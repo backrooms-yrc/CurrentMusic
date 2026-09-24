@@ -1,0 +1,166 @@
+// API 层：优先走 Android 原生 HTTP 桥（无 CORS），浏览器调试时回退 fetch。
+const LS = {
+  base: 'cm.base',
+  token: 'cm.token',
+  user: 'cm.user',
+  accounts: 'cm.accounts',
+  quality: 'cm.quality',
+  theme: 'cm.theme',
+};
+
+const DEFAULT_BASE = 'http://music.20110208.xyz/cm';
+
+export const settings = {
+  get base() { return localStorage.getItem(LS.base) || DEFAULT_BASE; },
+  set base(v) { localStorage.setItem(LS.base, v); },
+  get quality() { return localStorage.getItem(LS.quality) || 'auto'; },
+  set quality(v) { localStorage.setItem(LS.quality, v); },
+  get theme() { return localStorage.getItem(LS.theme) || 'auto'; },
+  set theme(v) { localStorage.setItem(LS.theme, v); },
+};
+
+// ---------- 账号本地存储（支持多账号切换） ----------
+
+export const auth = {
+  get token() { return localStorage.getItem(LS.token) || ''; },
+  get user() { try { return JSON.parse(localStorage.getItem(LS.user)) || null; } catch { return null; } },
+
+  saveLogin(token, user) {
+    localStorage.setItem(LS.token, token);
+    localStorage.setItem(LS.user, JSON.stringify(user));
+    const accounts = this.accounts().filter(a => a.username !== user.username);
+    accounts.unshift({ username: user.username, nickname: user.nickname, avatar: user.avatar, token });
+    localStorage.setItem(LS.accounts, JSON.stringify(accounts.slice(0, 5)));
+  },
+  accounts() { try { return JSON.parse(localStorage.getItem(LS.accounts)) || []; } catch { return []; } },
+  switchTo(username) {
+    const a = this.accounts().find(x => x.username === username);
+    if (!a) return false;
+    localStorage.setItem(LS.token, a.token);
+    localStorage.setItem(LS.user, JSON.stringify({ id: 0, username: a.username, nickname: a.nickname, avatar: a.avatar, bio: '' }));
+    return true;
+  },
+  clear() {
+    const cur = this.user;
+    if (cur) {
+      const accounts = this.accounts().filter(a => a.username !== cur.username);
+      localStorage.setItem(LS.accounts, JSON.stringify(accounts));
+    }
+    localStorage.removeItem(LS.token);
+    localStorage.removeItem(LS.user);
+  },
+};
+
+// ---------- 传输 ----------
+
+let bridged = typeof window.NativeApi !== 'undefined';
+const pending = new Map();
+let seq = 0;
+
+window.__cmHttpDone = function (id, status, body) {
+  const p = pending.get(id);
+  if (!p) return;
+  pending.delete(id);
+  let data = null;
+  try { data = body ? JSON.parse(body) : null; } catch { data = { error: '响应解析失败' }; }
+  if (status >= 200 && status < 300) p.resolve(data);
+  else p.reject(Object.assign(new Error((data && data.error) || `HTTP ${status}`), { status }));
+};
+
+async function rawRequest(method, url, headers, bodyStr) {
+  if (bridged) {
+    return new Promise((resolve, reject) => {
+      const id = 'r' + (++seq);
+      pending.set(id, { resolve, reject });
+      window.NativeApi.http(id, method, url, JSON.stringify(headers || {}), bodyStr || '');
+    });
+  }
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', ...(headers || {}) }, body: bodyStr || undefined });
+  let data = null;
+  try { data = await r.json(); } catch { /* 空体 */ }
+  if (r.ok) return data;
+  throw Object.assign(new Error((data && data.error) || `HTTP ${r.status}`), { status: r.status });
+}
+
+let onAuthExpired = null;
+export function setAuthExpiredHandler(fn) { onAuthExpired = fn; }
+
+export async function call(method, path, { body, auth: needAuth = false } = {}) {
+  const headers = {};
+  if (needAuth && auth.token) headers.Authorization = 'Bearer ' + auth.token;
+  const bodyStr = body !== undefined ? JSON.stringify(body) : '';
+  try {
+    return await rawRequest(method, settings.base + path, headers, bodyStr);
+  } catch (e) {
+    if (e.status === 401 && needAuth && onAuthExpired) onAuthExpired();
+    throw e;
+  }
+}
+
+// ---------- 端点封装 ----------
+
+export const api = {
+  // 认证/资料
+  register: (username, password, nickname, email, emailCode) => call('POST', '/auth/register', { body: { username, password, nickname, email, emailCode } }),
+  sendEmailCode: (email) => call('POST', '/auth/email/code', { body: { email } }),
+  login: (username, password) => call('POST', '/auth/login', { body: { username, password } }),
+  internalLogin: (password) => call('POST', '/auth/internal', { body: { password } }),
+  logout: () => call('POST', '/auth/logout', { body: {}, auth: true }),
+  me: () => call('GET', '/auth/me', { auth: true }),
+  profileOf: (uid) => call('GET', `/profile/${uid}`),
+  updateProfile: (fields) => call('PUT', '/profile', { body: fields, auth: true }),
+  changePassword: (oldPassword, newPassword) => call('PUT', '/profile/password', { body: { oldPassword, newPassword }, auth: true }),
+  uploadAvatarBase64: (b64) => call('PUT', '/profile/avatar', { body: { data: b64 }, auth: true }),
+
+  // 点赞/收藏/状态
+  toggleLike: (meta) => call('POST', `/likes/${meta.ncm_id}`, { body: meta, auth: true }),
+  likedSongs: () => call('GET', '/likes/mine', { auth: true }),
+  likeCount: (ids) => call('GET', `/likes/count?ids=${ids.join(',')}`),
+  songsStatus: (ids) => call('GET', `/songs/status?ids=${ids.slice(0, 100).join(',')}`, { auth: true }),
+
+  // 元数据/历史
+  pushMeta: (songs) => call('POST', '/meta', { body: { songs }, auth: true }),
+  recordPlay: (meta) => call('POST', `/plays/${meta.ncm_id}`, { body: meta, auth: true }),
+  recentPlays: (limit = 50) => call('GET', `/plays/recent?limit=${limit}`, { auth: true }),
+
+  // 歌单
+  myPlaylists: () => call('GET', '/playlists', { auth: true }),
+  createPlaylist: (name, description) => call('POST', '/playlists', { body: { name, description }, auth: true }),
+  playlist: (pid) => call('GET', `/playlists/${pid}`, { auth: true }),
+  updatePlaylist: (pid, fields) => call('PUT', `/playlists/${pid}`, { body: fields, auth: true }),
+  deletePlaylist: (pid) => call('DELETE', `/playlists/${pid}`, { body: {}, auth: true }),
+  addPlaylistTracks: (pid, songs) => call('POST', `/playlists/${pid}/tracks`, { body: { songs }, auth: true }),
+  delPlaylistTracks: (pid, ids) => call('DELETE', `/playlists/${pid}/tracks`, { body: { songs: ids.map(i => ({ ncm_id: i, name: 'x' })) }, auth: true }),
+
+  // 网易云账号绑定
+  bindStatus: () => call('GET', '/ncmbind', { auth: true }),
+  qrKey: () => call('POST', '/ncmbind/qr/key', { body: {}, auth: true }),
+  qrImg: (key) => call('GET', `/ncmbind/qr/img?key=${encodeURIComponent(key)}`, { auth: true }),
+  qrCheck: (key) => call('GET', `/ncmbind/qr/check?key=${encodeURIComponent(key)}`, { auth: true }),
+  unbindNcm: () => call('DELETE', '/ncmbind', { body: {}, auth: true }),
+  syncNcm: () => call('POST', '/ncmbind/sync', { body: {}, auth: true }),
+  ncmLike: (meta, like) => call('POST', `/ncmbind/like/${meta.ncm_id}`, { body: { ...meta, like }, auth: true }),
+  ncmLikelist: () => call('GET', '/ncmbind/likelist', { auth: true }),
+  comments: (ncmId, offset = 0, limit = 20) => call('GET', `/ncm/comments?id=${ncmId}&offset=${offset}&limit=${limit}`, { auth: true }),
+  commentPost: (ncmId, content, commentId) => call('POST', `/ncmbind/comment/${ncmId}`, { body: { content, commentId }, auth: true }),
+  commentLike: (ncmId, commentId, like) => call('POST', `/ncmbind/comment-like/${ncmId}`, { body: { commentId, like }, auth: true }),
+  commentFloor: (ncmId, cid) => call('GET', `/ncm/comment/floor?id=${ncmId}&cid=${cid}`),
+  hotSearch: () => call('GET', '/ncm/hot'),
+  commentDelete: (ncmId, commentId) => call('DELETE', `/ncmbind/comment/${ncmId}`, { body: { commentId }, auth: true }),
+
+  // NCM 音源
+  search: (keywords, offset = 0, limit = 30) => call('GET', `/ncm/search?keywords=${encodeURIComponent(keywords)}&offset=${offset}&limit=${limit}`),
+  songUrl: (ncmId, level) => call('GET', `/ncm/song/url?id=${ncmId}&level=${level}`),
+  songDetail: (ids) => call('GET', `/ncm/song/detail?ids=${ids.slice(0, 100).join(',')}`),
+  lyric: (ncmId) => call('GET', `/ncm/lyric?id=${ncmId}`),
+  commentCount: (ncmId) => call('GET', `/ncm/comment-count?id=${ncmId}`),
+  ncmPlaylist: (pid) => call('GET', `/ncm/playlist?id=${pid}`),
+  daily: () => call('GET', '/daily', { auth: true }),
+
+  avatarUrl: (fname) => fname ? `${settings.base}/avatar/${fname}` : '',
+};
+
+export function detectBridge() {
+  bridged = typeof window.NativeApi !== 'undefined';
+  return bridged;
+}

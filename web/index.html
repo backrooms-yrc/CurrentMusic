@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>CurrentMusic</title>
+  <link rel="stylesheet" href="app.css">
+  <style>
+    html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
+    #boot { display: flex; height: 100%; align-items: center; justify-content: center;
+      font: 16px/1.6 system-ui; color: #666; }
+  </style>
+</head>
+<body>
+  <div id="boot">CurrentMusic 加载中…</div>
+
+  <header id="topbar">
+    <div id="brandLock"><span class="material-icons-outlined">graphic_eq</span><b>CurrentMusic</b></div>
+    <div id="pageTitle">CurrentMusic</div>
+    <span id="topAction" class="material-icons-outlined" title="设置">settings</span>
+  </header>
+
+  <main id="out"></main>
+
+  <div id="mini"></div>
+
+  <nav id="bottomNav">
+    <a href="#/home" class="navItem"><span class="nav-ic"><span class="material-icons-outlined">home</span></span><span>首页</span></a>
+    <a href="#/search" class="navItem"><span class="nav-ic"><span class="material-icons-outlined">search</span></span><span>搜索</span></a>
+    <a href="#/library" class="navItem"><span class="nav-ic"><span class="material-icons-outlined">library_music</span></span><span>歌单</span></a>
+    <a href="#/user" class="navItem"><span class="nav-ic"><span class="material-icons-outlined">person</span></span><span>我的</span></a>
+  </nav>
+
+  <div id="playerOverlay" hidden></div>
+  <div id="sheets"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

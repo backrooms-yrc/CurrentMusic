@@ -1,0 +1,7 @@
+node_modules/
+dist/
+web/node_modules/
+*.apk
+*.jks
+*.idsig
+.DS_Store
