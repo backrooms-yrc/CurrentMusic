@@ -894,3 +894,13 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .pl-lyric-line { transition: none; }
   .pl-lyric-line.cur .lyr .ch { transition: none; }
 }
+
+/* ---------- 登录设备管理 ---------- */
+.cm-devs { display: flex; flex-direction: column; min-width: min(88vw, 380px); }
+.cm-dev { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid color-mix(in srgb, var(--mdui-color-outline-variant, #cac4d0) 25%, transparent); }
+.cm-dev:last-child { border-bottom: none; }
+.cm-dev > .material-icons-outlined { color: var(--cm-primary); font-size: 22px; }
+.cm-dev-main { flex: 1; min-width: 0; font-size: 14px; }
+.cm-dev-sub { font-size: 11px; opacity: .6; margin-top: 2px; }
+.cm-dev-cur { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: var(--cm-primary); color: #fff; margin-left: 6px; vertical-align: 1px; }
+.cm-dev-kick { font-size: 12px; color: var(--mdui-color-error, #b3261e); cursor: pointer; padding: 4px 8px; border-radius: 8px; position: relative; overflow: hidden; z-index: 0; }

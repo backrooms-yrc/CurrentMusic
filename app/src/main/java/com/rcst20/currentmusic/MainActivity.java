@@ -233,6 +233,16 @@ public class MainActivity extends Activity {
             return "1.8.0";
         }
 
+        /** 设备标识（厂商+型号+系统版本），用于「登录设备」列表展示。 */
+        @JavascriptInterface
+        public String deviceModel() {
+            try {
+                return (Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE).trim();
+            } catch (Exception e) {
+                return "Android";
+            }
+        }
+
         /** 当前安装版本的 versionName。 */
         @JavascriptInterface
         public String versionName() {
