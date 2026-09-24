@@ -1,3 +1,4 @@
+import './polyfill.js';   // 旧版 WebView 兼容垫片（必须在 mdui 之前）
 // CurrentMusic 入口：mdui 注册、主题、路由、播放器 UI 挂载。
 import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
@@ -92,6 +93,7 @@ function boot() {
     } catch { /* 忽略 */ }
   }
   initRipple();
+  window.__cmBooted = true;   // 供 index.html 的启动诊断判定
   document.getElementById('boot').remove();
 
   document.getElementById('topAction').onclick = () => { location.hash = '#/settings'; };   // 齿轮直达设置页
