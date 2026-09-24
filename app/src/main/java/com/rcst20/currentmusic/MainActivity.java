@@ -236,11 +236,7 @@ public class MainActivity extends Activity {
         /** 当前安装版本的 versionName。 */
         @JavascriptInterface
         public String versionName() {
-            try {
-                return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-            } catch (Exception e) {
-                return "0";
-            }
+            return appVersionName();
         }
 
         /** 当前安装版本的 versionCode（在线更新比对用）。 */
@@ -263,11 +259,11 @@ public class MainActivity extends Activity {
                 long read = 0;
                 HttpURLConnection c = null;
                 try {
-                    c = (HttpURLConnection) new URL(url).openConnection();
+                    c = openFollowingRedirects(new URL(url), 4);
                     c.setRequestProperty("Range", "bytes=0-" + Math.max(0, bytes - 1));
-                    c.setConnectTimeout(6000);
-                    c.setReadTimeout(6000);
-                    if (c.getResponseCode() >= 400) throw new IllegalStateException("HTTP " + c.getResponseCode());
+                    int status = c.getResponseCode();
+                    if (status >= 400) throw new IllegalStateException("HTTP " + status);
+                    // 上游不认 Range（返回 200）也照读，按实际读到的字节数计时
                     try (InputStream in = c.getInputStream()) {
                         byte[] buf = new byte[16384];
                         int n;
@@ -408,6 +404,37 @@ public class MainActivity extends Activity {
         android.view.WindowInsets ins = getWindow().getDecorView().getRootWindowInsets();
         int[] v = computeInsets(ins);
         if (v != null) applyInsets(v[0], v[1], v[2], v[3], force);
+    }
+
+    private String appVersionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "0";
+        }
+    }
+
+    /** 打开连接并手动跟随重定向（GitHub Releases 会 302 到 CDN；手动处理可跨协议/跨域）。 */
+    private HttpURLConnection openFollowingRedirects(URL url, int maxHops) throws IOException {
+        URL cur = url;
+        for (int i = 0; i < maxHops; i++) {
+            HttpURLConnection conn = (HttpURLConnection) cur.openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(6000);
+            conn.setReadTimeout(6000);
+            conn.setRequestProperty("User-Agent", "CurrentMusic/" + appVersionName());
+            conn.setRequestProperty("Accept", "*/*");
+            int code = conn.getResponseCode();
+            if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+                String loc = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (loc == null) throw new IOException("重定向缺少 Location");
+                cur = new URL(cur, loc);
+                continue;
+            }
+            return conn;
+        }
+        throw new IOException("重定向次数过多");
     }
 
     private long apkDownloadId = -1;
