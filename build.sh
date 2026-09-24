@@ -61,5 +61,12 @@ mkdir -p "$ROOT/dist"
   --out "$APK_FINAL" "$OUT/aligned.apk"
 "$BT/apksigner" verify "$APK_FINAL" && echo "签名校验通过"
 
+echo "==> 同步网页版静态资源"
+WEB_DIR="$ROOT/data/app"
+mkdir -p "$WEB_DIR"
+rm -f "$WEB_DIR"/*
+cp "$APP/src/main/assets/www/"* "$WEB_DIR"/
+echo "    网页版已同步 → http://music.20110208.xyz/app/（$(du -sh "$WEB_DIR" | cut -f1)）"
+
 echo "==> 完成: $APK_FINAL ($(du -h "$APK_FINAL" | cut -f1))"
 "$BT/aapt" dump badging "$APK_FINAL" | head -6

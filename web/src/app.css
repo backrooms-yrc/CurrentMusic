@@ -870,3 +870,8 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .upd-src > * + * { margin-left: 10px; }
   .upd-prog > * + * { margin-top: 6px; }
 }
+/* ---------- 逐字歌词（卡拉OK）：当前行逐字点亮 ---------- */
+.pl-lyric-line .lyr .ch { transition: color .16s linear, text-shadow .24s ease; }
+.pl-lyric-line.cur .lyr .ch { color: rgba(255, 255, 255, .42); }
+.pl-lyric-line.cur .lyr .ch.on { color: #fff; text-shadow: 0 0 12px rgba(255, 255, 255, .45); }
+@media (prefers-reduced-motion: reduce) { .pl-lyric-line .lyr .ch { transition: none; } }
