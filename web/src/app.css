@@ -904,3 +904,30 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-dev-sub { font-size: 11px; opacity: .6; margin-top: 2px; }
 .cm-dev-cur { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: var(--cm-primary); color: #fff; margin-left: 6px; vertical-align: 1px; }
 .cm-dev-kick { font-size: 12px; color: var(--mdui-color-error, #b3261e); cursor: pointer; padding: 4px 8px; border-radius: 8px; position: relative; overflow: hidden; z-index: 0; }
+
+/* ---------- 管理员面板 ---------- */
+.cm-agrid { display: grid; grid-template-columns: repeat(2, 1fr); grid-gap: 10px; gap: 10px; }
+@media (min-width: 600px) { .cm-agrid { grid-template-columns: repeat(4, 1fr); } }
+.cm-acard {
+  padding: 14px 16px; border-radius: 16px;
+  background: var(--mdui-color-surface-container, #f3edf7);
+}
+.cm-acard-v { font-size: 24px; font-weight: 700; color: var(--cm-primary); }
+.cm-acard-l { font-size: 12px; opacity: .75; margin-top: 2px; }
+.cm-acard-s { font-size: 11px; opacity: .55; margin-top: 4px; }
+.cm-adminbar { display: flex; gap: 10px; margin-bottom: 10px; }
+.cm-ulist { display: flex; flex-direction: column; }
+.cm-urow {
+  display: flex; align-items: center; gap: 10px; padding: 12px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mdui-color-outline-variant, #cac4d0) 22%, transparent);
+}
+.cm-umain { flex: 1; min-width: 0; }
+.cm-uname { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cm-usub { font-size: 11px; opacity: .6; margin-top: 2px; word-break: break-all; }
+.cm-tag { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--cm-primary) 14%, transparent); color: var(--cm-primary); }
+.cm-tag.admin { background: var(--cm-primary); color: #fff; }
+.cm-tag.banned { background: var(--mdui-color-error, #b3261e); color: #fff; }
+.cm-uact { padding: 8px; cursor: pointer; border-radius: 50%; position: relative; overflow: hidden; z-index: 0; }
+.cm-pager { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; }
+.cm-pager-info { font-size: 12px; opacity: .6; }
+.cm-devlist { display: flex; flex-direction: column; }

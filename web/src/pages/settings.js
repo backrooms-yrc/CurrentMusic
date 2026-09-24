@@ -44,6 +44,7 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:15px;vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
       <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i>${esc(u.nickname || u.username || '未登录')}</i></div>
+      ${(auth.user && auth.user.isAdmin) ? `<div class="cm-setting" id="adminEntry"><span class="material-icons-outlined">admin_panel_settings</span>管理员面板<i>用户/设备/系统</i></div>` : ''}
       ${auth.token ? `<div class="cm-setting" id="devices"><span class="material-icons-outlined">devices</span>登录设备<i id="devCount">—</i></div>` : ''}
       <div class="cm-setting" id="engine"><span class="material-icons-outlined">public</span>系统 WebView<i>${engineChrome() ? 'Chromium ' + engineChrome() : '未知'}${engineOutdated() ? ' · 建议更新' : ''}</i></div>
     </div>`;
@@ -119,6 +120,8 @@ export async function render(el) {
       ],
     });
   };
+  el.querySelector('#adminEntry')?.addEventListener('click', () => { location.hash = '#/admin'; });
+
   const devRow = el.querySelector('#devices');
   if (devRow) {
     const fmtTime = ts => {
