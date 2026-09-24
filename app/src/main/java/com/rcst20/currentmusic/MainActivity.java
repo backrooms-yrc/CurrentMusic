@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
     private static final int REQ_FILE = 42;
 
     private WebView web;
+    private final java.util.concurrent.ConcurrentHashMap<String, Boolean> sseStop = new java.util.concurrent.ConcurrentHashMap<>();
     private int insetT, insetB, insetL, insetR;   // 系统栏真实 insets（env() 在 WebView 常为 0）
     private final ExecutorService pool = Executors.newCachedThreadPool();
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -235,6 +236,20 @@ public class MainActivity extends Activity {
             return "1.8.0";
         }
 
+        /** 原生 SSE：打开房间事件流（App 内 EventSource 受混合内容限制，改由原生长连接读取后回推 JS）。
+         *  事件经 window.__cmSseEvent(roomId, type, dataJson) 推送，状态经 window.__cmSseState(roomId, state, detail)。 */
+        @JavascriptInterface
+        public void sseOpen(final String roomId, final String url, final String token) {
+            if (sseStop.containsKey(roomId)) return;      // 已连接
+            sseStop.put(roomId, Boolean.FALSE);
+            pool.execute(() -> sseLoop(roomId, url, token));
+        }
+
+        @JavascriptInterface
+        public void sseClose(final String roomId) {
+            sseStop.put(roomId, Boolean.TRUE);
+        }
+
         /** 设备标识（厂商+型号+系统版本），用于「登录设备」列表展示。 */
         @JavascriptInterface
         public String deviceModel() {
@@ -378,6 +393,61 @@ public class MainActivity extends Activity {
     }
 
     @SuppressLint("InlinedApi")
+    /** 后台线程 maintained 的 SSE 循环：断线自动指数退避重连。 */
+    private void sseLoop(String roomId, String url, String token) {
+        int backoff = 1000;
+        while (!Boolean.TRUE.equals(sseStop.get(roomId))) {
+            HttpURLConnection c = null;
+            try {
+                c = openFollowingRedirects(new URL(url), 3);
+                c.setRequestProperty("Accept", "text/event-stream");
+                if (token != null && !token.isEmpty()) {
+                    c.setRequestProperty("Authorization", "Bearer " + token);
+                }
+                int code = c.getResponseCode();
+                if (code >= 400) throw new IOException("HTTP " + code);
+                jsRaw("window.__cmSseState && window.__cmSseState(" + org.json.JSONObject.quote(roomId) + ",'open','')");
+                backoff = 1000;
+                try (java.io.BufferedReader r = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line, event = "message";
+                    StringBuilder data = new StringBuilder();
+                    while (!Boolean.TRUE.equals(sseStop.get(roomId)) && (line = r.readLine()) != null) {
+                        if (line.isEmpty()) {
+                            if (data.length() > 0) {
+                                jsRaw("window.__cmSseEvent && window.__cmSseEvent("
+                                        + org.json.JSONObject.quote(roomId) + ","
+                                        + org.json.JSONObject.quote(event) + ","
+                                        + org.json.JSONObject.quote(data.toString()) + ")");
+                            }
+                            event = "message";
+                            data.setLength(0);
+                        } else if (line.startsWith("event:")) {
+                            event = line.substring(6).trim();
+                        } else if (line.startsWith("data:")) {
+                            data.append(line.substring(5).trim());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.d(TAG, "sse " + roomId + " error: " + e);
+                jsRaw("window.__cmSseState && window.__cmSseState(" + org.json.JSONObject.quote(roomId)
+                        + ",'error'," + org.json.JSONObject.quote(String.valueOf(e.getMessage())) + ")");
+            } finally {
+                if (c != null) c.disconnect();
+            }
+            if (Boolean.TRUE.equals(sseStop.get(roomId))) break;
+            try {
+                Thread.sleep(backoff);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            backoff = Math.min(backoff * 2, 15000);
+        }
+        sseStop.remove(roomId);
+    }
+
     private void startPlaybackService() {
         try {
             startForegroundService(new Intent(this, PlaybackService.class));
