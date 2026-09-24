@@ -30,6 +30,9 @@ body {
 #topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 20;
   display: flex; align-items: center; justify-content: space-between;
+  /* 关键：border-box —— 否则 height 里的安全区与 padding-top 重复计入，
+     顶栏会高出 #out 顶部一整个状态栏高度并压住内容（且随 insets 迟到而跳变） */
+  box-sizing: border-box;
   height: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px)));
   padding: max(env(safe-area-inset-top), var(--safe-t, 0px)) 8px 0 18px;
   background: var(--mdui-color-surface-container-low, #f7f2fa);
@@ -791,3 +794,33 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 
 /* 实心图标（评论点赞等：同字形切到 Filled 字族，无需额外字形名） */
 .mi.fill { font-family: 'Material Icons'; font-weight: normal; }
+
+/* ---------- 在线更新弹窗 ---------- */
+.upd { display: flex; flex-direction: column; gap: 10px; min-width: min(88vw, 400px); }
+.upd-ver { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.upd-ver b { color: var(--cm-primary); }
+.upd-ver .upd-new { font-size: 16px; }
+.upd-ver .material-icons-outlined { font-size: 16px; opacity: .6; }
+.upd-size { margin-left: auto; font-size: 12px; opacity: .6; }
+.upd-log {
+  max-height: 180px; overflow-y: auto; white-space: pre-wrap; font-size: 12.5px; line-height: 1.7;
+  background: var(--mdui-color-surface-container, #f3edf7); border-radius: 12px; padding: 12px 14px;
+  opacity: .9;
+}
+.mdui-theme-dark .upd-log { background: #2b2930; }
+.upd-sec { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 600; opacity: .6; margin-top: 4px; }
+.upd-tip { font-weight: 400; font-size: 11px; color: var(--cm-primary); opacity: 1; }
+.upd-srcs { display: flex; flex-direction: column; gap: 8px; }
+.upd-src {
+  display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; cursor: pointer;
+  background: var(--mdui-color-surface-container-low, #f7f2fa);
+  border: 1.5px solid transparent; position: relative; overflow: hidden; z-index: 0;
+}
+.upd-src.on { border-color: var(--cm-primary); background: color-mix(in srgb, var(--cm-primary) 8%, transparent); }
+.upd-radio { font-size: 20px; color: var(--cm-primary); }
+.upd-src-main { flex: 1; min-width: 0; font-size: 14px; }
+.upd-src-url { font-size: 11px; opacity: .55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upd-spd { font-size: 12px; opacity: .7; flex: none; }
+.upd-spd.bad { color: var(--mdui-color-error, #b3261e); opacity: 1; }
+.upd-prog { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.upd-prog-txt { font-size: 12px; opacity: .75; }

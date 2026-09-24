@@ -4,9 +4,9 @@
 
 > 本仓库开源 **前端壳**（原生 Java WebView 容器 + MDUI 2 Web 前端全部源码）；[Releases](../../releases) 分发的 APK 是**完整版体验**：默认连接作者自建的网易云 SVIP 音源服务，无需任何会员身份即可播放官方需 SVIP 的最高音质。
 
-![version](https://img.shields.io/badge/version-1.8.0-6750A4)
+![version](https://img.shields.io/badge/version-1.9.0-6750A4)
 ![platform](https://img.shields.io/badge/Android-7.0%2B-34A853)
-![apk](https://img.shields.io/badge/APK-321_KB-4285F4)
+![apk](https://img.shields.io/badge/APK-325_KB-4285F4)
 ![build](https://img.shields.io/badge/build-无_Gradle_·_一条命令-FF6D00)
 ![license](https://img.shields.io/badge/license-MIT-3DA639)
 
@@ -65,6 +65,7 @@
 - **评论区**：热门 / 最新 / 楼层回复 · 点赞、回复、删除自己的评论
 - **个性化**：**动态取色**（全局主色随封面自动变化）· 6 套预设配色 · **沉浸模式**（封面主色流动渐变）· 深浅主题
 - **体验**：全控件 MD3 涟漪 · 骨架屏 · 方向感知转场动画 · 原生 insets 桥（全面屏 / 平板沉浸式）· Pad 导航栏 + 双列列表
+- **在线更新**：启动自动检测新版本并弹窗提示 · **服务器直连 / GitHub Releases 双下载源**（进弹窗自动测速、优选最快源、可手动切换）· 应用内下载进度 · 完成后自动拉起系统安装器
 
 ## 📦 安装
 

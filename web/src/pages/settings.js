@@ -2,6 +2,8 @@
 import { mdui } from '../md.js';
 import { settings, auth } from '../api.js';
 import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel } from '../ui.js';
+import { checkUpdate } from '../update.js';
+import { currentVersion } from '../version.js';
 
 export function applyTheme() {
   const root = document.documentElement;
@@ -40,7 +42,7 @@ export async function render(el) {
     </div>
     <div class="cm-sec-head"><h2>关于</h2></div>
     <div class="cm-setting-list">
-      <div class="cm-setting"><span class="material-icons-outlined">music_note</span>CurrentMusic<i>v${(window.NativeApi && window.NativeApi.appVersion) ? window.NativeApi.appVersion() : '1.7.0'}</i></div>
+      <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:15px;vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
       <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i>${esc(u.nickname || u.username || '未登录')}</i></div>
     </div>`;
 
@@ -96,6 +98,10 @@ export async function render(el) {
     title: '下载目录', label: 'Music/ 下的子目录名', value: localStorage.getItem('cm.downloadDir') || 'CurrentMusic',
     onOk: v => { localStorage.setItem('cm.downloadDir', v.trim() || 'CurrentMusic'); toast('已保存'); render(el); },
   });
+  el.querySelector('#checkUpd').onclick = async () => {
+    toast('正在检查更新…');
+    await checkUpdate({ silent: false });
+  };
   el.querySelector('#server').onclick = () => promptDialog({
     title: '服务器地址', label: 'API 基址', value: settings.base,
     onOk: v => { settings.base = v.replace(/\/+$/, ''); toast('已保存'); render(el); },

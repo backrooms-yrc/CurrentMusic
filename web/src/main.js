@@ -4,6 +4,7 @@ import '@material-design-icons/font/outlined.css';
 import './app.css';
 import { auth, setAuthExpiredHandler } from './api.js';
 import { toast, initRipple, bootColorScheme } from './ui.js';
+import { checkUpdate } from './update.js';
 import { player } from './player.js';
 import { initPlayerUI } from './player-ui.js';
 import { applyTheme } from './pages/settings.js';
@@ -107,6 +108,9 @@ function boot() {
   initPlayerUI();
 
   setAuthExpiredHandler(() => toast('登录已失效，请重新登录'));
+
+  // 启动自动检测更新（延迟启动，不与首屏渲染抢资源）
+  setTimeout(() => { checkUpdate({ silent: true }).catch(() => {}); }, 1500);
 
   // 系统深浅色切换时（Android 壳转发 cmthemechange），auto 模式即时跟随
   window.addEventListener('cmthemechange', applyTheme);

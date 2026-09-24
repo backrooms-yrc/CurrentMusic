@@ -123,6 +123,12 @@ public class MainActivity extends Activity {
 
     private class LocalClient extends WebViewClient {
         @Override
+        public void onPageFinished(WebView view, String url) {
+            // 页面脚本此时必定就绪：强制重推 insets，兜住首帧注入丢失的情况
+            refreshInsetsFromWindow(true);
+        }
+
+        @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
             Uri u = request.getUrl();
             if (!"https".equals(u.getScheme()) || !LOCAL_HOST.equals(u.getHost())) {
@@ -227,6 +233,79 @@ public class MainActivity extends Activity {
             return "1.8.0";
         }
 
+        /** 当前安装版本的 versionName。 */
+        @JavascriptInterface
+        public String versionName() {
+            try {
+                return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            } catch (Exception e) {
+                return "0";
+            }
+        }
+
+        /** 当前安装版本的 versionCode（在线更新比对用）。 */
+        @JavascriptInterface
+        public int versionCode() {
+            try {
+                android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+                if (Build.VERSION.SDK_INT >= 28) return (int) pi.getLongVersionCode();
+                return pi.versionCode;
+            } catch (Exception e) {
+                return 0;
+            }
+        }
+
+        /** 测速：Range 拉取前 bytes 字节，结果经 __cmSpeedResult(key, bytes, bytesPerSec, ms) 回调。 */
+        @JavascriptInterface
+        public void testSpeed(final String key, final String url, final int bytes) {
+            pool.execute(() -> {
+                long t0 = System.currentTimeMillis();
+                long read = 0;
+                HttpURLConnection c = null;
+                try {
+                    c = (HttpURLConnection) new URL(url).openConnection();
+                    c.setRequestProperty("Range", "bytes=0-" + Math.max(0, bytes - 1));
+                    c.setConnectTimeout(6000);
+                    c.setReadTimeout(6000);
+                    if (c.getResponseCode() >= 400) throw new IllegalStateException("HTTP " + c.getResponseCode());
+                    try (InputStream in = c.getInputStream()) {
+                        byte[] buf = new byte[16384];
+                        int n;
+                        while (read < bytes && (n = in.read(buf)) > 0) read += n;
+                    }
+                } catch (Exception e) {
+                    Log.d(TAG, "speed test " + key + " failed: " + e);
+                    read = -1;
+                } finally {
+                    if (c != null) c.disconnect();
+                }
+                long ms = Math.max(1, System.currentTimeMillis() - t0);
+                double bps = read > 0 ? (read * 1000.0 / ms) : 0;
+                jsRaw(String.format(java.util.Locale.US,
+                        "window.__cmSpeedResult && window.__cmSpeedResult(%s,%d,%.0f,%d)",
+                        org.json.JSONObject.quote(key), read, bps, ms));
+            });
+        }
+
+        /** 下载更新包并在完成后拉起系统安装器；进度经 __cmUpdateProgress(pct,done,total) 回调。 */
+        @JavascriptInterface
+        public void downloadApk(final String url, final String fileName) {
+            main.post(() -> startApkDownload(url, fileName));
+        }
+
+        /** 当前系统栏 insets（JSON）。先在 UI 线程实时刷新再返回，保证首帧安全区正确（避免迟到跳变）。 */
+        @JavascriptInterface
+        public String insets() {
+            main.post(() -> refreshInsetsFromWindow(true));
+            try {
+                Thread.sleep(80);   // 桥线程短暂等待 UI 线程完成刷新（仅启动时调用一次）
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return String.format(java.util.Locale.US, "{\"t\":%d,\"b\":%d,\"l\":%d,\"r\":%d}",
+                    insetT, insetB, insetL, insetR);
+        }
+
         /** 后台播放保活：true=启动前台服务（通知+唤醒锁），false=停止。 */
         @JavascriptInterface
         public void keepAlive(final boolean on) {
@@ -294,24 +373,121 @@ public class MainActivity extends Activity {
         if (hasFocus) hideSystemNav();   // 对话框等场景后重新进入沉浸
     }
 
-    private void pushInsets(android.view.WindowInsets ins) {
+    private static int[] computeInsets(android.view.WindowInsets ins) {
+        if (ins == null) return null;
         if (Build.VERSION.SDK_INT >= 30) {
             android.graphics.Insets i = ins.getInsets(
                     android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout());
-            insetT = i.top; insetB = i.bottom; insetL = i.left; insetR = i.right;
-        } else {
-            insetT = ins.getSystemWindowInsetTop();
-            insetB = ins.getSystemWindowInsetBottom();
-            insetL = ins.getSystemWindowInsetLeft();
-            insetR = ins.getSystemWindowInsetRight();
+            return new int[]{i.top, i.bottom, i.left, i.right};
         }
+        return new int[]{ins.getSystemWindowInsetTop(), ins.getSystemWindowInsetBottom(),
+                ins.getSystemWindowInsetLeft(), ins.getSystemWindowInsetRight()};
+    }
+
+    private void pushInsets(android.view.WindowInsets ins) {
+        int[] v = computeInsets(ins);
+        if (v != null) applyInsets(v[0], v[1], v[2], v[3], false);
+    }
+
+    /** force=true 即使数值未变也重推（页面刚加载完时，此前的注入可能早于 JS 就绪而丢失）。 */
+    private void applyInsets(int t, int b, int l, int r, boolean force) {
+        if (!force && t == insetT && b == insetB && l == insetL && r == insetR) return;
+        insetT = t; insetB = b; insetL = l; insetR = r;
         final String js = String.format(java.util.Locale.US,
                 "var r=document.documentElement.style;" +
                 "r.setProperty('--safe-t','%dpx');r.setProperty('--safe-b','%dpx');" +
                 "r.setProperty('--safe-l','%dpx');r.setProperty('--safe-r','%dpx');" +
                 "window.dispatchEvent(new Event('resize'))",
-                insetT, insetB, insetL, insetR);
+                t, b, l, r);
         main.post(() -> { if (web != null) web.evaluateJavascript(js, null); });
+    }
+
+    /** 从窗口实时读取 insets（监听尚未触发时的兜底），须在 UI 线程调用。 */
+    private void refreshInsetsFromWindow(boolean force) {
+        if (Build.VERSION.SDK_INT < 23) return;
+        android.view.WindowInsets ins = getWindow().getDecorView().getRootWindowInsets();
+        int[] v = computeInsets(ins);
+        if (v != null) applyInsets(v[0], v[1], v[2], v[3], force);
+    }
+
+    private long apkDownloadId = -1;
+    private Runnable apkPollTask;
+
+    private void jsRaw(final String js) {
+        main.post(() -> { if (web != null) web.evaluateJavascript(js, null); });
+    }
+
+    private void startApkDownload(String url, String fileName) {
+        try {
+            String name = (fileName == null || fileName.isEmpty())
+                    ? "CurrentMusic-update.apk" : fileName.replaceAll("[\\/:*?\"<>|]", "_");
+            android.app.DownloadManager.Request req = new android.app.DownloadManager.Request(
+                    android.net.Uri.parse(url));
+            req.setTitle("CurrentMusic 在线更新");
+            req.setDescription(name);
+            req.setMimeType("application/vnd.android.package-archive");
+            req.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE);
+            req.setDestinationInExternalFilesDir(this, android.os.Environment.DIRECTORY_DOWNLOADS, name);
+            android.app.DownloadManager dm = (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            apkDownloadId = dm.enqueue(req);
+            pollApkProgress(dm, apkDownloadId);
+        } catch (Exception e) {
+            Log.w(TAG, "apk download failed: " + e);
+            jsRaw("window.__cmUpdateFailed && window.__cmUpdateFailed('下载启动失败：" + e.getMessage() + "')");
+        }
+    }
+
+    private void pollApkProgress(final android.app.DownloadManager dm, final long id) {
+        if (apkPollTask != null) main.removeCallbacks(apkPollTask);
+        apkPollTask = new Runnable() {
+            @Override
+            public void run() {
+                android.database.Cursor c = null;
+                try {
+                    c = dm.query(new android.app.DownloadManager.Query().setFilterById(id));
+                    if (c != null && c.moveToFirst()) {
+                        long done = c.getLong(c.getColumnIndexOrThrow(
+                                android.app.DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                        long total = c.getLong(c.getColumnIndexOrThrow(
+                                android.app.DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                        int status = c.getInt(c.getColumnIndexOrThrow(android.app.DownloadManager.COLUMN_STATUS));
+                        int pct = total > 0 ? (int) (done * 100 / total) : 0;
+                        jsRaw("window.__cmUpdateProgress && window.__cmUpdateProgress(" + pct + "," + done + "," + total + ")");
+                        if (status == android.app.DownloadManager.STATUS_SUCCESSFUL) {
+                            installApk(dm.getUriForDownloadedFile(id));
+                            return;
+                        }
+                        if (status == android.app.DownloadManager.STATUS_FAILED) {
+                            int reason = c.getInt(c.getColumnIndexOrThrow(android.app.DownloadManager.COLUMN_REASON));
+                            jsRaw("window.__cmUpdateFailed && window.__cmUpdateFailed('下载失败（代码 " + reason + "）')");
+                            return;
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "poll apk: " + e);
+                } finally {
+                    if (c != null) c.close();
+                }
+                main.postDelayed(this, 400);
+            }
+        };
+        main.postDelayed(apkPollTask, 400);
+    }
+
+    private void installApk(android.net.Uri uri) {
+        if (uri == null) {
+            jsRaw("window.__cmUpdateFailed && window.__cmUpdateFailed('安装包不可用')");
+            return;
+        }
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(uri, "application/vnd.android.package-archive");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            jsRaw("window.__cmUpdateInstall && window.__cmUpdateInstall()");
+        } catch (Exception e) {
+            jsRaw("window.__cmUpdateFailed && window.__cmUpdateFailed('无法启动安装器：" + e.getMessage() + "')");
+        }
     }
 
     private static final int REQ_PERM = 43;
