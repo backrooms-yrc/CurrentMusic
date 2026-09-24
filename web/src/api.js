@@ -1,6 +1,7 @@
 // API 层：优先走 Android 原生 HTTP 桥（无 CORS），浏览器调试时回退 fetch。
 const LS = {
   base: 'cm.base',
+  secure: 'cm.secure',
   token: 'cm.token',
   user: 'cm.user',
   accounts: 'cm.accounts',
@@ -8,11 +9,21 @@ const LS = {
   theme: 'cm.theme',
 };
 
-const DEFAULT_BASE = 'http://music.20110208.xyz/cm';
+const DEFAULT_BASE = 'https://music.20110208.xyz/cm';
 
 export const settings = {
-  get base() { return localStorage.getItem(LS.base) || DEFAULT_BASE; },
+  get base() {
+    const raw = localStorage.getItem(LS.base) || DEFAULT_BASE;
+    // 安全连接模式（默认开启）：强制 HTTPS。
+    // 关闭后尊重用户填写的协议（http:// 或 https:// 均可）。
+    if (this.secureMode) {
+      return raw.replace(/^http:\/\//i, 'https://');
+    }
+    return raw;
+  },
   set base(v) { localStorage.setItem(LS.base, v); },
+  get secureMode() { return localStorage.getItem(LS.secure) !== '0'; },   // 默认 true
+  set secureMode(v) { localStorage.setItem(LS.secure, v ? '1' : '0'); },
   get quality() { return localStorage.getItem(LS.quality) || 'auto'; },
   set quality(v) { localStorage.setItem(LS.quality, v); },
   get theme() { return localStorage.getItem(LS.theme) || 'auto'; },
