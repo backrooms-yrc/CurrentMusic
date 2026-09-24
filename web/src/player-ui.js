@@ -160,7 +160,10 @@ function renderLyric() {
   // 动画期间标志位被 setTimeout 重置后，后续动画事件会被误判为用户操作，
   // 误设 userScrollUntil → 自动跟随被禁 → 视觉上歌词"卡住不滚"。
   ['pointerdown', 'wheel', 'touchstart'].forEach(evt => {
-    box.addEventListener(evt, () => { userScrollUntil = Date.now() + 3000; }, { passive: true });
+    box.addEventListener(evt, () => {
+      if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }   // 终止弹簧，交给用户
+      userScrollUntil = Date.now() + 3000;
+    }, { passive: true });
   });
 }
 
@@ -260,6 +263,59 @@ function stopKaraoke() {
 let curLyricIdx = -1;
 let userScrollUntil = 0;
 
+// ---------- 弹簧滚动引擎 ----------
+// 替代 CSS behavior:'smooth'（固定缓动、无弹性），用胡克定律做带微弹的跟随：
+//   force = -k·(位移) - c·速度     → 轻微过冲后自然回稳（灵动感的来源）
+const SPRING = { k: 130, c: 16, snapDist: 0.4, snapVel: 12 };
+let springRaf = 0;
+
+function springScrollTo(box, target) {
+  if (springRaf) cancelAnimationFrame(springRaf);
+  const start = box.scrollTop;
+  const dist = target - start;
+  if (Math.abs(dist) < 2) { box.scrollTop = target; updateLyricDepth(box); return; }
+  let pos = start;
+  let vel = dist * 3;            // 初速度朝目标方向（减少起步延迟）
+  let last = performance.now();
+  const step = (now) => {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    const force = -SPRING.k * (pos - target) - SPRING.c * vel;
+    vel += force * dt;
+    pos += vel * dt;
+    box.scrollTop = pos;
+    updateLyricDepth(box);
+    if (Math.abs(pos - target) < SPRING.snapDist && Math.abs(vel) < SPRING.snapVel) {
+      box.scrollTop = target;    // 收敛后吸附
+      updateLyricDepth(box);
+      springRaf = 0;
+      return;
+    }
+    springRaf = requestAnimationFrame(step);
+  };
+  springRaf = requestAnimationFrame(step);
+}
+
+// ---------- 距离感知渐变：离中心越远的行越淡（灵动层次感） ----------
+let depthRaf = 0;
+function updateLyricDepth(box) {
+  if (depthRaf) return;
+  depthRaf = requestAnimationFrame(() => {
+    depthRaf = 0;
+    const centerY = box.scrollTop + box.clientHeight / 2;
+    const maxDist = box.clientHeight * 0.55;
+    const lines = box.querySelectorAll('.pl-lyric-line');
+    for (let j = 0; j < lines.length; j++) {
+      const el = lines[j];
+      const lineCenter = el.offsetTop + el.offsetHeight / 2;
+      const d = Math.abs(lineCenter - centerY);
+      // 近处 0.68 → 远处 0.30（.cur 行的 opacity 由 CSS 覆盖为 1）
+      const fade = Math.max(0.30, 0.68 - (d / maxDist) * 0.38);
+      el.style.setProperty('--depth', fade.toFixed(2));
+    }
+  });
+}
+
 function syncLyric() {
   if (!lyricLines.length) return;
   const box = document.getElementById('plLyric');
@@ -270,18 +326,14 @@ function syncLyric() {
     if (lyricLines[k].t <= t) i = k; else break;
   }
   if (i === curLyricIdx) return;
-  const prev = curLyricIdx;
   curLyricIdx = i;
   box.querySelectorAll('.pl-lyric-line').forEach(el => el.classList.toggle('cur', +el.dataset.i === i));
-  // 逐字缓存随行切换而失效
   karaokeSpans = null;
   const cur = box.querySelector(`.pl-lyric-line[data-i="${i}"]`);
   if (!cur) return;
-  if (Date.now() < userScrollUntil) return;         // 用户正在浏览
-  const target = cur.offsetTop - box.clientHeight / 2 + cur.clientHeight / 2;
-  if (target < 0) { box.scrollTop = 0; return; }
-  // 统一用 smooth：瞬时跳转 ('auto') 在视觉上等同"消失再出现"
-  box.scrollTo({ top: target, behavior: 'smooth' });
+  if (Date.now() < userScrollUntil) return;
+  const target = Math.max(0, cur.offsetTop - box.clientHeight / 2 + cur.clientHeight / 2);
+  springScrollTo(box, target);
 }
 
 async function openFull() {
@@ -418,6 +470,7 @@ function closeFull() {
   const ov = overlay();
   if (ov.hidden) return;
   stopKaraoke();
+  if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }
   ov.classList.add('closing');
   setTimeout(() => { ov.hidden = true; ov.innerHTML = ''; ov.classList.remove('closing'); }, 240);
 }

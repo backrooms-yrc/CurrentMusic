@@ -488,15 +488,26 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
  * 绝不在 .cur 上改 font-size / font-weight / line-height —— 那会触发整列回流，
  * 滚动目标基于旧布局计算 → 实际位置偏移 → 表现为"跳闪"。
  * 用 opacity / transform / letter-spacing / text-shadow 做视觉强调（零回流）。 */
+/* --depth 由 JS 弹簧滚动时按距中心距离写入（0.30 远 → 0.68 近），
+ * .cur 行由 CSS 强制覆盖为 1（满亮），产生"聚焦"层次 */
 .pl-lyric-line {
-  opacity: .55;
+  opacity: var(--depth, .55);
   cursor: pointer;
-  transition: opacity .38s ease, transform .42s cubic-bezier(.25, .8, .25, 1), letter-spacing .42s ease;
+  transition: opacity .3s ease, transform .42s cubic-bezier(.22, 1, .36, 1), letter-spacing .42s ease;
 }
 .pl-lyric-line.cur {
   opacity: 1;
-  letter-spacing: .3px;        /* 视觉强调，替代 font-weight（不回流） */
-  transform: scale(1.024);     /* 轻微浮起 */
+  letter-spacing: .3px;
+  transform: scale(1.028);
+  /* 当前行柔和辉光（呼吸感由动画驱动，替代静态 text-shadow） */
+  animation: curGlow 3.2s ease-in-out infinite;
+}
+@keyframes curGlow {
+  0%, 100% { text-shadow: 0 0 0 rgba(255,255,255,0); }
+  50%      { text-shadow: 0 0 10px rgba(255,255,255,.14); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pl-lyric-line.cur { animation: none; }
 }
 
 /* 歌词容器必须 position:relative：滚动定位用行元素相对此容器的 offsetTop 计算 */
