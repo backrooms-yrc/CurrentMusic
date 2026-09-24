@@ -1,4 +1,4 @@
-// 歌单库页：网易云同步歌单 + 我的歌单 + 我喜欢的/收藏 + 排行榜
+// 歌单库页：网易云同步歌单 + 我的歌单 + 我喜欢的/收藏（排行榜已移至首页）
 import { mdui } from '../md.js';
 import { api, auth } from '../api.js';
 import { esc, toast, confirmDialog, promptDialog, skelGrid } from '../ui.js';
@@ -65,12 +65,7 @@ export async function render(el) {
         </div>`).join('') || `<div class="cm-empty small">还没有歌单，点右上角新建</div>`}
     </div>
 
-    <div class="cm-sec-head"><h2>排行榜</h2></div>
-    <div class="cm-quickrow">
-      <a class="cm-quick" href="#/ncmpl/3778678"><span class="material-icons-outlined">local_fire_department</span><b>热歌榜</b></a>
-      <a class="cm-quick" href="#/ncmpl/19723756"><span class="material-icons-outlined">trending_up</span><b>飙升榜</b></a>
-      <a class="cm-quick" href="#/ncmpl/3779629"><span class="material-icons-outlined">star</span><b>新歌榜</b></a>
-    </div>`;
+`;
 
   el.querySelector('#syncNcm')?.addEventListener('click', () => {
     if (!bind.bound) { toast('请先到「我的」页扫码绑定网易云账号'); return; }
