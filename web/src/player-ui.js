@@ -107,11 +107,12 @@ function setPlayerView(v) {
   if (bodyEl) bodyEl.className = `pl-body view-${v}`;
   if (v === 'lyric') {
     // 视图尺寸变化后：重算垫片并让当前行重新居中
-    layoutLyricPads();
-    userScrollUntil = 0;
-    curLyricIdx = -1;
-    karaokeTick = 0;
-    syncLyric();
+    requestAnimationFrame(() => {
+      layoutLyricPads();
+      userScrollUntil = 0;
+      curLyricIdx = -1;      // 强制 syncLyric 重新滚动到当前行
+      syncLyric();
+    });
   }
 }
 
@@ -143,11 +144,13 @@ function renderLyric() {
     el.onclick = e => { e.stopPropagation(); player.seek(lyricLines[+el.dataset.i].t / 1000); };
   });
   layoutLyricPads();
-  // 用户手动滚动时暂停自动跟随 3 秒
-  box.onscroll = () => {
-    if (programmaticScroll) return;
-    userScrollUntil = Date.now() + 3000;
-  };
+  // 只在真实用户输入时暂停自动跟随 3 秒。
+  // 不要用 onscroll + 标志位判定——scrollTo 的平滑动画也会触发 scroll 事件，
+  // 动画期间标志位被 setTimeout 重置后，后续动画事件会被误判为用户操作，
+  // 误设 userScrollUntil → 自动跟随被禁 → 视觉上歌词"卡住不滚"。
+  ['pointerdown', 'wheel', 'touchstart'].forEach(evt => {
+    box.addEventListener(evt, () => { userScrollUntil = Date.now() + 3000; }, { passive: true });
+  });
 }
 
 // 垫片高度 = 容器半高，使任意行（含首尾）都能滚动到垂直中线
@@ -179,44 +182,46 @@ let karaokeVals = [];
 
 function fireKaraoke() {
   if (!lyricKaraoke) return;
-  const box = document.getElementById('plLyric');
-  if (!box) return;
-  const i = curLyricIdx;
-  const line = lyricLines[i];
+  if (curLyricIdx < 0) return;
+  const line = lyricLines[curLyricIdx];
   if (!line || !line.w) return;
-  const el = box.querySelector(`.pl-lyric-line[data-i="${i}"]`);
-  if (!el) return;
   const now = player.audio.currentTime * 1000;
   const w = line.w;
 
-  if (!CAN_SWEEP) {                       // 兜底：逐字跳色
+  // 获取或重建当前行的 DOM 缓存
+  if (karaokeLine !== curLyricIdx || !karaokeSpans) {
+    const box = document.getElementById('plLyric');
+    if (!box) return;
+    const el = box.querySelector(`.pl-lyric-line[data-i="${curLyricIdx}"]`);
+    if (!el) return;
+    karaokeSpans = el.querySelectorAll('.ch');
+    karaokeVals = new Array(karaokeSpans.length).fill(-1);
+    karaokeLine = curLyricIdx;
+    karaokeTick = 0;                 // 换行后首帧立即绘制
+  }
+  const spans = karaokeSpans;
+  if (!spans.length) return;
+
+  if (!CAN_SWEEP) {                  // 老引擎兜底：逐字跳色
     let idx = -1;
     for (let k = 0; k < w.length; k++) { if (w[k][0] <= now) idx = k; else break; }
-    if (i === karaokeLine && idx === karaokeIdx) return;
-    karaokeLine = i; karaokeIdx = idx;
-    el.querySelectorAll('.ch').forEach((sp, k) => sp.classList.toggle('on', k <= idx));
+    if (idx === karaokeIdx) return;
+    karaokeIdx = idx;
+    spans.forEach((sp, k) => sp.classList.toggle('on', k <= idx));
     return;
   }
 
-  if (karaokeLine !== i || !karaokeSpans) {
-    karaokeSpans = el.querySelectorAll('.ch');
-    karaokeVals = new Array(karaokeSpans.length).fill(-1);
-    karaokeLine = i;
-    karaokeTick = 0;                 // 换行后首帧立即绘制，不受节流影响
-  }
-  const spans = karaokeSpans;
-  if (!spans || !spans.length) return;
-  // 节流到 ~30fps：扫光肉眼无差，但可把重栅格化次数减半（弱机更稳）
+  // 节流到 ~30fps
   const t = performance.now();
   if (t - karaokeTick < 33) return;
   karaokeTick = t;
+
   for (let k = 0; k < spans.length && k < w.length; k++) {
     const start = w[k][0];
-    const end = (k + 1 < w.length) ? w[k + 1][0] : start + 280;   // 末字按 ~280ms 收尾
+    const end = (k + 1 < w.length) ? w[k + 1][0] : start + 280;
     let p = (now - start) / Math.max(60, end - start);
     p = p < 0 ? 0 : (p > 1 ? 1 : p);
-    // 5% 量化（约 1px，肉眼不可辨）后比较：**不再对 0/1 边界开特例**，
-    // 否则未唱/已唱的字每帧都会被重写 → 渐变裁切文字反复重栅格化 → 闪烁
+    // 5% 量化后比较（避免无变化时重写样式导致重栅格化闪烁）
     const q = Math.round(p * 20) / 20;
     if (q === karaokeVals[k]) continue;
     karaokeVals[k] = q;
@@ -238,11 +243,11 @@ function stopKaraoke() {
   karaokeIdx = -1;
   karaokeSpans = null;
   karaokeVals = [];
+  karaokeTick = 0;
 }
 
 let curLyricIdx = -1;
 let userScrollUntil = 0;
-let programmaticScroll = false;
 
 function syncLyric() {
   if (!lyricLines.length) return;
@@ -254,18 +259,19 @@ function syncLyric() {
     if (lyricLines[k].t <= t) i = k; else break;
   }
   if (i === curLyricIdx) return;
+  const prev = curLyricIdx;
   curLyricIdx = i;
-  // 用 data-i 精确定位（与 lyricLines 索引一一对应）
   box.querySelectorAll('.pl-lyric-line').forEach(el => el.classList.toggle('cur', +el.dataset.i === i));
+  // 逐字缓存随行切换而失效
+  karaokeSpans = null;
   const cur = box.querySelector(`.pl-lyric-line[data-i="${i}"]`);
-  if (cur && Date.now() >= userScrollUntil) {
-    const target = cur.offsetTop - box.clientHeight / 2 + cur.clientHeight / 2;
-    // 长距离用瞬时跳转（smooth 动画跟不上切歌/拖动进度），短距离平滑
-    const far = Math.abs(target - box.scrollTop) > 600;
-    programmaticScroll = true;
-    box.scrollTo({ top: target, behavior: far ? 'auto' : 'smooth' });
-    setTimeout(() => { programmaticScroll = false; }, far ? 60 : 400);
-  }
+  if (!cur) return;
+  if (Date.now() < userScrollUntil) return;         // 用户正在浏览
+  const target = cur.offsetTop - box.clientHeight / 2 + cur.clientHeight / 2;
+  if (target < 0) { box.scrollTop = 0; return; }
+  const dist = Math.abs(target - box.scrollTop);
+  // 短距离平滑、长距离瞬时（拖进度/切歌时 smooth 跟不上）
+  box.scrollTo({ top: target, behavior: dist > 500 ? 'auto' : 'smooth' });
 }
 
 async function openFull() {
