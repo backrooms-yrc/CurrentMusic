@@ -6,7 +6,29 @@ import { currentVersion, isNewer } from './version.js';
 
 const SKIP_KEY = 'cm.updateSkip';         // 本会话跳过的版本（避免反复打扰）
 const SPEED_BYTES = 262144;               // 测速样本 256KB
+const SPEED_TIMEOUT = 15000;              // 原生侧 6s 连接 + 6s 读取，留足余量
 const GH_REPO = 'backrooms-yrc/CurrentMusic';
+
+// 按源注册的测速结果派发表（关键：多源并发时不能共用一个全局回调，
+// 否则后注册的会覆盖先注册的，先测那一路永远收不到结果 → 误报「不可达」）
+const speedPending = new Map();
+
+function ensureSpeedDispatcher() {
+  if (window.__cmSpeedResult) return;
+  window.__cmSpeedResult = (key, bytes, bps, ms) => {
+    const p = speedPending.get(key);
+    if (!p) return;
+    speedPending.delete(key);
+    clearTimeout(p.timer);
+    p.resolve(bytes > 0 ? { bps, ms } : null);
+  };
+}
+
+export function clearSpeedPending() {
+  for (const p of speedPending.values()) clearTimeout(p.timer);
+  speedPending.clear();
+  delete window.__cmSpeedResult;
+}
 
 const fmtSpeed = bps => (bps >= 1048576 ? (bps / 1048576).toFixed(1) + ' MB/s' : (bps / 1024).toFixed(0) + ' KB/s');
 const fmtSize = n => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB');
@@ -41,16 +63,14 @@ async function fetchFromGithub() {
 function speedTest(source) {
   return new Promise(resolve => {
     if (window.NativeApi && window.NativeApi.testSpeed) {
-      const timer = setTimeout(() => resolve(null), 9000);
-      window.__cmSpeedResult = (key, bytes, bps, ms) => {
-        if (key !== source.key) return;
-        clearTimeout(timer);
-        resolve(bytes > 0 ? { bps, ms } : null);
-      };
+      ensureSpeedDispatcher();
+      const timer = setTimeout(() => { speedPending.delete(source.key); resolve(null); }, SPEED_TIMEOUT);
+      speedPending.set(source.key, { resolve, timer });
       try {
         window.NativeApi.testSpeed(source.key, source.url, SPEED_BYTES);
       } catch {
         clearTimeout(timer);
+        speedPending.delete(source.key);
         resolve(null);
       }
       return;
@@ -139,7 +159,14 @@ function showUpdateDialog(latest, cur) {
       const r = speed[s.key];
       if (r === undefined) { if (el) el.textContent = '测速中'; continue; }
       done++;
-      if (r === null) { if (el) { el.textContent = '不可达'; el.classList.add('bad'); } continue; }
+      if (r === null) {
+        if (el) {
+          const bridged = !!(window.NativeApi && window.NativeApi.testSpeed);
+          el.textContent = bridged ? '不可达' : '需应用内测速';
+          el.classList.add('bad');
+        }
+        continue;
+      }
       if (el) el.textContent = fmtSpeed(r.bps);
       if (!best || r.bps > speed[best].bps) best = s.key;
     }
@@ -190,7 +217,7 @@ function showUpdateDialog(latest, cur) {
     delete window.__cmUpdateProgress;
     delete window.__cmUpdateInstall;
     delete window.__cmUpdateFailed;
-    delete window.__cmSpeedResult;
+    clearSpeedPending();
   }
 
   function startDownload() {
