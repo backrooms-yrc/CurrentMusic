@@ -51,13 +51,24 @@ let lyricLoadedFor = null;
 async function loadLyric() {
   const m = player.meta;
   if (!m) return;
-  lyricLines = []; curLyricIdx = -1; lyricLoadedFor = m.ncm_id;
+  // 关键：不清空旧歌词——让旧内容在 fetch 期间保持可见（消除"突然消失又出现"的空窗）。
+  // 新数据到达后才一次性替换并重置行号。
+  const oldLines = lyricLines;
+  lyricLoadedFor = m.ncm_id;
   try {
     const d = await api.lyric(m.ncm_id);
     if (!player.meta || player.meta.ncm_id !== m.ncm_id) return;
     lyricLines = (d.lines || []).filter(l => l.txt);
-  } catch { lyricLoadedFor = m.ncm_id + ':err'; }
+  } catch {
+    lyricLoadedFor = m.ncm_id + ':err';
+    lyricLines = [];            // 仅在获取失败时清空
+  }
+  if (lyricLines !== oldLines) {
+    curLyricIdx = -1;           // 行集变了，重置行号以触发首次滚动
+    karaokeSpans = null;
+  }
   renderLyric();
+  syncLyric();
 }
 
 const PLAY_MODES = [
@@ -269,9 +280,8 @@ function syncLyric() {
   if (Date.now() < userScrollUntil) return;         // 用户正在浏览
   const target = cur.offsetTop - box.clientHeight / 2 + cur.clientHeight / 2;
   if (target < 0) { box.scrollTop = 0; return; }
-  const dist = Math.abs(target - box.scrollTop);
-  // 短距离平滑、长距离瞬时（拖进度/切歌时 smooth 跟不上）
-  box.scrollTo({ top: target, behavior: dist > 500 ? 'auto' : 'smooth' });
+  // 统一用 smooth：瞬时跳转 ('auto') 在视觉上等同"消失再出现"
+  box.scrollTo({ top: target, behavior: 'smooth' });
 }
 
 async function openFull() {
@@ -529,7 +539,39 @@ async function applyDynamicScheme() {
 }
 on('song', () => { applyDynamicScheme(); });
 
-on('song', () => { if (!overlay().hidden) openFull(); karaokeLine = -1; karaokeIdx = -1; karaokeSpans = null; karaokeTick = 0; fireKaraoke(); });
+/** 切歌时轻量更新播放页的歌曲字段（封面/标题/歌手/统计/音质），不重建 overlay——
+ * 重建会导致歌词区被清空再异步填充，产生"突然消失又出现"的闪烁。 */
+function updateSongInfo() {
+  const ov = overlay();
+  const m = player.meta;
+  if (!ov || ov.hidden || !m) return;
+  const cover = document.getElementById('plCover');
+  if (cover) cover.src = m.pic || '';
+  const name = ov.querySelector('.pl-name');
+  if (name) name.textContent = m.name;
+  const artist = ov.querySelector('.pl-artist');
+  if (artist) artist.textContent = m.artists + (m.album ? ' · ' + m.album : '');
+  const q = document.getElementById('plQuality');
+  if (q) q.textContent = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
+  const likeBtn = document.getElementById('plLike');
+  if (likeBtn) {
+    const st = getStatus(m.ncm_id);
+    likeBtn.classList.toggle('on', st.liked);
+    likeBtn.querySelector('.material-icons-outlined').textContent = st.liked ? 'favorite' : 'favorite_border';
+  }
+  // 更新背景
+  applyPlayerBg();
+}
+
+on('song', () => {
+  if (!overlay().hidden) {
+    updateSongInfo();           // 只更新歌曲字段，不重建整个 overlay（重建会清空歌词区 → 闪烁）
+  }
+  karaokeLine = -1; karaokeIdx = -1; karaokeSpans = null; karaokeTick = 0;
+  loadLyric();
+  loadStats();
+  fireKaraoke();
+});
 on('state', () => {
   if (player.audio.paused) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');
