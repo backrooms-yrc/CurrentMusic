@@ -1,6 +1,6 @@
 // 设置页：配色/音质/主题/下载目录/服务器/关于（与「我的」分离，顶栏齿轮直达）
 import { mdui } from '../md.js';
-import { settings, auth } from '../api.js';
+import { api, settings, auth } from '../api.js';
 import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel } from '../ui.js';
 import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
@@ -44,6 +44,7 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:15px;vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
       <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i>${esc(u.nickname || u.username || '未登录')}</i></div>
+      ${auth.token ? `<div class="cm-setting" id="devices"><span class="material-icons-outlined">devices</span>登录设备<i id="devCount">—</i></div>` : ''}
       <div class="cm-setting" id="engine"><span class="material-icons-outlined">public</span>系统 WebView<i>${engineChrome() ? 'Chromium ' + engineChrome() : '未知'}${engineOutdated() ? ' · 建议更新' : ''}</i></div>
     </div>`;
 
@@ -118,6 +119,74 @@ export async function render(el) {
       ],
     });
   };
+  const devRow = el.querySelector('#devices');
+  if (devRow) {
+    const fmtTime = ts => {
+      if (!ts) return '—';
+      const d = new Date(ts * 1000), now = new Date();
+      const diff = (now - d) / 1000;
+      if (diff < 120) return '刚刚活跃';
+      if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+      if (d.toDateString() === now.toDateString()) return '今天 ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+      return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+    let sessions = [];
+    const refresh = async () => {
+      try {
+        const d = await api.sessions();
+        sessions = d.sessions || [];
+        const c = el.querySelector('#devCount');
+        if (c) c.textContent = `${sessions.length}/${d.max} 台`;
+        return d.max;
+      } catch (e) {
+        const c = el.querySelector('#devCount');
+        if (c) c.textContent = '查看';
+        return 5;
+      }
+    };
+    refresh();
+    devRow.onclick = async () => {
+      const max = await refresh();
+      const diag = mdui.dialog({
+        headline: `登录设备（最多 ${max} 台）`,
+        body: `<div class="cm-devs">
+          ${sessions.map(s => `
+            <div class="cm-dev">
+              <span class="material-icons-outlined">${s.platform === 'web' ? 'language' : 'smartphone'}</span>
+              <div class="cm-dev-main">
+                <div>${esc(s.device)}${s.current ? '<span class="cm-dev-cur">本机</span>' : ''}</div>
+                <div class="cm-dev-sub">登录于 ${fmtTime(s.createdAt)} · ${fmtTime(s.lastSeen)}</div>
+              </div>
+              ${s.current ? '' : `<span class="cm-dev-kick" data-id="${s.id}">退出</span>`}
+            </div>`).join('') || '<div class="cm-empty small">暂无设备</div>'}
+        </div>`,
+        actions: [
+          { text: '关闭' },
+          { text: '退出其他设备', onClick: () => {
+              api.revokeOtherSessions().then(r => {
+                toast(`已退出 ${r.removed} 台设备`);
+                diag.open = false;
+                render(el);
+              }).catch(e => toast(e.message));
+              return false;
+            } },
+        ],
+      });
+      setTimeout(() => {
+        diag.querySelectorAll('.cm-dev-kick').forEach(k => {
+          k.onclick = async () => {
+            try {
+              await api.revokeSession(k.dataset.id);
+              toast('该设备已下线');
+              k.closest('.cm-dev').remove();
+              refresh();
+            } catch (e) { toast(e.message); }
+          };
+        });
+      }, 0);
+    };
+  }
+
   el.querySelector('#checkUpd').onclick = async () => {
     toast('正在检查更新…');
     await checkUpdate({ silent: false });

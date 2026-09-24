@@ -99,13 +99,34 @@ export async function call(method, path, { body, auth: needAuth = false } = {}) 
 
 // ---------- 端点封装 ----------
 
+/** 设备标识（App 取真实机型，浏览器按 UA 归纳） */
+export function deviceInfo() {
+  const ua = navigator.userAgent || '';
+  const isApp = typeof window.NativeApi !== 'undefined';
+  let label = '';
+  try {
+    if (isApp && window.NativeApi.deviceModel) label = window.NativeApi.deviceModel();
+  } catch { /* 忽略 */ }
+  if (!label) {
+    const os = (/Android[ /]([\d.]+)/.exec(ua) && 'Android ' + /Android[ /]([\d.]+)/.exec(ua)[1])
+      || (/Windows/.test(ua) && 'Windows') || (/Macintosh|Mac OS/.test(ua) && 'macOS')
+      || (/Linux/.test(ua) && 'Linux') || '';
+    const ch = /Chrome\/([\d.]+)/.exec(ua);
+    label = [isApp ? 'App' : '网页', os, ch ? 'Chromium ' + ch[1].split('.')[0] : ''].filter(Boolean).join(' · ');
+  }
+  return { device: label, platform: isApp ? 'app' : 'web' };
+}
+
 export const api = {
   // 认证/资料
-  register: (username, password, nickname, email, emailCode) => call('POST', '/auth/register', { body: { username, password, nickname, email, emailCode } }),
+  register: (username, password, nickname, email, emailCode) => call('POST', '/auth/register', { body: { username, password, nickname, email, emailCode, ...deviceInfo() } }),
   sendEmailCode: (email) => call('POST', '/auth/email/code', { body: { email } }),
-  login: (username, password) => call('POST', '/auth/login', { body: { username, password } }),
-  internalLogin: (password) => call('POST', '/auth/internal', { body: { password } }),
+  login: (username, password) => call('POST', '/auth/login', { body: { username, password, ...deviceInfo() } }),
+  internalLogin: (password) => call('POST', '/auth/internal', { body: { password, ...deviceInfo() } }),
   logout: () => call('POST', '/auth/logout', { body: {}, auth: true }),
+  sessions: () => call('GET', '/auth/sessions', { auth: true }),
+  revokeSession: (id) => call('DELETE', `/auth/sessions/${id}`, { body: {}, auth: true }),
+  revokeOtherSessions: () => call('DELETE', '/auth/sessions/others', { body: {}, auth: true }),
   me: () => call('GET', '/auth/me', { auth: true }),
   profileOf: (uid) => call('GET', `/profile/${uid}`),
   updateProfile: (fields) => call('PUT', '/profile', { body: fields, auth: true }),
