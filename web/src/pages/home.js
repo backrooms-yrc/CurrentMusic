@@ -1,4 +1,4 @@
-// 首页：每日推荐 + 猜你喜欢（登录后） + 最近播放（登录后）
+// 首页：每日推荐 + 排行榜 + 猜你喜欢（登录后） + 最近播放（登录后）
 import { api, auth } from '../api.js';
 import { esc, renderSongList, skelCards, skelList } from '../ui.js';
 import { player } from '../player.js';
@@ -32,6 +32,14 @@ export async function render(el) {
             <div class="cm-card-sub">${esc(s.artists)}</div>
           </div>`).join('')
       }</div>` : `<div class="cm-empty small">今日推荐暂不可用</div>`}
+    </section>
+    <section class="cm-sec">
+      <div class="cm-sec-head"><h2>排行榜</h2></div>
+      <div class="cm-quickrow">
+        <a class="cm-quick" href="#/ncmpl/3778678"><span class="material-icons-outlined">local_fire_department</span><b>热歌榜</b></a>
+        <a class="cm-quick" href="#/ncmpl/19723756"><span class="material-icons-outlined">trending_up</span><b>飙升榜</b></a>
+        <a class="cm-quick" href="#/ncmpl/3779629"><span class="material-icons-outlined">star</span><b>新歌榜</b></a>
+      </div>
     </section>
     ${forYou.length ? `
     <section class="cm-sec">
