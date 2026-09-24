@@ -17,6 +17,7 @@ import * as library from './pages/library.js';
 import * as playlist from './pages/playlist.js';
 import * as user from './pages/user.js';
 import * as settingsPage from './pages/settings.js';
+import * as adminPage from './pages/admin.js';
 
 const ROUTES = [
   { re: /^#\/home$/, page: home, title: 'CurrentMusic' },
@@ -24,6 +25,7 @@ const ROUTES = [
   { re: /^#\/library$/, page: library, title: '歌单' },
   { re: /^#\/user$/, page: user, title: '我的' },
   { re: /^#\/settings$/, page: settingsPage, title: '设置' },
+  { re: /^#\/admin$/, page: adminPage, title: '管理员' },
   { re: /^#\/pl\/(.+)$/, page: playlist, title: '歌单', fixed: m => ['pl', m[1]] },
   { re: /^#\/daily$/, page: playlist, title: '每日推荐', fixed: ['daily'] },
   { re: /^#\/ncmpl\/(\d+)$/, page: playlist, title: '排行榜', fixed: m => ['ncmpl', m[1]] },

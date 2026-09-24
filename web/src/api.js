@@ -127,6 +127,16 @@ export const api = {
   sessions: () => call('GET', '/auth/sessions', { auth: true }),
   revokeSession: (id) => call('DELETE', `/auth/sessions/${id}`, { body: {}, auth: true }),
   revokeOtherSessions: () => call('DELETE', '/auth/sessions/others', { body: {}, auth: true }),
+
+  // 管理员
+  adminOverview: () => call('GET', '/admin/overview', { auth: true }),
+  adminUsers: (query = '', offset = 0, limit = 20) => call('GET', `/admin/users?query=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}`, { auth: true }),
+  adminDisable: (id, on) => call('POST', `/admin/users/${id}/disable`, { body: { on }, auth: true }),
+  adminResetPassword: (id, password) => call('POST', `/admin/users/${id}/password`, { body: { password }, auth: true }),
+  adminKick: (id) => call('POST', `/admin/users/${id}/kick`, { body: {}, auth: true }),
+  adminSetAdmin: (id, on) => call('POST', `/admin/users/${id}/admin`, { body: { on }, auth: true }),
+  adminSessions: () => call('GET', '/admin/sessions', { auth: true }),
+  adminClearCache: (scope = 'aux') => call('POST', '/admin/cache/clear', { body: { scope }, auth: true }),
   me: () => call('GET', '/auth/me', { auth: true }),
   profileOf: (uid) => call('GET', `/profile/${uid}`),
   updateProfile: (fields) => call('PUT', '/profile', { body: fields, auth: true }),
