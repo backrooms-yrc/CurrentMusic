@@ -11,7 +11,7 @@ await build({
   entryPoints: ['src/main.js'],
   bundle: true,
   format: 'iife',
-  target: ['chrome100'],
+  target: ['chrome70'],   // 兼容未更新的系统 WebView（Android 10 出厂常为 74~83）
   minify: true,
   outfile: `${OUT}/app.js`,
   loader: { '.woff2': 'file' },
