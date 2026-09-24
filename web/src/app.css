@@ -457,7 +457,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .pl-cover-wrap { margin: 6px 0 16px; }
   #plCover { width: min(36vw, 320px); height: min(36vw, 320px); }
   .pl-lyric { font-size: 16px; line-height: 2.3; }
-  .pl-lyric-line.cur { font-size: 17px; }
   .pl-transport { margin: 8px 0 14px; }
   .pl-transport .huge .material-icons-outlined { font-size: 68px; }
 }
@@ -485,6 +484,21 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 10px; }
 .pl-transport .material-icons-outlined { font-size: 38px; }
 .pl-transport .huge .material-icons-outlined { font-size: 62px; }
+/* ---------- 歌词行样式（统一版：只用不影响布局的属性）----------
+ * 绝不在 .cur 上改 font-size / font-weight / line-height —— 那会触发整列回流，
+ * 滚动目标基于旧布局计算 → 实际位置偏移 → 表现为"跳闪"。
+ * 用 opacity / transform / letter-spacing / text-shadow 做视觉强调（零回流）。 */
+.pl-lyric-line {
+  opacity: .55;
+  cursor: pointer;
+  transition: opacity .38s ease, transform .42s cubic-bezier(.25, .8, .25, 1), letter-spacing .42s ease;
+}
+.pl-lyric-line.cur {
+  opacity: 1;
+  letter-spacing: .3px;        /* 视觉强调，替代 font-weight（不回流） */
+  transform: scale(1.024);     /* 轻微浮起 */
+}
+
 /* 歌词容器必须 position:relative：滚动定位用行元素相对此容器的 offsetTop 计算 */
 .pl-lyric {
   position: relative; flex: 1; min-height: 0; width: 100%; overflow-y: auto;
@@ -493,8 +507,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   -webkit-mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
   padding: 6px 0; overscroll-behavior: contain;
 }
-.pl-lyric-line { opacity: .55; cursor: pointer; transition: opacity .25s ease, font-size .2s ease; }
-.pl-lyric-line.cur { opacity: 1; font-weight: 700; font-size: 15px; }
 .pl-lyric-trans { font-size: calc(var(--pl-fs, 15px) - 3px); opacity: .8; }
 .pl-lyric-empty { opacity: .5; padding: 30px 0; }
 /* 歌词工具 chips（语言模式 + 字号，悬浮于歌词区顶部） */
@@ -512,7 +524,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 
 /* 歌词字号（JS 注入 --pl-fs） */
 .pl-lyric { font-size: var(--pl-fs, 15px); }
-.pl-lyric-line.cur { font-size: calc(var(--pl-fs, 15px) + 1px); }
 
 /* ---------- 评论区加载动画（骨架 + 批次渐入 + 加载更多进度） ---------- */
 .cmt-skava { width: 36px; height: 36px; border-radius: 50%; flex: none; }
@@ -874,8 +885,9 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 /* 当前行的每个字用渐变裁切填充，--p 由 JS 按毫秒插值 0→1，形成"扫过"效果 */
 .pl-lyric-line.cur .lyr .ch {
   background-image: linear-gradient(90deg,
+    #fff 0%,
     #fff calc(var(--p, 0) * 100%),
-    rgba(255, 255, 255, .40) calc(var(--p, 0) * 100%));
+    rgba(255, 255, 255, .38) calc(var(--p, 0) * 100%));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -892,9 +904,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .pl-lyric-line.cur .lyr .ch.on { color: #fff; text-shadow: 0 0 12px rgba(255, 255, 255, .45); }
 }
 /* 当前行浮起（Apple 式层级感），非当前行略降 */
-.pl-lyric-line { transition: opacity .3s ease; }
 /* 当前行浮起：只在切换瞬间做一次性缩放（不加过渡，避免缩放动画期间文字逐帧重栅格化导致闪烁） */
-.pl-lyric-line.cur { transform: scale(1.03); }
 @media (prefers-reduced-motion: reduce) {
   .pl-lyric-line { transition: none; }
   .pl-lyric-line.cur .lyr .ch { transition: none; }
