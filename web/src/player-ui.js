@@ -163,6 +163,19 @@ window.addEventListener('resize', () => { layoutLyricPads(); });
 // ---------- 逐字点亮（卡拉OK） ----------
 let karaokeRaf = 0, karaokeLine = -1, karaokeIdx = -1;
 
+// 支持连续填充（background-clip:text）时走 Apple 风格的「扫光」，
+// 否则退化为逐字跳色（老引擎兜底）
+const CAN_SWEEP = (() => {
+  try {
+    return CSS.supports('-webkit-background-clip', 'text') || CSS.supports('background-clip', 'text');
+  } catch (e) {
+    return false;
+  }
+})();
+
+let karaokeSpans = null;
+let karaokeVals = [];
+
 function fireKaraoke() {
   if (!lyricKaraoke) return;
   const box = document.getElementById('plLyric');
@@ -173,13 +186,34 @@ function fireKaraoke() {
   const el = box.querySelector(`.pl-lyric-line[data-i="${i}"]`);
   if (!el) return;
   const now = player.audio.currentTime * 1000;
-  let idx = -1;
-  for (let k = 0; k < line.w.length; k++) {
-    if (line.w[k][0] <= now) idx = k; else break;
+  const w = line.w;
+
+  if (!CAN_SWEEP) {                       // 兜底：逐字跳色
+    let idx = -1;
+    for (let k = 0; k < w.length; k++) { if (w[k][0] <= now) idx = k; else break; }
+    if (i === karaokeLine && idx === karaokeIdx) return;
+    karaokeLine = i; karaokeIdx = idx;
+    el.querySelectorAll('.ch').forEach((sp, k) => sp.classList.toggle('on', k <= idx));
+    return;
   }
-  if (i === karaokeLine && idx === karaokeIdx) return;   // 无变化不碰 DOM
-  karaokeLine = i; karaokeIdx = idx;
-  el.querySelectorAll('.ch').forEach((sp, k) => sp.classList.toggle('on', k <= idx));
+
+  if (karaokeLine !== i || !karaokeSpans) {
+    karaokeSpans = el.querySelectorAll('.ch');
+    karaokeVals = new Array(karaokeSpans.length).fill(-1);
+    karaokeLine = i;
+  }
+  const spans = karaokeSpans;
+  if (!spans || !spans.length) return;
+  for (let k = 0; k < spans.length && k < w.length; k++) {
+    const start = w[k][0];
+    const end = (k + 1 < w.length) ? w[k + 1][0] : start + 280;   // 末字按 ~280ms 收尾
+    let p = (now - start) / Math.max(60, end - start);
+    p = p < 0 ? 0 : (p > 1 ? 1 : p);
+    if (Math.abs(p - karaokeVals[k]) < 0.02 && p !== 0 && p !== 1) continue;   // 无实质变化不写样式
+    karaokeVals[k] = p;
+    spans[k].style.setProperty('--p', p.toFixed(3));
+    spans[k].classList.toggle('sweep', p > 0 && p < 1);            // 正在扫过的字加光晕
+  }
 }
 
 function startKaraoke() {
@@ -192,6 +226,8 @@ function stopKaraoke() {
   karaokeRaf = 0;
   karaokeLine = -1;
   karaokeIdx = -1;
+  karaokeSpans = null;
+  karaokeVals = [];
 }
 
 let curLyricIdx = -1;
@@ -477,7 +513,7 @@ async function applyDynamicScheme() {
 }
 on('song', () => { applyDynamicScheme(); });
 
-on('song', () => { if (!overlay().hidden) openFull(); karaokeLine = -1; karaokeIdx = -1; fireKaraoke(); });
+on('song', () => { if (!overlay().hidden) openFull(); karaokeLine = -1; karaokeIdx = -1; karaokeSpans = null; fireKaraoke(); });
 on('state', () => {
   if (player.audio.paused) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');

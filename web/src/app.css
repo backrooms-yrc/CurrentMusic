@@ -870,8 +870,27 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .upd-src > * + * { margin-left: 10px; }
   .upd-prog > * + * { margin-top: 6px; }
 }
-/* ---------- 逐字歌词（卡拉OK）：当前行逐字点亮 ---------- */
-.pl-lyric-line .lyr .ch { transition: color .16s linear, text-shadow .24s ease; }
-.pl-lyric-line.cur .lyr .ch { color: rgba(255, 255, 255, .42); }
-.pl-lyric-line.cur .lyr .ch.on { color: #fff; text-shadow: 0 0 12px rgba(255, 255, 255, .45); }
-@media (prefers-reduced-motion: reduce) { .pl-lyric-line .lyr .ch { transition: none; } }
+/* ---------- 逐字歌词：连续扫光填充（Apple Music 风格） ---------- */
+/* 当前行的每个字用渐变裁切填充，--p 由 JS 按毫秒插值 0→1，形成"扫过"效果 */
+.pl-lyric-line.cur .lyr .ch {
+  background-image: linear-gradient(90deg,
+    #fff calc(var(--p, 0) * 100%),
+    rgba(255, 255, 255, .40) calc(var(--p, 0) * 100%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.pl-lyric-line.cur .lyr .ch.sweep { filter: drop-shadow(0 0 9px rgba(255, 255, 255, .5)); }
+/* 兜底：不支持 background-clip:text 时退回逐字跳色（.on 由 JS 切换） */
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .pl-lyric-line.cur .lyr .ch { color: rgba(255, 255, 255, .42); -webkit-text-fill-color: currentColor; }
+  .pl-lyric-line.cur .lyr .ch.on { color: #fff; text-shadow: 0 0 12px rgba(255, 255, 255, .45); }
+}
+/* 当前行浮起（Apple 式层级感），非当前行略降 */
+.pl-lyric-line { transition: opacity .3s ease, transform .42s cubic-bezier(.2, .8, .2, 1); }
+.pl-lyric-line.cur { transform: scale(1.035); }
+@media (prefers-reduced-motion: reduce) {
+  .pl-lyric-line { transition: none; }
+  .pl-lyric-line.cur .lyr .ch { transition: none; }
+}
