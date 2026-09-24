@@ -38,6 +38,7 @@ export async function render(el) {
     </div>
     <div class="cm-sec-head"><h2>服务器</h2></div>
     <div class="cm-setting-list">
+      <div class="cm-setting" id="secure"><span class="material-icons-outlined">lock</span>安全连接<i>${settings.secureMode ? 'HTTPS 已启用' : '已关闭'}</i></div>
       <div class="cm-setting" id="server"><span class="material-icons-outlined">dns</span>服务器地址<i>${esc(settings.base)}</i></div>
     </div>
     <div class="cm-sec-head"><h2>关于</h2></div>
@@ -193,6 +194,12 @@ export async function render(el) {
   el.querySelector('#checkUpd').onclick = async () => {
     toast('正在检查更新…');
     await checkUpdate({ silent: false });
+  };
+  el.querySelector('#secure').onclick = () => {
+    const next = !settings.secureMode;
+    settings.secureMode = next;
+    toast(next ? '安全连接已启用（HTTPS）' : '安全连接已关闭（允许 HTTP）');
+    render(el);
   };
   el.querySelector('#server').onclick = () => promptDialog({
     title: '服务器地址', label: 'API 基址', value: settings.base,
