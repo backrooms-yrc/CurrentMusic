@@ -881,15 +881,20 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   -webkit-text-fill-color: transparent;
   color: transparent;
 }
-.pl-lyric-line.cur .lyr .ch.sweep { filter: drop-shadow(0 0 9px rgba(255, 255, 255, .5)); }
+.pl-lyric-line.cur .lyr .ch.sweep {
+  /* 用 text-shadow 而非 filter：filter 会为每个字建立/更新滤镜层，逐帧变化时易闪烁。
+     注意不要覆盖填充色——实心白会让"开始扫光"的瞬间产生亮度跳变。 */
+  text-shadow: 0 0 9px rgba(255, 255, 255, .5);
+}
 /* 兜底：不支持 background-clip:text 时退回逐字跳色（.on 由 JS 切换） */
 @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
   .pl-lyric-line.cur .lyr .ch { color: rgba(255, 255, 255, .42); -webkit-text-fill-color: currentColor; }
   .pl-lyric-line.cur .lyr .ch.on { color: #fff; text-shadow: 0 0 12px rgba(255, 255, 255, .45); }
 }
 /* 当前行浮起（Apple 式层级感），非当前行略降 */
-.pl-lyric-line { transition: opacity .3s ease, transform .42s cubic-bezier(.2, .8, .2, 1); }
-.pl-lyric-line.cur { transform: scale(1.035); }
+.pl-lyric-line { transition: opacity .3s ease; }
+/* 当前行浮起：只在切换瞬间做一次性缩放（不加过渡，避免缩放动画期间文字逐帧重栅格化导致闪烁） */
+.pl-lyric-line.cur { transform: scale(1.03); }
 @media (prefers-reduced-motion: reduce) {
   .pl-lyric-line { transition: none; }
   .pl-lyric-line.cur .lyr .ch { transition: none; }

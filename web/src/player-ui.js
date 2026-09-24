@@ -110,6 +110,7 @@ function setPlayerView(v) {
     layoutLyricPads();
     userScrollUntil = 0;
     curLyricIdx = -1;
+    karaokeTick = 0;
     syncLyric();
   }
 }
@@ -161,7 +162,7 @@ function layoutLyricPads() {
 window.addEventListener('resize', () => { layoutLyricPads(); });
 
 // ---------- 逐字点亮（卡拉OK） ----------
-let karaokeRaf = 0, karaokeLine = -1, karaokeIdx = -1;
+let karaokeRaf = 0, karaokeLine = -1, karaokeIdx = -1, karaokeTick = 0;
 
 // 支持连续填充（background-clip:text）时走 Apple 风格的「扫光」，
 // 否则退化为逐字跳色（老引擎兜底）
@@ -201,18 +202,27 @@ function fireKaraoke() {
     karaokeSpans = el.querySelectorAll('.ch');
     karaokeVals = new Array(karaokeSpans.length).fill(-1);
     karaokeLine = i;
+    karaokeTick = 0;                 // 换行后首帧立即绘制，不受节流影响
   }
   const spans = karaokeSpans;
   if (!spans || !spans.length) return;
+  // 节流到 ~30fps：扫光肉眼无差，但可把重栅格化次数减半（弱机更稳）
+  const t = performance.now();
+  if (t - karaokeTick < 33) return;
+  karaokeTick = t;
   for (let k = 0; k < spans.length && k < w.length; k++) {
     const start = w[k][0];
     const end = (k + 1 < w.length) ? w[k + 1][0] : start + 280;   // 末字按 ~280ms 收尾
     let p = (now - start) / Math.max(60, end - start);
     p = p < 0 ? 0 : (p > 1 ? 1 : p);
-    if (Math.abs(p - karaokeVals[k]) < 0.02 && p !== 0 && p !== 1) continue;   // 无实质变化不写样式
-    karaokeVals[k] = p;
-    spans[k].style.setProperty('--p', p.toFixed(3));
-    spans[k].classList.toggle('sweep', p > 0 && p < 1);            // 正在扫过的字加光晕
+    // 5% 量化（约 1px，肉眼不可辨）后比较：**不再对 0/1 边界开特例**，
+    // 否则未唱/已唱的字每帧都会被重写 → 渐变裁切文字反复重栅格化 → 闪烁
+    const q = Math.round(p * 20) / 20;
+    if (q === karaokeVals[k]) continue;
+    karaokeVals[k] = q;
+    spans[k].style.setProperty('--p', q.toFixed(2));
+    const sweeping = q > 0 && q < 1;
+    if (spans[k].classList.contains('sweep') !== sweeping) spans[k].classList.toggle('sweep', sweeping);
   }
 }
 
@@ -513,7 +523,7 @@ async function applyDynamicScheme() {
 }
 on('song', () => { applyDynamicScheme(); });
 
-on('song', () => { if (!overlay().hidden) openFull(); karaokeLine = -1; karaokeIdx = -1; karaokeSpans = null; fireKaraoke(); });
+on('song', () => { if (!overlay().hidden) openFull(); karaokeLine = -1; karaokeIdx = -1; karaokeSpans = null; karaokeTick = 0; fireKaraoke(); });
 on('state', () => {
   if (player.audio.paused) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');
