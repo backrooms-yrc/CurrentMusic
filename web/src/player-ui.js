@@ -96,6 +96,7 @@ const LYRIC_SIZES = [
 ];
 let lyricSizeKey = localStorage.getItem('cm.lyricSize') || defaultLyricSizeKey();
 let bgGradOn = localStorage.getItem('cm.bgGrad') === '1';   // 沉浸模式（原动态渐变背景），默认关闭
+let lyricKaraoke = localStorage.getItem('cm.karaoke') !== '0';   // 逐字歌词（卡拉OK），默认开启
 
 // 窄屏播放页视图：cover（封面+控制） ↔ lyric（整屏歌词），点击主区域切换
 let playerView = sessionStorage.getItem('cm.playerView') || 'cover';
@@ -128,7 +129,13 @@ function renderLyric() {
     `<div class="pl-lyric-pad" id="padTop"></div>` +
     lyricLines.map((l, i) => {
       const { main, sub } = lineParts(l);
-      return `<div class="pl-lyric-line" data-i="${i}"><div>${esc(main)}</div>${sub ? `<div class="pl-lyric-trans">${esc(sub)}</div>` : ''}</div>`;
+      // 逐字：仅当该行有逐字/逐词轴、且当前显示的是原文时启用（翻译/罗马音无逐字轴）
+      const karaokeOK = lyricKaraoke && l.w && l.w.length
+        && (lyricMode === 'bi' || lyricMode === 'orig' || lyricMode === 'orig-roma');
+      const body = karaokeOK
+        ? `<div class="lyr">${l.w.map(([wt, tx]) => `<span class="ch" data-t="${wt}">${esc(tx)}</span>`).join('')}</div>`
+        : `<div>${esc(main)}</div>`;
+      return `<div class="pl-lyric-line" data-i="${i}">${body}${sub ? `<div class="pl-lyric-trans">${esc(sub)}</div>` : ''}</div>`;
     }).join('') +
     `<div class="pl-lyric-pad" id="padBot"></div>`;
   box.querySelectorAll('.pl-lyric-line').forEach(el => {
@@ -152,6 +159,40 @@ function layoutLyricPads() {
   if (bot) bot.style.height = h + 'px';
 }
 window.addEventListener('resize', () => { layoutLyricPads(); });
+
+// ---------- 逐字点亮（卡拉OK） ----------
+let karaokeRaf = 0, karaokeLine = -1, karaokeIdx = -1;
+
+function fireKaraoke() {
+  if (!lyricKaraoke) return;
+  const box = document.getElementById('plLyric');
+  if (!box) return;
+  const i = curLyricIdx;
+  const line = lyricLines[i];
+  if (!line || !line.w) return;
+  const el = box.querySelector(`.pl-lyric-line[data-i="${i}"]`);
+  if (!el) return;
+  const now = player.audio.currentTime * 1000;
+  let idx = -1;
+  for (let k = 0; k < line.w.length; k++) {
+    if (line.w[k][0] <= now) idx = k; else break;
+  }
+  if (i === karaokeLine && idx === karaokeIdx) return;   // 无变化不碰 DOM
+  karaokeLine = i; karaokeIdx = idx;
+  el.querySelectorAll('.ch').forEach((sp, k) => sp.classList.toggle('on', k <= idx));
+}
+
+function startKaraoke() {
+  if (karaokeRaf) return;
+  const step = () => { karaokeRaf = requestAnimationFrame(step); fireKaraoke(); };
+  karaokeRaf = requestAnimationFrame(step);
+}
+function stopKaraoke() {
+  if (karaokeRaf) cancelAnimationFrame(karaokeRaf);
+  karaokeRaf = 0;
+  karaokeLine = -1;
+  karaokeIdx = -1;
+}
 
 let curLyricIdx = -1;
 let userScrollUntil = 0;
@@ -279,6 +320,7 @@ async function openFull() {
 
   loadLyric();
   loadStats();
+  startKaraoke();   // 逐字点亮（暂停时在 state 回调里停）
   // 网易云红心小徽标（绑定账号已红心时显示；未登录不请求）
   if (auth.token) ensureNcmLiked().then(() => {
     const badge = document.getElementById('plNcmBadge');
@@ -313,6 +355,7 @@ async function loadStats() {
 function closeFull() {
   const ov = overlay();
   if (ov.hidden) return;
+  stopKaraoke();
   ov.classList.add('closing');
   setTimeout(() => { ov.hidden = true; ov.innerHTML = ''; ov.classList.remove('closing'); }, 240);
 }
@@ -332,6 +375,10 @@ function openMoreDrawer() {
       <div class="cm-more-chips" id="chipsLang">${chipsHTML(LYRIC_MODES, lyricMode, 'lang')}</div>
       <div class="cm-more-sec">歌词字号</div>
       <div class="cm-more-chips" id="chipsSize">${chipsHTML(LYRIC_SIZES, lyricSizeKey, 'size')}</div>
+      <div class="cm-more-row">
+        <div><div class="cm-more-t">逐字歌词</div><div class="cm-more-s">有逐字数据的歌曲逐字点亮（卡拉OK）</div></div>
+        <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
+      </div>
       <div class="cm-more-row">
         <div><div class="cm-more-t">沉浸模式</div><div class="cm-more-s">封面主色流动渐变铺满播放页</div></div>
         <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
@@ -360,6 +407,12 @@ function openMoreDrawer() {
         diag.querySelectorAll('mdui-chip[data-g="size"]').forEach(x => x.selected = x === ch);
         renderLyric(); syncLyric();
       };
+    });
+    diag.querySelector('#mKara').addEventListener('change', e => {
+      lyricKaraoke = e.target.checked;
+      localStorage.setItem('cm.karaoke', lyricKaraoke ? '1' : '0');
+      renderLyric();
+      stopKaraoke(); startKaraoke(); fireKaraoke();
     });
     diag.querySelector('#mGrad').addEventListener('change', e => {
       bgGradOn = e.target.checked;
@@ -424,8 +477,9 @@ async function applyDynamicScheme() {
 }
 on('song', () => { applyDynamicScheme(); });
 
-on('song', () => { if (!overlay().hidden) openFull(); });
+on('song', () => { if (!overlay().hidden) openFull(); karaokeLine = -1; karaokeIdx = -1; fireKaraoke(); });
 on('state', () => {
+  if (player.audio.paused) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');
   if (b) b.innerHTML = `<span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (!player.audio.paused ? 'pause_circle' : 'play_circle')}</span>`;
   renderMini();
