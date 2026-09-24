@@ -6,6 +6,7 @@ import './app.css';
 import { auth, setAuthExpiredHandler } from './api.js';
 import { toast, initRipple, bootColorScheme } from './ui.js';
 import { checkUpdate } from './update.js';
+import { engineChrome, engineOutdated } from './version.js';
 import { player } from './player.js';
 import { initPlayerUI } from './player-ui.js';
 import { applyTheme } from './pages/settings.js';
@@ -110,6 +111,12 @@ function boot() {
   initPlayerUI();
 
   setAuthExpiredHandler(() => toast('登录已失效，请重新登录'));
+
+  // 旧版渲染引擎一次性提示（引导更新 WebView，更新后可恢复最佳效果）
+  if (engineOutdated() && !sessionStorage.getItem('cm.engineHint')) {
+    sessionStorage.setItem('cm.engineHint', '1');
+    setTimeout(() => toast(`当前系统 WebView 较旧（Chromium ${engineChrome()}），建议在应用商店更新以获得最佳体验`), 4000);
+  }
 
   // 启动自动检测更新（延迟启动，不与首屏渲染抢资源）
   setTimeout(() => { checkUpdate({ silent: true }).catch(() => {}); }, 1500);

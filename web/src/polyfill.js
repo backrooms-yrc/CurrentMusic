@@ -78,5 +78,52 @@
   }
   if (!window.structuredClone) {
     window.structuredClone = function (v) { return v === undefined ? v : JSON.parse(JSON.stringify(v)); };
+  }  // ---- 以下为 Chromium 55~70 缺失的常用 API（Android 7~9 出厂 WebView）----
+  if (!Promise.prototype.finally) {
+    Promise.prototype.finally = function (cb) {
+      var P = this.constructor;
+      return this.then(
+        function (v) { return P.resolve(cb && cb()).then(function () { return v; }); },
+        function (e) { return P.resolve(cb && cb()).then(function () { throw e; }); }
+      );
+    };
   }
+  if (!String.prototype.padStart) {
+    String.prototype.padStart = function (n, pad) {
+      var s = String(this); pad = pad === undefined ? ' ' : String(pad); n = Math.trunc(n);
+      return s.length >= n ? s : (new Array(n - s.length + 1).join(pad || ' ')).slice(0, n - s.length) + s;
+    };
+  }
+  if (!String.prototype.padEnd) {
+    String.prototype.padEnd = function (n, pad) {
+      var s = String(this); pad = pad === undefined ? ' ' : String(pad); n = Math.trunc(n);
+      return s.length >= n ? s : s + (new Array(n - s.length + 1).join(pad || ' ')).slice(0, n - s.length);
+    };
+  }
+  if (window.Element && !Element.prototype.append) {
+    Element.prototype.append = function () { this.appendChild(_frag(arguments)); };
+    Element.prototype.prepend = function () { this.insertBefore(_frag(arguments), this.firstChild); };
+    Element.prototype.before = function () { if (this.parentNode) this.parentNode.insertBefore(_frag(arguments), this); };
+    Element.prototype.after = function () { if (this.parentNode) this.parentNode.insertBefore(_frag(arguments), this.nextSibling); };
+    function _frag(nodes) {
+      var f = document.createDocumentFragment();
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        f.appendChild(typeof n === 'string' ? document.createTextNode(n) : n);
+      }
+      return f;
+    }
+  }
+  if (window.Element && !Element.prototype.toggleAttribute) {
+    Element.prototype.toggleAttribute = function (name, force) {
+      var has = this.hasAttribute(name);
+      var want = force === undefined ? !has : !!force;
+      if (want) this.setAttribute(name, ''); else this.removeAttribute(name);
+      return want;
+    };
+  }
+  if (!window.queueMicrotask) {
+    window.queueMicrotask = function (fn) { Promise.resolve().then(fn); };
+  }
+  if (window.Element && !Element.prototype.remove && window.ChildNode) { /* 现代引擎自带 */ }
 })();

@@ -251,6 +251,33 @@ public class MainActivity extends Activity {
             }
         }
 
+        /** 打开系统 WebView 的更新入口（应用商店优先，回退到应用详情页）。 */
+        @JavascriptInterface
+        public void openWebViewUpdate() {
+            main.post(() -> {
+                String[] pkgs = {"com.google.android.webview", "com.android.webview"};
+                for (String p : pkgs) {
+                    try {
+                        Intent i = new Intent(Intent.ACTION_VIEW,
+                                android.net.Uri.parse("market://details?id=" + p));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(i);
+                        return;
+                    } catch (Exception ignored) {
+                        // 无应用商店，继续尝试下一个
+                    }
+                }
+                try {
+                    Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            android.net.Uri.parse("package:com.google.android.webview"));
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "请到应用商店搜索更新「Android System WebView」", Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
         /** 测速：Range 拉取前 bytes 字节，结果经 __cmSpeedResult(key, bytes, bytesPerSec, ms) 回调。 */
         @JavascriptInterface
         public void testSpeed(final String key, final String url, final int bytes) {

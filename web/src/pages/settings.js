@@ -3,7 +3,7 @@ import { mdui } from '../md.js';
 import { settings, auth } from '../api.js';
 import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel } from '../ui.js';
 import { checkUpdate } from '../update.js';
-import { currentVersion } from '../version.js';
+import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
 
 export function applyTheme() {
   const root = document.documentElement;
@@ -44,6 +44,7 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:15px;vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
       <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i>${esc(u.nickname || u.username || '未登录')}</i></div>
+      <div class="cm-setting" id="engine"><span class="material-icons-outlined">public</span>系统 WebView<i>${engineChrome() ? 'Chromium ' + engineChrome() : '未知'}${engineOutdated() ? ' · 建议更新' : ''}</i></div>
     </div>`;
 
   el.querySelector('#scheme').onclick = () => {
@@ -98,6 +99,25 @@ export async function render(el) {
     title: '下载目录', label: 'Music/ 下的子目录名', value: localStorage.getItem('cm.downloadDir') || 'CurrentMusic',
     onOk: v => { localStorage.setItem('cm.downloadDir', v.trim() || 'CurrentMusic'); toast('已保存'); render(el); },
   });
+  el.querySelector('#engine').onclick = () => {
+    const v = engineChrome();
+    if (!engineOutdated()) return toast(`当前 WebView：Chromium ${v || '未知'}，无需更新`);
+    mdui.dialog({
+      headline: '建议更新系统 WebView',
+      body: `<div style="font-size:13.5px;line-height:1.8">
+        当前内核为 <b>Chromium ${v}</b>，低于建议版本 ${ENGINE_MIN_RECOMMENDED}，
+        部分界面效果或播放体验可能受影响。<br>
+        在应用商店更新「Android System WebView」（或 Chrome）后重启 App 即可恢复最佳效果。
+      </div>`,
+      actions: [
+        { text: '稍后' },
+        { text: '去更新', onClick: () => {
+            if (window.NativeApi && window.NativeApi.openWebViewUpdate) window.NativeApi.openWebViewUpdate();
+            else toast('请到应用商店搜索「Android System WebView」');
+          } },
+      ],
+    });
+  };
   el.querySelector('#checkUpd').onclick = async () => {
     toast('正在检查更新…');
     await checkUpdate({ silent: false });

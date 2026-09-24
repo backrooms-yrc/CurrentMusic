@@ -11,7 +11,9 @@ await build({
   entryPoints: ['src/main.js'],
   bundle: true,
   format: 'iife',
-  target: ['chrome70'],   // 兼容未更新的系统 WebView（Android 10 出厂常为 74~83）
+  target: ['chrome58'],   // Android 8.0 出厂 WebView 起可用（55~57 需升级 WebView，App 内会提示）
+  // 注意：不要用 supported:{arrow:false} 强制降级箭头——esbuild 在 mdui 的类构造里
+  // 会因此生成访问 this 先于 super() 的代码，导致每个组件构造都抛 "Must call super..."。
   minify: true,
   outfile: `${OUT}/app.js`,
   loader: { '.woff2': 'file' },
