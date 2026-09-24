@@ -43,6 +43,13 @@ export async function render(el) {
     </section>
     ${forYou.length ? `
     <section class="cm-sec">
+      <div class="cm-sec-head"><h2>一起听</h2><span class="cm-sec-more" id="goRooms"><span class="material-icons-outlined">groups</span> 房间广场</span></div>
+      <div class="cm-quickrow">
+        <a class="cm-quick" href="#/rooms"><span class="material-icons-outlined">meeting_room</span><b>加入房间</b><i>多人同步播放</i></a>
+        <a class="cm-quick" id="quickCreateRoom"><span class="material-icons-outlined">add_circle</span><b>创建房间</b><i>可设密码</i></a>
+      </div>
+    </section>
+    <section class="cm-sec">
       <div class="cm-sec-head"><h2>猜你喜欢</h2><span class="cm-sec-sub">基于你点赞的歌手：${esc(artists.join('、'))}</span></div>
       <div id="forYouList"></div>
     </section>` : ''}
@@ -65,6 +72,9 @@ export async function render(el) {
     c.onclick = () => player.playList(daily, +c.dataset.i);
   });
   el.querySelector('#playDaily')?.addEventListener('click', () => player.playList(daily, 0));
+  el.querySelector('#quickCreateRoom')?.addEventListener('click', () => {
+    import('./rooms.js').then(m => m.createRoomDialog());   // 首页直达创建
+  });
   el.querySelector('#playRecent')?.addEventListener('click', () => player.playList(recent, 0));
 
   if (forYou.length) {

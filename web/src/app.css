@@ -957,3 +957,77 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-pager { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; }
 .cm-pager-info { font-size: 12px; opacity: .6; }
 .cm-devlist { display: flex; flex-direction: column; }
+
+/* ---------- 听歌房 ---------- */
+.cm-room-hero {
+  padding: 20px 18px; border-radius: 20px; margin-bottom: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cm-primary) 22%, transparent), color-mix(in srgb, var(--cm-primary) 6%, transparent));
+}
+.cm-room-hero-t { font-size: 24px; font-weight: 750; }
+.cm-room-hero-s { font-size: 12px; opacity: .7; margin-top: 4px; }
+.cm-room-hero-acts { margin-top: 14px; }
+.cm-roomgrid { display: grid; grid-template-columns: 1fr; grid-gap: 10px; gap: 10px; }
+@media (min-width: 600px) { .cm-roomgrid { grid-template-columns: 1fr 1fr; } }
+.cm-roomcard {
+  padding: 14px 16px; border-radius: 16px; cursor: pointer;
+  background: var(--mdui-color-surface-container, #f3edf7);
+  transition: background-color .15s ease, transform .12s ease;
+  position: relative; overflow: hidden; z-index: 0;
+}
+.cm-roomcard:active { transform: scale(.985); background: color-mix(in srgb, var(--cm-primary) 10%, var(--mdui-color-surface-container, #f3edf7)); }
+.cm-roomcard-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cm-roomcard-name { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-roomcard-live { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--cm-primary) 16%, transparent); color: var(--cm-primary); flex: none; }
+.cm-roomcard-sub { font-size: 12px; opacity: .65; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-roomcard-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #4caf50; margin-left: 4px; }
+.cm-roomcard-foot { display: flex; align-items: center; gap: 4px; font-size: 11px; opacity: .6; margin-top: 8px; }
+.cm-roomcard-foot .material-icons-outlined { font-size: 13px; }
+.cm-roomcard-code { margin-left: auto; font-family: ui-monospace, monospace; }
+
+/* 房间页 */
+.cm-rtop { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.cm-rtop-main { flex: 1; min-width: 0; }
+.cm-rname { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cm-rsub { font-size: 11px; opacity: .65; display: flex; gap: 12px; margin-top: 5px; flex-wrap: wrap; }
+.cm-rsub b { font-family: ui-monospace, monospace; }
+.cm-rsync { color: #e0a030; }
+.cm-rsync.ok { color: #4caf50; }
+.cm-rtop-acts { display: flex; gap: 2px; flex: none; }
+.cm-rnow {
+  display: flex; gap: 14px; padding: 14px; border-radius: 18px; margin-bottom: 12px;
+  background: var(--mdui-color-surface-container, #f3edf7);
+}
+.cm-rnow-cover {
+  width: 76px; height: 76px; border-radius: 14px; flex: none; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--mdui-color-surface-container-highest, #e6e0e9);
+}
+.cm-rnow-cover img { width: 100%; height: 100%; object-fit: cover; }
+.cm-rnow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.cm-rnow-name { font-size: 15px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-rnow-artist { font-size: 11px; opacity: .6; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-rnow-bar { height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--cm-primary) 20%, transparent); margin-top: 10px; overflow: hidden; }
+.cm-rnow-bar i { display: block; height: 100%; width: 0; background: var(--cm-primary); }
+.cm-rnow-time { display: flex; justify-content: space-between; font-size: 10px; opacity: .5; margin-top: 3px; }
+.cm-rctrl { display: flex; align-items: center; justify-content: center; gap: 22px; padding: 6px 0 14px; flex-wrap: wrap; }
+.cm-rctrl .material-icons-outlined { font-size: 34px; color: var(--cm-primary); }
+.cm-rctrl .huge .material-icons-outlined { font-size: 56px; }
+.cm-rctrl-tip { flex-basis: 100%; text-align: center; font-size: 11px; opacity: .55; }
+.cm-rctrl-follow { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; opacity: .6; padding: 8px 0 14px; }
+.cm-rctrl-follow .material-icons-outlined { font-size: 16px; }
+.cm-rq { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 12px; }
+.cm-rq.playing { background: color-mix(in srgb, var(--cm-primary) 10%, transparent); }
+.cm-rq-from { opacity: .7; }
+.cm-rq-btn { padding: 6px; cursor: pointer; border-radius: 50%; position: relative; overflow: hidden; z-index: 0; }
+.cm-rq-btn.ok { color: #2e7d32; }
+.cm-rq-btn.no { color: var(--mdui-color-error, #b3261e); }
+.cm-rmembers { display: flex; flex-direction: column; }
+.cm-rmember { display: flex; align-items: center; gap: 10px; padding: 8px 4px; }
+.cm-rmember img, .cm-rmember-ph {
+  width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--cm-primary) 18%, transparent); color: var(--cm-primary);
+  font-weight: 600; font-size: 15px;
+}
+.cm-rmember-name { font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cm-rmember-act { margin-left: auto; padding: 6px; cursor: pointer; opacity: .6; border-radius: 50%; position: relative; overflow: hidden; z-index: 0; }
