@@ -4,7 +4,7 @@ import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './app.css';
 import { auth, setAuthExpiredHandler } from './api.js';
-import { toast, initRipple, bootColorScheme } from './ui.js';
+import { toast, initRipple, bootColorScheme, initImageFade } from './ui.js';
 import { checkUpdate } from './update.js';
 import { initPullToRefresh } from './ptr.js';
 import { engineChrome, engineOutdated } from './version.js';
@@ -101,6 +101,7 @@ function boot() {
     } catch { /* 忽略 */ }
   }
   initRipple();
+  initImageFade();   // 全局图片加载动画（骨架微光 → 渐显）
   window.__cmBooted = true;   // 供 index.html 的启动诊断判定
   document.getElementById('boot').remove();
 

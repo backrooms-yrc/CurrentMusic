@@ -351,6 +351,18 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-bindstale { font-size: 10px; padding: 2px 6px; border-radius: 6px; background: #b3261e; color: #fff; }
 .cm-bindbtns { display: flex; flex-direction: column; gap: 4px; }
 
+/* ---------- 全局图片加载动画：未加载完成 = 骨架微光占位，完成渐显（.ld 由 ui.js 标记） ---------- */
+#out img, #mini img, mdui-dialog img, #playerOverlay img, #sheets img {
+  transition: opacity .35s ease;
+}
+#out img:not(.ld), #mini img:not(.ld), mdui-dialog img:not(.ld), #playerOverlay img:not(.ld), #sheets img:not(.ld) {
+  opacity: 0;
+  background: linear-gradient(100deg, rgba(120,118,128,.09) 32%, rgba(120,118,128,.2) 50%, rgba(120,118,128,.09) 68%);
+  background-size: 250% 100%;
+  animation: cmImgShimmer 1.3s linear infinite;
+}
+@keyframes cmImgShimmer { from { background-position: 125% 0; } to { background-position: -125% 0; } }
+
 /* 扫码绑定弹窗 */
 .cm-qrbind { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .cm-qrbox {
@@ -409,6 +421,15 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-auth-title { font-size: 24px; font-weight: 800; letter-spacing: .5px; }
 .cm-auth-form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .cm-auth-note { font-size: 11px; opacity: .55; text-align: center; line-height: 1.6; }
+/* 网页版登录页「下载安卓版 APP」入口（仅浏览器渲染） */
+.cm-auth-apk {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin-top: 12px; padding: 10px 14px; border-radius: var(--cm-radius, 16px);
+  text-decoration: none; font-size: 13px; color: var(--cm-primary);
+  background: color-mix(in srgb, var(--cm-primary) 8%, transparent); background: rgba(103, 80, 164, .08);
+  border: 1px dashed color-mix(in srgb, var(--cm-primary) 45%, transparent); border: 1px dashed rgba(103, 80, 164, .45);
+}
+.cm-auth-apk .material-icons-outlined { font-size: 18px; }
 /* 其他登录方式分隔线（MD3 divider with text） */
 .cm-auth-alt {
   display: flex; align-items: center; gap: 12px; width: 100%;
@@ -484,6 +505,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .pl-body.view-lyric .pl-left { flex: 0 0 auto; }
   .pl-body.view-lyric .pl-right {
     display: flex; flex: 1; min-height: 0;
+    order: -1;                     /* 歌词在上、播放控件（ctrl/进度/走带）在下 */
     animation: cmViewIn .24s cubic-bezier(0.05, 0.7, 0.1, 1);
   }
   .pl-body.view-lyric .pl-lyric { padding-bottom: 12px; }
