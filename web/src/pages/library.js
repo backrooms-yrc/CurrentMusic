@@ -28,6 +28,24 @@ export async function render(el) {
     ? `<img src="${esc(p.cover)}" loading="lazy" onerror="this.remove()"><span class="material-icons-outlined">queue_music</span>`
     : `<span class="material-icons-outlined">queue_music</span>`;
 
+  // 歌单页的定时器随页面实例销毁；进入页面时安排下一次本地午夜同步
+  let midnightTimer = null;
+  const scheduleMidnightSync = () => {
+    clearTimeout(midnightTimer);
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(24, 0, 0, 0);
+    midnightTimer = setTimeout(async () => {
+      if (bind.bound) {
+        try { await api.syncNcm(); toast('已自动刷新网易云歌单'); } catch (e) { toast('自动刷新歌单失败：' + e.message); }
+        render(el);                         // 新页面实例会重新安排下一次午夜
+        return;
+      }
+      scheduleMidnightSync();
+    }, Math.max(1000, next - now));
+  };
+  scheduleMidnightSync();
+
   el.innerHTML = `
     <div class="cm-quickrow">
       <a class="cm-quick" href="#/pl/likes"><span class="material-icons-outlined">favorite</span><b>CurrentMusic·我喜欢</b><i>${me ? me.stat.likes : 0} 首</i></a>
@@ -38,7 +56,7 @@ export async function render(el) {
 
     ${ncmPls.length || bind.bound ? `
     <div class="cm-sec-head"><h2>网易云同步</h2>
-      <span class="cm-sec-more" id="syncNcm"><span class="material-icons-outlined">sync</span> ${bind.lastSync ? '重新同步' : '立即同步'}</span></div>
+      <span class="cm-sec-more" id="syncNcm"><span class="material-icons-outlined">refresh</span> 刷新歌单</span></div>
     <div class="cm-plgrid" id="ncmGrid">
       ${ncmPls.map(p => `
         <div class="cm-plcard" data-id="${p.id}">
@@ -67,10 +85,21 @@ export async function render(el) {
 
 `;
 
-  el.querySelector('#syncNcm')?.addEventListener('click', () => {
+  el.querySelector('#syncNcm')?.addEventListener('click', async () => {
     if (!bind.bound) { toast('请先到「我的」页绑定网易云账号'); return; }
-    el.querySelector('#syncNcm').innerHTML = '<mdui-linear-progress style="width:90px"></mdui-linear-progress> 同步中…';
-    import('../ncmbind.js').then(m => m.runSync(el, () => render(el)));
+    const btn = el.querySelector('#syncNcm');
+    if (!btn || btn.dataset.loading) return;
+    btn.dataset.loading = '1';
+    btn.innerHTML = '<mdui-circular-progress style="--mdui-circular-progress-size:18px"></mdui-circular-progress> 刷新中…';
+    try {
+      const r = await api.syncNcm();
+      toast(`已刷新 ${r.imported || 0} 个歌单 / ${r.tracks || 0} 首歌`);
+      render(el);
+    } catch (e) {
+      delete btn.dataset.loading;
+      btn.innerHTML = '<span class="material-icons-outlined">refresh</span> 刷新歌单';
+      toast('刷新歌单失败：' + e.message);
+    }
   });
   el.querySelector('#goBind')?.addEventListener('click', () => {
     import('../ncmbind.js').then(m => m.bindDialog(() => render(el)));
