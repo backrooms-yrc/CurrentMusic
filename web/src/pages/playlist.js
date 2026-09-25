@@ -77,7 +77,6 @@ export async function render(el, params) {
           ${kind !== 'pl' || !owner ? '' : `<mdui-button variant="tonal" id="addSongs"><span class="material-icons-outlined">add</span>添加歌曲</mdui-button>`}
           ${kind === 'pl' ? `<mdui-button variant="tonal" id="refreshPl"><span class="material-icons-outlined">refresh</span>刷新</mdui-button>` : ''}
           ${kind === 'pl' && owner ? `<mdui-button variant="tonal" id="delPl"><span class="material-icons-outlined">delete</span>删除</mdui-button>` : ''}
-          <mdui-button variant="tonal" id="addAll"><span class="material-icons-outlined">playlist_add</span>收入歌单</mdui-button>
         </div>
       </div>
     </div>
@@ -105,7 +104,6 @@ export async function render(el, params) {
   });
 
   el.querySelector('#playAll').onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
-  el.querySelector('#addAll').onclick = () => songs.length ? addToPlaylist(songs) : toast('列表为空');
   const refreshBtn = el.querySelector('#refreshPl');
   if (refreshBtn) refreshBtn.onclick = async () => {
     if (refreshBtn.dataset.loading) return;

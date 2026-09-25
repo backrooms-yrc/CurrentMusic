@@ -4,6 +4,31 @@ import { api, auth, settings } from './api.js';
 import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, ensureStatus, openLikeMenu, isNcmLiked, ensureNcmLiked, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
 import { player, on } from './player.js';
 
+// ---------- 网易云评论表情：方括号码 → emoji ----------
+// NCM 客户端表情在接口里是纯文本码（如 [爱心]/[呲牙]），网页端直接显示会看到
+// 原始方括号。这里映射为语义等价的通用 emoji（选用 Chrome58 即可渲染的早期码位）。
+const NCM_EMOTICONS = {
+  '微笑': '😊', '嘿嘿': '😄', '大笑': '😃', '哈哈哈': '😂', '笑哭': '😂', '呲牙': '😁',
+  '偷笑': '🤭', '尴尬': '😅', '卖萌': '😋', '傲娇': '😤', '无奈': '😔', '叹气': '😩',
+  '汗': '😓', '流汗': '😓', '流泪': '😢', '哭泣': '😭', '泪奔': '😭', '伤心': '😞',
+  '衰': '😖', '愤怒': '😠', '生气': '😡', '骂': '🤬', '惊吓': '😱', '恐惧': '😨',
+  '疑问': '❓', '疑惑': '🤔', '瞌睡': '😴', '睡觉': '😴', '困': '😪', '揉脸': '🤦',
+  '拍手': '👏', '敬礼': '🙋', '抱拳': '🙏', '祈祷': '🙏', '勾引': '😏', '飞吻': '😘',
+  '亲亲': '😍', '爱心': '❤️', '心碎': '💔', '玫瑰': '🌹', '花': '🌸', '星星': '✨',
+  '太阳': '☀️', '月亮': '🌙', '蛋糕': '🎂', '礼物': '🎁', '啤酒': '🍺', '咖啡': '☕',
+  '点赞': '👍', '弱': '👎', '真棒': '👌', '耶': '✌️', '加油': '💪', '拳头': '✊',
+  '猪头': '🐷', '狗': '🐶', '猫': '🐱', '666': '🔥', '鼓掌': '👏', '比心': '💖',
+  '憨笑': '😆', '大笑': '😃', '酷': '😎', '酷酷': '😎', '鼓掌': '👏', '挥手': '👋',
+  '拜拜': '👋', 'ok': '👌', 'no': '🙅', '胜利': '✌️', '拳头': '✊', '强': '👍',
+  '干杯': '🍻', '酒': '🍺', '茶': '🍵', '饭': '🍚', '香蕉': '🍌', '苹果': '🍎',
+  '音符': '🎵', '音乐': '🎶', '话筒': '🎤', '耳机': '🎧', '电影': '🎬', '礼物': '🎁',
+  '害羞': '😳', '可怜': '🥺', '委屈': '🥺', '难受': '😣', '生病': '🤒', '吐': '🤮',
+  '抓狂': '😫', '崩溃': '😫', '发怒': '😡', '敲打': '🔨', '刀': '🔪', '药': '💊',
+};
+function renderEmoticons(escaped) {
+  return escaped.replace(/\[([^\[\]]{1,6})\]/g, (m, name) => NCM_EMOTICONS[name] || m);
+}
+
 const overlay = () => document.getElementById('playerOverlay');
 
 // ---------- 迷你条 ----------
@@ -755,7 +780,7 @@ export async function openComments(meta) {
           ${c.userId && c.userId === meUid ? '<span class="cmt-mine">我</span><span class="cmt-del" title="删除">删除</span>' : ''}
         </div>
         ${c.beNickname ? `<div class="cmt-be">回复 @${esc(c.beNickname)}：${esc(c.beContent)}</div>` : ''}
-        <div class="cmt-content">${esc(c.content)}</div>
+        <div class="cmt-content">${renderEmoticons(esc(c.content))}</div>
         <div class="cmt-foot">
           <span>${fmtCmtTime(c.time)}</span>
           <span class="cmt-like ${liked ? 'on' : ''}" data-like="${c.id}"><span class="mi">${liked ? 'thumb_up' : 'thumb_up_alt'}</span> ${c.liked || 0}</span>
@@ -862,7 +887,7 @@ export async function openComments(meta) {
             <div class="cmt-floor-item" data-cid="${c.id}">
               <div class="cmt-head"><span class="cmt-nick">${esc(c.nickname)}</span>
               ${c.beNickname ? `<span class="cmt-be-in">@${esc(c.beNickname)}</span>` : ''}</div>
-              <div class="cmt-content">${esc(c.content)}</div>
+              <div class="cmt-content">${renderEmoticons(esc(c.content))}</div>
               <div class="cmt-foot"><span>${fmtCmtTime(c.time)}</span><span><span class="mi">thumb_up</span> ${c.liked || 0}</span><span class="cmt-reply" data-rep="${c.id}">回复</span></div>
             </div>`).join('') || '<div class="cm-empty small">暂无回复</div>';
           bindDels();   // 楼层内也有回复按钮

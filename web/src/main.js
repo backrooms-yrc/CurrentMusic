@@ -23,12 +23,14 @@ import * as roomsPage from './pages/rooms.js';
 import * as roomPage from './pages/room.js';
 import * as squarePage from './pages/square.js';
 import * as profilePage from './pages/profile.js';
+import * as artistPage from './pages/artist.js';
 
 const ROUTES = [
   { re: /^#\/home$/, page: home, title: 'CurrentMusic' },
   { re: /^#\/search$/, page: search, title: '搜索' },
   { re: /^#\/square$/, page: squarePage, title: '发现' },
   { re: /^#\/u\/(\d+)$/, page: profilePage, title: '用户主页', fixed: m => [m[1]] },
+  { re: /^#\/artist\/(\d+)$/, page: artistPage, title: '歌手', fixed: m => [m[1]] },
   { re: /^#\/library$/, page: library, title: '歌单' },
   { re: /^#\/user$/, page: user, title: '我的' },
   { re: /^#\/settings$/, page: settingsPage, title: '设置' },

@@ -200,6 +200,8 @@ export const api = {
 
   // NCM 音源
   search: (keywords, offset = 0, limit = 30) => call('GET', `/ncm/search?keywords=${encodeURIComponent(keywords)}&offset=${offset}&limit=${limit}`),
+  album: (id) => call('GET', `/ncm/album?id=${id}`),
+  artist: (id, offset = 0, limit = 100) => call('GET', `/ncm/artist?id=${id}&offset=${offset}&limit=${limit}`),
   songUrl: (ncmId, level) => call('GET', `/ncm/song/url?id=${ncmId}&level=${level}`),
   songDetail: (ids) => call('GET', `/ncm/song/detail?ids=${ids.slice(0, 100).join(',')}`),
   lyric: (ncmId) => call('GET', `/ncm/lyric?id=${ncmId}`),
