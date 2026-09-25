@@ -38,7 +38,7 @@ export async function render(el) {
     <div class="cm-agrid">
       ${card('注册用户', ov.users, `今日 +${ov.usersToday} · 7日 +${ov.usersWeek}`)}
       ${card('在线设备', ov.sessions, `1 小时内活跃用户 ${ov.onlineUsers}`)}
-      ${card('禁用账号', ov.disabled, `管理员 ${ov.admins} 人`)}
+      ${card('禁用账号', ov.disabled, `管理员 ${Math.max(0, (ov.admins || 0) - (ov.supers || 0))} 人 · 超级管理员 ${ov.supers || 0} 人`)}
       ${card('站内点赞', ov.likes)}
       ${card('自建歌单', ov.playlists, `曲目 ${ov.tracks}`)}
       ${card('播放记录', ov.plays)}
@@ -101,7 +101,9 @@ export async function render(el) {
         { k: 'kick', label: u.sessions ? `踢下线（${u.sessions} 台设备）` : '踢下线（无在线设备）', icon: 'logout' },
         { k: 'pw', label: '重置密码', icon: 'password' },
         { k: u.disabled ? 'enable' : 'disable', label: u.disabled ? '解除禁用' : '禁用账号', icon: u.disabled ? 'lock_open' : 'block' },
-        { k: u.is_admin ? 'unadmin' : 'admin', label: u.is_admin ? '取消管理员' : '设为管理员', icon: 'verified_user' },
+        ...(u.is_super
+          ? [{ k: 'super', label: '超级管理员（不可降级）', icon: 'workspace_premium' }]
+          : [{ k: u.is_admin ? 'unadmin' : 'admin', label: u.is_admin ? '取消管理员' : '设为管理员', icon: 'verified_user' }]),
       ];
       const diag = mdui.dialog({
         headline: `${u.nickname || u.username}`,
@@ -119,6 +121,7 @@ export async function render(el) {
               else if (k === 'disable') { await api.adminDisable(id, true); toast('已禁用，其所有会话已作废'); render(el); }
               else if (k === 'enable') { await api.adminDisable(id, false); toast('已解除禁用'); render(el); }
               else if (k === 'admin') { await api.adminSetAdmin(id, true); toast('已设为管理员'); render(el); }
+              else if (k === 'super') { toast('超级管理员由服务端设置，不可在面板中变更'); }
               else if (k === 'unadmin') { await api.adminSetAdmin(id, false); toast('已取消管理员'); render(el); }
               else if (k === 'pw') {
                 promptDialog({
