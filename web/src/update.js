@@ -1,36 +1,12 @@
-// 在线更新：启动自动检测 + MD3 更新弹窗（双源测速选优 + 下载进度 + 自动拉起安装器）
+// 在线更新：启动自动检测 + MD3 更新弹窗（默认服务器源，可手动切换 + 下载进度 + 自动拉起安装器）
 import { mdui } from './md.js';
 import { call, settings } from './api.js';
 import { esc, toast } from './ui.js';
 import { currentVersion, isNewer } from './version.js';
 
 const SKIP_KEY = 'cm.updateSkip';         // 本会话跳过的版本（避免反复打扰）
-const SPEED_BYTES = 262144;               // 测速样本上限 256KB（原生侧先读 64KB，快链路才扩到该值）
-const SPEED_TIMEOUT = 16000;              // 原生侧总期限 13s（含 9s 连接），浏览器路径同额；留 3s 余量
 const GH_REPO = 'backrooms-yrc/CurrentMusic';
 
-// 按源注册的测速结果派发表（关键：多源并发时不能共用一个全局回调，
-// 否则后注册的会覆盖先注册的，先测那一路永远收不到结果 → 误报「不可达」）
-const speedPending = new Map();
-
-function ensureSpeedDispatcher() {
-  if (window.__cmSpeedResult) return;
-  window.__cmSpeedResult = (key, bytes, bps, ms) => {
-    const p = speedPending.get(key);
-    if (!p) return;
-    speedPending.delete(key);
-    clearTimeout(p.timer);
-    p.resolve(bytes > 0 ? { bps, ms } : null);
-  };
-}
-
-export function clearSpeedPending() {
-  for (const p of speedPending.values()) clearTimeout(p.timer);
-  speedPending.clear();
-  delete window.__cmSpeedResult;
-}
-
-const fmtSpeed = bps => (bps >= 1048576 ? (bps / 1048576).toFixed(1) + ' MB/s' : (bps / 1024).toFixed(0) + ' KB/s');
 const fmtSize = n => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB');
 
 /** 拉取最新版本信息：服务器优先，不可达时回退 GitHub Releases API。 */
@@ -59,38 +35,6 @@ async function fetchFromGithub() {
   };
 }
 
-/** 单源测速：App 内走原生桥（Range 采样，慢链路按已读字节如实报速），浏览器调试用 fetch。 */
-function speedTest(source) {
-  return new Promise(resolve => {
-    if (window.NativeApi && window.NativeApi.testSpeed) {
-      ensureSpeedDispatcher();
-      const timer = setTimeout(() => { speedPending.delete(source.key); resolve(null); }, SPEED_TIMEOUT);
-      speedPending.set(source.key, { resolve, timer });
-      try {
-        window.NativeApi.testSpeed(source.key, source.url, SPEED_BYTES);
-      } catch {
-        clearTimeout(timer);
-        speedPending.delete(source.key);
-        resolve(null);
-      }
-      return;
-    }
-    // 浏览器路径：同样要有超时兜底——没有的话慢源会永远停在「测速中」
-    const t0 = performance.now();
-    let settled = false;
-    const done = v => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
-    const timer = setTimeout(() => done(null), SPEED_TIMEOUT);
-    fetch(source.url, { headers: { Range: `bytes=0-${SPEED_BYTES - 1}` } })
-      .then(async r => {
-        if (!r.ok && r.status !== 206) throw new Error('HTTP ' + r.status);
-        const buf = await r.arrayBuffer();
-        const ms = Math.max(1, performance.now() - t0);
-        done({ bps: buf.byteLength * 1000 / ms, ms });
-      })
-      .catch(() => done(null));
-  });
-}
-
 /** 启动时自动检测（silent=不弹"已是最新"提示）。 */
 export async function checkUpdate({ silent = true } = {}) {
   const cur = currentVersion();
@@ -114,11 +58,9 @@ export async function checkUpdate({ silent = true } = {}) {
 }
 
 function showUpdateDialog(latest, cur) {
-  const speed = {};      // key -> {bps, ms, failed}
   let picked = null;
   let downloading = false;
 
-  const running = (cur.code && cur.code < 21);   // 极老版本提示
   const diag = mdui.dialog({
     headline: `发现新版本 v${latest.version}`,
     body: `<div class="upd">
@@ -129,13 +71,12 @@ function showUpdateDialog(latest, cur) {
         ${latest.size ? `<span class="upd-size">${fmtSize(latest.size)}</span>` : ''}
       </div>
       ${latest.changelog ? `<div class="upd-log">${esc(latest.changelog).slice(0, 1200)}</div>` : ''}
-      <div class="upd-sec">下载源<span class="upd-tip" id="updSpeedTip">测速中…</span></div>
+      <div class="upd-sec">下载源<span class="upd-tip">默认服务器直连，可点击切换</span></div>
       <div class="upd-srcs" id="updSrcs">
         ${latest.sources.map(s => `
           <div class="upd-src" data-key="${s.key}">
             <span class="material-icons-outlined upd-radio">radio_button_unchecked</span>
             <div class="upd-src-main"><div>${esc(s.label)}</div><div class="upd-src-url">${esc(s.url.replace(/^https?:\/\//, '').slice(0, 46))}</div></div>
-            <span class="upd-spd" data-spd="${s.key}">测速中</span>
           </div>`).join('')}
       </div>
       <div class="upd-prog" id="updProg" hidden>
@@ -155,57 +96,14 @@ function showUpdateDialog(latest, cur) {
     });
   };
 
-  let userPicked = false;
-  const renderSpeed = () => {
-    let best = null, done = 0;
-    for (const s of latest.sources) {
-      const el = diag.querySelector(`.upd-spd[data-spd="${s.key}"]`);
-      const r = speed[s.key];
-      if (r === undefined) { if (el) el.textContent = '测速中'; continue; }
-      done++;
-      if (r === null) {
-        if (el) {
-          const bridged = !!(window.NativeApi && window.NativeApi.testSpeed);
-          el.textContent = bridged ? '不可达' : '需应用内测速';
-          el.classList.add('bad');
-        }
-        continue;
-      }
-      if (el) el.textContent = fmtSpeed(r.bps);
-      if (!best || r.bps > speed[best].bps) best = s.key;
-    }
-    if (best && !userPicked) setPicked(best);          // 自动选择最快源（不覆盖用户手选）
-    const tip = diag.querySelector('#updSpeedTip');
-    if (tip) {
-      if (done === latest.sources.length) {
-        if (best) tip.textContent = '已自动选择最快源';
-        else {
-          const serverOk = latest.sources.some(s => s.key === 'server');
-          tip.textContent = serverOk ? '测速失败，已默认选服务器直连' : '测速失败，请手动选择';
-          if (serverOk && !userPicked) setPicked('server');      // 全挂时仍默认服务器源，保证能点更新
-        }
-      } else tip.textContent = '测速中…';
-    }
-  };
-
   diag.querySelectorAll('.upd-src').forEach(el => {
-    el.onclick = () => { userPicked = true; setPicked(el.dataset.key); };
+    el.onclick = () => setPicked(el.dataset.key);
   });
 
-  if (latest.sources.length) setPicked(latest.sources[0].key);   // 兜底先选第一个
-  // 各源并发测速；失败（不可达/超时）的源自动重试一次——跨境链路首包丢失很常见
-  const retried = {};
-  latest.sources.forEach(async s => {
-    speed[s.key] = await speedTest(s);
-    if (speed[s.key] === null && !retried[s.key]) {
-      retried[s.key] = true;
-      delete speed[s.key];                       // 重试期间恢复「测速中」显示
-      renderSpeed();
-      await new Promise(r => setTimeout(r, 900));
-      speed[s.key] = await speedTest(s);
-    }
-    renderSpeed();
-  });
+  // 默认服务器直连；无服务器源（如仅 GitHub 兜底）时选第一个
+  const serverSrc = latest.sources.find(s => s.key === 'server');
+  if (serverSrc) setPicked('server');
+  else if (latest.sources.length) setPicked(latest.sources[0].key);
 
   // 原生回调
   window.__cmUpdateProgress = (pct, done, total) => {
@@ -236,7 +134,6 @@ function showUpdateDialog(latest, cur) {
     delete window.__cmUpdateProgress;
     delete window.__cmUpdateInstall;
     delete window.__cmUpdateFailed;
-    clearSpeedPending();
   }
 
   function startDownload() {
