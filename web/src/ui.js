@@ -181,6 +181,26 @@ export function bootColorScheme() {
   }
 }
 
+// ---------- 全局图片加载动画（骨架微光占位 → 渐显） ----------
+// CSS 对 img:not(.ld) 显示微光占位；这里负责标记：load 事件（捕获期，img 的 load 不冒泡）
+// + 缓存图兜底（插入时已 complete 的，load 事件可能已错过）+ error 也标记（停止微光，多数图另有 onerror 隐藏）
+export function initImageFade() {
+  const mark = t => { if (t && t.tagName === 'IMG') t.classList.add('ld'); };
+  document.addEventListener('load', e => mark(e.target), true);
+  document.addEventListener('error', e => mark(e.target), true);
+  let pending = false;
+  const sweep = () => {
+    document.querySelectorAll('img').forEach(i => { if (i.complete) i.classList.add('ld'); });
+  };
+  const mo = new MutationObserver(() => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => { pending = false; sweep(); });
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+  sweep();
+}
+
 // ---------- 歌词默认字号：移动端「大」、平板「特大」（用户手动选过后尊重选择） ----------
 
 export function defaultLyricSizeKey() {
