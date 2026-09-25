@@ -183,6 +183,8 @@ export const api = {
   syncNcm: () => call('POST', '/ncmbind/sync', { body: {}, auth: true }),
   ncmLike: (meta, like) => call('POST', `/ncmbind/like/${meta.ncm_id}`, { body: { ...meta, like }, auth: true }),
   ncmLikelist: () => call('GET', '/ncmbind/likelist', { auth: true }),
+  ncmPhoneCode: (phone, ctcode) => call('POST', '/ncmbind/phone/code', { body: { phone, ctcode }, auth: true }),
+  ncmPhoneLogin: (phone, captcha, ctcode) => call('POST', '/ncmbind/phone/login', { body: { phone, captcha, ctcode }, auth: true }),
   comments: (ncmId, offset = 0, limit = 20) => call('GET', `/ncm/comments?id=${ncmId}&offset=${offset}&limit=${limit}`, { auth: true }),
   commentPost: (ncmId, content, commentId) => call('POST', `/ncmbind/comment/${ncmId}`, { body: { content, commentId }, auth: true }),
   commentLike: (ncmId, commentId, like) => call('POST', `/ncmbind/comment-like/${ncmId}`, { body: { commentId, like }, auth: true }),
