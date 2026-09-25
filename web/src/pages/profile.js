@@ -35,7 +35,7 @@ export async function render(el, params) {
     <div class="cm-up-head">
       <div class="cm-up-ava">${avatarHTML(u, 76)}</div>
       <div class="cm-up-info">
-        <h2>${esc(u.nickname)}${u.isAdmin ? ' <span class="cm-tag admin">管理员</span>' : ''}</h2>
+        <h2>${esc(u.nickname)}${u.isSuper ? ' <span class="cm-tag super">超级管理员</span>' : u.isAdmin ? ' <span class="cm-tag admin">管理员</span>' : ''}</h2>
         <div class="cm-up-bio">${esc(u.bio || '这个人很懒，什么都没写')}</div>
         <div class="cm-up-sub">注册于 ${fmtTime(u.created_at)}</div>
       </div>

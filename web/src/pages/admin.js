@@ -56,7 +56,7 @@ export async function render(el) {
         <div class="cm-urow" data-id="${u.id}">
           <div class="cm-umain">
             <div class="cm-uname">${esc(u.nickname || u.username)}
-              ${u.is_admin ? '<span class="cm-tag admin">管理员</span>' : ''}
+              ${u.is_super ? '<span class="cm-tag super">超级管理员</span>' : u.is_admin ? '<span class="cm-tag admin">管理员</span>' : ''}
               ${u.disabled ? '<span class="cm-tag banned">已禁用</span>' : ''}
               ${u.username === '__internal__' ? '<span class="cm-tag">内部账户</span>' : ''}
             </div>
