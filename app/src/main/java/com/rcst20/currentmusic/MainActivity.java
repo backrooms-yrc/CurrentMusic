@@ -424,14 +424,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** 仅 Pad/大屏沉浸式隐藏系统导航栏；手机保留导航栏（smallestWidth ≥600dp，与前端 ≥600px 断点一致）。 */
-    private boolean isTablet() {
-        android.content.res.Configuration c = getResources().getConfiguration();
-        return c.smallestScreenWidthDp >= 600;
-    }
-
     private void hideSystemNav() {
-        if (!isTablet()) return;   // 手机端不隐藏：保留系统导航栏，避免误触手势区/失去返回可见性
         if (Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController ic = getWindow().getInsetsController();
             if (ic != null) {

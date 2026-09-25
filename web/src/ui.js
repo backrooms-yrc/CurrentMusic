@@ -39,17 +39,13 @@ const RIPPLE_SEL = [
   '.cm-plcard', '.cm-card', '.nav-ic', '.cm-mini-inner', '.cm-song-like',
   '.cm-song-more', '.cm-plmenu', '.cm-bindbanner', '.pl-btn', '#topAction',
   '.pl-quality', '.pl-lyric-mode', '.cm-sec-more', '.cmt-del', '#cmtMore',
-  '.cm-ava-wrap', '.cmt-like', '.cmt-reply', '.cmt-floor-btn',
-  // 注意：不含 mdui-chip 等影子 DOM 组件——其光节点不进插槽会错位，且 mdui 自带涟漪
+  '.cm-ava-wrap', 'mdui-chip', '.cmt-like', '.cmt-reply', '.cmt-floor-btn',
 ].join(',');
 
 export function initRipple() {
   document.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;                 // 右键/中键不产生涟漪
     const t = e.target.closest(RIPPLE_SEL);
     if (!t || !e.isPrimary) return;
-    // 目标内已有自身层叠上下文的影子 DOM 宿主（如误配进来）跳过，避免涟漪落在错误位置
-    if (t.shadowRoot) return;
     const r = t.getBoundingClientRect();
     if (!r.width && !r.height) return;
     const d = Math.max(r.width, r.height) * 2.2;
