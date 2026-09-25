@@ -75,6 +75,7 @@ export async function render(el, params) {
         <div class="cm-detail-actions">
           <mdui-button variant="filled" id="playAll"><span class="material-icons-outlined">play_arrow</span>播放全部</mdui-button>
           ${kind !== 'pl' || !owner ? '' : `<mdui-button variant="tonal" id="addSongs"><span class="material-icons-outlined">add</span>添加歌曲</mdui-button>`}
+          ${kind === 'pl' ? `<mdui-button variant="tonal" id="refreshPl"><span class="material-icons-outlined">refresh</span>刷新</mdui-button>` : ''}
           ${kind === 'pl' && owner ? `<mdui-button variant="tonal" id="delPl"><span class="material-icons-outlined">delete</span>删除</mdui-button>` : ''}
           <mdui-button variant="tonal" id="addAll"><span class="material-icons-outlined">playlist_add</span>收入歌单</mdui-button>
         </div>
@@ -105,6 +106,20 @@ export async function render(el, params) {
 
   el.querySelector('#playAll').onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
   el.querySelector('#addAll').onclick = () => songs.length ? addToPlaylist(songs) : toast('列表为空');
+  const refreshBtn = el.querySelector('#refreshPl');
+  if (refreshBtn) refreshBtn.onclick = async () => {
+    if (refreshBtn.dataset.loading) return;
+    refreshBtn.dataset.loading = '1';
+    refreshBtn.innerHTML = '<mdui-circular-progress style="--mdui-circular-progress-size:18px"></mdui-circular-progress> 刷新中…';
+    try {
+      // 重新进入当前歌单路由：render 顶部会重新调用 /playlists/:id API
+      await render(el, params);
+    } catch (e) {
+      delete refreshBtn.dataset.loading;
+      refreshBtn.innerHTML = '<span class="material-icons-outlined">refresh</span>刷新';
+      toast('刷新歌单失败：' + e.message);
+    }
+  };
   const del = el.querySelector('#delPl');
   if (del) del.onclick = () => confirmDialog({
     title: `删除歌单「${title}」？`, body: '删除后不可恢复。',
