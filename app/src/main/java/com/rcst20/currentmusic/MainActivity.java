@@ -48,6 +48,13 @@ public class MainActivity extends Activity {
     private int insetT, insetB, insetL, insetR;   // 系统栏真实 insets（env() 在 WebView 常为 0）
     private final ExecutorService pool = Executors.newCachedThreadPool();
     private final Handler main = new Handler(Looper.getMainLooper());
+    private static MainActivity sRef;   // 前台服务转发播放动作回 WebView 用
+
+    /** 任意线程安全地向页面注入 JS（服务/媒体回调线程调用）。 */
+    static void runJs(final String js) {
+        MainActivity a = sRef;
+        if (a != null) a.main.post(() -> { if (a.web != null) a.web.evaluateJavascript(js, null); });
+    }
     private ValueCallback<Uri[]> fileCallback;
     private long lastBack = 0;
 
@@ -55,6 +62,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        sRef = this;
         // Edge-to-edge：内容延伸到状态栏/手势条之下，由前端 env(safe-area-inset-*) 收边
         // （否则底部进度条与系统手势条之间永远有一条系统预留空隙）
         if (Build.VERSION.SDK_INT >= 30) {
@@ -333,6 +341,22 @@ public class MainActivity extends Activity {
             });
         }
 
+        /**
+         * 媒体元数据 → MediaSession（通知栏常驻展示 + 蓝牙 AVRCP 曲目信息）。
+         * pic 为封面 URL，服务内异步取图并回填到大图标与 ALBUM_ART。
+         */
+        @JavascriptInterface
+        public void mediaMeta(final String title, final String artist, final String album,
+                              final long durationMs, final String pic) {
+            PlaybackService.setMediaInfo(title, artist, album, durationMs, pic);
+        }
+
+        /** 播放态（含进度）→ MediaSession PlaybackState（通知按钮态/蓝牙进度/耳机线控）。 */
+        @JavascriptInterface
+        public void mediaState(final boolean playing, final long positionMs) {
+            PlaybackService.setPlaybackState(playing, positionMs);
+        }
+
         /** 申请保活相关权限：通知（13+运行时）+ 电池优化白名单。 */
         @JavascriptInterface
         public void requestKeepAlivePerms() {
@@ -424,7 +448,14 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** 仅 Pad/大屏沉浸式隐藏系统导航栏；手机保留导航栏（smallestWidth≥600dp，与前端断点一致）。 */
+    private boolean isTablet() {
+        android.content.res.Configuration c = getResources().getConfiguration();
+        return c.smallestScreenWidthDp >= 600;
+    }
+
     private void hideSystemNav() {
+        if (!isTablet()) return;   // 手机端不隐藏：保留导航栏与返回可见性
         if (Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController ic = getWindow().getInsetsController();
             if (ic != null) {
@@ -712,6 +743,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        sRef = null;
         if (web != null) {
             web.destroy();
             web = null;

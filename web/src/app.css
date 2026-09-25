@@ -33,8 +33,8 @@ body {
   /* 关键：border-box —— 否则 height 里的安全区与 padding-top 重复计入，
      顶栏会高出 #out 顶部一整个状态栏高度并压住内容（且随 insets 迟到而跳变） */
   box-sizing: border-box;
-  height: calc(56px + var(--safe-top, 0px));   height: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px)));
-  padding: var(--safe-top, 0px) 8px 0 18px;   padding: max(env(safe-area-inset-top), var(--safe-t, 0px)) 8px 0 18px;
+  height: calc(56px + var(--safe-top, 0px));   height: calc(56px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))));
+  padding: var(--safe-top, 0px) 8px 0 18px;   padding: min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))) 8px 0 18px;
   background: var(--mdui-color-surface-container-low, #f7f2fa);
   font-size: 22px; font-weight: 400;                /* MD3 title-large */
   transition: background-color .2s ease, box-shadow .2s ease;
@@ -60,7 +60,7 @@ body {
 
 /* ---------- 主区域 ---------- */
 #out {
-  position: fixed; top: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px))); bottom: calc(var(--cm-nav-h) + var(--cm-mini-h));
+  position: fixed; top: calc(56px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px)))); bottom: calc(var(--cm-nav-h) + var(--cm-mini-h));
   left: 0; right: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
   padding: 12px clamp(10px, 3vw, 28px) calc(var(--cm-nav-h) + 40px);
   overscroll-behavior-y: contain;   /* 下拉刷新接管前抑制 WebView 自带 overscroll 光晕（Chrome63+，旧引擎自动忽略） */
@@ -70,7 +70,7 @@ body.no-mini #out { bottom: var(--cm-nav-h); }
 /* ---------- 全局下拉刷新指示器（MD3 圆形） ---------- */
 #ptrInd {
   position: fixed; left: 50%; margin-left: -19px;
-  top: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px)) + 10px);
+  top: calc(56px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))) + 10px);
   width: 38px; height: 38px; z-index: 30; pointer-events: none;
   opacity: 0; transform: translateY(-8px) scale(.62);
   transition: opacity .18s ease, transform .26s cubic-bezier(.2, .9, .3, 1);
@@ -203,7 +203,9 @@ body.no-mini #out { bottom: var(--cm-nav-h); }
   -webkit-mask-image: none;
 }
 .cm-rip {
-  position: absolute; z-index: -1; border-radius: 50%; pointer-events: none;
+  /* MD3 规范：涟漪叠加在内容之上（低透明度）——负 z 会被封面 img 等在流子元素盖住，
+     卡片/歌单上完全看不见 */
+  position: absolute; z-index: 1; border-radius: 50%; pointer-events: none;
   background: currentColor; transform: scale(0); opacity: 0;
   animation: cmRip .55s cubic-bezier(0.05, 0.7, 0.1, 1) forwards;
 }
@@ -499,6 +501,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-page { position: relative; z-index: 1; }
 .pl-page {
   position: relative; height: 100%; display: flex; flex-direction: column; align-items: stretch;
+  box-sizing: border-box;   /* content-box 下 100% 高+padding 会整页高出屏幕 */
   padding: 14px 22px calc(10px + var(--safe-bottom, 0px));   padding: 14px 22px calc(10px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))); color: #fff;
 }
 .pl-body { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; width: 100%; }
@@ -560,7 +563,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-ctrl .material-icons-outlined { font-size: 22px; }
 .pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: 10px; opacity: .85; }
 .pl-seek input[type=range] { flex: 1; accent-color: var(--cm-primary, #d0bcff); }
-.pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 10px; }
+.pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 22px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
 .pl-transport .material-icons-outlined { font-size: 38px; }
 .pl-transport .huge .material-icons-outlined { font-size: 62px; }
 /* ---------- 歌词行样式（统一版：只用不影响布局的属性）----------

@@ -39,13 +39,16 @@ const RIPPLE_SEL = [
   '.cm-plcard', '.cm-card', '.nav-ic', '.cm-mini-inner', '.cm-song-like',
   '.cm-song-more', '.cm-plmenu', '.cm-bindbanner', '.pl-btn', '#topAction', '.cm-dl-apk-top',
   '.pl-quality', '.pl-lyric-mode', '.cm-sec-more', '.cmt-del', '#cmtMore',
-  '.cm-ava-wrap', 'mdui-chip', '.cmt-like', '.cmt-reply', '.cmt-floor-btn',
+  '.cm-ava-wrap', '.cmt-like', '.cmt-reply', '.cmt-floor-btn',
+  // 不含 mdui-chip 等影子 DOM 组件：光节点不进插槽会错位，且 mdui 自带涟漪
 ].join(',');
 
 export function initRipple() {
   document.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;                 // 右键/中键不产生涟漪
     const t = e.target.closest(RIPPLE_SEL);
     if (!t || !e.isPrimary) return;
+    if (t.shadowRoot) return;                   // 影子 DOM 宿主：涟漪会落在错误位置
     const r = t.getBoundingClientRect();
     if (!r.width && !r.height) return;
     const d = Math.max(r.width, r.height) * 2.2;
@@ -262,6 +265,22 @@ export function setStatus(ncmId, patch) {
   statusCache.set(ncmId, Object.assign(cur, patch));
 }
 export const getStatus = ncmId => statusCache.get(ncmId) || { liked: false, faved: false, count: 0 };
+
+/** 强制刷新单首歌的喜欢/计数状态（切歌用——直接读缓存会让红心停留在上一首状态）。 */
+export async function ensureStatus(ncmId) {
+  try {
+    const st = await api.songsStatus([ncmId]);
+    const s = {
+      liked: (st.liked || []).includes(ncmId),
+      faved: (st.faved || []).includes(ncmId),
+      count: (st.counts || {})[ncmId] || 0,
+    };
+    statusCache.set(ncmId, s);
+    return s;
+  } catch {
+    return getStatus(ncmId);
+  }
+}
 
 // ---------- 网易云红心状态（会话级缓存，来自绑定账号 likelist） ----------
 
