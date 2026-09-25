@@ -690,8 +690,9 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .cm-hscroll .cm-card { width: 150px; }
   .cm-hscroll .cm-card img { width: 150px; height: 150px; }
   .cm-auth { max-width: 460px; margin: 0 auto; }
-  .cm-profile, .cm-setting-list { max-width: 720px; }
-  .cm-quickrow { max-width: 720px; }
+  /* 限宽模块必须配套水平居中（margin auto），否则贴左、右侧留大块空白 */
+  .cm-profile, .cm-setting-list { max-width: 720px; margin-left: auto; margin-right: auto; }
+  .cm-quickrow { max-width: 720px; margin-left: auto; margin-right: auto; }
 }
 @media (min-width: 900px) and (max-width: 1199px) {
   .cm-page { padding: 0 4px; }
