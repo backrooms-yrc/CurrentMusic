@@ -193,7 +193,9 @@ body.no-mini #out { bottom: var(--cm-nav-h); }
   -webkit-mask-image: none;
 }
 .cm-rip {
-  position: absolute; z-index: -1; border-radius: 50%; pointer-events: none;
+  /* MD3 规范：涟漪覆盖在内容之上（低透明度）——此前 z-index:-1 垫底会被封面图片等
+     子元素盖住（卡片/歌单上完全看不见），改为内容上层叠加 */
+  position: absolute; z-index: 1; border-radius: 50%; pointer-events: none;
   background: currentColor; transform: scale(0); opacity: 0;
   animation: cmRip .55s cubic-bezier(0.05, 0.7, 0.1, 1) forwards;
 }
@@ -486,6 +488,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-page { position: relative; z-index: 1; }
 .pl-page {
   position: relative; height: 100%; display: flex; flex-direction: column; align-items: stretch;
+  box-sizing: border-box;   /* 关键：否则 content-box 下 100% 高 + 上下 padding 会超出屏幕（播放键被压进底部手势区） */
   padding: 14px 22px calc(10px + var(--safe-bottom, 0px));   padding: 14px 22px calc(10px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))); color: #fff;
 }
 .pl-body { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; width: 100%; }
@@ -550,6 +553,14 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 10px; }
 .pl-transport .material-icons-outlined { font-size: 38px; }
 .pl-transport .huge .material-icons-outlined { font-size: 62px; }
+/* 矮屏（小屏手机）：只缩控件尺寸与间距（不动整体位置），避免大按钮探入底部手势区 */
+@media (max-width: 599px) and (max-height: 720px) {
+  .pl-transport { gap: 20px; }
+  .pl-transport .material-icons-outlined { font-size: 32px; }
+  .pl-transport .huge .material-icons-outlined { font-size: 52px; }
+  .pl-ctrl .material-icons-outlined { font-size: 24px; }
+  .pl-seek { gap: 8px; }
+}
 /* ---------- 歌词行样式（统一版：只用不影响布局的属性）----------
  * 绝不在 .cur 上改 font-size / font-weight / line-height —— 那会触发整列回流，
  * 滚动目标基于旧布局计算 → 实际位置偏移 → 表现为"跳闪"。
