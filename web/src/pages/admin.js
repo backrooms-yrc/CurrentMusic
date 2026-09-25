@@ -60,7 +60,7 @@ export async function render(el) {
               ${u.disabled ? '<span class="cm-tag banned">已禁用</span>' : ''}
               ${u.username === '__internal__' ? '<span class="cm-tag">内部账户</span>' : ''}
             </div>
-            <div class="cm-usub">@${esc(u.username)}${u.email ? ' · ' + esc(u.email) : ''} · 注册于 ${fmtTime(u.created_at)}</div>
+            <div class="cm-usub">@${esc(u.username)}${u.email ? ' · ' + esc(u.email) : ''}${u.phone ? ' · ' + esc(u.phone) : ''} · 注册于 ${fmtTime(u.created_at)}</div>
             <div class="cm-usub">赞 ${u.likes} · 歌单 ${u.playlists} · 播放 ${u.plays} · 在线设备 ${u.sessions}${u.bound ? ' · 已绑网易云' : ''}</div>
           </div>
           <span class="cm-uact" data-act="menu" data-id="${u.id}"><span class="material-icons-outlined">more_vert</span></span>

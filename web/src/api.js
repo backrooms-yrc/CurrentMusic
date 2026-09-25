@@ -130,8 +130,10 @@ export function deviceInfo() {
 
 export const api = {
   // 认证/资料
-  register: (username, password, nickname, email, emailCode) => call('POST', '/auth/register', { body: { username, password, nickname, email, emailCode, ...deviceInfo() } }),
+  register: (payload) => call('POST', '/auth/register', { body: { ...payload, ...deviceInfo() } }),
   sendEmailCode: (email) => call('POST', '/auth/email/code', { body: { email } }),
+  sendPhoneCode: (phone) => call('POST', '/auth/phone/code', { body: { phone } }),
+  smsInfo: () => call('GET', '/auth/sms'),
   login: (username, password) => call('POST', '/auth/login', { body: { username, password, ...deviceInfo() } }),
   internalLogin: (password) => call('POST', '/auth/internal', { body: { password, ...deviceInfo() } }),
   logout: () => call('POST', '/auth/logout', { body: {}, auth: true }),

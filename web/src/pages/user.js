@@ -23,10 +23,24 @@ function renderAuth(el) {
         <mdui-text-field id="fUser" label="用户名" variant="outlined"></mdui-text-field>
         <mdui-text-field id="fNick" label="昵称（可留空）" variant="outlined" hidden></mdui-text-field>
         <mdui-text-field id="fPass" label="密码" variant="outlined" type="password" password-icon></mdui-text-field>
-        <div class="cm-email-row" hidden>
+        <div class="cm-vfy-tabs" id="vfyTabs" hidden>
+          <mdui-segmented-button-group value="phone" selects="single" id="vfy">
+            <mdui-segmented-button value="phone">手机验证</mdui-segmented-button>
+            <mdui-segmented-button value="email">邮箱验证</mdui-segmented-button>
+          </mdui-segmented-button-group>
+        </div>
+        <div class="cm-email-row" id="rowPhone" hidden>
+          <mdui-text-field id="fPhone" label="手机号" variant="outlined" type="tel" style="flex:1"></mdui-text-field>
+        </div>
+        <div class="cm-email-row" id="rowPhoneCode" hidden>
+          <mdui-text-field id="fPhoneCode" label="短信验证码" variant="outlined" style="flex:1"></mdui-text-field>
+          <mdui-button variant="tonal" id="sendPhoneCode">获取验证码</mdui-button>
+        </div>
+        <div class="cm-vfy-hint" id="vfyHint" hidden></div>
+        <div class="cm-email-row" id="rowEmail" hidden>
           <mdui-text-field id="fEmail" label="邮箱" variant="outlined" type="email" style="flex:1"></mdui-text-field>
         </div>
-        <div class="cm-email-row" hidden>
+        <div class="cm-email-row" id="rowEmailCode" hidden>
           <mdui-text-field id="fEmailCode" label="邮箱验证码" variant="outlined" style="flex:1"></mdui-text-field>
           <mdui-button variant="tonal" id="sendCode">获取验证码</mdui-button>
         </div>
@@ -36,21 +50,67 @@ function renderAuth(el) {
       <mdui-button variant="tonal" full-width id="altInternal">
         <span class="material-icons-outlined">key</span>&nbsp;内部账户登录
       </mdui-button>
-      <div class="cm-auth-note">注册需邮箱验证（验证码 5 分钟内有效）；本服务为自建音乐社区，数据存储于服务器管理员处。</div>
+      <div class="cm-auth-note" id="authNote">注册需完成手机或邮箱验证（验证码 5 分钟内有效）；本服务为自建音乐社区，数据存储于服务器管理员处。</div>
     </div>`;
 
   const mode = el.querySelector('#mode');
   const nick = el.querySelector('#fNick');
   const go = el.querySelector('#go');
-  const emailRows = el.querySelectorAll('.cm-email-row');
-  // 按模式只显示必填项：登录=用户名+密码；注册=用户名+昵称+密码+邮箱+验证码
+  const vfyTabs = el.querySelector('#vfyTabs');
+  const vfy = el.querySelector('#vfy');
+  const vfyHint = el.querySelector('#vfyHint');
+  const rowPhone = el.querySelector('#rowPhone');
+  const rowPhoneCode = el.querySelector('#rowPhoneCode');
+  const rowEmail = el.querySelector('#rowEmail');
+  const rowEmailCode = el.querySelector('#rowEmailCode');
+
+  // 短信通道提示（服务端给：自建网关 / 网易云通道），只在注册-手机验证时展示
+  let smsHint = '';
+  api.smsInfo().then(d => { smsHint = d.hint || ''; showHint(); }).catch(() => {});
+
+  function showHint() {
+    // 异步回调（如 smsInfo 返回）也可能在登录 tab 期间到达：只在「注册 + 手机验证」下显示
+    if (mode.value !== 'register' || vfy.value !== 'phone') { vfyHint.hidden = true; return; }
+    vfyHint.textContent = smsHint || '验证码 5 分钟内有效，请勿泄露';
+    vfyHint.hidden = false;
+  }
+
+  // 验证方式：手机验证（默认）/ 邮箱验证
+  const setVerify = v => {
+    const phone = v === 'phone';
+    rowPhone.hidden = !phone;
+    rowPhoneCode.hidden = !phone;
+    rowEmail.hidden = phone;
+    rowEmailCode.hidden = phone;
+    vfyHint.hidden = true;
+    if (phone) showHint();
+  };
+  vfy.addEventListener('change', () => setVerify(vfy.value));
+
+  // 按模式只显示必填项：登录=用户名+密码；注册=用户名+昵称+密码+验证方式对应字段
   const setMode = m => {
-    nick.hidden = m !== 'register';
-    emailRows.forEach(r => { r.hidden = m !== 'register'; });
-    go.textContent = m === 'login' ? '登录' : '注册并登录';
+    const reg = m === 'register';
+    nick.hidden = !reg;
+    vfyTabs.hidden = !reg;
+    el.querySelector('#fUser').setAttribute('label', reg ? '用户名' : '用户名 / 手机号');
+    go.textContent = reg ? '注册并登录' : '登录';
+    if (reg) setVerify(vfy.value);
+    else { rowPhone.hidden = rowPhoneCode.hidden = rowEmail.hidden = rowEmailCode.hidden = vfyHint.hidden = true; }
   };
   mode.addEventListener('change', () => setMode(mode.value));
   setMode('login');
+
+  // 倒计时（每个按钮各一份，重发按钮 60s 内禁用）
+  const countdown = (btn, state) => {
+    let left = 60;
+    btn.disabled = true;
+    const tick = () => {
+      btn.textContent = `${left}s 后重发`;
+      if (left-- <= 0) { clearInterval(state.timer); btn.disabled = false; btn.textContent = '获取验证码'; }
+    };
+    tick();
+    state.timer = setInterval(tick, 1000);
+  };
 
   // 内部登录：底部第三方渠道入口 → 密码对话框
   el.querySelector('#altInternal').onclick = () => {
@@ -82,9 +142,11 @@ function renderAuth(el) {
     setTimeout(() => diag.querySelector('#iPass')?.focus?.(), 200);
   };
 
-  // 获取验证码：60s 倒计时
+  // 获取验证码：60s 倒计时（邮箱 / 短信各一份）
   const sendBtn = el.querySelector('#sendCode');
-  let cdTimer = null;
+  const sendPhoneBtn = el.querySelector('#sendPhoneCode');
+  const cdEmail = { timer: null }, cdPhone = { timer: null };
+
   sendBtn.onclick = async () => {
     const email = el.querySelector('#fEmail').value.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('请先填写正确的邮箱地址');
@@ -92,22 +154,27 @@ function renderAuth(el) {
       sendBtn.loading = true;
       await api.sendEmailCode(email);
       toast('验证码已发送，请查收邮箱（注意垃圾箱）');
-      let left = 60;
-      sendBtn.disabled = true;
-      const tick = () => {
-        sendBtn.textContent = `${left}s 后重发`;
-        if (left-- <= 0) {
-          clearInterval(cdTimer);
-          sendBtn.disabled = false;
-          sendBtn.textContent = '获取验证码';
-        }
-      };
-      tick();
-      cdTimer = setInterval(tick, 1000);
+      countdown(sendBtn, cdEmail);
     } catch (e) {
       toast(e.message);
     } finally {
       sendBtn.loading = false;
+    }
+  };
+
+  sendPhoneBtn.onclick = async () => {
+    const phone = el.querySelector('#fPhone').value.replace(/\D/g, '');
+    if (!/^\d{5,15}$/.test(phone)) return toast('请先填写正确的手机号');
+    try {
+      sendPhoneBtn.loading = true;
+      const r = await api.sendPhoneCode(phone);
+      if (r && r.hint) { smsHint = r.hint; showHint(); }
+      toast('验证码已发送，请留意短信');
+      countdown(sendPhoneBtn, cdPhone);
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      sendPhoneBtn.loading = false;
     }
   };
 
@@ -116,13 +183,24 @@ function renderAuth(el) {
     const password = el.querySelector('#fPass').value;
     if (!username || !password) return toast('请填写用户名和密码');
     if (mode.value === 'register') {
-      const email = el.querySelector('#fEmail').value.trim();
-      const emailCode = el.querySelector('#fEmailCode').value.trim();
-      if (!email) return toast('请填写邮箱');
-      if (!emailCode) return toast('请填写邮箱验证码');
+      const nickname = nick.value.trim() || username;
+      let payload;
+      if (vfy.value === 'phone') {
+        const phone = el.querySelector('#fPhone').value.replace(/\D/g, '');
+        const phoneCode = el.querySelector('#fPhoneCode').value.trim();
+        if (!/^\d{5,15}$/.test(phone)) return toast('请填写正确的手机号');
+        if (!phoneCode) return toast('请填写短信验证码');
+        payload = { username, password, nickname, phone, phoneCode };
+      } else {
+        const email = el.querySelector('#fEmail').value.trim();
+        const emailCode = el.querySelector('#fEmailCode').value.trim();
+        if (!email) return toast('请填写邮箱');
+        if (!emailCode) return toast('请填写邮箱验证码');
+        payload = { username, password, nickname, email, emailCode };
+      }
       try {
         go.loading = true;
-        const r = await api.register(username, password, nick.value.trim() || username, email, emailCode);
+        const r = await api.register(payload);
         auth.saveLogin(r.token, r.user);
         toast(`欢迎，${r.user.nickname}！`);
         location.hash = '#/home';
@@ -169,6 +247,7 @@ async function renderProfile(el) {
         <div class="cm-profile-info">
           <div class="cm-profile-name">${esc(u.nickname || u.username)} <span class="cm-edit" id="editNick"><span class="material-icons-outlined">edit</span></span></div>
           <div class="cm-profile-bio">${esc(u.bio || '这个人很懒，什么都没写')} <span class="cm-edit" id="editBio"><span class="material-icons-outlined">edit</span></span></div>
+          ${u.phone ? `<div class="cm-profile-phone"><span class="material-icons-outlined">smartphone</span>${esc(u.phone)}</div>` : ''}
           <div class="cm-profile-stat">
             <span><b>${me ? me.stat.likes : 0}</b>点赞</span>
             <span><b>${me ? me.stat.playlists : pls.length}</b>歌单</span>
