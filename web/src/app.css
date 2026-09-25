@@ -46,6 +46,8 @@ body {
 .mdui-theme-dark #topbar { background: #211f26; }
 .mdui-theme-dark #topbar.scrolled { background: #2b2930; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
 #topAction { padding: 8px; cursor: pointer; border-radius: 50%; transition: background-color .15s; }
+#topSearch { padding: 8px; border-radius: 50%; color: inherit; text-decoration: none; transition: background-color .15s; }
+#topSearch:active { background: color-mix(in srgb, var(--cm-primary) 12%, transparent); }
 #topAction:active { background: color-mix(in srgb, var(--cm-primary) 12%, transparent); }
 /* 网页版顶栏「下载安卓版 APP」入口（App 内不渲染） */
 .cm-dl-apk-top {
@@ -1123,3 +1125,49 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-phone-row mdui-text-field { min-width: 0; }   /* flex:1 的输入框需允许收缩 */
 .cm-phone-row mdui-button { flex: none; height: 56px; }
 .cm-phonebind .cm-qrhint { margin-top: 4px; }
+
+
+/* ---------- 用户广场 ---------- */
+.cm-sq-grid { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.cm-ucard {
+  display: flex; gap: 14px; align-items: center; padding: 14px;
+  border-radius: var(--cm-radius, 16px); cursor: pointer;
+  background: var(--mdui-color-surface-container, #f3edf7);
+  transition: transform .12s ease, background-color .15s ease;
+  position: relative; overflow: hidden; z-index: 0;
+}
+.cm-ucard:active { transform: scale(.985); }
+.cm-uava { flex: none; }
+.cm-umain { flex: 1; min-width: 0; }
+.cm-uname { font-size: 15px; font-weight: 650; display: flex; align-items: center; gap: 6px; }
+.cm-ubio { font-size: 12px; opacity: .65; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-usub { font-size: 11px; opacity: .55; margin-top: 4px; }
+.cm-tag.admin { font-size: 10px; padding: 2px 7px; border-radius: 6px; background: var(--cm-primary); color: #fff; font-weight: 500; }
+.cm-sq-more { display: flex; justify-content: center; padding: 14px 0 4px; }
+@media (min-width: 900px) { .cm-sq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } }
+
+/* ---------- 公开用户主页 ---------- */
+.cm-up-head { display: flex; gap: 18px; align-items: center; padding: 12px 2px 18px; }
+.cm-up-info { flex: 1; min-width: 0; }
+.cm-up-info h2 { font-size: 22px; display: flex; align-items: center; gap: 8px; }
+.cm-up-bio { font-size: 13px; opacity: .7; margin-top: 6px; }
+.cm-up-sub { font-size: 11px; opacity: .5; margin-top: 4px; }
+.cm-up-stats { display: flex; gap: 10px; }
+.cm-up-stats > div {
+  flex: 1; text-align: center; padding: 12px 4px; border-radius: 14px;
+  background: var(--mdui-color-surface-container, #f3edf7); display: flex; flex-direction: column; gap: 2px;
+}
+.cm-up-stats b { font-size: 16px; }
+.cm-up-stats span { font-size: 10.5px; opacity: .6; }
+.cm-up-now {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--cm-primary) 10%, transparent); background: rgba(103, 80, 164, .10);
+}
+.cm-up-now .graphic_eq { color: var(--cm-primary); font-size: 26px; animation: cmEqPulse 1.6s ease-in-out infinite; }
+@keyframes cmEqPulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+.cm-up-now-main { flex: 1; min-width: 0; }
+.cm-up-now-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-up-now-sub { font-size: 11px; opacity: .6; margin-top: 2px; }
+.cm-song-cover { width: 44px; height: 44px; border-radius: 10px; overflow: hidden; flex: none; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.06); }
+.cm-song-cover img { width: 100%; height: 100%; object-fit: cover; }
+.cm-song-cover .material-icons-outlined { font-size: 20px; opacity: .4; }
