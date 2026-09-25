@@ -3,7 +3,7 @@ import './polyfill.js';   // 旧版 WebView 兼容垫片（必须在 mdui 之前
 import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './app.css';
-import { auth, setAuthExpiredHandler } from './api.js';
+import { auth, settings, setAuthExpiredHandler } from './api.js';
 import { toast, initRipple, bootColorScheme, initImageFade } from './ui.js';
 import { checkUpdate } from './update.js';
 import { initPullToRefresh } from './ptr.js';
@@ -106,6 +106,17 @@ function boot() {
   document.getElementById('boot').remove();
 
   document.getElementById('topAction').onclick = () => { location.hash = '#/settings'; };   // 齿轮直达设置页
+
+  // 网页版顶栏「下载安卓版 APP」入口（App 内有 NativeApi，不渲染）
+  if (!(window.NativeApi && window.NativeApi.versionCode)) {
+    const dl = document.createElement('a');
+    dl.id = 'dlApkTop';
+    dl.className = 'material-icons-outlined';
+    dl.title = '下载安卓版 APP';
+    dl.textContent = 'android';
+    dl.href = settings.base + '/download/latest';
+    document.getElementById('topAction').before(dl);
+  }
   // MD3 top app bar：内容滚动时切换 surface 层级 + elevation
   const outEl = out();
   outEl.addEventListener('scroll', () => {
