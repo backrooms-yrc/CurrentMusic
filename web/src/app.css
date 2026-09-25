@@ -47,13 +47,16 @@ body {
 .mdui-theme-dark #topbar.scrolled { background: #2b2930; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
 #topAction { padding: 8px; cursor: pointer; border-radius: 50%; transition: background-color .15s; }
 #topAction:active { background: color-mix(in srgb, var(--cm-primary) 12%, transparent); }
-/* 网页版顶栏「下载安卓版 APP」入口（App 内不渲染），视觉与齿轮一致 */
-#dlApkTop {
-  padding: 8px; cursor: pointer; border-radius: 50%; text-decoration: none; color: inherit;
-  font-size: 24px; line-height: 1; margin-right: 2px;
-  transition: background-color .15s;
+/* 网页版顶栏「下载安卓版 APP」入口（App 内不渲染） */
+.cm-dl-apk-top {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  padding: 7px 10px; margin-right: 6px; border-radius: 18px;
+  color: var(--cm-primary); background: color-mix(in srgb, var(--cm-primary) 9%, transparent);
+  text-decoration: none; font-size: 12px; line-height: 1.2; white-space: nowrap;
+  transition: background-color .15s, transform .12s ease;
 }
-#dlApkTop:active { background: color-mix(in srgb, var(--cm-primary) 12%, transparent); }
+.cm-dl-apk-top .material-icons-outlined { font-size: 18px; line-height: 1; }
+.cm-dl-apk-top:active { background: color-mix(in srgb, var(--cm-primary) 16%, transparent); transform: scale(.97); }
 
 /* ---------- 主区域 ---------- */
 #out {
@@ -191,7 +194,7 @@ body.no-mini #out { bottom: var(--cm-nav-h); }
 /* ---------- MD3 涟漪（事件委托生成 .cm-rip，置于内容层之下） ---------- */
 .cm-song, .cm-quick, .cm-setting, .cm-qm-item, .cm-pl-pick-item,
 .cm-plcard, .cm-card, .nav-ic, .cm-mini-inner, .cm-song-like,
-.cm-song-more, .cm-plmenu, .cm-bindbanner, .pl-btn, #topAction, #dlApkTop,
+.cm-song-more, .cm-plmenu, .cm-bindbanner, .pl-btn, #topAction, .cm-dl-apk-top,
 .pl-quality, .pl-lyric-mode, .cm-sec-more, .cmt-del, #cmtMore,
 .cm-ava-wrap, mdui-chip, .cmt-like, .cmt-reply, .cmt-floor-btn {
   position: relative;
