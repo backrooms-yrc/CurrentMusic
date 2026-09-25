@@ -45,11 +45,11 @@ export async function render(el) {
           <div class="cm-plcover">${coverHTML(p)}<span class="cm-ncmbadge">网易云</span></div>
           <div class="cm-plname">${esc(p.name)}</div>
           <div class="cm-plsub">${p.track_count} 首</div>
-        </div>`).join('') || `<div class="cm-empty small">${bind.stale ? '绑定已失效，请到「我的」页重新扫码绑定' : '还没有同步到歌单，点右上角立即同步'}</div>`}
+        </div>`).join('') || `<div class="cm-empty small">${bind.stale ? '绑定已失效，请到「我的」页重新绑定' : '还没有同步到歌单，点右上角立即同步'}</div>`}
     </div>` : `
     <div class="cm-bindbanner" id="bindBanner">
       <span class="material-icons-outlined">cloud_sync</span>
-      <div class="cm-bindbanner-t"><b>绑定网易云音乐，自动同步全部歌单</b><span>扫码授权即可，随时可解绑</span></div>
+      <div class="cm-bindbanner-t"><b>绑定网易云音乐，自动同步全部歌单</b><span>手机验证码或扫码授权均可，随时可解绑</span></div>
       <mdui-button variant="tonal" compact id="goBind">去绑定</mdui-button>
     </div>`}
 
@@ -68,7 +68,7 @@ export async function render(el) {
 `;
 
   el.querySelector('#syncNcm')?.addEventListener('click', () => {
-    if (!bind.bound) { toast('请先到「我的」页扫码绑定网易云账号'); return; }
+    if (!bind.bound) { toast('请先到「我的」页绑定网易云账号'); return; }
     el.querySelector('#syncNcm').innerHTML = '<mdui-linear-progress style="width:90px"></mdui-linear-progress> 同步中…';
     import('../ncmbind.js').then(m => m.runSync(el, () => render(el)));
   });

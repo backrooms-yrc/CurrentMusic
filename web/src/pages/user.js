@@ -196,9 +196,9 @@ async function renderProfile(el) {
              </div>`
           : `<div class="cm-bindinfo">
                <div class="cm-bindname">绑定网易云音乐</div>
-               <div class="cm-bindsub">扫码授权后，自动同步你网易云 APP 里的全部歌单</div>
+               <div class="cm-bindsub">手机验证码或扫码授权均可，绑定后自动同步你网易云 APP 里的全部歌单</div>
              </div>
-             <mdui-button variant="filled" id="goBind">扫码绑定</mdui-button>`
+             <mdui-button variant="filled" id="goBind">立即绑定</mdui-button>`
       }</div>
 
         <div class="cm-sec-head"><h2>账号管理</h2></div>

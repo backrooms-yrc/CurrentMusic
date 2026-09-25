@@ -6,8 +6,9 @@ import { esc, toast, confirmDialog } from './ui.js';
 export function bindDialog(onBound) {
   if (!auth.token) return toast('请先登录 CurrentMusic 账号');
   let closed = false;
-  let mode = 'qr';          // qr | phone
+  let mode = 'phone';       // 默认手机验证码（qr | phone）
   let qrKey = '';
+  let qrGen = 0;            // 二维码加载世代：旧请求的回调一律丢弃
   let qrTimer = null;
   let smsTimer = null;
 
@@ -15,17 +16,17 @@ export function bindDialog(onBound) {
     headline: '绑定网易云音乐',
     body: `
       <div class="cm-bindtabs">
-        <mdui-segmented-button-group value="qr" selects="single" id="bindMode">
-          <mdui-segmented-button value="qr">扫码登录</mdui-segmented-button>
+        <mdui-segmented-button-group value="phone" selects="single" id="bindMode">
           <mdui-segmented-button value="phone">手机验证码</mdui-segmented-button>
+          <mdui-segmented-button value="qr">扫码登录</mdui-segmented-button>
         </mdui-segmented-button-group>
       </div>
-      <div id="paneQr" class="cm-qrbind">
-        <div class="cm-qrbox"><img id="qrImg" alt="二维码加载中…"></div>
+      <div id="paneQr" class="cm-qrbind" hidden>
+        <div class="cm-qrbox loading" id="qrBox"><img id="qrImg" alt=""></div>
         <div class="cm-qrstatus" id="qrStatus"><mdui-linear-progress></mdui-linear-progress></div>
         <div class="cm-qrhint">打开网易云音乐 APP → 左上角「扫一扫」扫描二维码授权登录</div>
       </div>
-      <div id="panePhone" class="cm-phonebind" hidden>
+      <div id="panePhone" class="cm-phonebind">
         <div class="cm-phone-row">
           <mdui-text-field id="phCc" label="区号" variant="outlined" value="86" style="width:88px"></mdui-text-field>
           <mdui-text-field id="phPhone" label="手机号" variant="outlined" type="tel" style="flex:1"></mdui-text-field>
@@ -35,39 +36,66 @@ export function bindDialog(onBound) {
           <mdui-button variant="tonal" id="phSend">获取验证码</mdui-button>
         </div>
         <mdui-button variant="filled" id="phLogin" style="width:100%;margin-top:10px">绑定</mdui-button>
+        <div class="cm-qrstatus" id="phStatus" hidden></div>
         <div class="cm-qrhint">将向该手机号发送网易云登录验证码；此方式会真实发送短信，请确认号码无误</div>
       </div>`,
     actions: [{ text: '取消' }],
     onClose: () => { closed = true; clearTimeout(qrTimer); clearInterval(smsTimer); },
   });
 
-  const setStatus = (html) => {
-    const el = diag.querySelector('#qrStatus');
+  const setStatus = (html, sel = '#qrStatus') => {
+    const el = diag.querySelector(sel);
     if (el) el.innerHTML = html;
   };
 
   // ---------- 扫码 ----------
+  const qrBox = diag.querySelector('#qrBox');
+  const qrImg = diag.querySelector('#qrImg');
+
+  function qrLoading(on, failed) {
+    qrBox.classList.toggle('loading', !!on);
+    qrBox.classList.toggle('failed', !!failed);
+    qrBox.classList.remove('ok');
+  }
+
   async function startQr() {
-    setStatus('<mdui-linear-progress></mdui-linear-progress>');
+    const gen = ++qrGen;
+    clearTimeout(qrTimer);
+    qrLoading(true);
+    setStatus('正在生成二维码…');
+    qrImg.onload = () => {
+      if (closed || gen !== qrGen) return;
+      qrLoading(false);     // 移除 loading 即触发二维码弹入动画
+    };
+    qrImg.onerror = () => {
+      if (closed || gen !== qrGen) return;
+      qrLoading(false, true);
+      setStatus('<span class="err">二维码加载失败，<a id="qrRefresh">点击重试</a></span>');
+      diag.querySelector('#qrRefresh').onclick = startQr;
+    };
     try {
       qrKey = (await api.qrKey()).key;
       const img = (await api.qrImg(qrKey)).qrimg;
-      if (closed) return;
-      diag.querySelector('#qrImg').src = img;
+      if (closed || gen !== qrGen) return;
+      qrImg.src = img;
       setStatus('等待扫码…');
-      pollQr();
+      pollQr(gen);
     } catch (e) {
-      if (!closed) setStatus(`<span class="err">${esc(e.message)}</span>`);
+      if (closed || gen !== qrGen) return;
+      qrLoading(false, true);
+      setStatus(`<span class="err">${esc(e.message)}，<a id="qrRefresh">点击重试</a></span>`);
+      diag.querySelector('#qrRefresh').onclick = startQr;
     }
   }
 
-  async function pollQr() {
-    if (closed || mode !== 'qr') return;
+  async function pollQr(gen) {
+    if (closed || mode !== 'qr' || gen !== qrGen) return;
     try {
       const r = await api.qrCheck(qrKey);
+      if (closed || gen !== qrGen) return;
       if (r.code === 803) {
         setStatus(`<span class="ok"><span class="mi">check_circle</span> 绑定成功：${esc((r.profile && r.profile.nickname) || '')}，正在同步歌单…</span>`);
-        diag.querySelector('.cm-qrbox').classList.add('ok');
+        qrBox.classList.add('ok');
         await runSync(diag, () => { diag.open = false; onBound && onBound(); });
         return;
       }
@@ -77,11 +105,11 @@ export function bindDialog(onBound) {
         return;
       }
       setStatus(r.code === 802 ? '已扫码，请在手机上确认授权…' : '等待扫码…');
-      qrTimer = setTimeout(pollQr, 2000);
+      qrTimer = setTimeout(() => pollQr(gen), 2000);
     } catch (e) {
-      if (closed) return;
+      if (closed || gen !== qrGen) return;
       setStatus(`<span class="err">${esc(e.message)}</span>`);
-      qrTimer = setTimeout(pollQr, 3000);
+      qrTimer = setTimeout(() => pollQr(gen), 3000);
     }
   }
 
@@ -90,6 +118,7 @@ export function bindDialog(onBound) {
   const phCc = diag.querySelector('#phCc');
   const phCode = diag.querySelector('#phCode');
   const phSend = diag.querySelector('#phSend');
+  const phStatus = diag.querySelector('#phStatus');
 
   phSend.onclick = async () => {
     const phone = (phPhone.value || '').replace(/\D/g, '');
@@ -124,10 +153,12 @@ export function bindDialog(onBound) {
     try {
       btn.loading = true;
       const r = await api.ncmPhoneLogin(phone, captcha, cc);
-      toast(`绑定成功：${(r.profile && r.profile.nickname) || ''}`);
-      await runSync(diag, () => { diag.open = false; onBound && onBound(); });
+      phStatus.hidden = false;
+      phStatus.innerHTML = `<span class="ok"><span class="mi">check_circle</span> 绑定成功：${esc((r.profile && r.profile.nickname) || '')}，正在同步歌单…</span>`;
+      await runSync(diag, () => { diag.open = false; onBound && onBound(); }, '#phStatus');
     } catch (e) {
-      toast(e.message);
+      phStatus.hidden = false;
+      phStatus.innerHTML = `<span class="err">${esc(e.message)}</span>`;
     } finally {
       btn.loading = false;
     }
@@ -141,13 +172,14 @@ export function bindDialog(onBound) {
     diag.querySelector('#paneQr').hidden = !isQr;
     diag.querySelector('#panePhone').hidden = isQr;
     clearTimeout(qrTimer);
+    qrGen++;                       // 使在途的二维码回调失效
     if (isQr) startQr();
   });
-  startQr();
+  if (mode === 'qr') startQr();    // 默认手机验证码：进弹窗不预取二维码，切换时才生成
 }
 
-export async function runSync(container, onDone) {
-  const box = container.querySelector('#qrStatus') || container;
+export async function runSync(container, onDone, statusSel) {
+  const box = container.querySelector(statusSel || '#qrStatus') || container;
   const old = box.innerHTML;
   box.innerHTML = '<mdui-linear-progress></mdui-linear-progress> 正在同步网易云歌单（冷查询较慢，请稍候）…';
   try {
