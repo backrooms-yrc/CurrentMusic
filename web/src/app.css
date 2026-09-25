@@ -1173,3 +1173,26 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-song-cover { width: 44px; height: 44px; border-radius: 10px; overflow: hidden; flex: none; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.06); }
 .cm-song-cover img { width: 100%; height: 100%; object-fit: cover; }
 .cm-song-cover .material-icons-outlined { font-size: 20px; opacity: .4; }
+
+/* ---------- 搜索分区：歌手行 / 专辑行 ---------- */
+.cm-artist-row { display: flex; gap: 14px; overflow-x: auto; padding: 4px 2px 8px; }
+.cm-artist-card { flex: none; width: 84px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; }
+.cm-artist-ava {
+  width: 68px; height: 68px; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.06); position: relative;
+}
+.cm-artist-ava img { width: 100%; height: 100%; object-fit: cover; }
+.cm-artist-ava .material-icons-outlined { font-size: 30px; opacity: .4; }
+.cm-artist-name { font-size: 12px; font-weight: 600; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-artist-sub { font-size: 10px; opacity: .55; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-album-card { cursor: pointer; }
+.cm-sec-sub { font-size: 11px; opacity: .5; }
+
+/* ---------- 歌手页 ---------- */
+.cm-artist-head { align-items: center; }
+.cm-artist-bigava {
+  width: 132px; height: 132px; border-radius: 50%; overflow: hidden; flex: none;
+  display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.06);
+}
+.cm-artist-bigava img { width: 100%; height: 100%; object-fit: cover; }
+.cm-artist-bigava .material-icons-outlined { font-size: 54px; opacity: .4; }

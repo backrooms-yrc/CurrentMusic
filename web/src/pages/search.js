@@ -70,25 +70,78 @@ export async function render(el) {
     renderHist();
     hotBox.innerHTML = '';   // 有搜索内容后隐藏热搜
     resultBox.innerHTML = searchResultSkeleton(8);
-    let songs = [];
+    let d = { songs: [], artists: [], albums: [] };
     try {
-      songs = (await api.search(kw, 0, 30)).songs || [];
+      d = await api.search(kw, 0, 30);
     } catch (e) {
       if (my === seq) resultBox.innerHTML = `<div class="cm-empty">搜索失败：${esc(e.message)}</div>`;
       return;
     }
     if (my !== seq) return;
-    if (!songs.length) { resultBox.innerHTML = `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`; return; }
-    const head = document.createElement('div');
-    head.className = 'cm-sec-head';
-    head.innerHTML = `<h2>「${esc(kw)}」的搜索结果</h2>
-      <span class="cm-sec-more" id="addAll"><span class="material-icons-outlined">playlist_add</span> 全部收入歌单</span>`;
+    const { songs = [], artists = [], albums = [] } = d;
+    if (!songs.length && !artists.length && !albums.length) {
+      resultBox.innerHTML = `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`;
+      return;
+    }
     resultBox.innerHTML = '';
-    resultBox.appendChild(head);
-    const list = document.createElement('div');
-    resultBox.appendChild(list);
-    await renderSongList(list, songs, { onPlay: i => player.playList(songs, i) });
-    head.querySelector('#addAll').onclick = () => addToPlaylist(songs);
+
+    // ---- 歌手区 ----
+    if (artists.length) {
+      const sec = document.createElement('section');
+      sec.className = 'cm-sec';
+      sec.innerHTML = `<div class="cm-sec-head"><h2>歌手</h2></div>
+        <div class="cm-hscroll cm-artist-row">${artists.map(a => `
+          <div class="cm-artist-card" data-id="${a.id}">
+            <div class="cm-artist-ava">${a.pic ? `<img src="${esc(a.pic)}?param=120y120" loading="lazy">` : '<span class="material-icons-outlined">person</span>'}</div>
+            <div class="cm-artist-name">${esc(a.name)}</div>
+            ${a.alias ? `<div class="cm-artist-sub">${esc(a.alias)}</div>` : ''}
+          </div>`).join('')}</div>`;
+      sec.querySelectorAll('.cm-artist-card').forEach(c => {
+        c.onclick = () => { location.hash = `#/artist/${c.dataset.id}`; };
+      });
+      resultBox.appendChild(sec);
+    }
+
+    // ---- 专辑区（点击整专辑播放） ----
+    if (albums.length) {
+      const sec = document.createElement('section');
+      sec.className = 'cm-sec';
+      sec.innerHTML = `<div class="cm-sec-head"><h2>专辑</h2><span class="cm-sec-sub">点击整专辑播放</span></div>
+        <div class="cm-hscroll cm-album-row">${albums.map(a => `
+          <div class="cm-card cm-album-card" data-id="${a.id}" title="播放专辑「${esc(a.name)}」">
+            <img src="${esc(a.pic)}?param=300y300" loading="lazy" onerror="this.classList.add('none')">
+            <div class="cm-card-name">${esc(a.name)}</div>
+            <div class="cm-card-sub">${esc(a.artist)}</div>
+          </div>`).join('')}</div>`;
+      sec.querySelectorAll('.cm-album-card').forEach(c => {
+        c.onclick = async () => {
+          toast('正在打开专辑…');
+          try {
+            const al = await api.album(c.dataset.id);
+            if (!al.songs || !al.songs.length) return toast('专辑暂无曲目');
+            player.playList(al.songs, 0);
+          } catch (e) { toast('打开专辑失败：' + e.message); }
+        };
+      });
+      resultBox.appendChild(sec);
+    }
+
+    // ---- 单曲区 ----
+    if (songs.length) {
+      const sec = document.createElement('section');
+      sec.className = 'cm-sec';
+      const head = document.createElement('div');
+      head.className = 'cm-sec-head';
+      head.innerHTML = `<h2>单曲</h2>
+        <span class="cm-sec-more" id="addAll"><span class="material-icons-outlined">playlist_add</span> 全部收入歌单</span>`;
+      sec.appendChild(head);
+      const list = document.createElement('div');
+      sec.appendChild(list);
+      resultBox.appendChild(sec);
+      await renderSongList(list, songs, { onPlay: i => player.playList(songs, i) });
+      head.querySelector('#addAll').onclick = () => addToPlaylist(songs);
+      return;
+    }
   }
 
   // 输入不触发搜索：只有回车（或点击热搜/历史词条这类明确动作）才发起请求
