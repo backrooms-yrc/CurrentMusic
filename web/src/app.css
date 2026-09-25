@@ -53,8 +53,27 @@ body {
   position: fixed; top: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px))); bottom: calc(var(--cm-nav-h) + var(--cm-mini-h));
   left: 0; right: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
   padding: 12px clamp(10px, 3vw, 28px) calc(var(--cm-nav-h) + 40px);
+  overscroll-behavior-y: contain;   /* 下拉刷新接管前抑制 WebView 自带 overscroll 光晕（Chrome63+，旧引擎自动忽略） */
 }
 body.no-mini #out { bottom: var(--cm-nav-h); }
+
+/* ---------- 全局下拉刷新指示器（MD3 圆形） ---------- */
+#ptrInd {
+  position: fixed; left: 50%; margin-left: -19px;
+  top: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px)) + 10px);
+  width: 38px; height: 38px; z-index: 30; pointer-events: none;
+  opacity: 0; transform: translateY(-8px) scale(.62);
+  transition: opacity .18s ease, transform .26s cubic-bezier(.2, .9, .3, 1);
+}
+#ptrInd.drag { transition: none; }           /* 拖动期关过渡（跟手），松手后恢复以弹回 */
+#ptrInd svg { width: 100%; height: 100%; display: block; }
+#ptrInd .ptr-ring {
+  fill: none; stroke: var(--cm-primary); stroke-width: 3; stroke-linecap: round;
+  transform: rotate(-90deg); transform-origin: center;
+}
+#ptrInd.armed .ptr-ring { stroke-width: 3.5; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--cm-primary) 45%, transparent)); }
+#ptrInd.spin svg { animation: ptrSpin .8s linear infinite; }
+@keyframes ptrSpin { to { transform: rotate(360deg); } }
 
 /* MD3 页面过渡（emphasized decelerate）：分段渐入 + 轻微上移；后退变体左入 */
 .cm-page > * { animation: cmSecIn 320ms cubic-bezier(0.05, 0.7, 0.1, 1) both; }

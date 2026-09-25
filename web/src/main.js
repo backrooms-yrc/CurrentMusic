@@ -6,6 +6,7 @@ import './app.css';
 import { auth, setAuthExpiredHandler } from './api.js';
 import { toast, initRipple, bootColorScheme } from './ui.js';
 import { checkUpdate } from './update.js';
+import { initPullToRefresh } from './ptr.js';
 import { engineChrome, engineOutdated } from './version.js';
 import { player } from './player.js';
 import { initPlayerUI } from './player-ui.js';
@@ -112,6 +113,9 @@ function boot() {
   window.addEventListener('hashchange', router);
   if (!location.hash) location.hash = '#/home';
   router();
+
+  // 全局下拉刷新：重跑当前路由（页面 render 自带骨架屏与数据重取）
+  initPullToRefresh(() => router());
 
   player.restore();          // 恢复上次队列（不自动播放）
   initPlayerUI();
