@@ -13,6 +13,8 @@ const fmtSize = n => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.rou
 export async function fetchLatest() {
   try {
     const d = await call('GET', '/version/latest');
+    // 兼容旧发布脚本 bug：changelog 曾被写成字面 '-'（stdin 未实现）——视为无更新说明
+    if (d.changelog === '-') d.changelog = '';
     d.sources = (d.sources || []).map(s => ({ ...s, url: s.path ? `${settings.base}/${s.path}` : s.url }));
     return d;
   } catch (e) {
