@@ -37,7 +37,7 @@ export function loadingBar() {
 const RIPPLE_SEL = [
   '.cm-song', '.cm-quick', '.cm-setting', '.cm-qm-item', '.cm-pl-pick-item',
   '.cm-plcard', '.cm-card', '.nav-ic', '.cm-mini-inner', '.cm-song-like',
-  '.cm-song-more', '.cm-plmenu', '.cm-bindbanner', '.pl-btn', '#topAction', '.cm-dl-apk-top',
+  '.cm-song-more', '.cm-plmenu', '.cm-bindbanner', '.pl-btn', '#topAction', '#topSearch', '.cm-dl-apk-top', '.cm-ucard',
   '.pl-quality', '.pl-lyric-mode', '.cm-sec-more', '.cmt-del', '#cmtMore',
   '.cm-ava-wrap', '.cmt-like', '.cmt-reply', '.cmt-floor-btn',
   // 不含 mdui-chip 等影子 DOM 组件：光节点不进插槽会错位，且 mdui 自带涟漪

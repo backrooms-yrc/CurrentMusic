@@ -167,6 +167,10 @@ export const api = {
   recordPlay: (meta) => call('POST', `/plays/${meta.ncm_id}`, { body: meta, auth: true }),
   recentPlays: (limit = 50) => call('GET', `/plays/recent?limit=${limit}`, { auth: true }),
 
+  // 用户广场 / 公开主页（公开端点）
+  userSquare: (query = '', sort = 'reg', offset = 0, limit = 30) => call('GET', `/users/square?query=${encodeURIComponent(query)}&sort=${sort}&offset=${offset}&limit=${limit}`),
+  userProfile: (uid) => call('GET', `/users/${uid}/profile`),
+
   // 歌单
   myPlaylists: () => call('GET', '/playlists', { auth: true }),
   createPlaylist: (name, description) => call('POST', '/playlists', { body: { name, description }, auth: true }),
