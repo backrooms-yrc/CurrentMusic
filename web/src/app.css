@@ -400,13 +400,16 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   background: rgba(0, 0, 0, .08);  background: color-mix(in srgb, var(--mdui-color-outline-variant, #cac4d0) 60%, transparent);
 }
 
-/* 注册邮箱验证行 */
+/* 注册验证行（手机 / 邮箱两种方式共用） */
 .cm-email-row { display: flex; gap: 10px; align-items: flex-start; }
 .cm-email-row mdui-text-field { min-width: 0; }
 .cm-email-row mdui-button { flex: none; height: 56px; }
+.cm-vfy-tabs { display: flex; justify-content: center; margin: 2px 0; }
+.cm-vfy-hint { font-size: 11px; opacity: .6; line-height: 1.6; text-align: center; }
 
 /* ---------- 我的 ---------- */
 .cm-profile-head { display: flex; gap: 16px; padding: 10px 2px 18px; align-items: flex-start; }
+.cm-profile-phone { display: flex; align-items: center; gap: 4px; font-size: 11px; opacity: .6; margin-top: 3px; }
 .cm-avatar { border-radius: 50%; object-fit: cover; }
 .cm-avatar.ph {
   display: flex; align-items: center; justify-content: center; flex: none;
