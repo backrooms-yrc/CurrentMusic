@@ -1145,6 +1145,10 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-ubio { font-size: 12px; opacity: .65; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-usub { font-size: 11px; opacity: .55; margin-top: 4px; }
 .cm-tag.admin { font-size: 10px; padding: 2px 7px; border-radius: 6px; background: var(--cm-primary); color: #fff; font-weight: 500; }
+.cm-tag.super {
+  font-size: 10px; padding: 2px 7px; border-radius: 6px; font-weight: 650; color: #fff;
+  background: linear-gradient(135deg, #e8a33d, #d3452f);
+}
 .cm-sq-more { display: flex; justify-content: center; padding: 14px 0 4px; }
 @media (min-width: 900px) { .cm-sq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } }
 

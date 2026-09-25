@@ -35,7 +35,7 @@ export async function render(el, params, state = {}) {
     <div class="cm-ucard" data-id="${u.id}">
       <div class="cm-uava">${avatarHTML(u, 52)}</div>
       <div class="cm-umain">
-        <div class="cm-uname">${esc(u.nickname || `用户${u.id}`)}${u.is_admin ? '<span class="cm-tag admin">管理员</span>' : ''}</div>
+        <div class="cm-uname">${esc(u.nickname || `用户${u.id}`)}${u.is_super ? '<span class="cm-tag super">超级管理员</span>' : u.is_admin ? '<span class="cm-tag admin">管理员</span>' : ''}</div>
         <div class="cm-ubio">${esc(u.bio || '这个人很懒，什么都没写')}</div>
         <div class="cm-usub">点赞 ${u.likes} · 歌单 ${u.playlists} · 听歌 ${u.days} 天</div>
       </div>
