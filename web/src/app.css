@@ -1031,3 +1031,10 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 }
 .cm-rmember-name { font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .cm-rmember-act { margin-left: auto; padding: 6px; cursor: pointer; opacity: .6; border-radius: 50%; position: relative; overflow: hidden; z-index: 0; }
+
+/* ---------- 绑定方式切换（扫码 / 手机验证码） ---------- */
+.cm-bindtabs { display: flex; justify-content: center; margin-bottom: 14px; }
+.cm-phonebind { display: flex; flex-direction: column; gap: 10px; min-width: min(88vw, 360px); }
+.cm-phone-row { display: flex; gap: 10px; align-items: flex-start; }
+.cm-phone-row mdui-button { flex: none; height: 56px; }
+.cm-phonebind .cm-qrhint { margin-top: 4px; }
