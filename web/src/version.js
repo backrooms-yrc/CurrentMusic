@@ -1,5 +1,5 @@
 // 版本信息：App 内取原生真实版本；浏览器调试用构建常量（发版时与 APK 同步更新）
-export const WEB_VERSION = { name: '1.17.0', code: 47 };
+export const WEB_VERSION = { name: '1.17.1', code: 48 };
 
 export function currentVersion() {
   const b = window.NativeApi;
