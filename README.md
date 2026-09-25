@@ -6,7 +6,7 @@
 
 ![version](https://img.shields.io/badge/version-1.16.9-6750A4)
 ![platform](https://img.shields.io/badge/Android-7.0%2B-34A853)
-![apk](https://img.shields.io/badge/APK-352_KB-4285F4)
+![apk](https://img.shields.io/badge/APK-356_KB-4285F4)
 ![build](https://img.shields.io/badge/build-无_Gradle_·_一条命令-FF6D00)
 ![license](https://img.shields.io/badge/license-MIT-3DA639)
 

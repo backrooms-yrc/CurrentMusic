@@ -133,7 +133,18 @@ export const player = {
   },
 
   updateMediaSession() {
-    if (!('mediaSession' in navigator) || !this.meta) return;
+    if (!this.meta) return;
+    const b = window.NativeApi;
+    // App 内：走原生 MediaSession（通知栏常驻媒体信息 + 蓝牙 AVRCP 曲目/进度）
+    if (b && b.mediaMeta) {
+      try {
+        b.mediaMeta(this.meta.name || '', this.meta.artists || '', this.meta.album || '',
+          Math.round((this.meta.duration || 0) * 1000), this.meta.pic || '');
+        b.mediaState(!audio.paused, Math.round(audio.currentTime * 1000));
+        return;
+      } catch { /* 桥异常时回退浏览器 MediaSession */ }
+    }
+    if (!('mediaSession' in navigator)) return;
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: this.meta.name,
@@ -148,13 +159,31 @@ export const player = {
     } catch { /* 部分内核不支持 */ }
   },
 
+  /** 原生 MediaSession 播放态同步（通知按钮态/蓝牙进度）。App 外静默。 */
+  pushMediaState() {
+    const b = window.NativeApi;
+    if (b && b.mediaState) {
+      try { b.mediaState(!audio.paused, Math.round(audio.currentTime * 1000)); } catch { /* 忽略 */ }
+    }
+  },
+
   get audio() { return audio; },
 };
 
 audio.addEventListener('ended', () => player.next(true));
-audio.addEventListener('timeupdate', () => emit('time'));
-audio.addEventListener('play', () => { emit('state'); keepAlive(true); });
-audio.addEventListener('pause', () => { emit('state'); keepAlive(false); });
+let lastMediaPushSec = -1;
+audio.addEventListener('timeupdate', () => {
+  emit('time');
+  // 蓝牙/通知进度：每 5s 同步一次（AVRCP 由系统按 playbackState 自推进度，无需逐帧）
+  const sec = Math.floor(audio.currentTime);
+  if (!audio.seeking && sec !== lastMediaPushSec && sec % 5 === 0) {
+    lastMediaPushSec = sec;
+    player.pushMediaState();
+  }
+});
+audio.addEventListener('play', () => { emit('state'); keepAlive(true); player.pushMediaState(); });
+audio.addEventListener('pause', () => { emit('state'); keepAlive(false); player.pushMediaState(); });
+audio.addEventListener('seeked', () => player.pushMediaState());
 audio.addEventListener('ended', () => keepAlive(false));
 
 // 后台保活：播放中启动前台服务（通知+唤醒锁），暂停/结束即停

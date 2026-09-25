@@ -1,7 +1,7 @@
 // 播放器 UI：底部迷你条 + 全屏播放页（封面/歌词/进度/音质/点赞/收藏/加入歌单）。
 import { mdui } from './md.js';
 import { api, auth, settings } from './api.js';
-import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, openLikeMenu, isNcmLiked, ensureNcmLiked, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
+import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, ensureStatus, openLikeMenu, isNcmLiked, ensureNcmLiked, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
 import { player, on } from './player.js';
 
 const overlay = () => document.getElementById('playerOverlay');
@@ -608,9 +608,17 @@ function updateSongInfo() {
   if (q) q.textContent = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
   const likeBtn = document.getElementById('plLike');
   if (likeBtn) {
-    const st = getStatus(m.ncm_id);
+    const st = getStatus(m.ncm_id);          // 先按缓存立即上屏（避免闪默认态）
     likeBtn.classList.toggle('on', st.liked);
     likeBtn.querySelector('.material-icons-outlined').textContent = st.liked ? 'favorite' : 'favorite_border';
+    // 缓存里可能没有新歌/已过期（切歌时红心停留在上一首的根因）：强制拉一次，
+    // 期间若又切歌则丢弃本次结果
+    const songAt = m;
+    ensureStatus(m.ncm_id).then(s => {
+      if (!player.meta || player.meta !== songAt || !document.getElementById('plLike')) return;
+      likeBtn.classList.toggle('on', s.liked);
+      likeBtn.querySelector('.material-icons-outlined').textContent = s.liked ? 'favorite' : 'favorite_border';
+    });
   }
   // 更新背景
   applyPlayerBg();
