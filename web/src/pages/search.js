@@ -1,4 +1,4 @@
-// 搜索页：防抖搜索 + 历史记录
+// 搜索页：回车触发搜索 + 历史记录（不做逐字防抖——中间态查询会同时打爆上游与碎片化历史）
 import { api, auth } from '../api.js';
 import { esc, renderSongList, toast, skelList } from '../ui.js';
 import { api as _api } from '../api.js';
@@ -12,7 +12,6 @@ const pushHist = kw => {
   localStorage.setItem(HIST_KEY, JSON.stringify(h));
 };
 
-let timer = null;
 let seq = 0;
 
 export async function render(el) {
@@ -87,14 +86,12 @@ export async function render(el) {
     head.querySelector('#addAll').onclick = () => addToPlaylist(songs);
   }
 
+  // 输入不触发搜索：只有回车（或点击热搜/历史词条这类明确动作）才发起请求
   input.addEventListener('input', () => {
-    clearTimeout(timer);
-    const kw = (input.value || '').trim();
-    if (!kw) { seq++; resultBox.innerHTML = ''; renderHist(); renderHot(); return; }
-    timer = setTimeout(() => doSearch(kw), 450);
+    if (!(input.value || '').trim()) { seq++; resultBox.innerHTML = ''; renderHist(); renderHot(); }
   });
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { clearTimeout(timer); const kw = (input.value || '').trim(); if (kw) doSearch(kw); }
+    if (e.key === 'Enter') { const kw = (input.value || '').trim(); if (kw) doSearch(kw); }
   });
   setTimeout(() => input.focus(), 100);
 }
