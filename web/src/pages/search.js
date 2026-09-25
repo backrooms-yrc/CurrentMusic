@@ -1,6 +1,11 @@
 // 搜索页：回车触发搜索 + 历史记录（不做逐字防抖——中间态查询会同时打爆上游与碎片化历史）
 import { api, auth } from '../api.js';
 import { esc, renderSongList, toast, skelList } from '../ui.js';
+
+// 搜索结果专用骨架屏：保留歌曲行结构，避免请求期间结果区跳空
+const searchResultSkeleton = (n = 8) => `<div class="cm-search-result-skeleton" aria-busy="true" aria-label="搜索结果加载中">
+  <div class="cm-skel-list">${Array.from({ length: n }, () => `<div class="cm-skel-song"><div class="sk sk-pic"></div><div class="cm-skel-main"><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div></div>`).join('')}</div>
+</div>`;
 import { api as _api } from '../api.js';
 import { player } from '../player.js';
 import { addToPlaylist } from '../player-ui.js';
@@ -64,7 +69,7 @@ export async function render(el) {
     pushHist(kw);
     renderHist();
     hotBox.innerHTML = '';   // 有搜索内容后隐藏热搜
-    resultBox.innerHTML = skelList(8);
+    resultBox.innerHTML = searchResultSkeleton(8);
     let songs = [];
     try {
       songs = (await api.search(kw, 0, 30)).songs || [];

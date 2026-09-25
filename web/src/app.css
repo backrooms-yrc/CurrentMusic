@@ -410,6 +410,9 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-qrstatus a { color: var(--cm-primary); cursor: pointer; }
 .cm-qrhint { font-size: 11px; opacity: .6; text-align: center; line-height: 1.6; }
 
+/* 搜索结果加载：保留结果行尺寸，避免回车后结果区跳空 */
+.cm-search-result-skeleton { min-height: 300px; }
+
 /* ---------- 列表详情 ---------- */
 .cm-detail-head { display: flex; gap: 16px; padding: 8px 2px 18px; }
 .cm-detail-cover {
