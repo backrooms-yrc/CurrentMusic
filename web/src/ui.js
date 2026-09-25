@@ -37,7 +37,7 @@ export function loadingBar() {
 const RIPPLE_SEL = [
   '.cm-song', '.cm-quick', '.cm-setting', '.cm-qm-item', '.cm-pl-pick-item',
   '.cm-plcard', '.cm-card', '.nav-ic', '.cm-mini-inner', '.cm-song-like',
-  '.cm-song-more', '.cm-plmenu', '.cm-bindbanner', '.pl-btn', '#topAction', '#dlApkTop',
+  '.cm-song-more', '.cm-plmenu', '.cm-bindbanner', '.pl-btn', '#topAction', '.cm-dl-apk-top',
   '.pl-quality', '.pl-lyric-mode', '.cm-sec-more', '.cmt-del', '#cmtMore',
   '.cm-ava-wrap', 'mdui-chip', '.cmt-like', '.cmt-reply', '.cmt-floor-btn',
 ].join(',');

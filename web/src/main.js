@@ -111,9 +111,9 @@ function boot() {
   if (!(window.NativeApi && window.NativeApi.versionCode)) {
     const dl = document.createElement('a');
     dl.id = 'dlApkTop';
-    dl.className = 'material-icons-outlined';
+    dl.className = 'cm-dl-apk-top';
     dl.title = '下载安卓版 APP';
-    dl.textContent = 'android';
+    dl.innerHTML = '<span class="material-icons-outlined">android</span><span>下载 APP</span>';
     dl.href = settings.base + '/download/latest';
     document.getElementById('topAction').before(dl);
   }
