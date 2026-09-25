@@ -305,23 +305,45 @@ public class MainActivity extends Activity {
             });
         }
 
-        /** 测速：Range 拉取前 bytes 字节，结果经 __cmSpeedResult(key, bytes, bytesPerSec, ms) 回调。 */
+        /**
+         * 测速：Range 采样并经 __cmSpeedResult(key, bytes, bytesPerSec, ms) 回调。
+         *
+         * 慢速跨境链路（中国→海外）两处坑，均有对策：
+         *  1) 256KB 样本在 <20KB/s 链路上要跑 13s+，若无限期等满会超过 JS 侧预算 →
+         *     设总期限 SPEED_DEADLINE_MS=13s，到期按「已读字节数/耗时」如实报速（慢≠不可达）；
+         *  2) 快链路上小样本抖动大 → 两段采样：先读 64KB，若 1.2s 内读满（快链路）
+         *     再扩到调用方给的 bytes 上限（256KB）提高精度；慢链路停在 64KB 尽早出结果。
+         */
         @JavascriptInterface
         public void testSpeed(final String key, final String url, final int bytes) {
+            final long SPEED_DEADLINE_MS = 13000;
+            final int FIRST_STAGE = 65536;
+            final long FAST_STAGE_MS = 1200;
+            final int cap = Math.max(FIRST_STAGE, bytes);
             pool.execute(() -> {
                 long t0 = System.currentTimeMillis();
                 long read = 0;
+                long target = FIRST_STAGE;
+                boolean firstStageDone = false;
                 HttpURLConnection c = null;
                 try {
-                    c = openFollowingRedirects(new URL(url), 4);
-                    c.setRequestProperty("Range", "bytes=0-" + Math.max(0, bytes - 1));
+                    c = openFollowingRedirects(new URL(url), 4, 9000, 6000);   // 连接 9s（拥堵跨境链路），读 6s/块；总期限 13s 兜底
+                    c.setRequestProperty("Range", "bytes=0-" + (cap - 1));
                     int status = c.getResponseCode();
                     if (status >= 400) throw new IllegalStateException("HTTP " + status);
                     // 上游不认 Range（返回 200）也照读，按实际读到的字节数计时
                     try (InputStream in = c.getInputStream()) {
                         byte[] buf = new byte[16384];
                         int n;
-                        while (read < bytes && (n = in.read(buf)) > 0) read += n;
+                        while (read < target) {
+                            if (System.currentTimeMillis() - t0 >= SPEED_DEADLINE_MS) break;   // 总期限：到期按已读报速
+                            if ((n = in.read(buf)) <= 0) break;                               // 流结束
+                            read += n;
+                            if (!firstStageDone && read >= FIRST_STAGE) {
+                                firstStageDone = true;
+                                if (System.currentTimeMillis() - t0 < FAST_STAGE_MS) target = cap;  // 快链路：扩样到 256KB
+                            }
+                        }
                     }
                 } catch (Exception e) {
                     Log.d(TAG, "speed test " + key + " failed: " + e);
@@ -525,12 +547,16 @@ public class MainActivity extends Activity {
 
     /** 打开连接并手动跟随重定向（GitHub Releases 会 302 到 CDN；手动处理可跨协议/跨域）。 */
     private HttpURLConnection openFollowingRedirects(URL url, int maxHops) throws IOException {
+        return openFollowingRedirects(url, maxHops, 6000, 6000);
+    }
+
+    private HttpURLConnection openFollowingRedirects(URL url, int maxHops, int connectMs, int readMs) throws IOException {
         URL cur = url;
         for (int i = 0; i < maxHops; i++) {
             HttpURLConnection conn = (HttpURLConnection) cur.openConnection();
             conn.setInstanceFollowRedirects(false);
-            conn.setConnectTimeout(6000);
-            conn.setReadTimeout(6000);
+            conn.setConnectTimeout(connectMs);
+            conn.setReadTimeout(readMs);
             conn.setRequestProperty("User-Agent", "CurrentMusic/" + appVersionName());
             conn.setRequestProperty("Accept", "*/*");
             int code = conn.getResponseCode();
