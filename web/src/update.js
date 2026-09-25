@@ -5,8 +5,8 @@ import { esc, toast } from './ui.js';
 import { currentVersion, isNewer } from './version.js';
 
 const SKIP_KEY = 'cm.updateSkip';         // 本会话跳过的版本（避免反复打扰）
-const SPEED_BYTES = 262144;               // 测速样本 256KB
-const SPEED_TIMEOUT = 15000;              // 原生侧 6s 连接 + 6s 读取，留足余量
+const SPEED_BYTES = 262144;               // 测速样本上限 256KB（原生侧先读 64KB，快链路才扩到该值）
+const SPEED_TIMEOUT = 16000;              // 原生侧总期限 13s（含 9s 连接），浏览器路径同额；留 3s 余量
 const GH_REPO = 'backrooms-yrc/CurrentMusic';
 
 // 按源注册的测速结果派发表（关键：多源并发时不能共用一个全局回调，
@@ -59,7 +59,7 @@ async function fetchFromGithub() {
   };
 }
 
-/** 单源测速：App 内走原生桥（Range 拉 256KB），浏览器调试用 fetch。 */
+/** 单源测速：App 内走原生桥（Range 采样，慢链路按已读字节如实报速），浏览器调试用 fetch。 */
 function speedTest(source) {
   return new Promise(resolve => {
     if (window.NativeApi && window.NativeApi.testSpeed) {
@@ -75,15 +75,19 @@ function speedTest(source) {
       }
       return;
     }
+    // 浏览器路径：同样要有超时兜底——没有的话慢源会永远停在「测速中」
     const t0 = performance.now();
+    let settled = false;
+    const done = v => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
+    const timer = setTimeout(() => done(null), SPEED_TIMEOUT);
     fetch(source.url, { headers: { Range: `bytes=0-${SPEED_BYTES - 1}` } })
       .then(async r => {
         if (!r.ok && r.status !== 206) throw new Error('HTTP ' + r.status);
         const buf = await r.arrayBuffer();
         const ms = Math.max(1, performance.now() - t0);
-        resolve({ bps: buf.byteLength * 1000 / ms, ms });
+        done({ bps: buf.byteLength * 1000 / ms, ms });
       })
-      .catch(() => resolve(null));
+      .catch(() => done(null));
   });
 }
 
@@ -173,8 +177,14 @@ function showUpdateDialog(latest, cur) {
     if (best && !userPicked) setPicked(best);          // 自动选择最快源（不覆盖用户手选）
     const tip = diag.querySelector('#updSpeedTip');
     if (tip) {
-      if (done === latest.sources.length) tip.textContent = best ? '已自动选择最快源' : '测速失败，请手动选择';
-      else tip.textContent = '测速中…';
+      if (done === latest.sources.length) {
+        if (best) tip.textContent = '已自动选择最快源';
+        else {
+          const serverOk = latest.sources.some(s => s.key === 'server');
+          tip.textContent = serverOk ? '测速失败，已默认选服务器直连' : '测速失败，请手动选择';
+          if (serverOk && !userPicked) setPicked('server');      // 全挂时仍默认服务器源，保证能点更新
+        }
+      } else tip.textContent = '测速中…';
     }
   };
 
@@ -183,8 +193,17 @@ function showUpdateDialog(latest, cur) {
   });
 
   if (latest.sources.length) setPicked(latest.sources[0].key);   // 兜底先选第一个
-  latest.sources.forEach(async s => {                             // 各源并发测速
+  // 各源并发测速；失败（不可达/超时）的源自动重试一次——跨境链路首包丢失很常见
+  const retried = {};
+  latest.sources.forEach(async s => {
     speed[s.key] = await speedTest(s);
+    if (speed[s.key] === null && !retried[s.key]) {
+      retried[s.key] = true;
+      delete speed[s.key];                       // 重试期间恢复「测速中」显示
+      renderSpeed();
+      await new Promise(r => setTimeout(r, 900));
+      speed[s.key] = await speedTest(s);
+    }
     renderSpeed();
   });
 
