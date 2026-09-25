@@ -249,7 +249,7 @@ async function renderProfile(el) {
       <div class="cm-profile-head">
         <div id="avaWrap" class="cm-ava-wrap">${avatarHTML(u, 84)}</div>
         <div class="cm-profile-info">
-          <div class="cm-profile-name">${esc(u.nickname || u.username)} <span class="cm-edit" id="editNick"><span class="material-icons-outlined">edit</span></span></div>
+          <div class="cm-profile-name">${esc(u.nickname || u.username)}${u.isSuper ? ' <span class="cm-tag super">超级管理员</span>' : u.isAdmin ? ' <span class="cm-tag admin">管理员</span>' : ''} <span class="cm-edit" id="editNick"><span class="material-icons-outlined">edit</span></span></div>
           <div class="cm-profile-bio">${esc(u.bio || '这个人很懒，什么都没写')} <span class="cm-edit" id="editBio"><span class="material-icons-outlined">edit</span></span></div>
           ${u.phone ? `<div class="cm-profile-phone"><span class="material-icons-outlined">smartphone</span>${esc(u.phone)}</div>` : ''}
           <div class="cm-profile-stat">
