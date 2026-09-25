@@ -868,8 +868,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .upd-radio { font-size: 20px; color: var(--cm-primary); }
 .upd-src-main { flex: 1; min-width: 0; font-size: 14px; }
 .upd-src-url { font-size: 11px; opacity: .55; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.upd-spd { font-size: 12px; opacity: .7; flex: none; }
-.upd-spd.bad { color: var(--mdui-color-error, #b3261e); opacity: 1; }
 .upd-prog { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .upd-prog-txt { font-size: 12px; opacity: .75; }
 
