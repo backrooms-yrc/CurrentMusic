@@ -233,12 +233,12 @@ function renderAuth(el) {
 
 async function renderProfile(el) {
   el.innerHTML = skelProfile();
-  let me = null, pls = [], bind = { bound: false }, follows = [];
+  let me = null, pls = [], bind = { bound: false }, follows = [], followCount = 0;
   const jobs = [
     api.me().then(d => { me = d; }).catch(() => {}),
     api.myPlaylists().then(d => { pls = d.playlists || []; }).catch(() => {}),
     api.bindStatus().then(d => { bind = d; }).catch(() => {}),
-    api.followedArtists().then(d => { follows = d.artists || []; }).catch(() => {}),
+    api.followedArtists().then(d => { follows = d.artists || []; followCount = d.count || follows.length; }).catch(() => {}),
   ];
   await Promise.allSettled(jobs);
 
@@ -268,7 +268,7 @@ async function renderProfile(el) {
       </div>
 
       ${follows.length ? `
-      <div class="cm-sec-head"><h2>关注的歌手</h2><span class="cm-sec-sub">${follows.length} 位</span></div>
+      <div class="cm-sec-head"><h2>关注的歌手</h2><span class="cm-sec-sub">${followCount || follows.length} 位 · 来自网易云</span></div>
       <div class="cm-hscroll cm-artist-row" id="followRow">
         ${follows.map(a => `
           <div class="cm-artist-card" data-aid="${a.artist_id}">
