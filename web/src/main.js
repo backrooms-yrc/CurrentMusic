@@ -10,6 +10,7 @@ import { initPullToRefresh } from './ptr.js';
 import { engineChrome, engineOutdated } from './version.js';
 import { player } from './player.js';
 import { initPlayerUI } from './player-ui.js';
+import { initCast } from './cast.js';
 import { applyTheme } from './pages/settings.js';
 
 import * as home from './pages/home.js';
@@ -154,6 +155,7 @@ function boot() {
 
   player.restore();          // 恢复上次队列（不自动播放）
   initPlayerUI();
+  initCast();   // DLNA 投屏：还原投屏状态并接管传输指令
 
   setAuthExpiredHandler(() => toast('登录已失效，请重新登录'));
 

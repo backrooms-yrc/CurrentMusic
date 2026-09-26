@@ -49,6 +49,14 @@ public class MainActivity extends Activity {
     private final ExecutorService pool = Executors.newCachedThreadPool();
     private final Handler main = new Handler(Looper.getMainLooper());
     private static MainActivity sRef;   // 前台服务转发播放动作回 WebView 用
+    /** 当前 DLNA 投屏目标（null=未投屏）；投屏期间声音由渲染器输出，本机保持暂停。 */
+    private volatile Dlna.Device castDevice = null;
+    /** SSDP 搜索期间持有的组播锁（Android Wi-Fi 默认丢弃组播，不拿锁搜不到设备）。 */
+    private Object castLock = null;                 // WifiManager.MulticastLock（避免反射外的硬依赖）
+    /** 最近一次搜索到的渲染器列表：投屏时直接复用，免去重复 3s 搜索。 */
+    private volatile java.util.List<Dlna.Device> castPeers = new java.util.ArrayList<>();
+    /** 投屏时交给渲染器拉流的地址（退出投屏时置空）。 */
+    private volatile String castUrl = "";
 
     // 页面未就绪时暂存媒体指令（锁屏切歌时 Activity 可能正在重建，直接丢弃会「点了没反应」）
     private static final java.util.ArrayDeque<String> pendingJs = new java.util.ArrayDeque<>();
@@ -152,6 +160,62 @@ public class MainActivity extends Activity {
     }
 
     // ---------- 本地资产服务：https://cm.local → assets/www ----------
+
+    /** 在主线程执行一段 JS（后台线程回调时也要走这里，WebView 只能在主线程访问）。 */
+    private void evalJs(final String js) {
+        main.post(() -> {
+            if (web != null) web.evaluateJavascript(js, null);
+        });
+    }
+
+    /**
+     * SSDP 搜索期间持有 Wi-Fi 组播锁：Android 为省电默认丢弃组播包，
+     * 不拿锁时 M-SEARCH 发不出去/收不到回应（真机 DLNA 搜不到设备的头号原因）。
+     */
+    private void holdMulticastLock(boolean on) {
+        try {
+            Object svc = getSystemService(WIFI_SERVICE);
+            if (svc == null) return;
+            Class<?> wm = Class.forName("android.net.wifi.WifiManager");
+            if (castLock == null) {
+                Object lock = wm.getMethod("createMulticastLock", String.class)
+                        .invoke(svc, "CurrentMusicDlna");
+                castLock = lock;
+                java.lang.reflect.Method setRef = lock.getClass()
+                        .getMethod("setReferenceCounted", boolean.class);
+                setRef.invoke(lock, false);
+            }
+            castLock.getClass().getMethod("acquire").invoke(castLock);
+            java.lang.reflect.Method isHeld = castLock.getClass().getMethod("isHeld");
+            if (!on && Boolean.TRUE.equals(isHeld.invoke(castLock))) {
+                castLock.getClass().getMethod("release").invoke(castLock);
+            } else if (on) {
+                // acquire 已调用
+            }
+        } catch (Throwable ignored) {
+            // 无 Wi-Fi（如仅蜂窝/有线）或系统限制：搜索仍会尝试，只是成功率降低
+        }
+    }
+
+    /** 把任意文本安全塞进 JS 字符串字面量（设备名可能带引号/反斜杠/控制字符）。 */
+    static String jsStr(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length() + 8);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (c < 0x20) sb.append(String.format("\\u%04x", (int) c));
+                    else sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
 
     private class LocalClient extends WebViewClient {
         @Override
@@ -377,6 +441,121 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void mediaState(final boolean playing, final long positionMs) {
             PlaybackService.setPlaybackState(playing, positionMs);
+        }
+
+        // ---------------- DLNA 投屏 ----------------
+        // 均为异步：结果经 window.__cmDlna*(...) 回调（与 __cmHttpDone / __cmSseEvent 同一套路）。
+
+        /** 搜索局域网内的 DLNA 渲染器（SSDP 组播只能在原生层做，WebView 无 UDP 能力）。 */
+        @JavascriptInterface
+        public void dlnaDiscover(final int timeoutMs) {
+            holdMulticastLock(true);
+            pool.execute(() -> Dlna.discover(timeoutMs > 0 ? timeoutMs : 3000, null, (devices, error) -> {
+                holdMulticastLock(false);
+                if (devices != null && !devices.isEmpty()) castPeers = devices;
+                StringBuilder sb = new StringBuilder("[");
+                for (int i = 0; i < devices.size(); i++) {
+                    Dlna.Device d = devices.get(i);
+                    if (i > 0) sb.append(',');
+                    sb.append("{\"key\":\"").append(jsStr(d.key()))
+                      .append("\",\"name\":\"").append(jsStr(d.name))
+                      .append("\",\"model\":\"").append(jsStr(d.model))
+                      .append("\",\"hasVolume\":").append(d.rcUrl != null && !d.rcUrl.isEmpty())
+                      .append('}');
+                }
+                sb.append(']');
+                evalJs("window.__cmDlnaFound && window.__cmDlnaFound(" + sb + ", "
+                        + (error == null ? "null" : "\"" + jsStr(error) + "\"") + ")");
+            }));
+        }
+
+        /** 投屏播放：把音频地址交给设备由其自行拉流（地址由后端 /cast/<id> 中转，见 cm_cast.py）。 */
+        @JavascriptInterface
+        public void dlnaPlay(final String key, final String url, final String title,
+                             final String artist, final String album, final long durationMs) {
+            // 先查最近搜索缓存（刚在列表里选过设备，无需再等一次搜索）
+            Dlna.Device cached = null;
+            for (Dlna.Device d : castPeers) {
+                if (d.key().equals(key)) { cached = d; break; }
+            }
+            if (cached != null) {
+                final Dlna.Device dev = cached;
+                pool.execute(() -> doCast(dev, key, url, title, artist, album, durationMs));
+                return;
+            }
+            // 缓存没有（App 重启过/设备换了 USN）：重新搜索
+            pool.execute(() -> Dlna.discover(3000, null, (devices, error) -> {
+                Dlna.Device target = null;
+                for (Dlna.Device d : devices) {
+                    if (d.key().equals(key)) { target = d; break; }
+                }
+                if (target == null) {
+                    if (devices.isEmpty()) {
+                        evalJs("window.__cmDlnaResult && window.__cmDlnaResult(false,\"未找到该设备，请重新搜索\")");
+                        return;
+                    }
+                    target = devices.get(0);   // 退化：拿新搜到的第一台
+                }
+                doCast(target, key, url, title, artist, album, durationMs);
+            }));
+        }
+
+        /** 真正把曲目交给渲染器（后台线程执行）。 */
+        private void doCast(Dlna.Device dev, String key, String url, String title,
+                            String artist, String album, long durationMs) {
+            String meta = Dlna.didl(url, title, artist, album, durationMs);
+            Dlna.playUrl(dev, url, meta, (ok, err) -> {
+                if (ok) {
+                    castDevice = dev;
+                    castUrl = url;
+                    castPeers = java.util.Collections.singletonList(dev);
+                }
+                evalJs("window.__cmDlnaResult && window.__cmDlnaResult(" + ok + ","
+                        + (err == null ? "null" : "\"" + jsStr(err) + "\"") + ",\""
+                        + jsStr(dev.name) + "\")");
+            });
+        }
+
+        /** 投屏控制：Play / Pause / Stop / Seek（extra 为 Seek 参数，如 <Unit>REL_TIME</Unit><Target>0:01:02</Target>）。 */
+        @JavascriptInterface
+        public void dlnaCmd(final String action, final String extra) {
+            final Dlna.Device dev = castDevice;
+            if (dev == null) {
+                evalJs("window.__cmDlnaResult && window.__cmDlnaResult(false,\"当前没有投屏设备\")");
+                return;
+            }
+            pool.execute(() -> Dlna.command(dev, action, extra, (ok, info) -> {
+                if ("Stop".equals(action)) { castDevice = null; castUrl = ""; }
+                evalJs("window.__cmDlnaResult && window.__cmDlnaResult(" + ok + ","
+                        + (ok || info == null ? "null" : "\"" + jsStr(info) + "\"") + ",\""
+                        + jsStr(dev.name) + "\")");
+            }));
+        }
+
+        /** 结束投屏并释放设备端播放。 */
+        @JavascriptInterface
+        public void dlnaStop() {
+            final Dlna.Device dev = castDevice;
+            castDevice = null;
+            castUrl = "";
+            if (dev == null) return;
+            pool.execute(() -> Dlna.command(dev, "Stop", "", (ok, info) -> { /* 忽略结果 */ }));
+        }
+
+        /** 投屏设备音量（0~100）。 */
+        @JavascriptInterface
+        public void dlnaVolume(final int vol) {
+            final Dlna.Device dev = castDevice;
+            if (dev == null) return;
+            pool.execute(() -> Dlna.setVolume(dev, vol, (ok, err) -> { /* 忽略结果 */ }));
+        }
+
+        /** 当前是否已投屏（页面重建后恢复状态用）。 */
+        @JavascriptInterface
+        public String dlnaState() {
+            Dlna.Device d = castDevice;
+            if (d == null) return "{\"casting\":false}";
+            return "{\"casting\":true,\"name\":\"" + jsStr(d.name) + "\",\"key\":\"" + jsStr(d.key()) + "\"}";
         }
 
         /** 申请保活相关权限：通知（13+运行时）+ 电池优化白名单。 */

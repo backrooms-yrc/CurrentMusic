@@ -659,6 +659,32 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-top { width: 100%; display: flex; align-items: center; justify-content: space-between; padding-top: min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))); }
 .pl-quality { font-size: 12px; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.5); cursor: pointer; }
 .pl-btn { cursor: pointer; opacity: .9; padding: 6px; }
+/* 投屏图标与「更多」成组靠右（.pl-right 已被歌词区占用，故另起一类名） */
+.pl-topact { display: flex; align-items: center; gap: 2px; }
+.pl-btn.casting { color: var(--cm-primary); }
+/* ---------- DLNA 投屏对话框 ---------- */
+.cm-cast { max-width: 100%; }
+.cm-cast-hint { font-size: 12px; opacity: .75; line-height: 1.6; margin-bottom: 10px; }
+.cm-cast-list { display: flex; flex-direction: column; gap: 6px; max-height: min(52vh, 400px); overflow-y: auto; }
+.cm-cast-item {
+  display: flex; align-items: center; gap: 10px; padding: 11px 12px; cursor: pointer;
+  border-radius: 12px; border: 1px solid color-mix(in srgb, var(--cm-primary) 14%, transparent);
+  transition: background .12s ease, transform .12s ease;
+}
+.cm-cast-item:active { transform: scale(.985); }
+.cm-cast-item > .material-icons-outlined { font-size: 22px; color: var(--cm-primary); flex: none; }
+.cm-cast-item-t { flex: 1; min-width: 0; font-size: 13px; }
+.cm-cast-item-t .sub { font-size: 11px; opacity: .6; margin-top: 2px; }
+.cm-cast-go { opacity: .4; }
+.cm-cast-actions { margin-top: 12px; display: flex; justify-content: center; }
+.cm-cast-tip { font-size: 11px; opacity: .55; line-height: 1.6; margin-top: 10px; }
+.cm-cast-now { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.cm-cast-now > .material-icons-outlined { font-size: 26px; color: var(--cm-primary); }
+.cm-cast-now-t { font-size: 13px; }
+.cm-cast-now-t .sub { font-size: 11px; opacity: .6; margin-top: 2px; }
+.cm-cast-vol { display: flex; align-items: center; gap: 10px; }
+.cm-cast-vol .material-icons-outlined { font-size: 20px; opacity: .7; }
+.cm-cast-vol input { flex: 1; accent-color: var(--cm-primary); }
 .pl-btn.on { color: #d0bcff; }
 .pl-cover-wrap { margin: 18px 0 14px; flex: none; }
 #plCover {

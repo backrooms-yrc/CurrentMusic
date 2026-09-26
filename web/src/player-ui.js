@@ -3,6 +3,7 @@ import { mdui } from './md.js';
 import { api, auth, settings } from './api.js';
 import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, ensureStatus, openLikeMenu, isNcmLiked, ensureNcmLiked, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
 import { player, on } from './player.js';
+import { castIconHTML, openCastDialog } from './cast.js';
 
 // ---------- 网易云评论表情：方括号码 → emoji ----------
 // NCM 客户端表情在接口里是纯文本码（如 [爱心]/[呲牙]），网页端直接显示会看到
@@ -374,7 +375,10 @@ async function openFull() {
       <div class="pl-top">
         <span class="pl-btn" id="plClose"><span class="material-icons-outlined">keyboard_arrow_down</span></span>
         <div class="pl-quality" id="plQuality">${player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality)}</div>
-        <span class="pl-btn" id="plMore" title="更多（歌词/背景/下载）"><span class="material-icons-outlined">more_vert</span></span>
+        <span class="pl-topact">
+          ${castIconHTML()}
+          <span class="pl-btn" id="plMore" title="更多（歌词/背景/下载）"><span class="material-icons-outlined">more_vert</span></span>
+        </span>
       </div>
       <div class="pl-body view-${playerView}">
         <div class="pl-left">
@@ -444,6 +448,8 @@ async function openFull() {
   };
   ov.querySelector('#plQuality').onclick = qualityMenu;
   ov.querySelector('#plMore').onclick = openMoreDrawer;
+  const castBtn = ov.querySelector('#plCast');
+  if (castBtn) castBtn.onclick = () => openCastDialog();
   applyPlayerBg();
   applyDynamicScheme();
   ov.querySelector('#plComments').onclick = () => openComments(player.meta);
