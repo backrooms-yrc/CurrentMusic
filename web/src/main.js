@@ -24,6 +24,7 @@ import * as roomPage from './pages/room.js';
 import * as squarePage from './pages/square.js';
 import * as profilePage from './pages/profile.js';
 import * as artistPage from './pages/artist.js';
+import * as followedPage from './pages/followed.js';
 
 const ROUTES = [
   { re: /^#\/home$/, page: home, title: 'CurrentMusic' },
@@ -31,6 +32,7 @@ const ROUTES = [
   { re: /^#\/square$/, page: squarePage, title: '发现' },
   { re: /^#\/u\/(\d+)$/, page: profilePage, title: '用户主页', fixed: m => [m[1]] },
   { re: /^#\/artist\/(\d+)$/, page: artistPage, title: '歌手', fixed: m => [m[1]] },
+  { re: /^#\/followed$/, page: followedPage, title: '关注的歌手' },
   { re: /^#\/library$/, page: library, title: '歌单' },
   { re: /^#\/user$/, page: user, title: '我的' },
   { re: /^#\/settings$/, page: settingsPage, title: '设置' },

@@ -268,7 +268,7 @@ async function renderProfile(el) {
       </div>
 
       ${follows.length ? `
-      <div class="cm-sec-head"><h2>关注的歌手</h2><span class="cm-sec-sub">${followCount || follows.length} 位 · 来自网易云</span></div>
+      <div class="cm-sec-head"><h2>关注的歌手</h2><a class="cm-sec-more" href="#/followed">查看全部<i>${followCount || follows.length}</i></a></div>
       <div class="cm-hscroll cm-artist-row" id="followRow">
         ${follows.map(a => `
           <div class="cm-artist-card" data-aid="${a.artist_id}">

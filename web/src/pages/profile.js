@@ -56,6 +56,15 @@ export async function render(el, params) {
       </div>
       <mdui-button variant="tonal" compact id="nowPlay"><span class="material-icons-outlined">play_arrow</span>一起听</mdui-button>
     </div>` : ''}
+    ${(d.followed || []).length ? `
+    <div class="cm-sec-head"><h2>关注的歌手</h2><span class="cm-sec-sub">${d.followedCount || d.followed.length} 位 · 来自网易云</span></div>
+    <div class="cm-artist-grid cm-artist-grid-compact" id="upFollow">
+      ${d.followed.map(a => `
+        <div class="cm-artist-card" data-aid="${a.artist_id}">
+          <div class="cm-artist-ava">${a.pic ? `<img src="${esc(a.pic)}?param=160y160" loading="lazy">` : '<span class="material-icons-outlined">person</span>'}</div>
+          <div class="cm-artist-name">${esc(a.name || '歌手')}</div>
+        </div>`).join('')}
+    </div>` : ''}
     ${d.recent.length ? `
     <div class="cm-sec-head"><h2>最近听过</h2></div>
     <div id="upRecent">${d.recent.map((s, i) => songRow(s, i)).join('')}</div>` : ''}
@@ -76,6 +85,9 @@ export async function render(el, params) {
   }
   el.querySelectorAll('#upRecent .cm-song').forEach(r => {
     r.onclick = () => player.playList(d.recent, +r.dataset.i);
+  });
+  el.querySelectorAll('#upFollow .cm-artist-card').forEach(c => {
+    c.onclick = () => { location.hash = `#/artist/${c.dataset.aid}`; };
   });
   el.querySelectorAll('.cm-plcard').forEach(c => {
     c.onclick = () => { location.hash = `#/pl/${c.dataset.id}`; };

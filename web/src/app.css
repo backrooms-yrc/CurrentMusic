@@ -1257,3 +1257,14 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-artist-link:active { color: var(--cm-primary); border-bottom-color: var(--cm-primary); }
 /* 歌手页「已关注」按钮态 */
 #followBtn.on { color: var(--cm-primary); }
+
+
+/* ---------- 关注的歌手：网格（独立页 & 公开主页） ---------- */
+.cm-artist-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 14px 8px; padding: 4px 0 8px;
+}
+.cm-artist-grid .cm-artist-card { width: auto; }
+.cm-artist-grid-compact { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 12px 6px; }
+.cm-sec-more i { font-style: normal; opacity: .6; margin-left: 4px; }
+.cm-empty-sub { font-size: 11px; opacity: .6; }
