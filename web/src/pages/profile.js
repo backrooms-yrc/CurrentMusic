@@ -1,14 +1,8 @@
 // 公开用户主页：资料 + 统计（点赞/歌单/听歌天数/累计时长）+ 当前在听 + 最近听过 + TA 的歌单
 import { api } from '../api.js';
-import { esc, toast, avatarHTML } from '../ui.js';
+import { esc, toast, avatarHTML, fmtListen } from '../ui.js';
 import { player } from '../player.js';
 
-const fmtListen = ms => {
-  const min = Math.round(ms / 60000);
-  if (min < 60) return `${min} 分钟`;
-  const h = Math.floor(min / 60), m = min % 60;
-  return m ? `${h} 小时 ${m} 分` : `${h} 小时`;
-};
 const fmtTime = ts => new Date(ts * 1000).toLocaleDateString('zh-CN');
 
 export async function render(el, params) {

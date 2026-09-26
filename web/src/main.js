@@ -3,7 +3,7 @@ import './polyfill.js';   // 旧版 WebView 兼容垫片（必须在 mdui 之前
 import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './app.css';
-import { auth, settings, setAuthExpiredHandler } from './api.js';
+import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
 import { toast, initRipple, bootColorScheme, initImageFade } from './ui.js';
 import { checkUpdate } from './update.js';
 import { initPullToRefresh } from './ptr.js';
@@ -110,6 +110,7 @@ function boot() {
   }
   initRipple();
   initImageFade();   // 全局图片加载动画（骨架微光 → 渐显）
+  warmDecorScales(); // 预热头像挂件比例表（本地缓存即时可用，后台校验版本号）
   window.__cmBooted = true;   // 供 index.html 的启动诊断判定
   document.getElementById('boot').remove();
 

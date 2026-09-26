@@ -490,12 +490,78 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   box-shadow: 0 1px 4px rgba(0, 0, 0, .24), 0 0 0 2px var(--mdui-color-surface, #fef7ff);
 }
 .cm-ava-cam .material-icons-outlined { font-size: 15px; }
+
+/* ---------- 头像挂件（avatar decoration） ---------- */
+/* 挂件素材自带大量透明留白：圆环外径通常只有画布的 ~62%（稀疏点缀型更小）。
+   因此每个挂件附一个 --dsc（= 头像直径 ÷ 圆环外径占比），把画布放大到
+   「圆环外沿恰好落在头像边缘」。无环的点缀型挂件由后端按统一基准比例下发。 */
+.cm-ava-box { position: relative; display: inline-flex; flex: none; line-height: 0; }
+.cm-decor {
+  position: absolute; left: 0; top: 0; pointer-events: none;   /* 不挡头像点击/涟漪 */
+  display: flex; align-items: center; justify-content: center;
+  background: none; border-radius: 0;
+}
+.cm-decor img { display: block; background: none; border-radius: 0; }
+/* 选择器网格：素材多（400+），用 aspect-ratio 固定格高 + 懒加载避免一次性拉满 */
+.cm-decor-wrap { max-width: 100%; }
+.cm-decor-hint { font-size: 12px; opacity: .75; line-height: 1.7; margin-bottom: 10px; }
+.cm-decor-hint b { color: var(--cm-primary); }
+/* 搜索栏：402 款手动翻找不现实，按名称/ID 过滤 */
+.cm-decor-bar {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 0 12px;
+  border-radius: 999px; height: 40px;
+  background: var(--mdui-color-surface-container-high, #ece6f0);
+}
+.cm-decor-bar .material-icons-outlined { font-size: 19px; opacity: .55; }
+.cm-decor-bar input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit;
+  font-size: 13px; font-family: inherit; height: 100%;
+  -webkit-appearance: none; appearance: none;
+}
+.cm-decor-bar input::-webkit-search-cancel-button { display: none; }
+.cm-decor-count {
+  flex: none; font-size: 11px; opacity: .6; font-variant-numeric: tabular-nums;
+  padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--cm-primary) 14%, transparent);
+  color: var(--cm-primary);
+}
+.cm-decor-grid {
+  display: grid; gap: 8px; max-height: min(58vh, 460px); overflow-y: auto;
+  grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); padding: 2px;
+}
+/* 过滤后不参与布局（避免 400 个节点重排）；[hidden] 在本项目已有 display:none!important 兜底 */
+.cm-decor-item[hidden] { display: none; }
+.cm-decor-none { font-size: 12px; opacity: .6; text-align: center; padding: 22px 0; }
+.cm-decor-item {
+  border: 1px solid color-mix(in srgb, var(--cm-primary) 14%, transparent);
+  border-radius: 12px; padding: 6px 4px; cursor: pointer; text-align: center;
+  transition: transform .12s ease, border-color .12s ease, background .12s ease;
+}
+.cm-decor-item:active { transform: scale(.95); }
+.cm-decor-item.on {
+  border-color: var(--cm-primary);
+  background: color-mix(in srgb, var(--cm-primary) 12%, transparent);
+}
+.cm-decor-item > span {
+  display: block; font-size: 10px; opacity: .7; margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cm-decor-thumb {
+  width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  /* 棋盘格底：挂件是透明 PNG/GIF，白底才看得清轮廓 */
+  background: repeating-conic-gradient(#ffffff1a 0 25%, transparent 0 50%) 50% / 14px 14px;
+}
+.cm-decor-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.cm-decor-thumb.ph { color: var(--cm-primary); opacity: .7; }
 .cm-profile-info { flex: 1; min-width: 0; padding-top: 4px; }
 .cm-profile-name { font-size: 20px; font-weight: 750; display: flex; align-items: center; gap: 6px; }
 .cm-profile-bio { font-size: 12px; opacity: .65; margin: 4px 0 8px; }
 .cm-edit { cursor: pointer; opacity: .5; }
 .cm-edit .material-icons-outlined { font-size: 15px; }
-.cm-profile-stat { display: flex; gap: 14px; font-size: 11px; opacity: .8; }
+/* 四项统计（点赞/歌单/天听过/听歌时长）在窄屏允许换行，避免被挤出容器 */
+.cm-profile-stat { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; opacity: .8; }
+.cm-profile-stat > span { white-space: nowrap; }
 .cm-profile-stat b { font-size: 15px; display: block; }
 
 .cm-setting-list { border-radius: var(--cm-radius); overflow: hidden; background: var(--mdui-color-surface-container, #f3edf7); }

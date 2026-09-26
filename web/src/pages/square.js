@@ -1,6 +1,6 @@
 // 用户广场：所有用户（头像/昵称/个签）· 多排序（管理员置顶）· 搜索 · 分页
 import { api } from '../api.js';
-import { esc, toast, avatarHTML } from '../ui.js';
+import { esc, toast, avatarHTML, fmtListen } from '../ui.js';
 
 const SORTS = [
   { key: 'reg', label: '注册最新' },
@@ -10,12 +10,6 @@ const SORTS = [
   { key: 'listen', label: '听歌时长' },
   { key: 'likes', label: '点赞数' },
 ];
-const fmtListen = ms => {
-  const min = Math.round((ms || 0) / 60000);
-  if (min < 60) return `${min} 分钟`;
-  const h = Math.floor(min / 60), m = min % 60;
-  return m ? `${h}h${m}m` : `${h} 小时`;
-};
 const PAGE = 30;
 
 export async function render(el, params, state = {}) {
