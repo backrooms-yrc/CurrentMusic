@@ -324,19 +324,56 @@ public final class Dlna {
 
     /** DIDL-Lite 元数据：多数渲染器要靠它识别媒体类型；audio/flac 等按扩展名推不出时给 octet-stream。 */
     public static String didl(String url, String title, String artist, String album, long durationMs) {
+        return didl(url, title, artist, album, durationMs, null, null);
+    }
+
+    /**
+     * 同上，并附带歌词。
+     *
+     * UPnP ContentDirectory 没有「歌词」标准字段，DLNA 也没有定义歌词推送；
+     * 业界通行的两种做法都做上，能显示的就显示，不能显示的无副作用：
+     *   1. 独立 LRC 资源：作为第二个 &lt;res&gt;（text/plain）+ Samsung 的 sec:CaptionInfo(Ex)
+     *      + 常见的 pv:subtitleFileUri —— 部分电视会把它当字幕/歌词拉取并显示；
+     *   2. 内联少量歌词文本：&lt;upnp:lyrics&gt;（扩展字段）+ &lt;dc:description&gt;，
+     *      部分设备在信息面板里会展示。
+     * 注意：是否显示完全取决于设备固件，App 内歌词不受影响。
+     */
+    public static String didl(String url, String title, String artist, String album, long durationMs,
+                              String lrcUrl, String lyricsSnippet) {
         String dur = durationMs > 0 ? formatDuration(durationMs) : "";
-        return "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" "
-                + "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" "
-                + "xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\">"
-                + "<item id=\"1\" parentID=\"0\" restricted=\"1\">"
-                + "<dc:title>" + esc(title) + "</dc:title>"
-                + "<dc:creator>" + esc(artist) + "</dc:creator>"
-                + "<upnp:artist>" + esc(artist) + "</upnp:artist>"
-                + "<upnp:album>" + esc(album) + "</upnp:album>"
-                + "<upnp:class>object.item.audioItem.musicTrack</upnp:class>"
-                + "<res" + (dur.isEmpty() ? "" : " duration=\"" + dur + "\"")
-                + " protocolInfo=\"" + protocolInfo(url) + "\">" + esc(url) + "</res>"
-                + "</item></DIDL-Lite>";
+        boolean hasLrc = lrcUrl != null && !lrcUrl.isEmpty();
+        StringBuilder sb = new StringBuilder(512);
+        sb.append("<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" ")
+          .append("xmlns:dc=\"http://purl.org/dc/elements/1.1/\" ")
+          .append("xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" ")
+          .append("xmlns:sec=\"http://www.sec.co.kr/\" xmlns:pv=\"http://www.pv.com/pvns/\">")
+          .append("<item id=\"1\" parentID=\"0\" restricted=\"1\"");
+        if (hasLrc) {
+            sb.append(" sec:CaptionInfoEx=\"").append(esc(lrcUrl)).append("\"")
+              .append(" sec:CaptionInfo=\"").append(esc(lrcUrl)).append("\"")
+              .append(" pv:subtitleFileUri=\"").append(esc(lrcUrl)).append("\"")
+              .append(" pv:subtitleFileType=\"LRC\"");
+        }
+        sb.append(">")
+          .append("<dc:title>").append(esc(title)).append("</dc:title>")
+          .append("<dc:creator>").append(esc(artist)).append("</dc:creator>")
+          .append("<upnp:artist>").append(esc(artist)).append("</upnp:artist>")
+          .append("<upnp:album>").append(esc(album)).append("</upnp:album>")
+          .append("<upnp:class>object.item.audioItem.musicTrack</upnp:class>");
+        if (lyricsSnippet != null && !lyricsSnippet.isEmpty()) {
+            String snip = lyricsSnippet.length() > 800 ? lyricsSnippet.substring(0, 800) : lyricsSnippet;
+            sb.append("<upnp:lyrics>").append(esc(snip)).append("</upnp:lyrics>")
+              .append("<dc:description>").append(esc(snip)).append("</dc:description>");
+        }
+        sb.append("<res").append(dur.isEmpty() ? "" : " duration=\"" + dur + "\"")
+          .append(" protocolInfo=\"").append(protocolInfo(url)).append("\">")
+          .append(esc(url)).append("</res>");
+        if (hasLrc) {
+            sb.append("<res protocolInfo=\"http-get:*:text/plain:*\">")
+              .append(esc(lrcUrl)).append("</res>");
+        }
+        sb.append("</item></DIDL-Lite>");
+        return sb.toString();
     }
 
     private static String protocolInfo(String url) {

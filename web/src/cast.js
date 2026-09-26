@@ -24,6 +24,12 @@ const S = {
   maxPosMs: 0,         // 本次投屏期间见到过的最大播放位置（判断是否已播完）
   recoverCount: 0,
   recoverTimer: null,
+  levelIdx: 0,         // 当前降级位置（对应 CAST_LADDER 下标）
+  troubleCount: 0,     // 同一档位连续故障次数（达阈值则降级）
+  troubleTimer: null,
+  playWatchdog: null,  // 投出后 N 秒仍未开始播放 → 判定该档位设备放不了
+  everPlayed: false,   // 本次投出后是否真的播起来过
+  connecting: false,   // 是否处于「首次连接到设备」阶段（重投不再走连接回调）
 };
 
 let patched = false;
@@ -35,10 +41,32 @@ export const castSupported = () => typeof window.NativeApi !== 'undefined'
 
 export const isCasting = () => S.casting;
 
-/** 投屏专用音质：默认 exhigh（320k MP3）。
- *  不能沿用本机音质——本机可能选了超清母带，单曲 160MB+ 的 FLAC 电视既不解码也扛不住。 */
+// 投屏音质降级梯（按**设备解码兼容性**由难到易）：
+//   超清母带(FLAC) → 高清臻音(FLAC) → 无损(FLAC) → 极高(MP3 320k) → 标准(MP3 128k)
+// 默认从最高档试起；设备放不了就逐档下探到能播为止。
+// 注意不含 sky/jyeffect（沉浸环绕声/臻音全景声）——它们是同族「效果变体」，
+// 体积同样巨大且更多设备解不了，不适合做自动降级目标（手动仍可在设置里选）。
+const CAST_LADDER = ['jymaster', 'hires', 'lossless', 'exhigh', 'standard'];
+const LEVEL_LABEL = {
+  jymaster: '超清母带', jyeffect: '臻音全景声', sky: '沉浸环绕声',
+  hires: '高清臻音', lossless: '无损', exhigh: '极高 320k', standard: '标准 128k',
+};
+
+/** 用户偏好：'best'（默认，从最高档开始）或某个具体档位（用户手动指定后不再自动降级）。 */
+function castPref() {
+  return localStorage.getItem('cm.castLevel') || 'best';
+}
+
+/** 本次投屏实际使用的档位：用户指定则用它，否则用当前降级位置。 */
 function castLevel() {
-  return localStorage.getItem('cm.castLevel') || 'exhigh';
+  const p = castPref();
+  if (p !== 'best' && CAST_LADDER.indexOf(p) >= 0) return p;
+  return CAST_LADDER[Math.min(S.levelIdx, CAST_LADDER.length - 1)];
+}
+
+/** 是否还能继续降级（用户手动指定档位时不自动降级，尊重其选择）。 */
+function canDowngrade() {
+  return castPref() === 'best' && S.levelIdx < CAST_LADDER.length - 1;
 }
 
 /** 投屏地址强制明文 http：渲染器普遍不支持 https（证书/SNI 不认），实测 https 会直接不出声。 */
@@ -51,6 +79,11 @@ function castBase() {
 function castUrlFor(meta, level) {
   const sep = castBase().indexOf('?') >= 0 ? '&' : '?';
   return `${castBase()}/cast/${meta.ncm_id}${sep}level=${encodeURIComponent(level || castLevel())}`;
+}
+
+/** 投屏歌词地址（LRC 纯文本）：随 DIDL 一起交给设备，部分电视会当字幕/歌词拉取显示。 */
+function castLrcUrl(meta) {
+  return `${castBase()}/cast/${meta.ncm_id}.lrc`;
 }
 
 function hms(sec) {
@@ -75,7 +108,7 @@ function onCastState(st) {
   if (!S.casting || !st) return;
   if (st.error) {
     // 查询失败：多数是设备离线/休眠。连续失败才判定为掉线，避免偶发抖动误报。
-    if (S.lastOkAt && Date.now() - S.lastOkAt > 6000) scheduleRecover('设备无响应');
+    if (S.lastOkAt && Date.now() - S.lastOkAt > 6000) handleTrouble('设备无响应');
     return;
   }
   S.lastOkAt = Date.now();
@@ -85,7 +118,14 @@ function onCastState(st) {
   if (st.posMs > 0) { S.posMs = st.posMs; S.syncedAt = Date.now(); }
   if (st.posMs > S.maxPosMs) S.maxPosMs = st.posMs;
   if (st.durMs > 0) S.durMs = st.durMs;
-  if (S.playing) S.recoverCount = 0;                 // 恢复正常，重置重连计数
+  if (S.playing) {
+    S.recoverCount = 0;                              // 恢复正常
+    S.troubleCount = 0;
+    if (!S.everPlayed) {
+      S.everPlayed = true;                           // 这次投出确实播起来了
+      if (S.playWatchdog) { clearTimeout(S.playWatchdog); S.playWatchdog = null; }
+    }
+  }
   if (wasPlaying !== S.playing || prevDur !== S.durMs) notifyState();   // 刷新播放键/时长
   // 设备端停了（我们期望在播）要分两种情况：
   //  a) 已经播到接近结尾 → 正常放完，应切下一首（否则会永远重播同一首）
@@ -96,26 +136,47 @@ function onCastState(st) {
       S.intended = false;              // 交给下一首的 castTrack 重新置 true
       player.next(true);               // 走 player 的自动前进（尊重单曲循环/顺序/随机）
     } else {
-      scheduleRecover('播放已停止');
+      handleTrouble('播放已停止');
     }
   }
 }
 
-/** 掉线/被停止后的自动恢复：从上次位置重新投一次（最多 3 次）。 */
-function scheduleRecover(reason) {
-  if (!S.casting || S.recoverTimer) return;
-  if (S.recoverCount >= 3) {
-    toast('投屏已断开，请重新连接设备');
-    stopCast();
-    return;
-  }
-  S.recoverTimer = setTimeout(() => {
-    S.recoverTimer = null;
+/**
+ * 投屏故障处理：先原地重试，同一档位连续两次失败则**自动降级**再试。
+ *
+ * 为什么需要降级：默认给设备最高音质（超清母带 FLAC），但不少电视/音箱
+ * 解不了无损、或拉大文件流会失败——表现为「连上了但不出声/很快就断」。
+ * 此时逐档下探（母带 → 高清臻音 → 无损 → 极高 320k → 标准）总能落到能播的档位。
+ * 用户若手动指定了档位，则不自动降级（尊重其选择）。
+ */
+function handleTrouble(reason) {
+  if (!S.casting || S.troubleTimer) return;
+  S.troubleTimer = setTimeout(() => {
+    S.troubleTimer = null;
     if (!S.casting || !player.meta) return;
+    S.troubleCount++;
+    if (S.troubleCount >= 2 && canDowngrade()) {
+      S.levelIdx++;
+      S.troubleCount = 0;
+      S.recoverCount = 0;
+      toast(`设备放不了「${LEVEL_LABEL[CAST_LADDER[S.levelIdx - 1]] || ''}」，已自动降到「${LEVEL_LABEL[currentLevelName()]}」`);
+      castTrack(player.meta, S.posMs / 1000);
+      return;
+    }
+    if (S.troubleCount >= 5) {
+      toast('投屏反复失败，已停止。可在设备列表把音质改成「标准」再试');
+      stopCast();
+      return;
+    }
     S.recoverCount++;
-    toast(`投屏中断（${reason}），正在重连 ${S.recoverCount}/3…`);
+    toast(`投屏中断（${reason}），正在重连…`);
     castTrack(player.meta, S.posMs / 1000);
   }, 1200);
+}
+
+/** 当前档位名（供提示文案用，避免闭包取到旧值） */
+function currentLevelName() {
+  return castLevel();
 }
 
 /** 把指定曲目推给设备；startSec>0 时在其后定位到该位置（用于续播/恢复）。 */
@@ -128,8 +189,21 @@ function castTrack(meta, startSec) {
   S.durMs = meta.duration || S.durMs;
   S.maxPosMs = S.posMs;                 // 新曲目重新计
   notifyState();
-  window.NativeApi.dlnaPlay(S.key, castUrlFor(meta, castLevel()),
-    meta.name || '', meta.artists || '', meta.album || '', meta.duration || 0);
+  const lrc = castLrcUrl(meta);
+  S.everPlayed = false;
+  if (window.NativeApi.dlnaPlay.length >= 8) {
+    // 新版桥：带上歌词（LRC 资源 + 少量内联文本，见 Dlna.didl 注释）
+    window.NativeApi.dlnaPlay(S.key, castUrlFor(meta, castLevel()),
+      meta.name || '', meta.artists || '', meta.album || '', meta.duration || 0, lrc, '');
+  } else {
+    window.NativeApi.dlnaPlay(S.key, castUrlFor(meta, castLevel()),
+      meta.name || '', meta.artists || '', meta.album || '', meta.duration || 0);
+  }
+  // 起播看门狗：投出后 12 秒仍未真正开始播，多半是该档位设备放不了（如不支持的 FLAC 规格）
+  if (S.playWatchdog) clearTimeout(S.playWatchdog);
+  S.playWatchdog = setTimeout(() => {
+    if (S.casting && !S.everPlayed) handleTrouble('设备未开始播放');
+  }, 12000);
   if (startSec > 0) {
     setTimeout(() => {
       if (S.casting && window.NativeApi.dlnaCmd) {
@@ -211,6 +285,12 @@ function endSession() {
   S.lastOkAt = 0;
   S.recoverCount = 0;
   if (S.recoverTimer) { clearTimeout(S.recoverTimer); S.recoverTimer = null; }
+  if (S.troubleTimer) { clearTimeout(S.troubleTimer); S.troubleTimer = null; }
+  if (S.playWatchdog) { clearTimeout(S.playWatchdog); S.playWatchdog = null; }
+  S.levelIdx = 0;
+  S.troubleCount = 0;
+  S.everPlayed = false;
+  S.connecting = false;
   if (ticker) { clearInterval(ticker); ticker = null; }
   setClockSource(null);
   paintIcon();
@@ -229,6 +309,8 @@ function beginSession(key, name) {
   S.syncedAt = Date.now();
   S.lastOkAt = Date.now();
   S.recoverCount = 0;
+  S.troubleCount = 0;
+  S.levelIdx = 0;                 // 每次开新会话都从最高档试起
   setClockSource(castClock);      // 让进度条/歌词改读设备时钟
   startTicker();
   window.__cmCastState = onCastState;
@@ -253,28 +335,32 @@ export function openCastDialog() {
                <span class="cm-cast-qlabel">投屏音质</span>
                <div class="cm-cast-qbox" id="castQ"></div>
              </div>
-             <div class="cm-cast-tip">设备需与本机在同一 Wi-Fi；音质过高时部分电视无法解码（默认「极高」兼容性最好）</div>
+             <div class="cm-cast-tip">设备需与本机在同一 Wi-Fi；默认给最高音质，设备放不了会自动降级。歌词随设备元数据/字幕一并发送（能否显示取决于电视固件）</div>
            </div>`,
     actions: [{ text: '关闭' }],
   });
 
-  // 投屏音质：默认极高(320k MP3)——电视基本都支持；无损/母带体积巨大且常不被支持
+  // 投屏音质：默认「最高（超清母带）」；设备放不了会自动逐档降级。
+  // 也可手动指定档位——指定后不再自动降级，便于已知设备能力时固定。
   const LEVELS = [
-    { k: 'standard', label: '标准' },
-    { k: 'exhigh', label: '极高' },
+    { k: 'best', label: '最高' },
     { k: 'lossless', label: '无损' },
+    { k: 'exhigh', label: '极高' },
+    { k: 'standard', label: '标准' },
   ];
   const renderQuality = () => {
     const box = diag.querySelector('#castQ');
     if (!box) return;
-    const cur = castLevel();
+    const cur = castPref();
     box.innerHTML = LEVELS.map(l =>
       `<span class="cm-cast-q${l.k === cur ? ' on' : ''}" data-k="${l.k}">${l.label}</span>`).join('');
     box.querySelectorAll('.cm-cast-q').forEach(el => {
       el.onclick = () => {
         localStorage.setItem('cm.castLevel', el.dataset.k);
         renderQuality();
-        toast(`投屏音质：${el.textContent}（下次投屏生效）`);
+        toast(el.dataset.k === 'best'
+          ? '投屏音质：最高（放不了会自动降级）'
+          : `投屏音质：${el.textContent}（固定，不再自动降级）`);
       };
     });
   };
@@ -343,6 +429,8 @@ function connect(key, name, diag) {
   toast(`正在投屏到「${name}」…`);
 
   window.__cmDlnaResult = (ok, err, devName) => {
+    if (!S.connecting) return;          // 只处理首次连接；后续重投/降级不看这个回调
+    S.connecting = false;
     if (ok) {
       beginSession(key, devName || name);
       S.durMs = meta.duration || 0;
@@ -361,6 +449,7 @@ function connect(key, name, diag) {
   };
   // 先接管时钟再发指令：避免 playAt 在投屏判定前触发本机播放
   beginSession(key, name);
+  S.connecting = true;
   castTrack(meta, pos);
   try { player.audio.pause(); player.wantPlaying = false; } catch (e) { /* 忽略 */ }
   if (diag) diag.open = false;
