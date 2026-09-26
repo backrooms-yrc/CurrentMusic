@@ -479,7 +479,17 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   display: flex; align-items: center; justify-content: center; flex: none;
   background: linear-gradient(135deg, var(--cm-primary), #9f8fff); color: #fff; font-weight: 700;
 }
-.cm-ava-wrap { cursor: pointer; }
+.cm-ava-wrap { cursor: pointer; position: relative; transition: transform .12s ease; }
+.cm-ava-wrap:active { transform: scale(.96); }
+/* 头像右下角相机角标：提示「点头像可更换」（原来藏在账号管理里不好找） */
+.cm-ava-cam {
+  /* 注意：.cm-ava-wrap 有 overflow:hidden（涟漪裁剪需要），角标必须落在盒内否则被裁掉 */
+  position: absolute; right: 1px; bottom: 1px; width: 25px; height: 25px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; z-index: 2;
+  background: var(--cm-primary); color: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .24), 0 0 0 2px var(--mdui-color-surface, #fef7ff);
+}
+.cm-ava-cam .material-icons-outlined { font-size: 15px; }
 .cm-profile-info { flex: 1; min-width: 0; padding-top: 4px; }
 .cm-profile-name { font-size: 20px; font-weight: 750; display: flex; align-items: center; gap: 6px; }
 .cm-profile-bio { font-size: 12px; opacity: .65; margin: 4px 0 8px; }

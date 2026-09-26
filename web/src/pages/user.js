@@ -247,7 +247,8 @@ async function renderProfile(el) {
   el.innerHTML = `
     <div class="cm-profile">
       <div class="cm-profile-head">
-        <div id="avaWrap" class="cm-ava-wrap">${avatarHTML(u, 84)}</div>
+        <div id="avaWrap" class="cm-ava-wrap" role="button" tabindex="0" title="点击更换头像"
+             aria-label="更换头像">${avatarHTML(u, 84)}<span class="cm-ava-cam"><span class="material-icons-outlined">photo_camera</span></span></div>
         <div class="cm-profile-info">
           <div class="cm-profile-name">${esc(u.nickname || u.username)}${u.isSuper ? ' <span class="cm-tag super">超级管理员</span>' : u.isAdmin ? ' <span class="cm-tag admin">管理员</span>' : ''} <span class="cm-edit" id="editNick"><span class="material-icons-outlined">edit</span></span></div>
           <div class="cm-profile-bio">${esc(u.bio || '这个人很懒，什么都没写')} <span class="cm-edit" id="editBio"><span class="material-icons-outlined">edit</span></span></div>
@@ -287,7 +288,6 @@ async function renderProfile(el) {
         <div class="cm-sec-head"><h2>账号管理</h2></div>
         <div class="cm-setting-list">
           <div class="cm-setting" id="chgPass"><span class="material-icons-outlined">password</span>修改密码</div>
-          <div class="cm-setting" id="chgAvatar"><span class="material-icons-outlined">account_box</span>更换头像</div>
         </div>
 
       ${accounts.length ? `
@@ -314,9 +314,13 @@ async function renderProfile(el) {
     import('../ncmbind.js').then(m => m.unbindFlow(() => renderProfile(el)));
   });
 
-  // 头像上传
+  // 头像上传：点击头像即换（替换原「账号管理 → 更换头像」入口，位置更直观）
   const fileInput = el.querySelector('#avaFile');
-  el.querySelector('#chgAvatar').onclick = () => fileInput.click();
+  const avaWrap = el.querySelector('#avaWrap');
+  if (avaWrap) {
+    avaWrap.onclick = () => fileInput.click();
+    avaWrap.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } };
+  }
   fileInput.onchange = async () => {
     const f = fileInput.files[0];
     if (!f) return;
