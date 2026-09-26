@@ -12,7 +12,9 @@ import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.PowerManager;
 
 import java.io.InputStream;
@@ -41,6 +43,7 @@ public class PlaybackService extends Service {
     private PowerManager.WakeLock wl;
     private MediaSession ms;
     private final ExecutorService artEx = Executors.newSingleThreadExecutor();
+    private final Handler main = new Handler(Looper.getMainLooper());
 
     // 当前媒体状态（服务未运行时桥调用先落静态字段，启动后首次通知即带上）
     private String title = "CurrentMusic", artist = "", album = "";
@@ -66,8 +69,8 @@ public class PlaybackService extends Service {
         }
         ms = new MediaSession(this, "CurrentMusic");
         ms.setCallback(new MediaSession.Callback() {
-            @Override public void onPlay() { MainActivity.runJs("window.__cmPlayer&&window.__cmPlayer.audio.play()"); }
-            @Override public void onPause() { MainActivity.runJs("window.__cmPlayer&&window.__cmPlayer.audio.pause()"); }
+            @Override public void onPlay() { MainActivity.runJs("window.__cmPlayer&&window.__cmPlayer.player.play()"); }
+            @Override public void onPause() { MainActivity.runJs("window.__cmPlayer&&window.__cmPlayer.player.pause()"); }
             @Override public void onSkipToNext() { MainActivity.runJs("window.__cmPlayer&&window.__cmPlayer.player.next()"); }
             @Override public void onSkipToPrevious() { MainActivity.runJs("window.__cmPlayer&&window.__cmPlayer.player.prev()"); }
         });
@@ -102,8 +105,30 @@ public class PlaybackService extends Service {
             wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CurrentMusic:playback");
             wl.setReferenceCounted(false);
         }
-        if (!wl.isHeld()) wl.acquire(4 * 60 * 60 * 1000L); // 单次最长 4 小时，防止泄漏
+        acquireLock();
         return START_STICKY;
+    }
+
+    /** 唤醒锁续租：Android 的 acquire 超时到期即自动释放，长播（尤其息屏 Doze）会被冻住——
+     *  定时续租，避免 4 小时到期后播放莫名暂停。 */
+    private void acquireLock() {
+        if (wl == null) return;
+        if (!wl.isHeld()) wl.acquire(10 * 60 * 1000L);   // 单次 10 分钟，由下面的定时器不断续
+        main.removeCallbacks(renewLock);
+        main.postDelayed(renewLock, 9 * 60 * 1000L);
+    }
+    private final Runnable renewLock = new Runnable() {
+        @Override public void run() {
+            if (wl != null && wl.isHeld()) { wl.release(); }
+            acquireLock();
+        }
+    };
+
+    /** 用户划掉任务卡片：WebView 随之销毁，音频不可能继续——清干净（撤通知、释放锁、停服务），
+     *  否则会留下一个「按了没反应」的僵尸媒体通知，锁屏控件也点不动。 */
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        stopSelf();
     }
 
 
@@ -239,6 +264,7 @@ public class PlaybackService extends Service {
 
     @Override
     public void onDestroy() {
+        main.removeCallbacks(renewLock);
         if (ms != null) {
             ms.setActive(false);
             ms.release();

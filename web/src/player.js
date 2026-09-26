@@ -57,6 +57,7 @@ export const player = {
     this.urlInfo = info;
     this.loading = false;
     audio.src = info.url;
+    this.wantPlaying = true;
     audio.play().catch(() => toast('点击播放键开始播放'));
     emit('song');
     emit('state');
@@ -70,9 +71,23 @@ export const player = {
     try { await api.recordPlay(this.meta); } catch { /* 静默 */ }
   },
 
-  toggle() {
+  // wantPlaying：我们「期望」的播放状态。系统打断（音频焦点被抢、锁屏瞬断、车机接管）
+  // 会触发 pause，若不自动恢复就表现为「锁屏播放突然暂停」。
+  wantPlaying: false,
+
+  play() {
     if (!this.urlInfo) { if (this.index === -1 && this.queue.length) this.playAt(0); return; }
-    if (audio.paused) audio.play(); else audio.pause();
+    this.wantPlaying = true;
+    audio.play().catch(() => { /* 交由 paused 兜底重试 */ });
+  },
+
+  pause() {
+    this.wantPlaying = false;
+    audio.pause();
+  },
+
+  toggle() {
+    if (this.audio.paused) this.play(); else this.pause();
   },
 
   next(auto = false) {
@@ -81,7 +96,7 @@ export const player = {
     let i = this.index;
     if (this.playMode === 'shuffle') i = Math.floor(Math.random() * this.queue.length);
     else if (i + 1 >= this.queue.length) {
-      if (this.playMode === 'order' && auto) { audio.pause(); return; }
+      if (this.playMode === 'order' && auto) { this.pause(); stopPlayback(); return; }
       i = 0;
     } else i++;
     this.playAt(i);
@@ -187,18 +202,47 @@ audio.addEventListener('timeupdate', () => {
     player.pushMediaState();
   }
 });
-audio.addEventListener('play', () => { emit('state'); keepAlive(true); player.pushMediaState(); });
-audio.addEventListener('pause', () => { emit('state'); keepAlive(false); player.pushMediaState(); });
+audio.addEventListener('play', () => {
+  player.wantPlaying = true;
+  clearTimeout(resumeTimer); resumeTries = 0;
+  emit('state'); keepAlive(true); player.pushMediaState();
+});
+audio.addEventListener('pause', () => {
+  emit('state'); player.pushMediaState();
+  // 注意：暂停不改保活状态——锁屏/系统音频焦点抖动会触发 pause，
+  // 此时若释放唤醒锁+停前台服务，进程可能在息屏下被冻结，出现「突然暂停且不再恢复」。
+  if (player.wantPlaying && !player.audio.ended) scheduleResume();
+});
 audio.addEventListener('seeked', () => player.pushMediaState());
 // 时长此时才实测可得：重推一次元数据，蓝牙/车机拿到准确曲长（避免用估计值或被旧值卡住）
 audio.addEventListener('loadedmetadata', () => {
   if (isFinite(audio.duration) && audio.duration > 0) player.updateMediaSession();
 });
-audio.addEventListener('ended', () => keepAlive(false));
 
-// 后台保活：播放中启动前台服务（通知+唤醒锁），暂停/结束即停
+// 意外暂停自动恢复：系统抢焦点/锁屏瞬断后重新起播（最多 3 次，间隔递增）
+let resumeTimer = 0, resumeTries = 0;
+function scheduleResume() {
+  if (resumeTries >= 3) return;
+  resumeTries++;
+  clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(() => {
+    if (player.wantPlaying && player.audio.paused && player.urlInfo) {
+      player.audio.play().catch(() => scheduleResume());
+    }
+  }, 600 * resumeTries);
+}
+
+// 后台保活：有正在播放的曲目就保持前台服务（含暂停态——便于锁屏随时恢复），
+// 仅在队列播完/清空/主动停止时释放
 function keepAlive(on) {
   try { window.NativeApi && window.NativeApi.keepAlive && window.NativeApi.keepAlive(on); } catch { /* 非 App 环境 */ }
+}
+
+/** 真正停止播放（队列播完且不循环 / 清空队列）：释放前台服务与唤醒锁。 */
+export function stopPlayback() {
+  player.wantPlaying = false;
+  clearTimeout(resumeTimer);
+  keepAlive(false);
 }
 audio.addEventListener('error', () => { if (player.urlInfo) { toast('播放出错，尝试下一首'); player.next(true); } });
 

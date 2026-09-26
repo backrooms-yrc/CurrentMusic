@@ -50,10 +50,31 @@ public class MainActivity extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private static MainActivity sRef;   // 前台服务转发播放动作回 WebView 用
 
-    /** 任意线程安全地向页面注入 JS（服务/媒体回调线程调用）。 */
+    // 页面未就绪时暂存媒体指令（锁屏切歌时 Activity 可能正在重建，直接丢弃会「点了没反应」）
+    private static final java.util.ArrayDeque<String> pendingJs = new java.util.ArrayDeque<>();
+
+    /** 任意线程安全地向页面注入 JS（服务/媒体回调线程调用）；页面不可用时排队待补发。 */
     static void runJs(final String js) {
         MainActivity a = sRef;
-        if (a != null) a.main.post(() -> { if (a.web != null) a.web.evaluateJavascript(js, null); });
+        if (a == null) return;
+        a.main.post(() -> {
+            if (a.web != null) {
+                a.web.evaluateJavascript(js, null);
+            } else {
+                synchronized (pendingJs) {
+                    if (pendingJs.size() < 8) pendingJs.addLast(js);   // 只留最近的少量指令
+                }
+            }
+        });
+    }
+
+    /** 页面就绪后补发暂存的媒体指令（在 onPageFinished 调用）。 */
+    private void flushPendingJs() {
+        synchronized (pendingJs) {
+            while (!pendingJs.isEmpty() && web != null) {
+                web.evaluateJavascript(pendingJs.pollFirst(), null);
+            }
+        }
     }
     private ValueCallback<Uri[]> fileCallback;
     private long lastBack = 0;
@@ -137,6 +158,7 @@ public class MainActivity extends Activity {
         public void onPageFinished(WebView view, String url) {
             // 页面脚本此时必定就绪：强制重推 insets，兜住首帧注入丢失的情况
             refreshInsetsFromWindow(true);
+            flushPendingJs();
         }
 
         @Override
