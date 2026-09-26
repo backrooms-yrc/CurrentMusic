@@ -70,7 +70,7 @@ export async function render(el) {
     renderHist();
     hotBox.innerHTML = '';   // 有搜索内容后隐藏热搜
     resultBox.innerHTML = searchResultSkeleton(8);
-    let d = { songs: [], artists: [], albums: [] };
+    let d = { songs: [], artists: [], albums: [], playlists: [] };
     try {
       d = await api.search(kw, 0, 30);
     } catch (e) {
@@ -78,42 +78,44 @@ export async function render(el) {
       return;
     }
     if (my !== seq) return;
-    const { songs = [], artists = [], albums = [] } = d;
-    if (!songs.length && !artists.length && !albums.length) {
+    const songs = d.songs || [], artists = d.artists || [], albums = d.albums || [], playlists = d.playlists || [];
+    if (!songs.length && !artists.length && !albums.length && !playlists.length) {
       resultBox.innerHTML = `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`;
       return;
     }
-    resultBox.innerHTML = '';
 
-    // ---- 歌手区 ----
-    if (artists.length) {
-      const sec = document.createElement('section');
-      sec.className = 'cm-sec';
-      sec.innerHTML = `<div class="cm-sec-head"><h2>歌手</h2></div>
-        <div class="cm-hscroll cm-artist-row">${artists.map(a => `
-          <div class="cm-artist-card" data-id="${a.id}">
-            <div class="cm-artist-ava">${a.pic ? `<img src="${esc(a.pic)}?param=120y120" loading="lazy">` : '<span class="material-icons-outlined">person</span>'}</div>
-            <div class="cm-artist-name">${esc(a.name)}</div>
-            ${a.alias ? `<div class="cm-artist-sub">${esc(a.alias)}</div>` : ''}
-          </div>`).join('')}</div>`;
-      sec.querySelectorAll('.cm-artist-card').forEach(c => {
-        c.onclick = () => { location.hash = `#/artist/${c.dataset.id}`; };
-      });
-      resultBox.appendChild(sec);
-    }
+    // 分 TAB：单曲（默认）/ 专辑 / 歌手 / 歌单
+    const TABS = [
+      { k: 'song', label: '单曲', n: songs.length },
+      { k: 'album', label: '专辑', n: albums.length },
+      { k: 'artist', label: '歌手', n: artists.length },
+      { k: 'list', label: '歌单', n: playlists.length },
+    ].filter(t => t.n > 0);
 
-    // ---- 专辑区（点击整专辑播放） ----
-    if (albums.length) {
-      const sec = document.createElement('section');
-      sec.className = 'cm-sec';
-      sec.innerHTML = `<div class="cm-sec-head"><h2>专辑</h2><span class="cm-sec-sub">点击整专辑播放</span></div>
+    resultBox.innerHTML = `
+      <div class="cm-srchtabs" id="srchTabs">
+        ${TABS.map((t, i) => `<button class="cm-srchtab${i === 0 ? ' on' : ''}" data-k="${t.k}">${t.label}<i>${t.n}</i></button>`).join('')}
+      </div>
+      <div id="srchPanel"></div>`;
+    const panel = resultBox.querySelector('#srchPanel');
+
+    const renderSong = () => {
+      panel.innerHTML = `<div class="cm-sec-head"><h2>单曲</h2>
+        <span class="cm-sec-more" id="addAll"><span class="material-icons-outlined">playlist_add</span> 全部收入歌单</span></div>
+        <div id="songList"></div>`;
+      renderSongList(panel.querySelector('#songList'), songs, { onPlay: i => player.playList(songs, i) });
+      panel.querySelector('#addAll').onclick = () => addToPlaylist(songs);
+    };
+
+    const renderAlbum = () => {
+      panel.innerHTML = `<div class="cm-sec-head"><h2>专辑</h2><span class="cm-sec-sub">点击整专辑播放</span></div>
         <div class="cm-hscroll cm-album-row">${albums.map(a => `
           <div class="cm-card cm-album-card" data-id="${a.id}" title="播放专辑「${esc(a.name)}」">
             <img src="${esc(a.pic)}?param=300y300" loading="lazy" onerror="this.classList.add('none')">
             <div class="cm-card-name">${esc(a.name)}</div>
             <div class="cm-card-sub">${esc(a.artist)}</div>
           </div>`).join('')}</div>`;
-      sec.querySelectorAll('.cm-album-card').forEach(c => {
+      panel.querySelectorAll('.cm-album-card').forEach(c => {
         c.onclick = async () => {
           toast('正在打开专辑…');
           try {
@@ -123,25 +125,49 @@ export async function render(el) {
           } catch (e) { toast('打开专辑失败：' + e.message); }
         };
       });
-      resultBox.appendChild(sec);
-    }
+    };
 
-    // ---- 单曲区 ----
-    if (songs.length) {
-      const sec = document.createElement('section');
-      sec.className = 'cm-sec';
-      const head = document.createElement('div');
-      head.className = 'cm-sec-head';
-      head.innerHTML = `<h2>单曲</h2>
-        <span class="cm-sec-more" id="addAll"><span class="material-icons-outlined">playlist_add</span> 全部收入歌单</span>`;
-      sec.appendChild(head);
-      const list = document.createElement('div');
-      sec.appendChild(list);
-      resultBox.appendChild(sec);
-      await renderSongList(list, songs, { onPlay: i => player.playList(songs, i) });
-      head.querySelector('#addAll').onclick = () => addToPlaylist(songs);
-      return;
-    }
+    const renderArtist = () => {
+      panel.innerHTML = `<div class="cm-sec-head"><h2>歌手</h2><span class="cm-sec-sub">点击查看全部作品</span></div>
+        <div class="cm-hscroll cm-artist-row">${artists.map(a => `
+          <div class="cm-artist-card" data-id="${a.id}">
+            <div class="cm-artist-ava">${a.pic ? `<img src="${esc(a.pic)}?param=120y120" loading="lazy">` : '<span class="material-icons-outlined">person</span>'}</div>
+            <div class="cm-artist-name">${esc(a.name)}</div>
+            ${a.alias ? `<div class="cm-artist-sub">${esc(a.alias)}</div>` : ''}
+          </div>`).join('')}</div>`;
+      panel.querySelectorAll('.cm-artist-card').forEach(c => {
+        c.onclick = () => { location.hash = `#/artist/${c.dataset.id}`; };
+      });
+    };
+
+    const fmtPlay = n => n >= 100000000 ? (n / 100000000).toFixed(1) + ' 亿'
+      : n >= 10000 ? Math.round(n / 10000) + ' 万' : String(n || 0);
+
+    const renderList = () => {
+      panel.innerHTML = `<div class="cm-sec-head"><h2>歌单</h2><span class="cm-sec-sub">点击查看歌单内容</span></div>
+        <div class="cm-plgrid" id="srchPls">${playlists.map(p => `
+          <div class="cm-plcard" data-id="${p.id}">
+            <div class="cm-plcover">${p.pic ? `<img src="${esc(p.pic)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''}<span class="material-icons-outlined">queue_music</span></div>
+            <div class="cm-plname">${esc(p.name)}</div>
+            <div class="cm-plsub">${p.trackCount} 首 · ${fmtPlay(p.playCount)}播放</div>
+          </div>`).join('')}</div>`;
+      panel.querySelectorAll('#srchPls .cm-plcard').forEach(c => {
+        c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.id}`; };
+      });
+    };
+
+    const renderers = { song: renderSong, album: renderAlbum, artist: renderArtist, list: renderList };
+    const show = k => {
+      const fn = renderers[k];
+      if (fn) fn();
+    };
+    resultBox.querySelectorAll('.cm-srchtab').forEach(tab => {
+      tab.onclick = () => {
+        resultBox.querySelectorAll('.cm-srchtab').forEach(t => t.classList.toggle('on', t === tab));
+        show(tab.dataset.k);
+      };
+    });
+    show(TABS[0].k);   // 默认「单曲」
   }
 
   // 输入不触发搜索：只有回车（或点击热搜/历史词条这类明确动作）才发起请求
