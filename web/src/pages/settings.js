@@ -37,6 +37,14 @@ export async function render(el) {
       <div class="cm-setting" id="quality"><span class="material-icons-outlined">high_quality</span>默认音质<i>${tierLabel(settings.quality)}</i></div>
       <div class="cm-setting" id="dlDir"><span class="material-icons-outlined">download</span>下载目录<i>Music/${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}</i></div>
     </div>
+    <div class="cm-sec-head"><h2>隐私</h2></div>
+    <div class="cm-setting-list">
+      <div class="cm-setting" id="sqPublic">
+        <span class="material-icons-outlined">public</span>在「发现」页公开我
+        <i>${u.publicSquare === false ? '已关闭' : '公开中'}</i>
+        <mdui-switch id="sqPublicSw" ${u.publicSquare === false ? '' : 'checked'} style="margin-left:8px"></mdui-switch>
+      </div>
+    </div>
     <div class="cm-sec-head"><h2>服务器</h2></div>
     <div class="cm-setting-list">
       <div class="cm-setting" id="secure"><span class="material-icons-outlined">lock</span>安全连接<i>${settings.secureMode ? 'HTTPS 已启用' : '已关闭'}</i></div>
@@ -51,6 +59,31 @@ export async function render(el) {
       ${auth.token ? `<div class="cm-setting" id="devices"><span class="material-icons-outlined">devices</span>登录设备<i id="devCount">—</i></div>` : ''}
       <div class="cm-setting" id="engine"><span class="material-icons-outlined">public</span>系统 WebView<i>${engineChrome() ? 'Chromium ' + engineChrome() : (isApp ? '未知' : '浏览器')}${engineOutdated() ? ' · 建议更新' : ''}</i></div>
     </div>`;
+
+  // 公开到发现页广场：关闭后不出现在广场列表（主页仍可被链接访问）
+  const sqSw = el.querySelector('#sqPublicSw');
+  if (sqSw) {
+    // 本地缓存的用户对象可能没有该字段（老会话）：进页面时用服务端值纠正显示
+    if (auth.token) api.me().then(me => {
+      const on = me.publicSquare !== false;
+      sqSw.checked = on;
+      const i = el.querySelector('#sqPublic i');
+      if (i) i.textContent = on ? '公开中' : '已关闭';
+    }).catch(() => {});
+    sqSw.addEventListener('change', async () => {
+      const on = !!sqSw.checked;
+      try {
+        const r = await api.setSquarePublic(on);
+        auth.saveLogin(auth.token, r);            // 同步本地缓存的用户信息
+        const i = el.querySelector('#sqPublic i');
+        if (i) i.textContent = on ? '公开中' : '已关闭';
+        toast(on ? '已公开到「发现」页' : '已从「发现」页隐藏');
+      } catch (e) {
+        sqSw.checked = !on;                     // 回滚
+        toast('设置失败：' + e.message);
+      }
+    });
+  }
 
   el.querySelector('#dlApk')?.addEventListener('click', () => {
     location.href = settings.base + '/download/latest';   // 后端 302 到最新版安装包

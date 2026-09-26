@@ -7,8 +7,15 @@ const SORTS = [
   { key: 'reg_asc', label: '注册最早' },
   { key: 'name', label: '昵称' },
   { key: 'days', label: '听歌天数' },
+  { key: 'listen', label: '听歌时长' },
   { key: 'likes', label: '点赞数' },
 ];
+const fmtListen = ms => {
+  const min = Math.round((ms || 0) / 60000);
+  if (min < 60) return `${min} 分钟`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m ? `${h}h${m}m` : `${h} 小时`;
+};
 const PAGE = 30;
 
 export async function render(el, params, state = {}) {
@@ -18,6 +25,7 @@ export async function render(el, params, state = {}) {
   const total = state.total ?? 0;
 
   el.innerHTML = `
+    <div class="cm-sq-stats" id="sqStats"><span class="material-icons-outlined">groups</span>正在统计…</div>
     <div class="cm-search-bar">
       <mdui-text-field id="sq" label="搜索昵称 / 个签（回车）" variant="outlined" clearable style="width:100%"></mdui-text-field>
     </div>
@@ -37,9 +45,21 @@ export async function render(el, params, state = {}) {
       <div class="cm-umain">
         <div class="cm-uname">${esc(u.nickname || `用户${u.id}`)}${u.is_super ? '<span class="cm-tag super">超级管理员</span>' : u.is_admin ? '<span class="cm-tag admin">管理员</span>' : ''}</div>
         <div class="cm-ubio">${esc(u.bio || '这个人很懒，什么都没写')}</div>
-        <div class="cm-usub">点赞 ${u.likes} · 歌单 ${u.playlists} · 听歌 ${u.days} 天</div>
+        <div class="cm-usub">点赞 ${u.likes} · 歌单 ${u.playlists} · ${sort === 'listen' ? '时长 ' + fmtListen(u.listenMs) : '听歌 ' + u.days + ' 天'}</div>
       </div>
     </div>`;
+
+  const renderStats = st => {
+    const box = el.querySelector('#sqStats');
+    if (!box || !st) return;
+    box.innerHTML = `<span class="material-icons-outlined">groups</span>共 <b>${st.users}</b> 位注册用户`
+      + `<i></i><span class="material-icons-outlined">graphic_eq</span>${st.listening > 0 ? `<b>${st.listening}</b> 人正在听歌` : '暂时没人在听歌'}`;
+  };
+  // 在线人数会随时变化：进页面后每 30s 刷新一次统计（页面切走即自动停止——元素不存在时跳过）
+  let statsTimer = setInterval(async () => {
+    if (!el.querySelector('#sqStats')) { clearInterval(statsTimer); return; }
+    try { const d = await api.userSquare(query, sort, 0, 1); renderStats(d.stats); } catch { /* 忽略 */ }
+  }, 30000);
 
   const load = async (offset, append) => {
     if (!append) grid.innerHTML = `<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>`;
@@ -52,6 +72,7 @@ export async function render(el, params, state = {}) {
       return;
     }
     const list = d.users || [];
+    renderStats(d.stats);
     if (!append) grid.innerHTML = '';
     if (!list.length && !append) {
       grid.innerHTML = query ? `<div class="cm-empty">没有找到「${esc(query)}」相关的用户</div>` : '<div class="cm-empty small">还没有用户</div>';
