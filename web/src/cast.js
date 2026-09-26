@@ -2,7 +2,7 @@
 // 原生侧（MainActivity.Bridge → Dlna.java）负责 SSDP 组播与 AVTransport SOAP，
 // 页面侧只做 UI 与「投屏时把控制指令转发给设备」。
 // 非 App 环境（浏览器）没有 NativeApi，入口会提示改用 App。
-import { settings } from './api.js';
+import { settings, call } from './api.js';
 import { esc, toast } from './ui.js';
 import { mdui } from './md.js';
 import { player } from './player.js';
@@ -16,10 +16,22 @@ export const castSupported = () => typeof window.NativeApi !== 'undefined'
 
 export const isCasting = () => S.casting;
 
-/** 投屏时交给渲染器拉流的地址：走后端 /cast/<id> 中转（原 CDN 是 https+签名短链，设备多半放不了）。 */
+/** 投屏专用音质：默认 exhigh（320k MP3）。
+ *  不能沿用本机音质——本机可能选了超清母带，单曲 160MB+ 的 FLAC 电视既不解码也扛不住。 */
+function castLevel() {
+  return localStorage.getItem('cm.castLevel') || 'exhigh';
+}
+
+/** 投屏地址强制明文 http：渲染器普遍不支持 https（证书/SNI 不认），实测 https 会直接不出声。 */
+function castBase() {
+  const scheme = localStorage.getItem('cm.castHttp') === '0' ? 'https' : 'http';
+  return settings.base.replace(/^https?:\/\//, scheme + '://');
+}
+
+/** 投屏时交给渲染器拉流的地址：走后端 /cast/<id> 中转（原 CDN 是 https+签名短链，设备放不了）。 */
 function castUrlFor(meta, level) {
-  const sep = settings.base.indexOf('?') >= 0 ? '&' : '?';
-  return `${settings.base}/cast/${meta.ncm_id}${sep}level=${encodeURIComponent(level || 'auto')}`;
+  const sep = castBase().indexOf('?') >= 0 ? '&' : '?';
+  return `${castBase()}/cast/${meta.ncm_id}${sep}level=${encodeURIComponent(level || castLevel())}`;
 }
 
 function hms(sec) {
@@ -31,7 +43,7 @@ function hms(sec) {
 function castTrack(meta) {
   if (!S.casting || !meta || !window.NativeApi.dlnaPlay) return;
   const d = deviceMeta(meta);
-  window.NativeApi.dlnaPlay(S.key, castUrlFor(meta, settings.quality || 'auto'),
+  window.NativeApi.dlnaPlay(S.key, castUrlFor(meta, castLevel()),
     d.title, d.artist, d.album, d.duration);
 }
 
@@ -96,10 +108,35 @@ export function openCastDialog() {
              <div class="cm-cast-actions">
                <mdui-button variant="tonal" id="castRescan" loading>重新搜索</mdui-button>
              </div>
-             <div class="cm-cast-tip">设备需与本机在同一 Wi-Fi；支持电视、音箱、投影等 DLNA/UPnP 渲染器</div>
+             <div class="cm-cast-qrow">
+               <span class="cm-cast-qlabel">投屏音质</span>
+               <div class="cm-cast-qbox" id="castQ"></div>
+             </div>
+             <div class="cm-cast-tip">设备需与本机在同一 Wi-Fi；音质过高时部分电视无法解码（默认「极高」兼容性最好）</div>
            </div>`,
     actions: [{ text: '关闭' }],
   });
+
+  // 投屏音质：默认极高(320k MP3)——电视基本都支持；无损/母带体积巨大且常不被支持
+  const LEVELS = [
+    { k: 'standard', label: '标准' },
+    { k: 'exhigh', label: '极高' },
+    { k: 'lossless', label: '无损' },
+  ];
+  const renderQuality = () => {
+    const box = diag.querySelector('#castQ');
+    if (!box) return;
+    const cur = castLevel();
+    box.innerHTML = LEVELS.map(l =>
+      `<span class="cm-cast-q${l.k === cur ? ' on' : ''}" data-k="${l.k}">${l.label}</span>`).join('');
+    box.querySelectorAll('.cm-cast-q').forEach(el => {
+      el.onclick = () => {
+        localStorage.setItem('cm.castLevel', el.dataset.k);
+        renderQuality();
+        toast(`投屏音质：${el.textContent}（下次投屏生效）`);
+      };
+    });
+  };
 
   const list = () => diag.querySelector('#castList');
   const hint = t => {
@@ -146,8 +183,15 @@ export function openCastDialog() {
     window.NativeApi.dlnaDiscover(3000);
   };
 
+  // 预热当前歌曲的音源地址：等用户点设备时首字节几乎立即到达
+  if (player.meta) {
+    call('GET', `/cast/${player.meta.ncm_id}?warm=1&level=${encodeURIComponent(castLevel())}`)
+      .catch(() => { /* 预热失败不影响正常投屏 */ });
+  }
+
   const b0 = btn();
   if (b0) b0.onclick = scan;
+  renderQuality();
   scan();
 }
 
@@ -172,8 +216,7 @@ function connect(key, name, diag) {
     }
   };
   const meta = player.meta;
-  const level = settings.quality || 'auto';
-  window.NativeApi.dlnaPlay(key, castUrlFor(meta, level), meta.name || '', meta.artists || '',
+  window.NativeApi.dlnaPlay(key, castUrlFor(meta, castLevel()), meta.name || '', meta.artists || '',
     meta.album || '', meta.duration || 0);
   try { player.audio.pause(); } catch (e) { /* 忽略 */ }
   setTimeout(() => {
