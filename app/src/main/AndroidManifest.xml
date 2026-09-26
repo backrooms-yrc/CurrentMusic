@@ -3,6 +3,9 @@
     package="com.rcst20.currentmusic">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- DLNA/SSDP 组播发现：多数机型默认过滤 Wi-Fi 组播，需声明并持有 MulticastLock -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
