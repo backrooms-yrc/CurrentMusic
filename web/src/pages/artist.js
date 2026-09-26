@@ -36,31 +36,45 @@ export async function render(el, params) {
   await renderSongList(list, all, { onPlay: i => player.playList(all, i) });
   el.querySelector('#playAll').onclick = () => all.length ? player.playList(all, 0) : toast('暂无作品');
 
-  // 关注歌手（站内存储；未登录/未绑定网易云也能用）
+  // 关注歌手：与网易云账号同步（读 /artist/sublist、写 /artist/sub），需已绑定网易云
   const fBtn = el.querySelector('#followBtn');
+  let following = false, bound = !!auth.token;
   const paintFollow = on => {
     fBtn.innerHTML = on
       ? '<span class="material-icons-outlined">favorite</span>已关注'
       : '<span class="material-icons-outlined">favorite_border</span>关注歌手';
     fBtn.classList.toggle('on', on);
   };
-  let following = false;
-  if (auth.token) {
-    api.followedArtists().then(r => {
+  const paintNeedBind = () => {
+    fBtn.innerHTML = '<span class="material-icons-outlined">cloud_off</span>绑定网易云后可关注';
+    fBtn.classList.remove('on');
+  };
+  if (bound) {
+    api.followedArtists(true).then(r => {            // 进页面取最新（绕过缓存）
       following = (r.artists || []).some(a => String(a.artist_id) === String(id));
       paintFollow(following);
-    }).catch(() => {});
+    }).catch(e => {
+      // 未绑定网易云：关注能力依赖用户自己的网易云账号
+      if (e && e.status === 400) { bound = false; paintNeedBind(); }
+    });
+  } else {
+    paintNeedBind();
   }
   fBtn.onclick = async () => {
     if (!auth.token) return toast('请先登录后再关注歌手');
+    if (!bound) {
+      toast('关注需先绑定网易云账号（与网易云 App 关注同步）');
+      location.hash = '#/user';
+      return;
+    }
     if (fBtn.dataset.busy) return;
     fBtn.dataset.busy = '1';
     try {
       const on = !following;
-      await api.followArtist(id, on, d.name, d.pic);
+      await api.followArtist(id, on, d.name, d.pic);   // 回传歌名/头像：服务端乐观展示用
       following = on;
       paintFollow(on);
-      toast(on ? `已关注 ${d.name}` : `已取消关注 ${d.name}`);
+      toast(on ? `已在网易云关注 ${d.name}` : `已在网易云取消关注 ${d.name}`);
     } catch (e) { toast('操作失败：' + e.message); }
     finally { delete fBtn.dataset.busy; }
   };

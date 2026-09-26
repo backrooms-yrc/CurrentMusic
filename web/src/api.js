@@ -204,7 +204,7 @@ export const api = {
   album: (id) => call('GET', `/ncm/album?id=${id}`),
   artist: (id, offset = 0, limit = 100) => call('GET', `/ncm/artist?id=${id}&offset=${offset}&limit=${limit}`),
   followArtist: (id, on, name, pic) => call('POST', `/artists/${id}/follow`, { body: { on, name, pic }, auth: true }),
-  followedArtists: () => call('GET', '/artists/followed', { auth: true }),
+  followedArtists: (refresh = false) => call('GET', `/artists/followed${refresh ? '?refresh=1' : ''}`, { auth: true }),
   songUrl: (ncmId, level) => call('GET', `/ncm/song/url?id=${ncmId}&level=${level}`),
   songDetail: (ids) => call('GET', `/ncm/song/detail?ids=${ids.slice(0, 100).join(',')}`),
   lyric: (ncmId) => call('GET', `/ncm/lyric?id=${ncmId}`),
