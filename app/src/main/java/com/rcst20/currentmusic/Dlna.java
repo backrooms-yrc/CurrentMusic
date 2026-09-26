@@ -74,6 +74,23 @@ public final class Dlna {
         void onDone(boolean ok, String error);
     }
 
+    /** 设备当前播放状态（供 App 侧驱动进度条/歌词，并判断是否掉线）。 */
+    public static final class Status {
+        public String state = "";      // PLAYING / PAUSED_PLAYBACK / STOPPED / TRANSITIONING…
+        public long posMs = 0;         // 当前播放位置
+        public long durMs = 0;         // 曲目总长
+        public String uri = "";
+        public String error = null;    // 非空表示本次查询失败（设备可能已离线）
+
+        public boolean playing() {
+            return "PLAYING".equals(state) || "TRANSITIONING".equals(state) || "RECORDING".equals(state);
+        }
+    }
+
+    public interface StatusCallback {
+        void onDone(Status st);
+    }
+
     // ---------------------------------------------------------------- 发现
 
     /**
@@ -239,6 +256,54 @@ public final class Dlna {
             cb.onDone(true, body);
         } catch (Exception e) {
             cb.onDone(false, msg(e));
+        }
+    }
+
+    /**
+     * 查询设备播放状态（GetTransportInfo + GetPositionInfo）。
+     * 任何一次失败都视为「设备可能已离线」，在 Status.error 里给出原因。
+     */
+    public static void poll(Device d, StatusCallback cb) {
+        Status st = new Status();
+        try {
+            String ti = soap(d.controlUrl, AVT, "GetTransportInfo", "<InstanceID>0</InstanceID>");
+            st.state = firstTag(ti, "CurrentTransportState");
+            String pi = soap(d.controlUrl, AVT, "GetPositionInfo", "<InstanceID>0</InstanceID>");
+            st.posMs = parseUpnpTime(firstTag(pi, "RelTime"));
+            st.durMs = parseUpnpTime(firstTag(pi, "TrackDuration"));
+            st.uri = firstTag(pi, "TrackURI");
+        } catch (Exception e) {
+            st.error = msg(e);
+        }
+        cb.onDone(st);
+    }
+
+    /** UPnP 时间串（H:MM:SS[.f] 或 NOT_IMPLEMENTED）→ 毫秒；无法解析返回 0。 */
+    static long parseUpnpTime(String s) {
+        if (s == null) return 0;
+        String t = s.trim();
+        if (t.isEmpty() || t.startsWith("NOT_IMPLEMENTED")) return 0;
+        int colon = t.indexOf(':');
+        try {
+            if (colon < 0) {                       // 纯秒
+                return (long) (Double.parseDouble(t) * 1000);
+            }
+            String[] parts = t.split(":");
+            long h = 0, m = 0;
+            double sec = 0;
+            if (parts.length == 3) {
+                h = Long.parseLong(parts[0].trim());
+                m = Long.parseLong(parts[1].trim());
+                sec = Double.parseDouble(parts[2].trim());
+            } else if (parts.length == 2) {
+                m = Long.parseLong(parts[0].trim());
+                sec = Double.parseDouble(parts[1].trim());
+            } else {
+                return 0;
+            }
+            return (long) ((h * 3600 + m * 60 + sec) * 1000);
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 

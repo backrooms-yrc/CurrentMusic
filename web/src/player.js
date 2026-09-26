@@ -10,6 +10,16 @@ audio.preload = 'auto';
 const listeners = {};
 export function on(evt, fn) { (listeners[evt] = listeners[evt] || []).push(fn); }
 function emit(evt, data) { (listeners[evt] || []).forEach(fn => fn(data)); }
+/** 供外部触发一次时间刷新（投屏时本机没有 timeupdate，由投屏侧按帧驱动）。 */
+export function tick() { emit('time'); }
+/** 供外部触发一次状态刷新（投屏时设备端播放态变化，需重绘播放键图标）。 */
+export function notifyState() { emit('state'); }
+
+// 播放时钟外部接管（DLNA 投屏）：投屏时本机音频暂停，audio.currentTime 不前进，
+// 若不接管，进度条与歌词都会停在原地（用户反馈的「歌词不跟随滚动」）。
+let clockSource = null;
+export function setClockSource(fn) { clockSource = fn; }
+const clock = () => (typeof clockSource === 'function' ? clockSource() : null);
 
 export const player = {
   queue: [],
@@ -42,6 +52,15 @@ export const player = {
     this.loading = true;
     emit('song');
     emit('state');
+    if (clock()) {
+      // 投屏中：声音由设备输出。这里只更新队列/元数据与界面，
+      // 既不取本机播放地址也不本地播放（否则手机会与电视同时出声）。
+      this.loading = false;
+      this.report();
+      this.persist();
+      this.updateMediaSession();
+      return;
+    }
     let info;
     try {
       info = await api.songUrl(this.meta.ncm_id, settings.quality);
@@ -92,7 +111,10 @@ export const player = {
 
   next(auto = false) {
     if (!this.queue.length) return;
-    if (this.playMode === 'one' && auto) { audio.currentTime = 0; audio.play(); return; }
+    if (this.playMode === 'one' && auto) {
+      if (clock()) { this.playAt(this.index); return; }   // 投屏中：重投同一首（不本地播放）
+      audio.currentTime = 0; audio.play(); return;
+    }
     let i = this.index;
     if (this.playMode === 'shuffle') i = Math.floor(Math.random() * this.queue.length);
     else if (i + 1 >= this.queue.length) {
@@ -112,6 +134,26 @@ export const player = {
   },
 
   seek(sec) { if (this.urlInfo && isFinite(sec)) audio.currentTime = sec; },
+
+  /** 当前播放位置（毫秒）：投屏时取设备上报值，否则取本机音频。 */
+  posMs() {
+    const c = clock();
+    return c ? c.posMs : (this.audio.currentTime || 0) * 1000;
+  },
+
+  /** 当前曲目总长（毫秒）。 */
+  durMs() {
+    const c = clock();
+    if (c && c.durMs > 0) return c.durMs;
+    return (isFinite(this.audio.duration) && this.audio.duration > 0)
+      ? this.audio.duration * 1000 : (this.meta && this.meta.duration) || 0;
+  },
+
+  /** 是否正在播放（投屏时以设备状态为准，否则看本机音频）。 */
+  isPlaying() {
+    const c = clock();
+    return c ? c.playing : !this.audio.paused;
+  },
 
   setPlayMode(mode) {
     this.playMode = mode;

@@ -47,7 +47,7 @@ function renderMini() {
         <div class="cm-mini-name">${esc(m.name)}</div>
         <div class="cm-mini-sub">${esc(m.artists)}${player.urlInfo ? ' · ' + tierLabel(player.urlInfo.level) : player.loading ? ' · 解析音质中…' : ''}</div>
       </div>
-      <span class="cm-mini-btn" id="miniPlay"><span class="material-icons-outlined">${!player.audio.paused ? 'pause_circle' : 'play_circle'}</span></span>
+      <span class="cm-mini-btn" id="miniPlay"><span class="material-icons-outlined">${player.isPlaying() ? 'pause_circle' : 'play_circle'}</span></span>
       <span class="cm-mini-btn" id="miniNext"><span class="material-icons-outlined">skip_next</span></span>
     </div>`;
   el.querySelector('#miniPlay').onclick = e => { e.stopPropagation(); player.toggle(); };
@@ -59,14 +59,16 @@ on('song', renderMini);
 on('state', renderMini);
 
 on('time', () => {
-  // 进度线紧贴迷你播放条上缘
+  // 进度线紧贴迷你播放条上缘。位置/总长一律走 player.posMs()/durMs()：
+  // 投屏时它们来自设备上报，直接读 audio 会永远是 0（进度条与歌词卡住）。
+  const pos = player.posMs(), dur = player.durMs();
   const bar = document.getElementById('miniProg');
-  if (bar) bar.style.width = player.audio.duration ? (player.audio.currentTime / player.audio.duration * 100) + '%' : '0%';
+  if (bar) bar.style.width = dur ? (pos / dur * 100) + '%' : '0%';
   syncLyric();
   const t = document.getElementById('plCur'), d = document.getElementById('plDur'), s = document.getElementById('plSeek');
-  if (t) t.textContent = fmtDur(player.audio.currentTime * 1000);
-  if (d && player.audio.duration) d.textContent = fmtDur(player.audio.duration * 1000);
-  if (s && !s.dataset.drag) { s.value = player.audio.duration ? (player.audio.currentTime / player.audio.duration) * 100 : 0; }
+  if (t) t.textContent = fmtDur(pos);
+  if (d && dur) d.textContent = fmtDur(dur);
+  if (s && !s.dataset.drag) s.value = dur ? (pos / dur) * 100 : 0;
 });
 
 // ---------- 全屏播放页 ----------
@@ -225,7 +227,7 @@ function fireKaraoke() {
   if (curLyricIdx < 0) return;
   const line = lyricLines[curLyricIdx];
   if (!line || !line.w) return;
-  const now = player.audio.currentTime * 1000;
+  const now = player.posMs();
   const w = line.w;
 
   // 获取或重建当前行的 DOM 缓存
@@ -346,7 +348,7 @@ function syncLyric() {
   if (!lyricLines.length) return;
   const box = document.getElementById('plLyric');
   if (!box) return;
-  const t = player.audio.currentTime * 1000;
+  const t = player.posMs();
   let i = 0;
   for (let k = 0; k < lyricLines.length; k++) {
     if (lyricLines[k].t <= t) i = k; else break;
@@ -404,7 +406,7 @@ async function openFull() {
           </div>
           <div class="pl-transport">
             <span class="pl-btn big" id="plPrev"><span class="material-icons-outlined">skip_previous</span></span>
-            <span class="pl-btn huge" id="plPlay"><span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (!player.audio.paused ? 'pause_circle' : 'play_circle')}</span></span>
+            <span class="pl-btn huge" id="plPlay"><span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (player.isPlaying() ? 'pause_circle' : 'play_circle')}</span></span>
             <span class="pl-btn big" id="plNext"><span class="material-icons-outlined">skip_next</span></span>
           </div>
         </div>
@@ -443,7 +445,8 @@ async function openFull() {
   const seek = ov.querySelector('#plSeek');
   seek.oninput = () => { seek.dataset.drag = '1'; };
   seek.onchange = () => {
-    if (player.audio.duration) player.seek(seek.value / 100 * player.audio.duration);
+    const dur = player.durMs();
+    if (dur) player.seek(seek.value / 100 * dur / 1000);
     delete seek.dataset.drag;
   };
   ov.querySelector('#plQuality').onclick = qualityMenu;
@@ -690,9 +693,9 @@ on('song', () => {
   fireKaraoke();
 });
 on('state', () => {
-  if (player.audio.paused) stopKaraoke(); else startKaraoke();
+  if (!player.isPlaying()) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');
-  if (b) b.innerHTML = `<span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (!player.audio.paused ? 'pause_circle' : 'play_circle')}</span>`;
+  if (b) b.innerHTML = `<span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (player.isPlaying() ? 'pause_circle' : 'play_circle')}</span>`;
   renderMini();
 });
 
