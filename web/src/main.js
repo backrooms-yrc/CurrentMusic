@@ -66,9 +66,22 @@ window.addEventListener('hashchange', () => {
 async function router() {
   const hash = location.hash || '#/home';
   if (!navStack.length) navStack.push(hash);
+  // 路由允许带查询串（如 #/user?decor=1 直达挂件设置）：匹配时只取路径部分，
+  // 查询参数解析成 params.query 交给页面（不解析的话 ?xxx 会让所有路由都匹配不上）
+  const qIdx = hash.indexOf('?');
+  const routePath = qIdx < 0 ? hash : hash.slice(0, qIdx);
+  const query = {};
+  if (qIdx >= 0) {
+    hash.slice(qIdx + 1).split('&').forEach(kv => {
+      if (!kv) return;
+      const eq = kv.indexOf('=');
+      const k = decodeURIComponent(eq < 0 ? kv : kv.slice(0, eq));
+      query[k] = eq < 0 ? '1' : decodeURIComponent(kv.slice(eq + 1));
+    });
+  }
   let matched = null, params = null;
   for (const r of ROUTES) {
-    const m = hash.match(r.re);
+    const m = routePath.match(r.re);
     if (m) {
       matched = r;
       params = r.fixed ? (typeof r.fixed === 'function' ? r.fixed(m) : r.fixed) : m.slice(1);
@@ -76,6 +89,7 @@ async function router() {
     }
   }
   if (!matched) { location.hash = '#/home'; return; }
+  if (params) params.query = query;   // 页面按需读取（大多忽略）
 
   document.getElementById('pageTitle').textContent = matched.title;
   document.querySelectorAll('#bottomNav .navItem').forEach(a => {
