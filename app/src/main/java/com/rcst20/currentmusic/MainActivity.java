@@ -495,6 +495,10 @@ public class MainActivity extends Activity {
 
     /** force=true 即使数值未变也重推（页面刚加载完时，此前的注入可能早于 JS 就绪而丢失）。 */
     private void applyInsets(int t, int b, int l, int r, boolean force) {
+        // WindowInsets 返回物理像素，而页面 CSS 的 px = dp（viewport=device-width / 1x）。
+        // 不换算会让高密度屏（2.75~3x）把 48dp 导航栏当成 130px+ 用——底部安全区被放大近 3 倍，
+        // 迷你条/底栏被顶飞、内容区被压缩（就是「窄屏版式炸掉」的根因）。
+        t = toCssPx(t); b = toCssPx(b); l = toCssPx(l); r = toCssPx(r);
         if (!force && t == insetT && b == insetB && l == insetL && r == insetR) return;
         insetT = t; insetB = b; insetL = l; insetR = r;
         final String js = String.format(java.util.Locale.US,
@@ -504,6 +508,13 @@ public class MainActivity extends Activity {
                 "window.dispatchEvent(new Event('resize'))",
                 t, b, l, r);
         main.post(() -> { if (web != null) web.evaluateJavascript(js, null); });
+    }
+
+    /** 物理像素 → CSS px（dp）：除以屏幕密度。 */
+    private int toCssPx(int physicalPx) {
+        float density = getResources().getDisplayMetrics().density;
+        if (density <= 0) density = 1f;
+        return Math.round(physicalPx / density);
     }
 
     /** 从窗口实时读取 insets（监听尚未触发时的兜底），须在 UI 线程调用。 */

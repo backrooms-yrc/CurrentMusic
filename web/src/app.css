@@ -64,12 +64,17 @@ body {
 
 /* ---------- 主区域 ---------- */
 #out {
-  position: fixed; top: calc(56px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px)))); bottom: calc(var(--cm-nav-h) + var(--cm-mini-h));
+  position: fixed; top: calc(56px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))));
+  /* 底边必须计入安全区：底栏实际高 = nav-h + safe-b、迷你条又叠在其上，
+     少算 safe-b 会让列表末尾被迷你条压住（窄屏尤为明显） */
+  bottom: calc(var(--cm-nav-h) + var(--cm-mini-h));
+  bottom: calc(var(--cm-nav-h) + var(--cm-mini-h) + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
   left: 0; right: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
-  padding: 12px clamp(10px, 3vw, 28px) calc(var(--cm-nav-h) + 40px);
+  padding: 12px clamp(10px, 3vw, 28px) calc(var(--cm-nav-h) + 24px);   /* 尾部垫高：滚到底最后一项也能完全露出 */
   overscroll-behavior-y: contain;   /* 下拉刷新接管前抑制 WebView 自带 overscroll 光晕（Chrome63+，旧引擎自动忽略） */
 }
 body.no-mini #out { bottom: var(--cm-nav-h); }
+body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-bottom), var(--safe-b, 0px))); }
 
 /* ---------- 全局下拉刷新指示器（MD3 圆形） ---------- */
 #ptrInd {
