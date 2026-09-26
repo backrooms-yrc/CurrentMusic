@@ -171,7 +171,9 @@ export const api = {
   recentPlays: (limit = 50) => call('GET', `/plays/recent?limit=${limit}`, { auth: true }),
 
   // 用户广场 / 公开主页（公开端点）
-  userSquare: (query = '', sort = 'reg', offset = 0, limit = 30) => call('GET', `/users/square?query=${encodeURIComponent(query)}&sort=${sort}&offset=${offset}&limit=${limit}`),
+  userSquare: (query = '', sort = 'reg', offset = 0, limit = 30, listening = false) =>
+    call('GET', `/users/square?query=${encodeURIComponent(query)}&sort=${sort}&offset=${offset}&limit=${limit}`
+      + (listening ? '&listening=1' : '')),
   userProfile: (uid) => call('GET', `/users/${uid}/profile`),
   setSquarePublic: (on) => call('PUT', '/profile', { body: { publicSquare: on }, auth: true }),
 
