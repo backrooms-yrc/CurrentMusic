@@ -1225,3 +1225,15 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   animation: cmTabIn .22s cubic-bezier(0.05, 0.7, 0.1, 1);
 }
 @keyframes cmTabIn { from { transform: scaleX(.3); opacity: .4; } to { transform: none; opacity: 1; } }
+
+
+/* ---------- 发现页：统计头 ---------- */
+.cm-sq-stats {
+  display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  padding: 10px 14px; margin-bottom: 10px; border-radius: 14px; font-size: 12.5px;
+  background: color-mix(in srgb, var(--cm-primary) 8%, transparent); background: rgba(103, 80, 164, .08);
+  color: var(--mdui-color-on-surface-variant, #49454f);
+}
+.cm-sq-stats b { color: var(--cm-primary); font-weight: 650; margin: 0 1px; }
+.cm-sq-stats .material-icons-outlined { font-size: 17px; color: var(--cm-primary); }
+.cm-sq-stats i { width: 1px; height: 12px; background: currentColor; opacity: .25; margin: 0 4px; }
