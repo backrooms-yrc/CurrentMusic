@@ -205,6 +205,7 @@ export const api = {
   // NCM 音源
   search: (keywords, offset = 0, limit = 30) => call('GET', `/ncm/search?keywords=${encodeURIComponent(keywords)}&offset=${offset}&limit=${limit}`),
   album: (id) => call('GET', `/ncm/album?id=${id}`),
+  artistAlbums: (id, offset = 0, limit = 30) => call('GET', `/ncm/artist/albums?id=${id}&offset=${offset}&limit=${limit}`),
   artist: (id, offset = 0, limit = 100) => call('GET', `/ncm/artist?id=${id}&offset=${offset}&limit=${limit}`),
   followArtist: (id, on, name, pic) => call('POST', `/artists/${id}/follow`, { body: { on, name, pic }, auth: true }),
   followedArtists: (refresh = false) => call('GET', `/artists/followed${refresh ? '?refresh=1' : ''}`, { auth: true }),

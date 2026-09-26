@@ -3,9 +3,11 @@ import { mdui } from '../md.js';
 import { api, auth, settings, adoptDecorScales } from '../api.js';
 import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile, fmtListen } from '../ui.js';
 
-export async function render(el) {
+export async function render(el, params) {
   if (!auth.token) return renderAuth(el);
-  return renderProfile(el);
+  // 首页横幅深链 #/user?decor=1：进页面后自动打开挂件选择器
+  const autoDecor = !!(params && params.query && params.query.decor);
+  return renderProfile(el, autoDecor);
 }
 
 // ---------- 头像挂件 ----------
@@ -30,7 +32,7 @@ function decorDialog(d, onDone) {
        <div class="cm-decor-bar">
          <span class="material-icons-outlined">search</span>
          <input id="decorQ" type="search" autocomplete="off" enterkeyhint="search"
-                placeholder="搜索挂件名称或 ID（共 ${list.length} 款）">
+                placeholder="搜索挂件名称或 ID">
          <span class="cm-decor-count" id="decorCount">${list.length}</span>
        </div>
        <div class="cm-decor-grid" id="decorGrid">
@@ -317,7 +319,7 @@ function renderAuth(el) {
 
 // ---------- 我的主页 ----------
 
-async function renderProfile(el) {
+async function renderProfile(el, autoDecor) {
   el.innerHTML = skelProfile();
   let me = null, pls = [], bind = { bound: false }, follows = [], followCount = 0;
   let decor = { decorations: [], unlocked: false, listenMs: 0, current: '', minListenMs: 7200000, failed: true };
@@ -455,6 +457,8 @@ async function renderProfile(el) {
   });
   // 头像挂件：设置行 → 选择器；未达门槛时点开显示进度
   el.querySelector('#setDecor').onclick = () => decorDialog(decor, () => renderProfile(el));
+  // 首页横幅深链（#/user?decor=1）：数据就绪后自动弹出选择器（目录加载失败则不弹，避免空弹窗）
+  if (autoDecor && !decor.failed) setTimeout(() => decorDialog(decor, () => renderProfile(el)), 120);
 
   el.querySelector('#chgPass').onclick = () => {
     const diag = mdui.dialog({

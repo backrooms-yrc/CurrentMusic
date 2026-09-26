@@ -3,6 +3,24 @@ import { api, auth } from '../api.js';
 import { esc, renderSongList, skelCards, skelList } from '../ui.js';
 import { player } from '../player.js';
 
+// 头像挂件更新横幅：仅在「已登录 + 听歌时长达标 + 尚未设置挂件」时出现，设好后自动消失
+// （永久占位会打扰已设置的用户；未达标者由「我的」页设置行引导，首页不做催促）
+async function decorBannerHTML() {
+  if (!auth.token) return '';
+  let me = null;
+  try { me = await api.me(); } catch (e) { return ''; }        // 未登录/限流/断网都静默不显示
+  if (!me || me.avatarDecoration || !me.decorUnlocked) return '';
+  return `
+    <a class="cm-decor-banner" href="#/user?decor=1">
+      <span class="material-icons-outlined">face_retouching_natural</span>
+      <span class="cm-decor-banner-t">
+        <b>重大更新：听歌时长 2 小时及以上的用户现已支持设置动态头像挂件！</b>
+        <span class="cm-decor-banner-sub">挂件会在个人主页、发现页等位置公开展示</span>
+      </span>
+      <span class="cm-decor-banner-go">点此设置<span class="material-icons-outlined">chevron_right</span></span>
+    </a>`;
+}
+
 export async function render(el) {
   const today = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
   el.innerHTML = `
@@ -10,18 +28,24 @@ export async function render(el) {
       <div class="cm-greet-date">${esc(today)}</div>
       <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
     </div>
+    <div id="decorBanner"></div>
     <section class="cm-sec"><div class="cm-sec-head"><h2>每日推荐</h2></div>${skelCards(8)}</section>
     <section class="cm-sec">${skelList(3)}</section>`;
+  // 横幅不阻塞首屏：与每日推荐并行请求；结果先存起来，整页重渲染后再插入
+  let bannerHTML = '';
+  const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
   let daily = [], forYou = [], recent = [], artists = [];
   const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => {})];
   if (auth.token) jobs.push(api.recentPlays(20).then(d => { recent = d.songs || []; }).catch(() => {}));
   await Promise.allSettled(jobs);
+  await bannerJob;   // 横幅请求通常更快，这里几乎立即返回
 
   el.innerHTML = `
     <div class="cm-greet">
       <div class="cm-greet-date">${esc(today)}</div>
       <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
     </div>
+    ${bannerHTML}
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>每日推荐</h2><span class="cm-sec-more" id="playDaily"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
       ${daily.length ? `<div class="cm-hscroll" id="dailyRow">${
