@@ -383,7 +383,7 @@ async function openFull() {
           </div>
           <div class="pl-info">
             <div class="pl-name">${esc(m.name)}</div>
-            <div class="pl-artist">${esc(m.artists)}${m.album ? ' · ' + esc(m.album) : ''}</div>
+            <div class="pl-artist" id="plArtist">${artistLineHTML(m)}</div>
             <div class="pl-stats" id="plStats"><mdui-linear-progress style="width:120px"></mdui-linear-progress></div>
           </div>
           <div class="pl-ctrl">
@@ -411,6 +411,7 @@ async function openFull() {
     </div>`;
 
   ov.querySelector('#plClose').onclick = closeFull;
+  bindArtistLinks(ov);
 
   // 窄屏：点击封面/周围空白 ↔ 整屏歌词 双视图切换（≥600px 双栏不参与）
   const bodyEl = ov.querySelector('.pl-body');
@@ -619,6 +620,30 @@ on('song', () => { applyDynamicScheme(); });
 
 /** 切歌时轻量更新播放页的歌曲字段（封面/标题/歌手/统计/音质），不重建 overlay——
  * 重建会导致歌词区被清空再异步填充，产生"突然消失又出现"的闪烁。 */
+/** 歌手行：每位歌手各自可点（跳其主页）；无 id 时退化为纯文本。 */
+function artistLineHTML(m) {
+  const ids = m.artist_ids || [];
+  const names = String(m.artists || '').split(' / ');
+  const parts = names.map((n, i) => ids[i]
+    ? `<span class="pl-artist-link" data-aid="${ids[i]}" title="查看 ${esc(n)} 的主页">${esc(n)}</span>`
+    : esc(n));
+  return parts.join(' / ') + (m.album ? ' · ' + esc(m.album) : '');
+}
+
+/** 绑定歌手名的点击（打开歌手主页前先收起播放页） */
+function bindArtistLinks(scope) {
+  (scope || document).querySelectorAll('.pl-artist-link').forEach(el => {
+    el.onclick = e => {
+      e.stopPropagation();
+      const aid = el.dataset.aid;
+      if (!aid) return;
+      const ov = overlay();
+      if (ov && !ov.hidden) closeFull();          // 先收播放页，避免盖住目标页
+      setTimeout(() => { location.hash = `#/artist/${aid}`; }, 180);
+    };
+  });
+}
+
 function updateSongInfo() {
   const ov = overlay();
   const m = player.meta;
@@ -628,7 +653,7 @@ function updateSongInfo() {
   const name = ov.querySelector('.pl-name');
   if (name) name.textContent = m.name;
   const artist = ov.querySelector('.pl-artist');
-  if (artist) artist.textContent = m.artists + (m.album ? ' · ' + m.album : '');
+  if (artist) { artist.innerHTML = artistLineHTML(m); bindArtistLinks(artist); }
   const q = document.getElementById('plQuality');
   if (q) q.textContent = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
   const likeBtn = document.getElementById('plLike');

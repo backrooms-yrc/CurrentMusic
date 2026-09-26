@@ -233,11 +233,12 @@ function renderAuth(el) {
 
 async function renderProfile(el) {
   el.innerHTML = skelProfile();
-  let me = null, pls = [], bind = { bound: false };
+  let me = null, pls = [], bind = { bound: false }, follows = [];
   const jobs = [
     api.me().then(d => { me = d; }).catch(() => {}),
     api.myPlaylists().then(d => { pls = d.playlists || []; }).catch(() => {}),
     api.bindStatus().then(d => { bind = d; }).catch(() => {}),
+    api.followedArtists().then(d => { follows = d.artists || []; }).catch(() => {}),
   ];
   await Promise.allSettled(jobs);
 
@@ -265,6 +266,16 @@ async function renderProfile(el) {
         <a class="cm-quick" href="#/pl/likes"><span class="material-icons-outlined">favorite</span><b>我喜欢的音乐</b></a>
         <a class="cm-quick" href="#/library"><span class="material-icons-outlined">queue_music</span><b>我的歌单</b></a>
       </div>
+
+      ${follows.length ? `
+      <div class="cm-sec-head"><h2>关注的歌手</h2><span class="cm-sec-sub">${follows.length} 位</span></div>
+      <div class="cm-hscroll cm-artist-row" id="followRow">
+        ${follows.map(a => `
+          <div class="cm-artist-card" data-aid="${a.artist_id}">
+            <div class="cm-artist-ava">${a.pic ? `<img src="${esc(a.pic)}?param=120y120" loading="lazy">` : '<span class="material-icons-outlined">person</span>'}</div>
+            <div class="cm-artist-name">${esc(a.name || '歌手')}</div>
+          </div>`).join('')}
+      </div>` : ''}
 
       <div class="cm-sec-head"><h2>网易云账号</h2></div>
       <div class="cm-bindbox" id="bindBox">${
@@ -299,6 +310,11 @@ async function renderProfile(el) {
       <div class="cm-logout"><mdui-button variant="outlined" error id="logout">退出登录</mdui-button></div>
     </div>
     <input type="file" id="avaFile" accept="image/png,image/jpeg,image/webp" hidden>`;
+
+  // 关注的歌手 → 歌手主页
+  el.querySelectorAll('#followRow .cm-artist-card').forEach(c => {
+    c.onclick = () => { location.hash = `#/artist/${c.dataset.aid}`; };
+  });
 
   // 网易云绑定交互
   el.querySelector('#goBind')?.addEventListener('click', () => {

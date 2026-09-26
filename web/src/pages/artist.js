@@ -1,5 +1,5 @@
 // 歌手作品页：资料 + 热度排序全部歌曲（分页加载）+ 播放全部
-import { api } from '../api.js';
+import { api, auth } from '../api.js';
 import { esc, toast, renderSongList } from '../ui.js';
 import { player } from '../player.js';
 
@@ -23,6 +23,7 @@ export async function render(el, params) {
         <div class="cm-detail-sub">${esc(d.alias || '')}${d.total ? `${d.alias ? ' · ' : ''}共 ${d.total} 首作品` : ''}</div>
         <div class="cm-detail-actions">
           <mdui-button variant="filled" id="playAll"><span class="material-icons-outlined">play_arrow</span>播放全部</mdui-button>
+          <mdui-button variant="tonal" id="followBtn"><span class="material-icons-outlined">favorite_border</span>关注歌手</mdui-button>
         </div>
       </div>
     </div>
@@ -34,6 +35,35 @@ export async function render(el, params) {
   const list = el.querySelector('#artistList');
   await renderSongList(list, all, { onPlay: i => player.playList(all, i) });
   el.querySelector('#playAll').onclick = () => all.length ? player.playList(all, 0) : toast('暂无作品');
+
+  // 关注歌手（站内存储；未登录/未绑定网易云也能用）
+  const fBtn = el.querySelector('#followBtn');
+  const paintFollow = on => {
+    fBtn.innerHTML = on
+      ? '<span class="material-icons-outlined">favorite</span>已关注'
+      : '<span class="material-icons-outlined">favorite_border</span>关注歌手';
+    fBtn.classList.toggle('on', on);
+  };
+  let following = false;
+  if (auth.token) {
+    api.followedArtists().then(r => {
+      following = (r.artists || []).some(a => String(a.artist_id) === String(id));
+      paintFollow(following);
+    }).catch(() => {});
+  }
+  fBtn.onclick = async () => {
+    if (!auth.token) return toast('请先登录后再关注歌手');
+    if (fBtn.dataset.busy) return;
+    fBtn.dataset.busy = '1';
+    try {
+      const on = !following;
+      await api.followArtist(id, on, d.name, d.pic);
+      following = on;
+      paintFollow(on);
+      toast(on ? `已关注 ${d.name}` : `已取消关注 ${d.name}`);
+    } catch (e) { toast('操作失败：' + e.message); }
+    finally { delete fBtn.dataset.busy; }
+  };
 
   // 分页加载更多
   const moreWrap = el.querySelector('#artistMoreWrap');
