@@ -155,6 +155,9 @@ export const api = {
   updateProfile: (fields) => call('PUT', '/profile', { body: fields, auth: true }),
   changePassword: (oldPassword, newPassword) => call('PUT', '/profile/password', { body: { oldPassword, newPassword }, auth: true }),
   uploadAvatarBase64: (b64) => call('PUT', '/profile/avatar', { body: { data: b64 }, auth: true }),
+  // 头像挂件：目录（带 token 时附本人解锁状态）；素材固定 .gif/.png 由后端按 id 寻址
+  decorations: () => call('GET', '/decorations', { auth: true }),
+  setDecoration: (id) => call('PUT', '/decorations/mine', { body: { id }, auth: true }),
 
   // 点赞/收藏/状态
   toggleLike: (meta) => call('POST', `/likes/${meta.ncm_id}`, { body: meta, auth: true }),
@@ -213,7 +216,62 @@ export const api = {
   daily: () => call('GET', '/daily', { auth: true }),
 
   avatarUrl: (fname) => fname ? `${settings.base}/avatar/${fname}` : '',
+  decorUrl: (id) => id ? `${settings.base}/decor/${encodeURIComponent(id)}.gif` : '',
+  // 挂件放大比例表（id → 比例）：广场/主页等只拿到挂件 id，需靠它换算渲染尺寸
+  decorScales: () => call('GET', '/decorations/scales'),
 };
+
+// ---------- 挂件比例表：版本门控的内存 + localStorage 缓存 ----------
+// 挂件素材自带透明留白（圆环外径常常只有画布的 ~0.6），渲染时必须按比例放大，
+// 否则圆环会明显小于头像。比例表很小（402 项 id→数字），启动时取一次即可长期复用。
+// 「版本门控」：只有版本号与随包构建的 CATALOG_VERSION 一致才采用缓存值，
+// 否则退回 1（宁可不放大），避免目录更新后拿旧比例把挂件放大到错误尺寸。
+import { DECOR_SCALES, CATALOG_VERSION } from './decor-scales.js';
+
+const LS_DECOR_SCALES = 'cm.decorScales';
+let _decorScales = null;          // { version, scales:{id:number} }
+
+function _trusted() {
+  if (_decorScales === null) {
+    _decorScales = _readStoredScales() || { version: CATALOG_VERSION, scales: DECOR_SCALES };
+  }
+  return _decorScales.version === CATALOG_VERSION ? _decorScales.scales : null;
+}
+
+function _readStoredScales() {
+  try {
+    const raw = localStorage.getItem(LS_DECOR_SCALES);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    return v && v.scales && typeof v.scales === 'object' ? v : null;
+  } catch (e) { return null; }
+}
+
+/** 同步取比例：版本不符或未知 id 一律返回 1（不放大好过放大错）。 */
+export function decorScale(id) {
+  if (!id) return 1;
+  const map = _trusted();
+  const s = map && map[id];
+  return typeof s === 'number' && s > 0 ? s : 1;
+}
+
+/** 预热：先用随包/本地缓存同步可用，再后台校验服务端版本并按需刷新。 */
+export function warmDecorScales() {
+  _trusted();
+  api.decorScales().then(d => {
+    if (!d || !d.scales) return;
+    _decorScales = { version: d.version, scales: d.scales };
+    try { localStorage.setItem(LS_DECOR_SCALES, JSON.stringify(_decorScales)); } catch (e) { /* 配额满忽略 */ }
+  }).catch(() => { /* 离线/限流：用随包基线 */ });
+}
+
+/** 目录接口（/decorations）已带比例表时直接采纳，省一次请求且与列表同版本。 */
+export function adoptDecorScales(d) {
+  if (d && d.scales) {
+    _decorScales = { version: d.version || CATALOG_VERSION, scales: d.scales };
+    try { localStorage.setItem(LS_DECOR_SCALES, JSON.stringify(_decorScales)); } catch (e) { /* 忽略 */ }
+  }
+}
 
 export function detectBridge() {
   bridged = typeof window.NativeApi !== 'undefined';

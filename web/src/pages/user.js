@@ -1,11 +1,97 @@
 // 用户页：未登录=登录/注册；已登录=我的主页（资料/统计/歌单/多账号/设置）
 import { mdui } from '../md.js';
-import { api, auth, settings } from '../api.js';
-import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile } from '../ui.js';
+import { api, auth, settings, adoptDecorScales } from '../api.js';
+import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile, fmtListen } from '../ui.js';
 
 export async function render(el) {
   if (!auth.token) return renderAuth(el);
   return renderProfile(el);
+}
+
+// ---------- 头像挂件 ----------
+
+// 设置行右侧的状态文案：已佩戴=挂件名；可设置=「去设置」；未达标=还差多久；加载失败=重试
+function decorValue(decor) {
+  const cur = (decor.decorations || []).find(d => d.id === decor.current);
+  if (cur) return esc(cur.name);
+  if (decor.unlocked) return '去设置';
+  if (decor.failed) return '加载失败，点击重试';
+  const left = Math.max(0, (decor.minListenMs || 7200000) - (decor.listenMs || 0));
+  return `听满 2 小时解锁（还差 ${fmtListen(left)}）`;
+}
+
+// 挂件选择器：搜索 + 网格预览 + 当前佩戴标记；未达门槛时展示进度而不列出素材
+function decorDialog(d, onDone) {
+  const list = d.decorations || [];
+  const body = d.failed
+    ? `<div class="cm-decor-hint">挂件目录加载失败（${esc(d.error || '网络异常')}）。<br>请稍后重试。</div>`
+    : d.unlocked
+    ? `<div class="cm-decor-hint">听歌时长已达 2 小时，选择一个挂件展示在个人主页、发现页等公开位置</div>
+       <div class="cm-decor-bar">
+         <span class="material-icons-outlined">search</span>
+         <input id="decorQ" type="search" autocomplete="off" enterkeyhint="search"
+                placeholder="搜索挂件名称或 ID（共 ${list.length} 款）">
+         <span class="cm-decor-count" id="decorCount">${list.length}</span>
+       </div>
+       <div class="cm-decor-grid" id="decorGrid">
+         <div class="cm-decor-item ${d.current ? '' : 'on'}" data-id="" data-key="">
+           <div class="cm-decor-thumb ph"><span class="material-icons-outlined">block</span></div><span>不佩戴</span>
+         </div>
+         ${list.map(x => `
+           <div class="cm-decor-item ${x.id === d.current ? 'on' : ''}" data-id="${esc(x.id)}"
+                data-key="${esc((x.name + ' ' + x.id).toLowerCase())}" title="${esc(x.name)}">
+             <div class="cm-decor-thumb"><img loading="lazy" src="${esc(api.decorUrl(x.id))}" alt="${esc(x.name)}"></div>
+             <span>${esc(x.name)}</span>
+           </div>`).join('')}
+       </div>
+       <div class="cm-decor-none" id="decorNone" hidden>没有匹配的挂件</div>`
+    : `<div class="cm-decor-hint">听歌时长满 <b>2 小时</b> 即可设置头像挂件。
+        当前累计 <b>${fmtListen(d.listenMs || 0)}</b>，还差 <b>${fmtListen(Math.max(0, (d.minListenMs || 7200000) - (d.listenMs || 0)))}</b>。
+        挂件会展示在个人主页、发现页等公开位置。</div>`;
+  const diag = mdui.dialog({
+    headline: '头像挂件',
+    body: `<div class="cm-decor-wrap">${body}</div>`,
+    actions: [{ text: '关闭' }],
+  });
+  setTimeout(() => {
+    const grid = diag.querySelector('#decorGrid');
+    if (!grid) return;
+    // 选择挂件
+    grid.querySelectorAll('.cm-decor-item').forEach(it => {
+      it.onclick = async () => {
+        const id = it.dataset.id || '';
+        try {
+          await api.setDecoration(id);
+          toast(id ? '挂件已设置，全站可见' : '已取消佩戴');
+          diag.open = false;
+          if (onDone) onDone();
+        } catch (e) {
+          toast(e.message);      // 未达标/挂件下架等由后端给出可读文案
+        }
+      };
+    });
+    // 搜索：按名称或 id 过滤（402 款手动翻找不现实）。匹配项才参与布局，避免 400 个节点重排
+    const q = diag.querySelector('#decorQ');
+    const cnt = diag.querySelector('#decorCount');
+    const none = diag.querySelector('#decorNone');
+    const items = [].slice.call(grid.querySelectorAll('.cm-decor-item'));
+    let timer = 0;
+    const apply = () => {
+      const v = (q.value || '').trim().toLowerCase();
+      let shown = 0;
+      items.forEach(it => {
+        const hit = !v || it.dataset.key.indexOf(v) > -1;
+        it.hidden = !hit;
+        if (hit && it.dataset.id) shown++;
+      });
+      if (cnt) cnt.textContent = shown;
+      if (none) none.hidden = shown > 0 || !v;
+    };
+    if (q) {
+      q.oninput = () => { clearTimeout(timer); timer = setTimeout(apply, 180); };
+      q.onkeydown = e => { if (e.key === 'Enter') { clearTimeout(timer); apply(); } };
+    }
+  }, 0);
 }
 
 // ---------- 登录 / 注册 ----------
@@ -234,11 +320,19 @@ function renderAuth(el) {
 async function renderProfile(el) {
   el.innerHTML = skelProfile();
   let me = null, pls = [], bind = { bound: false }, follows = [], followCount = 0;
+  let decor = { decorations: [], unlocked: false, listenMs: 0, current: '', minListenMs: 7200000, failed: true };
   const jobs = [
     api.me().then(d => { me = d; }).catch(() => {}),
     api.myPlaylists().then(d => { pls = d.playlists || []; }).catch(() => {}),
     api.bindStatus().then(d => { bind = d; }).catch(() => {}),
     api.followedArtists().then(d => { follows = d.artists || []; followCount = d.count || follows.length; }).catch(() => {}),
+    // 失败时标记 failed：不能把「没取到」当成「未解锁」，否则限流/断网会误报成还差多少小时
+    api.decorations()
+      .then(d => {
+        decor = Object.assign({ failed: false }, d || {});
+        adoptDecorScales(d);      // 目录自带比例表 → 同步给全局渲染用，省一次请求
+      })
+      .catch(e => { decor.failed = true; decor.error = (e && e.message) || '网络异常'; }),
   ];
   await Promise.allSettled(jobs);
 
@@ -258,6 +352,7 @@ async function renderProfile(el) {
             <span><b>${me ? me.stat.likes : 0}</b>点赞</span>
             <span><b>${me ? me.stat.playlists : pls.length}</b>歌单</span>
             <span><b>${me ? me.stat.playDays : 0}</b>天听过</span>
+            <span><b>${fmtListen(me ? me.stat.listenMs : 0)}</b>听歌时长</span>
           </div>
         </div>
       </div>
@@ -298,6 +393,7 @@ async function renderProfile(el) {
 
         <div class="cm-sec-head"><h2>账号管理</h2></div>
         <div class="cm-setting-list">
+          <div class="cm-setting" id="setDecor"><span class="material-icons-outlined">face_retouching_natural</span>头像挂件<i id="decorVal">${decorValue(decor)}</i></div>
           <div class="cm-setting" id="chgPass"><span class="material-icons-outlined">password</span>修改密码</div>
         </div>
 
@@ -357,6 +453,9 @@ async function renderProfile(el) {
     title: '修改简介', label: '新简介', value: u.bio || '',
     onOk: async v => { await api.updateProfile({ bio: v }); toast('已更新'); renderProfile(el); },
   });
+  // 头像挂件：设置行 → 选择器；未达门槛时点开显示进度
+  el.querySelector('#setDecor').onclick = () => decorDialog(decor, () => renderProfile(el));
+
   el.querySelector('#chgPass').onclick = () => {
     const diag = mdui.dialog({
       headline: '修改密码',

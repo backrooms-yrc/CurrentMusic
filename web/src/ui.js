@@ -1,6 +1,6 @@
 // UI 工具：转义、toast、时长格式、歌曲行渲染（含点赞/收藏状态）、对话框封装。
 import { mdui } from './md.js';
-import { api, auth } from './api.js';
+import { api, auth, decorScale } from './api.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -11,6 +11,15 @@ export function toast(message) {
 export const fmtDur = ms => {
   const s = Math.round((ms || 0) / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
+// 听歌时长（累计）文案：分钟以下按秒、分钟、小时逐级。全站统一口径（原 profile/square 各有一份且输出不一致）
+export const fmtListen = ms => {
+  const min = Math.floor((ms || 0) / 60000);
+  if (min < 1) return `${Math.round((ms || 0) / 1000)} 秒`;
+  if (min < 60) return `${min} 分钟`;
+  const h = Math.floor(min / 60), m = min % 60;
+  return m ? `${h} 小时 ${m} 分` : `${h} 小时`;
 };
 
 export const fmtCount = n => n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, '') + '万' : String(n ?? 0);
@@ -445,9 +454,25 @@ export function confirmDialog({ title, body = '', onOk }) {
   });
 }
 
+// 头像挂件叠加层：铺满头像盒并居中，按素材实测比例放大，使圆环外沿正好落在头像边缘。
+// 直接给 <img> 像素尺寸（而不是 transform:scale）——外层 .cm-ava-wrap 有 overflow:hidden，
+// transform 只是视觉溢出仍会被裁，改尺寸则不存在越界。
+export function decorHTML(user, size) {
+  const id = user && user.avatarDecoration;
+  const url = id && api.decorUrl(id);
+  if (!url) return '';
+  const s = Math.round(size * decorScale(id) * 100) / 100;
+  return `<span class="cm-decor" style="width:${size}px;height:${size}px">`
+    + `<img src="${esc(url)}" width="${s}" height="${s}" alt="" aria-hidden="true"></span>`;
+}
+
 export function avatarHTML(user, size = 72) {
   const url = user && user.avatar && api.avatarUrl(user.avatar);
-  if (url) return `<img class="cm-avatar" src="${esc(url)}?v=${Date.now() % 86400000}" style="width:${size}px;height:${size}px">`;
-  const ch = (user && user.nickname ? user.nickname[0] : '?').toUpperCase();
-  return `<div class="cm-avatar ph" style="width:${size}px;height:${size}px;font-size:${size / 2.6}px">${esc(ch)}</div>`;
+  const decor = decorHTML(user, size);
+  const inner = url
+    ? `<img class="cm-avatar" src="${esc(url)}?v=${Date.now() % 86400000}" style="width:${size}px;height:${size}px">`
+    : `<div class="cm-avatar ph" style="width:${size}px;height:${size}px;font-size:${size / 2.6}px">${esc((user && user.nickname ? user.nickname[0] : '?').toUpperCase())}</div>`;
+  if (!decor) return inner;
+  // 有挂件时外层补一个定位盒（原先直接返回 img，调用方的 flex 布局不受影响）
+  return `<span class="cm-ava-box" style="width:${size}px;height:${size}px">${inner}${decor}</span>`;
 }

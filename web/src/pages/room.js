@@ -1,7 +1,7 @@
 // 房间页：房主控播 + 全员同步跟随 + 点歌审批 + 成员/权限管理
 import { mdui } from '../md.js';
 import { auth, settings } from '../api.js';
-import { esc, toast, fmtDur, getStatus, renderSongList } from '../ui.js';
+import { esc, toast, fmtDur, getStatus, renderSongList, avatarHTML } from '../ui.js';
 import { roomApi, openEventStream, estimateClockOffset, RoomSync } from '../room.js';
 import { player } from '../player.js';
 
@@ -100,7 +100,7 @@ export async function render(el) {
     el.querySelector('#rMembers').textContent = `${members.length} 人在线`;
     box.innerHTML = members.map(m => `
       <div class="cm-rmember" data-uid="${m.userId}">
-        ${m.avatar ? `<img src="${esc(m.avatar)}">` : `<span class="cm-rmember-ph">${esc((m.nickname || '?')[0])}</span>`}
+        ${m.avatar || m.avatarDecoration ? avatarHTML(m, 36) : `<span class="cm-rmember-ph">${esc((m.nickname || '?')[0])}</span>`}
         <div class="cm-rmember-main">
           <div class="cm-rmember-name">${esc(m.nickname || ('用户' + m.userId))}
             ${m.role === 'owner' ? '<span class="cm-tag admin">房主</span>' : m.role === 'admin' ? '<span class="cm-tag">管理员</span>' : ''}
