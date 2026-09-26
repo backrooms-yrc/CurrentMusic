@@ -511,6 +511,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void dlnaPlay(final String key, final String url, final String title,
                              final String artist, final String album, final long durationMs) {
+            dlnaPlay(key, url, title, artist, album, durationMs, "", "");
+        }
+
+        /** 同上，附带歌词：lrcUrl 为 LRC 纯文本地址，lyrics 为少量内联歌词（见 Dlna.didl 注释）。 */
+        @JavascriptInterface
+        public void dlnaPlay(final String key, final String url, final String title,
+                             final String artist, final String album, final long durationMs,
+                             final String lrcUrl, final String lyrics) {
             // 先查最近搜索缓存（刚在列表里选过设备，无需再等一次搜索）
             Dlna.Device cached = null;
             for (Dlna.Device d : castPeers) {
@@ -518,7 +526,7 @@ public class MainActivity extends Activity {
             }
             if (cached != null) {
                 final Dlna.Device dev = cached;
-                pool.execute(() -> doCast(dev, key, url, title, artist, album, durationMs));
+                pool.execute(() -> doCast(dev, key, url, title, artist, album, durationMs, lrcUrl, lyrics));
                 return;
             }
             // 缓存没有（App 重启过/设备换了 USN）：重新搜索
@@ -534,14 +542,15 @@ public class MainActivity extends Activity {
                     }
                     target = devices.get(0);   // 退化：拿新搜到的第一台
                 }
-                doCast(target, key, url, title, artist, album, durationMs);
+                doCast(target, key, url, title, artist, album, durationMs, lrcUrl, lyrics);
             }));
         }
 
         /** 真正把曲目交给渲染器（后台线程执行）。 */
         private void doCast(Dlna.Device dev, String key, String url, String title,
-                            String artist, String album, long durationMs) {
-            String meta = Dlna.didl(url, title, artist, album, durationMs);
+                            String artist, String album, long durationMs,
+                            String lrcUrl, String lyrics) {
+            String meta = Dlna.didl(url, title, artist, album, durationMs, lrcUrl, lyrics);
             Dlna.playUrl(dev, url, meta, (ok, err) -> {
                 if (ok) {
                     castDevice = dev;
