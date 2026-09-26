@@ -138,8 +138,14 @@ export const player = {
     // App 内：走原生 MediaSession（通知栏常驻媒体信息 + 蓝牙 AVRCP 曲目/进度）
     if (b && b.mediaMeta) {
       try {
+        // 时长单位是毫秒：meta.duration 来自 NCM 的 dt（本就为 ms），不可再乘 1000
+        // （曾错乘一次 → 蓝牙/车机把 9 分 36 秒的歌显示成 160 小时）；
+        // 优先用 <audio> 实测时长（更准，且能纠正元数据缺失/偏差）
+        const durMs = Math.round(isFinite(audio.duration) && audio.duration > 0
+          ? audio.duration * 1000
+          : (this.meta.duration || 0));
         b.mediaMeta(this.meta.name || '', this.meta.artists || '', this.meta.album || '',
-          Math.round((this.meta.duration || 0) * 1000), this.meta.pic || '');
+          durMs, this.meta.pic || '');
         b.mediaState(!audio.paused, Math.round(audio.currentTime * 1000));
         return;
       } catch { /* 桥异常时回退浏览器 MediaSession */ }
@@ -184,6 +190,10 @@ audio.addEventListener('timeupdate', () => {
 audio.addEventListener('play', () => { emit('state'); keepAlive(true); player.pushMediaState(); });
 audio.addEventListener('pause', () => { emit('state'); keepAlive(false); player.pushMediaState(); });
 audio.addEventListener('seeked', () => player.pushMediaState());
+// 时长此时才实测可得：重推一次元数据，蓝牙/车机拿到准确曲长（避免用估计值或被旧值卡住）
+audio.addEventListener('loadedmetadata', () => {
+  if (isFinite(audio.duration) && audio.duration > 0) player.updateMediaSession();
+});
 audio.addEventListener('ended', () => keepAlive(false));
 
 // 后台保活：播放中启动前台服务（通知+唤醒锁），暂停/结束即停
