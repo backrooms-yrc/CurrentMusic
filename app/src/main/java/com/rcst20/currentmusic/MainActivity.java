@@ -57,6 +57,8 @@ public class MainActivity extends Activity {
     private volatile java.util.List<Dlna.Device> castPeers = new java.util.ArrayList<>();
     /** 投屏时交给渲染器拉流的地址（退出投屏时置空）。 */
     private volatile String castUrl = "";
+    /** 投屏状态轮询开关：投屏期间每秒查一次设备播放态/进度，推给页面。 */
+    private volatile boolean castPolling = false;
 
     // 页面未就绪时暂存媒体指令（锁屏切歌时 Activity 可能正在重建，直接丢弃会「点了没反应」）
     private static final java.util.ArrayDeque<String> pendingJs = new java.util.ArrayDeque<>();
@@ -165,6 +167,42 @@ public class MainActivity extends Activity {
     private void evalJs(final String js) {
         main.post(() -> {
             if (web != null) web.evaluateJavascript(js, null);
+        });
+    }
+
+    /**
+     * 投屏状态轮询：每秒取一次设备的播放态与进度，经 window.__cmCastState 推给页面。
+     *
+     * 为什么必须有它：投屏时本机音频是暂停的，audio.currentTime 不前进，
+     * 页面既无法滚动歌词、也无法显示进度、更无从判断是否掉线。
+     * 查询失败（设备离线/休眠）会带上 error 字段，页面据此自动重连。
+     */
+    private void startCastPolling() {
+        if (castPolling) return;
+        castPolling = true;
+        pool.execute(() -> {
+            while (castPolling) {
+                final Dlna.Device dev = castDevice;
+                if (dev == null) break;
+                final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+                Dlna.poll(dev, st -> {
+                    evalJs("window.__cmCastState && window.__cmCastState({"
+                            + "\"state\":\"" + jsStr(st.state) + "\","
+                            + "\"posMs\":" + st.posMs + ","
+                            + "\"durMs\":" + st.durMs + ","
+                            + "\"uri\":\"" + jsStr(st.uri) + "\","
+                            + "\"error\":" + (st.error == null ? "null" : "\"" + jsStr(st.error) + "\"")
+                            + "})");
+                    done.countDown();
+                });
+                try {
+                    done.await(6, java.util.concurrent.TimeUnit.SECONDS);
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    break;
+                }
+            }
+            castPolling = false;
         });
     }
 
@@ -509,6 +547,7 @@ public class MainActivity extends Activity {
                     castDevice = dev;
                     castUrl = url;
                     castPeers = java.util.Collections.singletonList(dev);
+                    startCastPolling();          // 开始把设备状态/进度推给页面
                 }
                 evalJs("window.__cmDlnaResult && window.__cmDlnaResult(" + ok + ","
                         + (err == null ? "null" : "\"" + jsStr(err) + "\"") + ",\""
@@ -538,6 +577,7 @@ public class MainActivity extends Activity {
             final Dlna.Device dev = castDevice;
             castDevice = null;
             castUrl = "";
+            castPolling = false;
             if (dev == null) return;
             pool.execute(() -> Dlna.command(dev, "Stop", "", (ok, info) -> { /* 忽略结果 */ }));
         }

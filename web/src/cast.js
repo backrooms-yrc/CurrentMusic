@@ -1,14 +1,33 @@
 // DLNA 投屏：搜索局域网渲染器并把音频交给设备播放。
+//
 // 原生侧（MainActivity.Bridge → Dlna.java）负责 SSDP 组播与 AVTransport SOAP，
-// 页面侧只做 UI 与「投屏时把控制指令转发给设备」。
-// 非 App 环境（浏览器）没有 NativeApi，入口会提示改用 App。
+// 并每秒轮询一次设备状态（GetTransportInfo/GetPositionInfo）推给页面；
+// 页面侧维护「投屏会话」：本地插值时钟驱动进度条与歌词、把控制指令转给设备、掉线自动重连。
+//
+// 为什么需要会话状态：投屏时本机音频是暂停的，audio.currentTime 不前进。
+// 若不做接管，进度条与歌词会永远停在原处、播放键也分不清设备当前是播是停。
 import { settings, call } from './api.js';
 import { esc, toast } from './ui.js';
 import { mdui } from './md.js';
-import { player } from './player.js';
+import { player, setClockSource, tick, notifyState } from './player.js';
 
-const S = { casting: false, name: '', key: '', busy: false };
+const S = {
+  casting: false,
+  name: '',
+  key: '',
+  playing: false,      // 设备当前是否在播（来自轮询）
+  posMs: 0,            // 设备上报的播放位置
+  durMs: 0,            // 设备上报的曲目总长
+  syncedAt: 0,         // posMs 对应的本地时间戳（用于两次轮询之间插值）
+  intended: true,      // 我们期望的播放状态（用于区分「设备自己停了」）
+  lastOkAt: 0,         // 最近一次成功查询的时间
+  maxPosMs: 0,         // 本次投屏期间见到过的最大播放位置（判断是否已播完）
+  recoverCount: 0,
+  recoverTimer: null,
+};
+
 let patched = false;
+let ticker = null;
 
 /** 原生桥是否可用（浏览器里没有）。 */
 export const castSupported = () => typeof window.NativeApi !== 'undefined'
@@ -39,58 +58,180 @@ function hms(sec) {
   return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** 原生直推当前（或指定）曲目（不入队、不取本机播放地址，省一次请求）。 */
-function castTrack(meta) {
+/**
+ * 播放时钟：轮询间隔 1s 太久（歌词会一跳一跳），故用「上报值 + 本地经过时间」插值，
+ * 每 250ms 重算一次位置，歌词与进度条因此能平滑推进。
+ */
+function castClock() {
+  if (!S.casting) return null;
+  let pos = S.posMs;
+  if (S.playing && S.syncedAt) pos += Date.now() - S.syncedAt;
+  if (S.durMs > 0 && pos > S.durMs) pos = S.durMs;
+  return { posMs: Math.max(0, pos), durMs: S.durMs, playing: S.playing };
+}
+
+/** 原生每秒推来的设备状态。 */
+function onCastState(st) {
+  if (!S.casting || !st) return;
+  if (st.error) {
+    // 查询失败：多数是设备离线/休眠。连续失败才判定为掉线，避免偶发抖动误报。
+    if (S.lastOkAt && Date.now() - S.lastOkAt > 6000) scheduleRecover('设备无响应');
+    return;
+  }
+  S.lastOkAt = Date.now();
+  const wasPlaying = S.playing;
+  const prevDur = S.durMs;
+  S.playing = st.state === 'PLAYING' || st.state === 'TRANSITIONING' || st.state === 'RECORDING';
+  if (st.posMs > 0) { S.posMs = st.posMs; S.syncedAt = Date.now(); }
+  if (st.posMs > S.maxPosMs) S.maxPosMs = st.posMs;
+  if (st.durMs > 0) S.durMs = st.durMs;
+  if (S.playing) S.recoverCount = 0;                 // 恢复正常，重置重连计数
+  if (wasPlaying !== S.playing || prevDur !== S.durMs) notifyState();   // 刷新播放键/时长
+  // 设备端停了（我们期望在播）要分两种情况：
+  //  a) 已经播到接近结尾 → 正常放完，应切下一首（否则会永远重播同一首）
+  //  b) 中途停住 → 异常，从当前位置续播
+  if (!S.playing && S.intended && st.state === 'STOPPED') {
+    const atEnd = S.durMs > 0 && S.maxPosMs >= S.durMs - 6000;
+    if (atEnd) {
+      S.intended = false;              // 交给下一首的 castTrack 重新置 true
+      player.next(true);               // 走 player 的自动前进（尊重单曲循环/顺序/随机）
+    } else {
+      scheduleRecover('播放已停止');
+    }
+  }
+}
+
+/** 掉线/被停止后的自动恢复：从上次位置重新投一次（最多 3 次）。 */
+function scheduleRecover(reason) {
+  if (!S.casting || S.recoverTimer) return;
+  if (S.recoverCount >= 3) {
+    toast('投屏已断开，请重新连接设备');
+    stopCast();
+    return;
+  }
+  S.recoverTimer = setTimeout(() => {
+    S.recoverTimer = null;
+    if (!S.casting || !player.meta) return;
+    S.recoverCount++;
+    toast(`投屏中断（${reason}），正在重连 ${S.recoverCount}/3…`);
+    castTrack(player.meta, S.posMs / 1000);
+  }, 1200);
+}
+
+/** 把指定曲目推给设备；startSec>0 时在其后定位到该位置（用于续播/恢复）。 */
+function castTrack(meta, startSec) {
   if (!S.casting || !meta || !window.NativeApi.dlnaPlay) return;
-  const d = deviceMeta(meta);
+  S.intended = true;
+  S.posMs = Math.max(0, (startSec || 0) * 1000);
+  S.syncedAt = Date.now();
+  S.playing = true;                       // 乐观：设备通常很快就播；轮询会纠正
+  S.durMs = meta.duration || S.durMs;
+  S.maxPosMs = S.posMs;                 // 新曲目重新计
+  notifyState();
   window.NativeApi.dlnaPlay(S.key, castUrlFor(meta, castLevel()),
-    d.title, d.artist, d.album, d.duration);
+    meta.name || '', meta.artists || '', meta.album || '', meta.duration || 0);
+  if (startSec > 0) {
+    setTimeout(() => {
+      if (S.casting && window.NativeApi.dlnaCmd) {
+        window.NativeApi.dlnaCmd('Seek', `<Unit>REL_TIME</Unit><Target>${hms(startSec)}</Target>`);
+      }
+    }, 1600);
+  }
 }
 
-function deviceMeta(meta) {
-  return {
-    title: (meta && meta.name) || '', artist: (meta && meta.artists) || '',
-    album: (meta && meta.album) || '', duration: (meta && meta.duration) || 0,
-  };
-}
-
-/** 包装 player 的传输方法：投屏期间指令转发给设备，本机不再出声。 */
+/** 包装 player 的传输方法：投屏期间指令转给设备，本机不出声；任何来源的切歌都会跟随。 */
 function patchPlayer() {
   if (patched) return;
   patched = true;
-  const wrap = (name, action, extra) => {
-    const orig = player[name];
-    if (typeof orig !== 'function') return;
-    player[name] = function (...args) {
-      if (!S.casting) return orig.apply(this, args);
-      // 投屏中：本机保持静默，只把动作转给设备
-      try { player.audio.pause(); player.wantPlaying = false; } catch (e) { /* 忽略 */ }
-      if (window.NativeApi[action]) window.NativeApi[action](...extra(args));
-      return undefined;
-    };
-  };
-  wrap('toggle', 'dlnaCmd', () => ['Pause', '']);
-  wrap('play', 'dlnaCmd', () => ['Play', '']);
-  wrap('pause', 'dlnaCmd', () => ['Pause', '']);
-  wrap('seek', 'dlnaCmd', s => ['Seek', `<Unit>REL_TIME</Unit><Target>${hms(s[0])}</Target>`]);
-  // 换歌：本机仍走 playAt（保持队列/进度/UI 一致），但立刻暂停，声音只从设备出
-  const wrapNav = name => {
-    const orig = player[name];
-    if (typeof orig !== 'function') return;
-    player[name] = function (...args) {
-      const r = orig.apply(this, args);
-      if (S.casting) {
-        setTimeout(() => {
-          try { player.audio.pause(); player.wantPlaying = false; } catch (e) { /* 忽略 */ }
-          castTrack(player.meta);
-        }, 60);
-      }
-      return r;
-    };
-  };
-  wrapNav('next');
-  wrapNav('prev');
 
+  // 播放/暂停：必须以「设备当前是否在播」为依据。
+  // 原先一律发 Pause，导致投屏后再也点不回播放。
+  const origToggle = player.toggle;
+  player.toggle = function (...a) {
+    if (!S.casting) return origToggle.apply(this, a);
+    try { player.audio.pause(); player.wantPlaying = false; } catch (e) { /* 忽略 */ }
+    S.intended = !S.playing;
+    S.playing = !S.playing;               // 乐观切换，轮询会纠正
+    S.syncedAt = Date.now();
+    notifyState();
+    window.NativeApi.dlnaCmd(S.intended ? 'Play' : 'Pause', '');
+  };
+
+  const origPlay = player.play;
+  player.play = function (...a) {
+    if (!S.casting) return origPlay.apply(this, a);
+    S.intended = true; S.playing = true; S.syncedAt = Date.now(); notifyState();
+    window.NativeApi.dlnaCmd('Play', '');
+  };
+
+  const origPause = player.pause;
+  player.pause = function (...a) {
+    if (!S.casting) return origPause.apply(this, a);
+    S.intended = false; S.playing = false; notifyState();
+    window.NativeApi.dlnaCmd('Pause', '');
+  };
+
+  // 拖动进度：投屏时本机没有时长/位置，必须把目标时间转成设备的 Seek
+  const origSeek = player.seek;
+  player.seek = function (sec) {
+    if (!S.casting) return origSeek.apply(this, arguments);
+    if (!isFinite(sec)) return;
+    S.posMs = Math.max(0, sec * 1000);
+    S.syncedAt = Date.now();
+    tick();
+    window.NativeApi.dlnaCmd('Seek', `<Unit>REL_TIME</Unit><Target>${hms(sec)}</Target>`);
+  };
+
+  // 切歌跟随：playAt 是所有换歌的唯一入口（点列表、下一首、播放全部、房间同步都走它），
+  // 在这里挂钩即可覆盖全部来源——此前只包了 next/prev，点列表换歌就不同步。
+  const origPlayAt = player.playAt;
+  player.playAt = function (...a) {
+    const r = origPlayAt.apply(this, a);
+    if (S.casting && player.meta) {
+      S.recoverCount = 0;
+      castTrack(player.meta, 0);
+    }
+    return r;
+  };
+}
+
+function startTicker() {
+  if (ticker) return;
+  ticker = setInterval(() => { if (S.casting) tick(); else { clearInterval(ticker); ticker = null; } }, 250);
+}
+
+function endSession() {
+  S.casting = false;
+  S.maxPosMs = 0;
+  S.playing = false;
+  S.intended = true;
+  S.posMs = 0;
+  S.durMs = 0;
+  S.syncedAt = 0;
+  S.lastOkAt = 0;
+  S.recoverCount = 0;
+  if (S.recoverTimer) { clearTimeout(S.recoverTimer); S.recoverTimer = null; }
+  if (ticker) { clearInterval(ticker); ticker = null; }
+  setClockSource(null);
+  paintIcon();
+  notifyState();
+}
+
+/** 开始投屏会话。 */
+function beginSession(key, name) {
+  S.casting = true;
+  S.key = key;
+  S.name = name;
+  S.playing = true;
+  S.intended = true;
+  S.posMs = 0;
+  S.durMs = 0;
+  S.syncedAt = Date.now();
+  S.lastOkAt = Date.now();
+  S.recoverCount = 0;
+  setClockSource(castClock);      // 让进度条/歌词改读设备时钟
+  startTicker();
+  window.__cmCastState = onCastState;
 }
 
 /** 打开设备选择器（未投屏）或投屏控制面板（已投屏）。 */
@@ -197,33 +338,31 @@ export function openCastDialog() {
 
 function connect(key, name, diag) {
   if (!player.meta) return toast('当前没有播放中的歌曲');
-  S.casting = true;
-  S.key = key;
-  S.name = name;
+  const meta = player.meta;
   const pos = (player.audio && player.audio.currentTime) || 0;
   toast(`正在投屏到「${name}」…`);
+
   window.__cmDlnaResult = (ok, err, devName) => {
     if (ok) {
-      S.name = devName || name;
+      beginSession(key, devName || name);
+      S.durMs = meta.duration || 0;
+      S.posMs = pos * 1000;
+      S.syncedAt = Date.now();
+      try { player.audio.pause(); player.wantPlaying = false; } catch (e) { /* 忽略 */ }
       toast(`已投屏到「${S.name}」`);
       paintIcon();
-      try { player.audio.pause(); } catch (e) { /* 忽略 */ }
+      notifyState();
     } else {
-      S.casting = false;
+      endSession();
       S.key = '';
+      S.name = '';
       toast('投屏失败：' + (err || '未知错误'));
-      paintIcon();
     }
   };
-  const meta = player.meta;
-  window.NativeApi.dlnaPlay(key, castUrlFor(meta, castLevel()), meta.name || '', meta.artists || '',
-    meta.album || '', meta.duration || 0);
-  try { player.audio.pause(); } catch (e) { /* 忽略 */ }
-  setTimeout(() => {
-    if (S.casting && pos > 1 && window.NativeApi.dlnaCmd) {
-      window.NativeApi.dlnaCmd('Seek', `<Unit>REL_TIME</Unit><Target>${hms(pos)}</Target>`);
-    }
-  }, 1600);
+  // 先接管时钟再发指令：避免 playAt 在投屏判定前触发本机播放
+  beginSession(key, name);
+  castTrack(meta, pos);
+  try { player.audio.pause(); player.wantPlaying = false; } catch (e) { /* 忽略 */ }
   if (diag) diag.open = false;
 }
 
@@ -240,7 +379,7 @@ function castControlDialog() {
                <span class="material-icons-outlined">volume_down</span>
                <input type="range" id="castVol" min="0" max="100" value="${localStorage.getItem('cm.castVol') || 50}">
              </div>
-             <div class="cm-cast-tip">换歌、暂停、拖动进度都会同步到该设备</div>
+             <div class="cm-cast-tip">换歌、暂停、拖动进度都会同步到该设备；断开会自动重连</div>
            </div>`,
     actions: [{ text: '关闭' }, { text: '停止投屏', onClick: () => { stopCast(); return true; } }],
   });
@@ -255,15 +394,14 @@ function castControlDialog() {
   }, 0);
 }
 
-/** 停止投屏：让设备停止并恢复本机播放能力。 */
+/** 停止投屏：让设备停止并交还本机播放能力。 */
 export function stopCast() {
   if (!S.casting) return;
-  S.casting = false;
   const name = S.name;
+  if (window.NativeApi.dlnaStop) window.NativeApi.dlnaStop();
+  endSession();
   S.key = '';
   S.name = '';
-  if (window.NativeApi.dlnaStop) window.NativeApi.dlnaStop();
-  paintIcon();
   toast(`已停止投屏${name ? '（' + name + '）' : ''}`);
 }
 
@@ -285,13 +423,15 @@ export function paintIcon() {
 
 export function initCast() {
   patchPlayer();
-  // 页面重建后恢复投屏状态（Activity 重建/切后台回来）
+  window.__cmCastState = onCastState;
+  // 页面重建后恢复投屏会话（Activity 重建/切后台回来）
   try {
     if (castSupported() && window.NativeApi.dlnaState) {
       const st = JSON.parse(window.NativeApi.dlnaState() || '{}');
-      if (st && st.casting) { S.casting = true; S.name = st.name || ''; S.key = st.key || ''; }
+      if (st && st.casting) {
+        beginSession(st.key || '', st.name || '');
+      }
     }
   } catch (e) { /* 忽略 */ }
-  // 整页重新渲染后图标会丢，这里补画
   document.addEventListener('cm-player-open', paintIcon);
 }
