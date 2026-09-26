@@ -1247,3 +1247,13 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-sq-stats b { color: var(--cm-primary); font-weight: 650; margin: 0 1px; }
 .cm-sq-stats .material-icons-outlined { font-size: 17px; color: var(--cm-primary); }
 .cm-sq-stats i { width: 1px; height: 12px; background: currentColor; opacity: .25; margin: 0 4px; }
+
+
+/* ---------- 播放页歌手名（可点进主页） ---------- */
+.pl-artist-link {
+  cursor: pointer; border-bottom: 1px dashed rgba(255, 255, 255, .45);
+  transition: color .15s ease, border-color .15s ease;
+}
+.pl-artist-link:active { color: var(--cm-primary); border-bottom-color: var(--cm-primary); }
+/* 歌手页「已关注」按钮态 */
+#followBtn.on { color: var(--cm-primary); }
