@@ -12,6 +12,7 @@ import { player } from './player.js';
 import { initPlayerUI } from './player-ui.js';
 import { initCast } from './cast.js';
 import { bootUiPreset } from './uipreset.js';
+import { initGlass } from './glass.js';
 import { applyTheme } from './pages/settings.js';
 
 import * as home from './pages/home.js';
@@ -155,6 +156,7 @@ function boot() {
   initPullToRefresh(() => router());
 
   bootUiPreset();            // UI 皮肤：把预设属性打到 <html>（默认不生效）
+  initGlass();               // 液体玻璃折射（仅 frost 皮肤 + 支持的内核）
   player.restore();          // 恢复上次队列（不自动播放）
   initPlayerUI();
   initCast();   // DLNA 投屏：还原投屏状态并接管传输指令

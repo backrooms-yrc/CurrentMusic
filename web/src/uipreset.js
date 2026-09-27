@@ -36,6 +36,8 @@ export function applyUiPreset(key) {
 export function setUiPreset(key) {
   localStorage.setItem(KEY, KEYS.includes(key) ? key : DEFAULT_PRESET);
   applyUiPreset(key);
+  // 通知折射引擎重建（皮肤切换后玻璃元素才存在/尺寸才确定）
+  try { document.dispatchEvent(new Event('cm-uipreset')); } catch (e) { /* 忽略 */ }
 }
 
 /** 启动时套用（main.js 很早就调用；index.html 里另有一段内联脚本防闪白）。 */
