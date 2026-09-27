@@ -2291,8 +2291,18 @@ html[data-ui-preset="frost"] #navDrop.moving {
     inset 0 -2px 4px rgba(255, 255, 255, .3),
     0 3px 10px rgba(16, 24, 40, .2);
 }
-/* 导航项浮在水滴之上 */
-html[data-ui-preset="frost"] #bottomNav .navItem { position: relative; z-index: 1; }
+/* 导航项浮在水滴之上；touch-action 交给我们自己处理，
+   否则横向滑动会被浏览器当成滚动/手势抢走，就"拖不动"了 */
+html[data-ui-preset="frost"] #bottomNav .navItem {
+  position: relative; z-index: 1;
+  touch-action: none;
+}
+/* 拖动时水滴要跟手：用很短的过渡（否则 0.439s 的弹簧会明显滞后于手指） */
+html[data-ui-preset="frost"] #navDrop.scrubbing {
+  transition: transform .08s linear, width .2s ease, height .2s ease;
+}
+/* 拖动经过的项：强调色提示（松手才真正切换） */
+html[data-ui-preset="frost"] #bottomNav .navItem.hover { color: var(--cm-primary); }
 
 /* 激活项：iOS 用强调色图标 + 文字（去掉 MD3 的胶囊指示器） */
 html[data-ui-preset="frost"] .navItem.cur .nav-ic::before { opacity: 0 !important; }

@@ -34,9 +34,9 @@ function currentItem() {
   return nav ? nav.querySelector(ITEM_SEL + '.cur') : null;
 }
 
-/** 计算当前选中项相对 #bottomNav 的外框（包裹图标 + 文字）。 */
-function measure() {
-  const item = currentItem();
+/** 计算指定项（默认当前选中项）相对 #bottomNav 的外框（包裹图标 + 文字）。 */
+function measure(target) {
+  const item = target || currentItem();
   if (!item || !nav) return null;
   const nr = nav.getBoundingClientRect();
   const icon = item.querySelector('.nav-ic');
@@ -133,6 +133,98 @@ function resetStretch() {
   drop.style.transformOrigin = 'center';
 }
 
+/* ── 拖动（scrub）：iOS 的标签栏支持按住横向滑动来选择 ──────────────────
+   手指按住底栏左右滑动时，水滴跟着手指走、经过的项以强调色提示，
+   松手才真正切换页面。实现要点：
+     · 只在 frost 皮肤下启用；
+     · 位移/抬起用 Pointer Events + setPointerCapture，手指移出底栏也能继续跟；
+     · 拖动超过阈值才接管手势（否则保留原生点击，普通点击照常工作）；
+     · 拖动后要拦掉浏览器补发的那次 click，否则会重复导航。 */
+const DRAG_THRESHOLD = 8;          // 超过这个位移才算"拖动"（px）
+let scrub = null;                  // { id, startX, startY, moved, item }
+let suppressClick = false;
+
+function itemAt(clientX) {
+  if (!nav) return null;
+  const items = nav.querySelectorAll(ITEM_SEL);
+  for (let i = 0; i < items.length; i++) {
+    const r = items[i].getBoundingClientRect();
+    if (clientX >= r.left && clientX <= r.right) return items[i];
+  }
+  return null;
+}
+
+function clearHover() {
+  if (!nav) return;
+  nav.querySelectorAll(ITEM_SEL + '.hover').forEach(el => el.classList.remove('hover'));
+}
+
+/** 拖动预览：水滴跟随手指，并把经过的项点亮。 */
+function previewAt(clientX) {
+  if (!drop || !nav) return;
+  const nr = nav.getBoundingClientRect();
+  const w = parseFloat(drop.style.getPropertyValue('--nd-w')) || 70;
+  const h = parseFloat(drop.style.getPropertyValue('--nd-h')) || 52;
+  let x = clientX - nr.left - w / 2;
+  if (x < 4) x = 4;
+  if (x + w > nr.width - 4) x = Math.max(4, nr.width - 4 - w);
+  drop.classList.add('scrubbing');
+  drop.style.setProperty('--nd-x', x.toFixed(1) + 'px');
+  drop.style.setProperty('--nd-w', w.toFixed(1) + 'px');
+  drop.style.setProperty('--nd-h', h.toFixed(1) + 'px');
+  const it = itemAt(clientX);
+  if (it !== scrub.item) {
+    clearHover();
+    if (it && !it.classList.contains('cur')) it.classList.add('hover');
+    scrub.item = it;
+  }
+}
+
+function onDown(e) {
+  if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') return;
+  if (e.button != null && e.button !== 0) return;
+  if (!e.target.closest || !e.target.closest(ITEM_SEL)) return;
+  scrub = { id: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false, item: null };
+  try { nav.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+}
+
+function onMove(e) {
+  if (!scrub || e.pointerId !== scrub.id) return;
+  const dx = e.clientX - scrub.startX, dy = e.clientY - scrub.startY;
+  if (!scrub.moved && Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
+  scrub.moved = true;
+  if (e.cancelable) e.preventDefault();       // 接管手势：不要再滚动/缩放
+  previewAt(e.clientX);
+}
+
+function onUp(e) {
+  if (!scrub || e.pointerId !== scrub.id) return;
+  const moved = scrub.moved, target = scrub.item;
+  const id = scrub.id;
+  scrub = null;
+  clearHover();
+  if (drop) drop.classList.remove('scrubbing');
+  try { nav.releasePointerCapture(id); } catch (err) { /* 忽略 */ }
+  if (!moved) return;                          // 普通点击：交给 <a> 自己处理
+  suppressClick = true;                        // 拦掉这次拖动末尾补发的 click
+  setTimeout(() => { suppressClick = false; }, 400);
+  if (target && !target.classList.contains('cur')) {
+    const href = target.getAttribute('href');
+    if (href) location.hash = href;             // 真正切换（路由会更新 .cur，水滴随之落位）
+    else move();
+  } else {
+    move();                                     // 没换项：回到当前项
+  }
+}
+
+function onCancel(e) {
+  if (!scrub || e.pointerId !== scrub.id) return;
+  scrub = null;
+  clearHover();
+  if (drop) drop.classList.remove('scrubbing');
+  move();
+}
+
 function ensureRefs() {
   nav = document.querySelector(NAV_SEL);
   drop = document.getElementById(DROP_ID);
@@ -166,6 +258,17 @@ export function initNavDrop() {
   drop.addEventListener('transitionend', function (e) {
     if (e.target === drop && e.propertyName === 'transform') resetStretch();
   });
+  // 拖动（scrub）：按住底栏横向滑动来选 tab
+  if (window.PointerEvent) {
+    nav.addEventListener('pointerdown', onDown);
+    nav.addEventListener('pointermove', onMove);
+    nav.addEventListener('pointerup', onUp);
+    nav.addEventListener('pointercancel', onCancel);
+    // 拖动结束时浏览器会补发一次 click，必须拦掉，否则会重复导航
+    nav.addEventListener('click', function (e) {
+      if (suppressClick) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+  }
   window.addEventListener('hashchange', schedule);
   window.addEventListener('resize', schedule);
   window.addEventListener('orientationchange', schedule);
@@ -189,6 +292,11 @@ export function initNavDrop() {
 
 /** 供验证脚本读取当前水滴几何。 */
 export function navDropDebug() {
+  // 供验证脚本读取拖动状态
+  return _navDropDebug();
+}
+
+function _navDropDebug() {
   if (!drop) return null;
   return {
     x: drop.style.getPropertyValue('--nd-x'),
