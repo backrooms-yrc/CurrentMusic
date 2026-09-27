@@ -138,9 +138,18 @@ function ensureDefs() {
 }
 
 // 需要折射的玻璃元素：底栏胶囊 + 迷你播放条（其余卡片不做模糊，见 app.css 注释）
+// 模糊值刻意**不写死在这里**，而是从元素的 CSS 变量 --frs-lens-blur 读，
+// 这样"玻璃有多毛"属于样式调参，改一行 CSS 即可，不必动 JS。
+const DEFAULT_BLUR = 4;
+function lensBlurOf(el) {
+  const raw = getComputedStyle(el).getPropertyValue('--frs-lens-blur').trim();
+  const n = parseFloat(raw);
+  return isFinite(n) ? n : DEFAULT_BLUR;
+}
+
 const TARGETS = [
-  { sel: '#bottomNav',     id: 'cmLensNav',  radius: null, bevel: 22, maxd: 18, blur: 0.5 },
-  { sel: '.cm-mini-inner', id: 'cmLensMini', radius: 16,   bevel: 18, maxd: 14, blur: 0.5 },
+  { sel: '#bottomNav',     id: 'cmLensNav',  radius: null, bevel: 22, maxd: 18 },
+  { sel: '.cm-mini-inner', id: 'cmLensMini', radius: 16,   bevel: 18, maxd: 14 },
 ];
 
 /** 按当前皮肤与尺寸重建所有折射图（非 frost 皮肤时直接跳过）。 */
@@ -152,7 +161,7 @@ export function refreshGlass() {
     if (!el) return;
     const r = el.getBoundingClientRect();
     const radius = t.radius != null ? t.radius : r.height / 2;
-    attachLens(el, t.id, { radius, bevel: t.bevel, maxd: t.maxd, blur: t.blur });
+    attachLens(el, t.id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
   });
   observeTargets();
 }
@@ -197,7 +206,7 @@ function watchSize() {
     if (lastSig[t.id] === sig) return;
     lastSig[t.id] = sig;
     const radius = t.radius != null ? t.radius : r.height / 2;
-    attachLens(el, t.id, { radius, bevel: t.bevel, maxd: t.maxd, blur: t.blur });
+    attachLens(el, t.id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
   });
 }
 

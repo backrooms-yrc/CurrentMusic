@@ -2153,13 +2153,17 @@ html[data-ui-preset="frost"] .cm-qrbox {
    兼容：不支持 backdrop-filter: url() 时，--frs-lens 回退为 blur(8px)，胶囊与高光边仍在。
    ========================================================================== */
 html[data-ui-preset="frost"] {
-  --frs-lens: blur(8px) saturate(150%);      /* 旧内核兜底；支持时由 glass.js 覆写为 url(#…) */
-  --frs-capsule: rgba(255, 255, 255, .42);   /* 玻璃本体很淡：主要靠折射与高光成形 */
+  /* ★ 玻璃的两个"手感"旋钮，想调只改这里 ★
+     --frs-lens-blur 只写数字（px），由 glass.js 读走拼成 blur(Npx)；
+     它同时决定"毛"的程度：越大越磨砂、越小越透亮（折射在边缘仍然保留）。 */
+  --frs-lens-blur: 4;
+  --frs-lens: blur(12px) saturate(150%);     /* 旧内核兜底；支持折射时由 glass.js 覆写为 url(#…) */
+  --frs-capsule: rgba(255, 255, 255, .58);   /* 玻璃本体（比上一版 .42 更实，不再"太透"） */
   --frs-capsule-line: rgba(255, 255, 255, .62);
   --frs-capsule-float: 0 12px 32px rgba(16, 24, 40, .22);
 }
 html[data-ui-preset="frost"].mdui-theme-dark {
-  --frs-capsule: rgba(30, 32, 40, .34);
+  --frs-capsule: rgba(30, 32, 40, .52);
   --frs-capsule-line: rgba(255, 255, 255, .28);
   --frs-capsule-float: 0 12px 34px rgba(0, 0, 0, .55);
 }
