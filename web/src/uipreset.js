@@ -9,6 +9,7 @@ export const DEFAULT_PRESET = 'md3';
 
 export const UI_PRESETS = [
   { key: 'md3', name: '默认', desc: 'Material 3 · 当前样式', swatch: 'md3' },
+  { key: 'frost', name: '简约玻璃', desc: '玻璃只在浮层 · 卡片磨砂白 + 发丝线 · 零投影', swatch: 'frost' },
   { key: 'glass', name: '液体玻璃', desc: '半透明玻璃 · 大圆角 · 柔和光影', swatch: 'glass' },
 ];
 

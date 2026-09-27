@@ -121,7 +121,7 @@ export async function render(el) {
         <div class="cm-more-chips">${UI_PRESETS.map(p =>
           `<mdui-chip ${p.key === cur ? 'selected' : ''} data-k="${p.key}"><i class="cm-swatch ${p.swatch}"></i>${p.name}</mdui-chip>`).join('')}</div>
         <div class="cm-more-s" style="margin-top:10px">${esc((UI_PRESETS.find(p => p.key === cur) || {}).desc || '')}</div>
-        <div class="cm-more-s" style="margin-top:6px">「液体玻璃」为半透明玻璃质感（大圆角 + 柔和光影）；旧版系统会自动降级为纯色，不影响使用。默认保持原样式。</div>
+        <div class="cm-more-s" style="margin-top:6px">「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影；「液体玻璃」整体更通透华丽。旧版系统会自动降级为半透明纯色，不影响使用。默认保持原样式。</div>
       </div>`,
       actions: [{ text: '关闭' }],
     });

@@ -1793,3 +1793,354 @@ html[data-ui-preset="glass"] .cm-qrbox {
     linear-gradient(135deg, rgba(255, 255, 255, .85), rgba(210, 225, 255, .8));
 }
 .cm-swatch.md3 { background: linear-gradient(135deg, #6750a4, #d0bcff); }
+
+/* ==========================================================================
+   UI 预设：简约玻璃（A 的克制 + B 的液态玻璃）
+   --------------------------------------------------------------------------
+   设计取舍（与上一套「液体玻璃」的区别）：
+   - **玻璃只用在浮层**：顶栏 / 底栏 / 迷你播放条 / 弹窗 / 弹出菜单。
+     这些层浮在滚动内容之上，背景模糊才有意义；
+     内容卡片若也做模糊，背后是纯色底，模糊等于没做，只会徒增性能开销。
+   - **卡片走 iOS 分组风**：磨砂白 + 1px 高光内描边 + 发丝分隔线，**零投影**。
+     层级靠底色差与描边表达，而不是靠阴影堆叠 —— 这是「简约」的来源。
+   - **底色极淡**：只在顶部加一层很轻的冷色渐隐，给玻璃条一点可折射的内容，
+     不铺满高饱和径向渐变（那是上一套「液体玻璃」的做法）。
+   - **字重与圆角**：标题 600 字重、卡片 14px 圆角、按钮/标签用胶囊 —— iOS 的克制感。
+
+   作用域：全部限定在 html[data-ui-preset="frost"] 之下，默认 UI 不受影响。
+   ========================================================================== */
+
+/* ---- 1. 代币 ---- */
+html[data-ui-preset="frost"] {
+  --frs-bg: #f2f3f7;          /* iOS 分组底色（微冷灰） */
+  --frs-fg: #0a0c12;
+  --frs-fg2: rgba(60, 60, 67, .6);
+  --frs-card: rgba(255, 255, 255, .82);   /* 磨砂白（不支持模糊时也好看） */
+  --frs-card-solid: rgba(255, 255, 255, .92);
+  --frs-hair: rgba(60, 60, 67, .14);      /* 发丝线 */
+  --frs-glass: rgba(255, 255, 255, .72);  /* 浮层玻璃 */
+  --frs-glass-line: rgba(0, 0, 0, .06);
+  --frs-lip: inset 0 1px 0 rgba(255, 255, 255, .9);   /* 玻璃上沿高光 */
+  --frs-float: 0 10px 28px rgba(18, 28, 48, .14);     /* 只给真正悬浮的层 */
+  --frs-filter: none;
+  --frs-r: 14px;
+  --frs-r-lg: 18px;
+
+  /* MDUI 表面代币：向 iOS 分组色靠（Shadow DOM 组件只能靠代币） */
+  --mdui-color-background-light: 242,243,247 !important;
+  --mdui-color-background-dark: 0,0,0 !important;
+  --mdui-color-on-background-light: 10,12,18 !important;
+  --mdui-color-on-background-dark: 255,255,255 !important;
+  --mdui-color-surface-light: 255,255,255 !important;
+  --mdui-color-surface-dark: 16,17,21 !important;
+  --mdui-color-surface-dim-light: 242,243,247 !important;
+  --mdui-color-surface-dim-dark: 0,0,0 !important;
+  --mdui-color-surface-bright-light: 255,255,255 !important;
+  --mdui-color-surface-bright-dark: 44,46,54 !important;
+  --mdui-color-surface-container-lowest-light: 255,255,255 !important;
+  --mdui-color-surface-container-lowest-dark: 12,13,17 !important;
+  --mdui-color-surface-container-low-light: 248,249,252 !important;
+  --mdui-color-surface-container-low-dark: 20,21,26 !important;
+  --mdui-color-surface-container-light: 255,255,255 !important;
+  --mdui-color-surface-container-dark: 26,27,33 !important;
+  --mdui-color-surface-container-high-light: 255,255,255 !important;
+  --mdui-color-surface-container-high-dark: 33,35,42 !important;
+  --mdui-color-surface-container-highest-light: 233,235,241 !important;
+  --mdui-color-surface-container-highest-dark: 44,46,54 !important;
+  --mdui-color-surface-variant-light: 233,235,241 !important;
+  --mdui-color-surface-variant-dark: 44,46,54 !important;
+  --mdui-color-on-surface-light: 10,12,18 !important;
+  --mdui-color-on-surface-dark: 255,255,255 !important;
+  --mdui-color-on-surface-variant-light: 90,94,104 !important;
+  --mdui-color-on-surface-variant-dark: 168,172,182 !important;
+  --mdui-color-outline-light: 199,203,213 !important;
+  --mdui-color-outline-dark: 72,75,84 !important;
+  --mdui-color-outline-variant-light: 224,226,233 !important;
+  --mdui-color-outline-variant-dark: 52,54,62 !important;
+  --mdui-color-inverse-surface-light: 28,30,36 !important;
+  --mdui-color-inverse-surface-dark: 242,243,247 !important;
+  --mdui-color-inverse-on-surface-light: 242,243,247 !important;
+  --mdui-color-inverse-on-surface-dark: 28,30,36 !important;
+  --mdui-color-secondary-light: 233,235,241 !important;
+  --mdui-color-secondary-dark: 44,46,54 !important;
+  --mdui-color-on-secondary-light: 28,30,36 !important;
+  --mdui-color-on-secondary-dark: 255,255,255 !important;
+  --mdui-color-secondary-container-light: 233,235,241 !important;
+  --mdui-color-secondary-container-dark: 44,46,54 !important;
+  --mdui-color-on-secondary-container-light: 28,30,36 !important;
+  --mdui-color-on-secondary-container-dark: 255,255,255 !important;
+  --mdui-color-error-light: 255,59,48 !important;
+  --mdui-color-error-dark: 255,69,58 !important;
+  --mdui-color-on-error-light: 255,255,255 !important;
+  --mdui-color-on-error-dark: 255,255,255 !important;
+  --mdui-color-error-container-light: 255,231,229 !important;
+  --mdui-color-error-container-dark: 90,26,22 !important;
+  --mdui-color-on-error-container-light: 90,26,22 !important;
+  --mdui-color-on-error-container-dark: 255,231,229 !important;
+
+  --mdui-shape-corner-extra-small: .375rem;
+  --mdui-shape-corner-small: .5rem;
+  --mdui-shape-corner-medium: .75rem;
+  --mdui-shape-corner-large: .875rem;
+  --mdui-shape-corner-extra-large: 1.25rem;
+  --cm-radius: 14px;
+}
+
+html[data-ui-preset="frost"].mdui-theme-dark {
+  --frs-bg: #000;
+  --frs-fg: #ffffff;
+  --frs-fg2: rgba(235, 235, 245, .6);
+  --frs-card: rgba(28, 29, 35, .78);
+  --frs-card-solid: rgba(28, 29, 35, .92);
+  --frs-hair: rgba(255, 255, 255, .10);
+  --frs-glass: rgba(22, 23, 28, .72);
+  --frs-glass-line: rgba(255, 255, 255, .08);
+  --frs-lip: inset 0 1px 0 rgba(255, 255, 255, .12);
+  --frs-float: 0 12px 30px rgba(0, 0, 0, .55);
+}
+
+@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  html[data-ui-preset="frost"] { --frs-filter: blur(20px) saturate(180%); }
+}
+
+/* ---- 2. 强调色：未选配色时用 iOS 蓝 ---- */
+html[data-ui-preset="frost"]:not([style*="--cm-primary"]) { --cm-primary: #007aff; }
+html[data-ui-preset="frost"].mdui-theme-dark:not([style*="--cm-primary"]) { --cm-primary: #0a84ff; }
+html[data-ui-preset="frost"]:not([style*="--mdui-color-primary-light"]) {
+  --mdui-color-primary-light: 0,122,255 !important;
+  --mdui-color-on-primary-light: 255,255,255 !important;
+  --mdui-color-primary-container-light: 224,238,255 !important;
+  --mdui-color-on-primary-container-light: 0,50,110 !important;
+  --mdui-color-primary-dark: 10,132,255 !important;
+  --mdui-color-on-primary-dark: 255,255,255 !important;
+  --mdui-color-primary-container-dark: 12,46,92 !important;
+  --mdui-color-on-primary-container-dark: 214,232,255 !important;
+}
+
+/* ---- 3. 页面底色：只加一层很轻的顶部冷色渐隐（给玻璃条可折射的内容） ---- */
+html[data-ui-preset="frost"] body {
+  background:
+    linear-gradient(180deg, rgba(120, 150, 220, .12), rgba(120, 150, 220, 0) 340px),
+    var(--frs-bg) !important;
+  color: var(--frs-fg) !important;
+}
+html[data-ui-preset="frost"].mdui-theme-dark body,
+html[data-ui-preset="frost"] .mdui-theme-dark body {
+  background:
+    linear-gradient(180deg, rgba(70, 110, 200, .16), rgba(70, 110, 200, 0) 340px),
+    var(--frs-bg) !important;
+  color: var(--frs-fg) !important;
+}
+
+/* ---- 4. 浮层玻璃：顶栏 / 底栏 / 迷你播放条（模糊在这里才成立） ---- */
+html[data-ui-preset="frost"] #topbar,
+html[data-ui-preset="frost"] #topbar.scrolled {
+  background: var(--frs-glass) !important;
+  border-bottom: 1px solid var(--frs-glass-line);
+  box-shadow: none !important;
+  -webkit-backdrop-filter: var(--frs-filter);
+  backdrop-filter: var(--frs-filter);
+  font-size: 17px; font-weight: 600; letter-spacing: -.012em;
+}
+html[data-ui-preset="frost"] #bottomNav {
+  background: var(--frs-glass) !important;
+  border-top: 1px solid var(--frs-glass-line) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: var(--frs-filter);
+  backdrop-filter: var(--frs-filter);
+}
+html[data-ui-preset="frost"] .cm-mini-inner {
+  background: var(--frs-glass) !important;
+  border: 1px solid var(--frs-hair);
+  border-radius: var(--frs-r);
+  box-shadow: var(--frs-lip), var(--frs-float) !important;
+  -webkit-backdrop-filter: var(--frs-filter);
+  backdrop-filter: var(--frs-filter);
+}
+
+/* ---- 5. 内容卡片：iOS 分组磨砂白 —— 零投影，靠描边与底色差分层 ---- */
+html[data-ui-preset="frost"] .cm-quick,
+html[data-ui-preset="frost"] .cm-setting-list,
+html[data-ui-preset="frost"] .cm-login-tip,
+html[data-ui-preset="frost"] .cm-bindbox,
+html[data-ui-preset="frost"] .cm-acard,
+html[data-ui-preset="frost"] .cm-roomcard,
+html[data-ui-preset="frost"] .cm-rnow,
+html[data-ui-preset="frost"] .cm-ucard,
+html[data-ui-preset="frost"] .cm-up-stats > div,
+html[data-ui-preset="frost"] .cmt-be,
+html[data-ui-preset="frost"] .upd-log,
+html[data-ui-preset="frost"] .upd-src,
+html[data-ui-preset="frost"] .cm-hot,
+html[data-ui-preset="frost"] .cm-hist,
+html[data-ui-preset="frost"] .cm-decor-bar,
+html[data-ui-preset="frost"] .cm-sq-stats,
+html[data-ui-preset="frost"] .cm-cast-item,
+html[data-ui-preset="frost"] .cm-cast-now,
+html[data-ui-preset="frost"] .cm-pl-pick-item {
+  background: var(--frs-card) !important;
+  border: 1px solid var(--frs-hair);
+  border-radius: var(--frs-r);
+  box-shadow: var(--frs-lip) !important;   /* 只留一条上沿高光，不用投影 */
+}
+/* 轻量小控件 */
+html[data-ui-preset="frost"] .cm-tag,
+html[data-ui-preset="frost"] .cm-decor-count,
+html[data-ui-preset="frost"] .cm-cast-q,
+html[data-ui-preset="frost"] .cm-song-cover,
+html[data-ui-preset="frost"] .cm-artist-ava,
+html[data-ui-preset="frost"] .cm-artist-bigava {
+  background: var(--frs-card-solid) !important;
+  border: 1px solid var(--frs-hair);
+  box-shadow: none !important;
+}
+html[data-ui-preset="frost"] .cm-tag { border-radius: 999px; color: var(--frs-fg) !important; }
+html[data-ui-preset="frost"] .cm-tag.admin,
+html[data-ui-preset="frost"] .cm-tag.super {
+  background: var(--cm-primary) !important;
+  color: #fff !important;
+  border-color: transparent;
+}
+
+/* 占位图 / 骨架：中性灰，去掉 MD3 粉彩 */
+html[data-ui-preset="frost"] .sk,
+html[data-ui-preset="frost"] .cm-card img,
+html[data-ui-preset="frost"] .cm-song-pic,
+html[data-ui-preset="frost"] .cm-mini-inner img,
+html[data-ui-preset="frost"] .cm-mini-ph,
+html[data-ui-preset="frost"] .cmt-item img,
+html[data-ui-preset="frost"] .cmt-avaph,
+html[data-ui-preset="frost"] .cm-rnow-cover {
+  background: rgba(120, 128, 145, .14) !important;
+  box-shadow: none !important;
+}
+html[data-ui-preset="frost"].mdui-theme-dark .sk,
+html[data-ui-preset="frost"].mdui-theme-dark .cm-card img,
+html[data-ui-preset="frost"].mdui-theme-dark .cm-song-pic,
+html[data-ui-preset="frost"].mdui-theme-dark .cm-mini-inner img,
+html[data-ui-preset="frost"].mdui-theme-dark .cmt-avaph {
+  background: rgba(255, 255, 255, .08) !important;
+}
+html[data-ui-preset="frost"] .cm-card img { border-radius: var(--frs-r); }
+
+/* ---- 6. 选中/悬停：iOS 的浅灰按压态（不用彩色块） ---- */
+html[data-ui-preset="frost"] .cm-song:hover,
+html[data-ui-preset="frost"] .cm-song:active,
+html[data-ui-preset="frost"] .cm-queue-item:active,
+html[data-ui-preset="frost"] .cm-qm-item:active,
+html[data-ui-preset="frost"] .cm-pl-pick-item:active,
+html[data-ui-preset="frost"] .cm-quick:active,
+html[data-ui-preset="frost"] .cm-roomcard:active,
+html[data-ui-preset="frost"] .upd-src.on,
+html[data-ui-preset="frost"] .cm-decor-item.on {
+  background: rgba(120, 128, 145, .12) !important;
+}
+html[data-ui-preset="frost"] .cm-queue-item.cur,
+html[data-ui-preset="frost"] .cm-rq.playing,
+html[data-ui-preset="frost"] .cm-up-now,
+html[data-ui-preset="frost"] .cm-roomcard-live {
+  background: color-mix(in srgb, var(--cm-primary) 12%, transparent) !important;
+  border-radius: 10px;
+}
+html[data-ui-preset="frost"] .cm-queue-item.cur .q-idx {
+  background: var(--cm-primary) !important;
+  color: #fff !important;
+}
+html[data-ui-preset="frost"] .cm-ubio,
+html[data-ui-preset="frost"] .cm-usub,
+html[data-ui-preset="frost"] .cm-card-sub,
+html[data-ui-preset="frost"] .cm-setting > i,
+html[data-ui-preset="frost"] .cm-empty,
+html[data-ui-preset="frost"] .cm-loading,
+html[data-ui-preset="frost"] .cm-sq-stats {
+  color: var(--frs-fg2) !important;
+}
+html[data-ui-preset="frost"] .cm-sq-stats b { color: var(--frs-fg); }
+
+/* ---- 7. MDUI：弹层玻璃 + iOS 胶囊按钮 ---- */
+html[data-ui-preset="frost"] mdui-dialog::part(panel),
+html[data-ui-preset="frost"] mdui-menu::part(panel) {
+  background: var(--frs-card-solid) !important;
+  border: 1px solid var(--frs-hair);
+  border-radius: var(--frs-r-lg) !important;
+  box-shadow: var(--frs-lip), var(--frs-float) !important;
+  -webkit-backdrop-filter: var(--frs-filter);
+  backdrop-filter: var(--frs-filter);
+}
+html[data-ui-preset="frost"] mdui-button::part(container) { border-radius: 999px !important; }
+html[data-ui-preset="frost"] mdui-button[variant="filled"]::part(container) {
+  background: var(--cm-primary) !important;
+  box-shadow: none;
+}
+html[data-ui-preset="frost"] mdui-button[variant="tonal"]::part(container) {
+  background: var(--frs-card-solid) !important;
+  border: 1px solid var(--frs-hair);
+}
+html[data-ui-preset="frost"] #topSearch:active,
+html[data-ui-preset="frost"] #topAction:active,
+html[data-ui-preset="frost"] .cm-dl-apk-top,
+html[data-ui-preset="frost"] .cm-auth-apk {
+  background: rgba(120, 128, 145, .14) !important;
+  color: var(--frs-fg) !important;
+}
+
+/* ---- 8. 播放页：保持沉浸暗色，玻璃只加在工具条与角标 ---- */
+html[data-ui-preset="frost"] .pl-bg.grad {
+  --g1: linear-gradient(155deg, #1b3a6b 0%, #0d1a33 52%, #05070d 100%);
+  --g2: linear-gradient(205deg, #0a84ff 0%, #123 55%, #05070d 100%);
+}
+html[data-ui-preset="frost"] .pl-lyric-tools {
+  background: linear-gradient(rgba(5, 7, 13, .8) 30%, transparent) !important;
+}
+html[data-ui-preset="frost"] .pl-lyric-mode,
+html[data-ui-preset="frost"] .cm-plmenu {
+  background: rgba(255, 255, 255, .12) !important;
+  border: 1px solid rgba(255, 255, 255, .16);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+}
+html[data-ui-preset="frost"] .pl-btn.on { color: #8fc0ff !important; }
+html[data-ui-preset="frost"] .cm-ncmbadge { background: var(--cm-primary) !important; color: #fff !important; }
+
+/* ---- 9. 评论区 ---- */
+html[data-ui-preset="frost"] #commentOverlay {
+  background: var(--frs-bg) !important;
+  color: var(--frs-fg) !important;
+}
+html[data-ui-preset="frost"].mdui-theme-dark #commentOverlay,
+html[data-ui-preset="frost"] .mdui-theme-dark #commentOverlay {
+  background: var(--frs-bg) !important;
+}
+html[data-ui-preset="frost"] .cmt-composer,
+html[data-ui-preset="frost"].mdui-theme-dark .cmt-composer {
+  background: var(--frs-glass) !important;
+  border-top: 1px solid var(--frs-glass-line);
+  -webkit-backdrop-filter: var(--frs-filter);
+  backdrop-filter: var(--frs-filter);
+}
+html[data-ui-preset="frost"] .cmt-composer input,
+html[data-ui-preset="frost"].mdui-theme-dark .cmt-composer input {
+  background: rgba(120, 128, 145, .14) !important;
+  color: var(--frs-fg) !important;
+  border: 0;
+  border-radius: 999px;
+}
+html[data-ui-preset="frost"] #cmtReplyBar { background: var(--frs-card-solid) !important; }
+
+/* ---- 10. 头像占位 / 二维码 ---- */
+html[data-ui-preset="frost"] .cm-avatar.ph {
+  background: linear-gradient(135deg, rgba(0, 122, 255, .28), rgba(120, 128, 145, .22)) !important;
+}
+html[data-ui-preset="frost"] .cm-qrbox {
+  background: #fff !important;
+  border: 1px solid var(--frs-hair);
+  border-radius: var(--frs-r);
+  box-shadow: var(--frs-lip) !important;
+}
+
+/* ---- 11. 设置页色板预览 ---- */
+.cm-swatch.frost {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .55) 55%, rgba(242, 243, 247, .9) 100%),
+    linear-gradient(135deg, #007aff, #64b5ff);
+}
