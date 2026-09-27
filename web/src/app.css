@@ -2228,6 +2228,63 @@ html[data-ui-preset="frost"].mdui-theme-dark {
     padding-bottom: calc(64px + 14px + 34px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
   }
 }
+/* ── 底栏「液态玻璃水滴」指示器 ─────────────────────────────────────────
+   包裹当前选中的 tab（图标 + 文字），切换时流动过去并在中途拉伸、落位回弹。
+   默认皮肤不显示（display:none），仍用上面的 MD3 胶囊指示器。
+   几何由 navdrop.js 写入 --nd-x/-w/-y/-h，本处只负责外观与过渡。 */
+#navDrop { display: none; }
+
+html[data-ui-preset="frost"] #navDrop {
+  display: block;
+  position: absolute;
+  left: 0;
+  top: var(--nd-y, 5px);
+  height: var(--nd-h, 54px);
+  width: var(--nd-w, 0px);
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 0;
+  /* 玻璃本体：比整条导航略亮，才看得出"一颗液滴" */
+  background: rgba(255, 255, 255, .5);
+  box-shadow:
+    inset 0 0 0 .5px rgba(255, 255, 255, .9),      /* 高光描边（液滴的轮廓） */
+    inset -1px 1px 0 .5px rgba(255, 255, 255, .55), /* 朝光源一侧更亮 */
+    inset 0 2px 5px rgba(255, 255, 255, .5),        /* 顶部高光 */
+    inset 0 -2px 4px rgba(255, 255, 255, .25),      /* 底部反光 */
+    0 2px 8px rgba(16, 24, 40, .16);                /* 轻微浮起 */
+  -webkit-backdrop-filter: blur(2px) saturate(170%);
+  backdrop-filter: blur(2px) saturate(170%);
+  transform: translateX(var(--nd-x, 0px)) scaleX(var(--nd-sx, 1));
+  transition:
+    transform .46s cubic-bezier(.22, 1.25, .36, 1),
+    width .46s cubic-bezier(.22, 1.25, .36, 1),
+    height .3s ease;
+}
+html[data-ui-preset="frost"].mdui-theme-dark #navDrop {
+  background: rgba(255, 255, 255, .16);
+  box-shadow:
+    inset 0 0 0 .5px rgba(255, 255, 255, .34),
+    inset -1px 1px 0 .5px rgba(255, 255, 255, .2),
+    inset 0 2px 5px rgba(255, 255, 255, .18),
+    inset 0 -2px 4px rgba(255, 255, 255, .08),
+    0 2px 10px rgba(0, 0, 0, .4);
+}
+/* 首帧/尺寸变化：不要动画，直接落位（否则会看到水滴从旧位置飞过来） */
+html[data-ui-preset="frost"] #navDrop.no-anim { transition: none; }
+/* 移动中：只加一点亮度，拉伸由 --nd-sx 驱动（与位移动画共用一条过渡，
+   靠 transitionend 收尾，避免过渡被打断时水滴卡在"被压扁"的状态） */
+html[data-ui-preset="frost"] #navDrop.moving {
+  background: rgba(255, 255, 255, .6);
+  box-shadow:
+    inset 0 0 0 .5px rgba(255, 255, 255, .95),
+    inset -1px 1px 0 .5px rgba(255, 255, 255, .6),
+    inset 0 2px 6px rgba(255, 255, 255, .55),
+    inset 0 -2px 4px rgba(255, 255, 255, .3),
+    0 3px 10px rgba(16, 24, 40, .2);
+}
+/* 导航项浮在水滴之上 */
+html[data-ui-preset="frost"] #bottomNav .navItem { position: relative; z-index: 1; }
+
 /* 激活项：iOS 用强调色图标 + 文字（去掉 MD3 的胶囊指示器） */
 html[data-ui-preset="frost"] .navItem.cur .nav-ic::before { opacity: 0 !important; }
 html[data-ui-preset="frost"] .nav-ic { width: auto; height: 30px; border-radius: 0; }
