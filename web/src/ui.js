@@ -367,11 +367,16 @@ export function openLikeMenu(song, onChange) {
   });
 }
 
-export async function songListHTML(songs, { removable = false } = {}) {
+/**
+ * 生成歌曲列表 HTML。
+ * @param offset data-i 的起始下标——追加渲染时传已有条数，保证 data-i 始终是
+ *               在**完整数组**里的绝对下标（点击行为依赖它）
+ */
+export async function songListHTML(songs, { removable = false, offset = 0 } = {}) {
   const st = await fetchStatus(songs.map(s => s.ncm_id));
   if (auth.token) ensureNcmLiked().catch(() => {});
   return `<div class="cm-songs">` + songs.map((s, i) => `
-    <div class="cm-song" data-i="${i}">
+    <div class="cm-song" data-i="${offset + i}">
       ${s.pic ? `<img class="cm-song-pic" src="${esc(s.pic)}" loading="lazy">` : `<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>`}
       <div class="cm-song-main">
         <div class="cm-song-name">${esc(s.name)}</div>
@@ -382,11 +387,11 @@ export async function songListHTML(songs, { removable = false } = {}) {
         </div>
       </div>
       <span class="cm-song-dur">${fmtDur(s.duration)}</span>
-      <span class="cm-song-like ${st[i].liked ? 'on' : ''}" data-act="like" data-i="${i}" title="选择收录到哪个我喜欢">
+      <span class="cm-song-like ${st[i].liked ? 'on' : ''}" data-act="like" data-i="${offset + i}" title="选择收录到哪个我喜欢">
         <span class="material-icons-outlined">${st[i].liked ? 'favorite' : 'favorite_border'}</span>
         ${isNcmLiked(s.ncm_id) ? '<i class="cm-ncmdot" title="已在网易云红心"></i>' : ''}
       </span>
-      ${removable ? `<span class="cm-song-more" data-act="remove" data-i="${i}"><span class="material-icons-outlined">remove_circle_outline</span></span>` : ''}
+      ${removable ? `<span class="cm-song-more" data-act="remove" data-i="${offset + i}"><span class="material-icons-outlined">remove_circle_outline</span></span>` : ''}
     </div>`).join('') + `</div>`;
 }
 
@@ -394,15 +399,38 @@ export async function songListHTML(songs, { removable = false } = {}) {
  * 渲染歌曲列表并绑定行为。
  * @param el    容器
  * @param songs 歌曲数组
- * @param opts  { onPlay(i), onRemove(i) }
+ * @param opts  { onPlay(i), onRemove(i), from }
+ *              from > 0 时进入**追加模式**：只把 songs[from..] 插到已有列表末尾，
+ *              已有行原样保留（避免「显示更多」时整段重渲染导致已加载内容闪一下）。
+ *              此时 songs 必须传**完整数组**——行上的 data-i 是完整数组的绝对下标，
+ *              点击回调里的索引也据此对齐。
+ * @returns 本次新增的行元素数组（供调用方做渐入动画）
  */
 export async function renderSongList(el, songs, opts = {}) {
+  const from = Math.max(0, opts.from || 0);
   if (!songs.length) {
     el.innerHTML = `<div class="cm-empty"><span class="material-icons-outlined">queue_music</span>还没有歌曲</div>`;
-    return;
+    return [];
   }
-  el.innerHTML = await songListHTML(songs, { removable: !!opts.onRemove });
-  el.querySelectorAll('.cm-song').forEach(row => {
+  const slice = songs.slice(from);
+  if (!slice.length) return [];
+  const html = await songListHTML(slice, { removable: !!opts.onRemove, offset: from });
+
+  let rows;
+  const wrap = el.querySelector('.cm-songs');
+  if (from > 0 && wrap) {
+    // 追加：把 <div class="cm-songs"> 里的内容取出后插到已有列表末尾
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const inner = tmp.querySelector('.cm-songs');
+    wrap.insertAdjacentHTML('beforeend', inner ? inner.innerHTML : '');
+    rows = [...wrap.querySelectorAll('.cm-song')].slice(-slice.length);
+  } else {
+    el.innerHTML = html;
+    rows = [...el.querySelectorAll('.cm-song')];
+  }
+
+  rows.forEach(row => {
     const i = +row.dataset.i;
     row.addEventListener('click', async e => {
       const act = e.target.closest('[data-act]');
@@ -419,6 +447,7 @@ export async function renderSongList(el, songs, opts = {}) {
       opts.onPlay && opts.onPlay(i);
     });
   });
+  return rows;
 }
 
 // ---------- 对话框 ----------

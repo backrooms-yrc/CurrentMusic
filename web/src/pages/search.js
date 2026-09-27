@@ -5,6 +5,12 @@
 //   而默认展示的是「单曲」。所以**首屏只请求单曲**（~3s 即可出结果），其余类型在
 //   首屏渲染完成后于后台补齐，用于填 TAB 上的计数；用户切到某个 TAB 时若还没取，
 //   再按需取一次。每个类型每批只取 10 条，底部给「显示更多」按需追加。
+//
+// 动效约定（曲线与时长跟评论区批次渐入 cmtIn 保持一致）：
+//   · 切 TAB：面板内容按切换方向轻微横移 + 淡入
+//   · 显示更多：只把**新增条目**阶梯渐入，已有条目保持不动
+//   · TAB 栏就地更新计数而不整块重建，否则指示条的 cmTabIn 动画会被反复重播
+//   · prefers-reduced-motion 下全部跳过
 import { api } from '../api.js';
 import { esc, renderSongList, toast } from '../ui.js';
 import { player } from '../player.js';
@@ -12,6 +18,7 @@ import { addToPlaylist } from '../player-ui.js';
 
 const HIST_KEY = 'cm.searchHistory';
 const BATCH = 10;              // 每个类型每批取的条数（首屏与「显示更多」共用）
+const EASE = 'cubic-bezier(0.05, 0.7, 0.1, 1)';   // 与 app.css 里 cmtIn 同一曲线
 
 // TAB 定义：k 直接用作后端 type 参数，arr 是响应里的数组字段
 const TABS = [
@@ -34,6 +41,18 @@ const searchResultSkeleton = (n = 6) => `<div class="cm-search-result-skeleton" 
 </div>`;
 
 const panelLoading = () => '<div class="cmt-more-loading"><mdui-circular-progress></mdui-circular-progress> 加载中…</div>';
+
+/** 是否应减少动效。实时查询，用户改系统设置后无需重载页面。 */
+const reduceMotion = () => typeof matchMedia === 'function'
+  && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** 新条目阶梯渐入。fill:'backwards' 保证延迟期间不可见，不会先闪一下再开始动。 */
+function animateIn(els, { y = 8, stagger = 26, cap = 160 } = {}) {
+  if (!els.length || reduceMotion() || !els[0].animate) return;
+  els.forEach((el, i) => el.animate(
+    [{ opacity: 0, transform: `translateY(${y}px)` }, { opacity: 1, transform: 'none' }],
+    { duration: 260, delay: Math.min(i * stagger, cap), easing: EASE, fill: 'backwards' }));
+}
 
 let seq = 0;
 
@@ -107,21 +126,51 @@ export async function render(el) {
   const visibleTabs = () => TABS.filter(t =>
     !S.loaded[t.k] || loadedCount(t.k) > 0 || t.k === S.cur);
 
+  /**
+   * 绘制 TAB 栏。
+   * 可见集合没变时**就地更新**计数与选中态——整块重建会让 `.on` 上那条指示条的
+   * cmTabIn 动画被反复重播（后台补齐计数时尤其明显，看起来像整条 TAB 栏在闪）。
+   */
   function renderTabs() {
     const box = resultBox.querySelector('#srchTabs');
     if (!box) return;
-    box.innerHTML = visibleTabs().map(t => {
+    const list = visibleTabs();
+    const sig = list.map(t => t.k).join(',');
+    if (box.dataset.sig === sig && box.children.length === list.length) {
+      list.forEach((t, i) => {
+        const btn = box.children[i];
+        btn.classList.toggle('on', t.k === S.cur);
+        const n = tabCount(t.k);
+        const badge = btn.querySelector('i');
+        if (n === '') { if (badge) badge.remove(); }
+        else if (badge) { badge.textContent = n; }
+        else { btn.insertAdjacentHTML('beforeend', `<i>${n}</i>`); }
+      });
+      return;
+    }
+    box.dataset.sig = sig;
+    box.innerHTML = list.map(t => {
       const n = tabCount(t.k);
       return `<button class="cm-srchtab${t.k === S.cur ? ' on' : ''}" data-k="${t.k}">${t.label}${n !== '' ? `<i>${n}</i>` : ''}</button>`;
     }).join('');
     box.querySelectorAll('.cm-srchtab').forEach(b => { b.onclick = () => selectTab(b.dataset.k); });
   }
 
-  /** 「显示更多」：追加一批（沿用 square.js 的按钮与进度写法）。 */
-  function moreButton(t) {
+  /** 「显示更多」按钮（沿用 square.js 的按钮与进度写法）。 */
+  function moreButtonHTML(t) {
     if (!S.more[t]) return '';
     const shown = loadedCount(t), total = S.total[t] || shown;
-    return `<div class="cm-sq-more"><mdui-button variant="tonal" data-more="${t}">显示更多（${shown}/${total}）</mdui-button></div>`;
+    return `<div class="cm-sq-more" data-more-wrap="${t}"><mdui-button variant="tonal" data-more="${t}">显示更多（${shown}/${total}）</mdui-button></div>`;
+  }
+
+  /** 把底部按钮换到面板末尾（并重新绑定）。追加后计数变了，整块替换最简单。 */
+  function refreshMore(t) {
+    const p = panel();
+    if (!p) return;
+    p.querySelectorAll('[data-more-wrap]').forEach(x => x.remove());
+    const html = moreButtonHTML(t);
+    if (html) p.insertAdjacentHTML('beforeend', html);
+    bindMore(t);
   }
 
   function bindMore(t) {
@@ -133,11 +182,12 @@ export async function render(el) {
       btn.disabled = true;
       btn.textContent = '加载中…';
       const my = seq;
+      const before = loadedCount(t);           // 追加前的条数 = 本次渲染的起点
       try {
-        await load(t, loadedCount(t));
+        await load(t, before);
         if (my !== seq) return;
         renderTabs();
-        renderPanel();
+        renderPanel(before, { items: true });  // 只画新增的那一批
       } catch (e) {
         if (my !== seq) return;
         toast('加载失败：' + e.message);
@@ -149,28 +199,45 @@ export async function render(el) {
     };
   }
 
-  /* ---------- 各类型面板 ---------- */
+  /* ---------- 各类型面板 ----------
+     约定：from = 0 建容器并画第一批；from > 0 只追加新增条目。
+     items 为真时才给条目加渐入动画（切 TAB 由面板整体动画负责，避免双重动效）。 */
 
-  function renderSongPanel() {
-    panel().innerHTML = `<div class="cm-sec-head"><h2>单曲</h2>
-      <span class="cm-sec-more" id="addAll"><span class="material-icons-outlined">playlist_add</span> 全部收入歌单</span></div>
-      <div id="songList"></div>${moreButton('song')}`;
-    renderSongList(panel().querySelector('#songList'), S.items.song || [], {
-      onPlay: i => player.playList(S.items.song, i),
-    });
-    panel().querySelector('#addAll').onclick = () => addToPlaylist(S.items.song || []);
-    bindMore('song');
+  async function renderSongPanel(from, items) {
+    const p = panel();
+    if (!from) {
+      p.innerHTML = `<div class="cm-sec-head"><h2>单曲</h2>
+        <span class="cm-sec-more" id="addAll"><span class="material-icons-outlined">playlist_add</span> 全部收入歌单</span></div>
+        <div id="songList"></div>`;
+      p.querySelector('#addAll').onclick = () => addToPlaylist(S.items.song || []);
+      refreshMore('song');
+    }
+    const rows = await renderSongList(p.querySelector('#songList'), S.items.song || [],
+      { from, onPlay: i => player.playList(S.items.song, i) });
+    // 追加时动画新增行；首次出结果时也渐入（那时没有面板整体动画）
+    if (from) { animateIn(rows); refreshMore('song'); }
+    else if (items) animateIn(rows);
   }
 
-  function renderAlbumPanel() {
-    panel().innerHTML = `<div class="cm-sec-head"><h2>专辑</h2><span class="cm-sec-sub">点击整专辑播放</span></div>
-      <div class="cm-hscroll cm-album-row">${(S.items.album || []).map(a => `
-        <div class="cm-card cm-album-card" data-id="${a.id}" title="播放专辑「${esc(a.name)}」">
-          <img src="${esc(a.pic)}?param=300y300" loading="lazy" onerror="this.classList.add('none')">
-          <div class="cm-card-name">${esc(a.name)}</div>
-          <div class="cm-card-sub">${esc(a.artist)}</div>
-        </div>`).join('')}</div>${moreButton('album')}`;
-    panel().querySelectorAll('.cm-album-card').forEach(c => {
+  function renderAlbumPanel(from, items) {
+    const p = panel();
+    const all = S.items.album || [];
+    if (!from) {
+      p.innerHTML = `<div class="cm-sec-head"><h2>专辑</h2><span class="cm-sec-sub">点击整专辑播放</span></div>
+        <div class="cm-hscroll cm-album-row" id="srchAlbum"></div>`;
+      refreshMore('album');
+    }
+    const box = p.querySelector('#srchAlbum');
+    const added = all.slice(from);
+    if (!added.length) return;
+    box.insertAdjacentHTML('beforeend', added.map(a => `
+      <div class="cm-card cm-album-card" data-id="${a.id}" title="播放专辑「${esc(a.name)}」">
+        <img src="${esc(a.pic)}?param=300y300" loading="lazy" onerror="this.classList.add('none')">
+        <div class="cm-card-name">${esc(a.name)}</div>
+        <div class="cm-card-sub">${esc(a.artist)}</div>
+      </div>`).join(''));
+    const els = [...box.querySelectorAll('.cm-album-card')].slice(-added.length);
+    els.forEach(c => {
       c.onclick = async () => {
         toast('正在打开专辑…');
         try {
@@ -180,49 +247,83 @@ export async function render(el) {
         } catch (e) { toast('打开专辑失败：' + e.message); }
       };
     });
-    bindMore('album');
+    if (from) { animateIn(els); refreshMore('album'); }
+    else if (items) animateIn(els);
   }
 
-  function renderArtistPanel() {
-    panel().innerHTML = `<div class="cm-sec-head"><h2>歌手</h2><span class="cm-sec-sub">点击查看全部作品</span></div>
-      <div class="cm-hscroll cm-artist-row">${(S.items.artist || []).map(a => `
-        <div class="cm-artist-card" data-id="${a.id}">
-          <div class="cm-artist-ava">${a.pic ? `<img src="${esc(a.pic)}?param=120y120" loading="lazy">` : '<span class="material-icons-outlined">person</span>'}</div>
-          <div class="cm-artist-name">${esc(a.name)}</div>
-          ${a.alias ? `<div class="cm-artist-sub">${esc(a.alias)}</div>` : ''}
-        </div>`).join('')}</div>${moreButton('artist')}`;
-    panel().querySelectorAll('.cm-artist-card').forEach(c => {
+  function renderArtistPanel(from, items) {
+    const p = panel();
+    const all = S.items.artist || [];
+    if (!from) {
+      p.innerHTML = `<div class="cm-sec-head"><h2>歌手</h2><span class="cm-sec-sub">点击查看全部作品</span></div>
+        <div class="cm-hscroll cm-artist-row" id="srchArtist"></div>`;
+      refreshMore('artist');
+    }
+    const box = p.querySelector('#srchArtist');
+    const added = all.slice(from);
+    if (!added.length) return;
+    box.insertAdjacentHTML('beforeend', added.map(a => `
+      <div class="cm-artist-card" data-id="${a.id}">
+        <div class="cm-artist-ava">${a.pic ? `<img src="${esc(a.pic)}?param=120y120" loading="lazy">` : '<span class="material-icons-outlined">person</span>'}</div>
+        <div class="cm-artist-name">${esc(a.name)}</div>
+        ${a.alias ? `<div class="cm-artist-sub">${esc(a.alias)}</div>` : ''}
+      </div>`).join(''));
+    const els = [...box.querySelectorAll('.cm-artist-card')].slice(-added.length);
+    els.forEach(c => {
       c.onclick = () => { location.hash = `#/artist/${c.dataset.id}`; };
     });
-    bindMore('artist');
+    if (from) { animateIn(els); refreshMore('artist'); }
+    else if (items) animateIn(els);
   }
 
   const fmtPlay = n => n >= 100000000 ? (n / 100000000).toFixed(1) + ' 亿'
     : n >= 10000 ? Math.round(n / 10000) + ' 万' : String(n || 0);
 
-  function renderPlaylistPanel() {
-    panel().innerHTML = `<div class="cm-sec-head"><h2>歌单</h2><span class="cm-sec-sub">点击查看歌单内容</span></div>
-      <div class="cm-plgrid" id="srchPls">${(S.items.playlist || []).map(p => `
-        <div class="cm-plcard" data-id="${p.id}">
-          <div class="cm-plcover">${p.pic ? `<img src="${esc(p.pic)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''}<span class="material-icons-outlined">queue_music</span></div>
-          <div class="cm-plname">${esc(p.name)}</div>
-          <div class="cm-plsub">${p.trackCount} 首 · ${fmtPlay(p.playCount)}播放</div>
-        </div>`).join('')}</div>${moreButton('playlist')}`;
-    panel().querySelectorAll('#srchPls .cm-plcard').forEach(c => {
+  function renderPlaylistPanel(from, items) {
+    const p = panel();
+    const all = S.items.playlist || [];
+    if (!from) {
+      p.innerHTML = `<div class="cm-sec-head"><h2>歌单</h2><span class="cm-sec-sub">点击查看歌单内容</span></div>
+        <div class="cm-plgrid" id="srchPls"></div>`;
+      refreshMore('playlist');
+    }
+    const box = p.querySelector('#srchPls');
+    const added = all.slice(from);
+    if (!added.length) return;
+    box.insertAdjacentHTML('beforeend', added.map(pl => `
+      <div class="cm-plcard" data-id="${pl.id}">
+        <div class="cm-plcover">${pl.pic ? `<img src="${esc(pl.pic)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''}<span class="material-icons-outlined">queue_music</span></div>
+        <div class="cm-plname">${esc(pl.name)}</div>
+        <div class="cm-plsub">${pl.trackCount} 首 · ${fmtPlay(pl.playCount)}播放</div>
+      </div>`).join(''));
+    const els = [...box.querySelectorAll('.cm-plcard')].slice(-added.length);
+    els.forEach(c => {
       c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.id}`; };
     });
-    bindMore('playlist');
+    if (from) { animateIn(els); refreshMore('playlist'); }
+    else if (items) animateIn(els);
   }
 
   const RENDERERS = { song: renderSongPanel, album: renderAlbumPanel, artist: renderArtistPanel, playlist: renderPlaylistPanel };
 
-  function renderPanel() {
+  function renderPanel(from = 0, { items = false } = {}) {
     const fn = RENDERERS[S.cur];
-    if (fn) fn();
+    if (fn) fn(from, items);
+  }
+
+  /** 切 TAB：内容按切换方向轻微横移 + 淡入（左右顺序决定方向）。 */
+  function animatePanel(dir) {
+    const p = panel();
+    if (!dir || !p || reduceMotion() || !p.animate) return;
+    p.animate(
+      [{ opacity: 0, transform: `translateX(${dir * 16}px)` }, { opacity: 1, transform: 'none' }],
+      { duration: 230, easing: EASE });
   }
 
   async function selectTab(k) {
-    if (!S) return;
+    if (!S || S.cur === k) return;
+    const order = TABS.map(t => t.k);
+    const dir = order.indexOf(k) > order.indexOf(S.cur) ? 1 : -1;
     S.cur = k;
     renderTabs();
     if (!S.loaded[k]) {
@@ -239,7 +340,8 @@ export async function render(el) {
       if (my !== seq) return;
       renderTabs();
     }
-    renderPanel();
+    renderPanel(0, { items: false });
+    animatePanel(dir);
   }
 
   function renderShell() {
@@ -247,7 +349,7 @@ export async function render(el) {
       <div class="cm-srchtabs" id="srchTabs"></div>
       <div id="srchPanel"></div>`;
     renderTabs();
-    renderPanel();
+    renderPanel(0, { items: true });   // 首次出结果：条目阶梯渐入
   }
 
   const anyResult = () => TABS.some(t => loadedCount(t.k) > 0);
