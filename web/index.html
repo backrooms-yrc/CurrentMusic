@@ -4,6 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>CurrentMusic</title>
+  <!-- UI 预设：在样式表之前把皮肤属性打到 <html> 上，避免切到非默认皮肤时闪一下默认样式。
+       只读 localStorage，出错静默（默认即原样式）。 -->
+  <script>
+    try {
+      var p = localStorage.getItem('cm.uiPreset');
+      if (p && p !== 'md3') document.documentElement.setAttribute('data-ui-preset', p);
+    } catch (e) { /* 忽略 */ }
+  </script>
   <link rel="stylesheet" href="app.css">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }

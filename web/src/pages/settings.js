@@ -4,6 +4,7 @@ import { api, settings, auth } from '../api.js';
 import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel } from '../ui.js';
 import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
+import { UI_PRESETS, uiPresetKey, uiPresetName, setUiPreset } from '../uipreset.js';
 
 export function applyTheme() {
   const root = document.documentElement;
@@ -31,6 +32,7 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="scheme"><span class="material-icons-outlined">palette</span>配色方案<i>${esc((COLOR_SCHEMES.find(s => s.key === getColorSchemeKey()) || {}).label || '动态取色')}</i></div>
       <div class="cm-setting" id="theme"><span class="material-icons-outlined">dark_mode</span>外观主题<i>${themeName()}</i></div>
+      <div class="cm-setting" id="uiPreset"><span class="material-icons-outlined">auto_awesome</span>界面风格<i>${esc(uiPresetName())}</i></div>
     </div>
     <div class="cm-sec-head"><h2>播放与下载</h2></div>
     <div class="cm-setting-list">
@@ -105,6 +107,29 @@ export async function render(el) {
         ch.onclick = () => {
           setColorSchemeKey(ch.dataset.k);
           toast(`配色：${ch.textContent.trim()}`);
+          diag.open = false;
+          render(el);
+        };
+      });
+    }, 0);
+  };
+  el.querySelector('#uiPreset').onclick = () => {
+    const cur = uiPresetKey();
+    const diag = mdui.dialog({
+      headline: '界面风格',
+      body: `<div class="cm-more">
+        <div class="cm-more-chips">${UI_PRESETS.map(p =>
+          `<mdui-chip ${p.key === cur ? 'selected' : ''} data-k="${p.key}"><i class="cm-swatch ${p.swatch}"></i>${p.name}</mdui-chip>`).join('')}</div>
+        <div class="cm-more-s" style="margin-top:10px">${esc((UI_PRESETS.find(p => p.key === cur) || {}).desc || '')}</div>
+        <div class="cm-more-s" style="margin-top:6px">「液体玻璃」为半透明玻璃质感（大圆角 + 柔和光影）；旧版系统会自动降级为纯色，不影响使用。默认保持原样式。</div>
+      </div>`,
+      actions: [{ text: '关闭' }],
+    });
+    setTimeout(() => {
+      diag.querySelectorAll('mdui-chip').forEach(ch => {
+        ch.onclick = () => {
+          setUiPreset(ch.dataset.k);
+          toast(`界面风格：${ch.textContent.trim()}`);
           diag.open = false;
           render(el);
         };

@@ -52,6 +52,27 @@ await build({
   logLevel: 'info',
 });
 
-// 图标字体随 css import 已由 esbuild 拷到 OUT；index.html 直接复制
-await cp('index.html', `${OUT}/index.html`);
+// 图标字体随 css import 已由 esbuild 拷到 OUT。
+//
+// index.html 里的 app.css / app.js 加**内容指纹**（?v=<hash>）：
+// 这两个文件被 CDN/WebView 长时间强缓存，不加指纹时发版会出现
+// 「新 index.html + 旧 app.css/js」混搭，表现为「设置改了却看不到变化」。
+// 加指纹后内容一变 URL 就变，既不牺牲缓存也不需要刷 CDN。
+// （App 内用虚拟 https 源 https://cm.local/ + shouldInterceptRequest 供 assets，
+//   查询串被安全忽略，file:// 的兼容性问题不存在。）
+{
+  const [css, js] = await Promise.all([
+    readFile(`${OUT}/app.css`, 'utf8').catch(() => ''),
+    readFile(`${OUT}/app.js`, 'utf8'),
+  ]);
+  const stamp = createHash('sha1').update(css).update(js).digest('hex').slice(0, 10);
+  let html = await readFile('index.html', 'utf8');
+  const before = html;
+  html = html
+    .replace(/(href="app\.css)(\?[^"]*)?(")/, `$1?v=${stamp}$3`)
+    .replace(/(src="app\.js)(\?[^"]*)?(")/, `$1?v=${stamp}$3`);
+  if (html === before) console.warn('⚠ index.html 未匹配到 app.css/app.js 引用，指纹未写入');
+  await writeFile(`${OUT}/index.html`, html);
+  console.log(`index.html → 资源指纹 v=${stamp}`);
+}
 console.log('web 构建完成 →', OUT);

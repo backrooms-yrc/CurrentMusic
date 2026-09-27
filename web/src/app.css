@@ -1413,3 +1413,383 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-artist-grid-compact { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 12px 6px; }
 .cm-sec-more i { font-style: normal; opacity: .6; margin-left: 4px; }
 .cm-empty-sub { font-size: 11px; opacity: .6; }
+
+/* ==========================================================================
+   UI 预设：液体玻璃（Liquid Glass）  —— 可选皮肤，默认不启用
+   --------------------------------------------------------------------------
+   设计语言：多层半透明玻璃 + 高光内描边 + 大模糊 + 大圆角 + 柔和投影。
+   参考 Apple 的 Liquid Glass 质感（GitHub 上相关实现 6.3k★ 量级）。
+
+   作用域：全部规则限定在 html[data-ui-preset="glass"] 之下。
+   默认（无该属性）时一条都不匹配 —— 原 UI 完全不受影响，可随时切回。
+
+   两个关键实现点：
+   1) 可降级：backdrop-filter 需要较新内核（旧 WebView 不支持），
+      故背景先用较实的 rgba 兜底，再用 @supports 切到低透明度 + 模糊。
+      旧机型得到「干净的半透明卡片」，新机型得到真正的毛玻璃。
+   2) 尊重用户配色：用户选过配色方案时沿用其强调色（仅做渐变），
+      没选过则用玻璃模式自带的蓝紫强调色。判断方式见 :not([style*=...])。
+   ========================================================================== */
+
+/* ---- 1. 代币：玻璃表面 / 描边 / 光影 ---- */
+html[data-ui-preset="glass"] {
+  --gls-bg: #e9edf6;
+  --gls-fg: #0b1220;
+  --gls-fg2: rgba(11, 18, 32, .58);
+  --gls-border: rgba(255, 255, 255, .72);
+  --gls-sep: rgba(120, 140, 180, .18);
+  --gls-card: rgba(255, 255, 255, .92);          /* 不支持模糊时的兜底（较实） */
+  --gls-shadow: 0 10px 28px rgba(28, 41, 64, .13), inset 0 1px 0 rgba(255, 255, 255, .9);
+  --gls-shadow-sm: 0 4px 14px rgba(28, 41, 64, .10), inset 0 1px 0 rgba(255, 255, 255, .8);
+  --gls-filter: none;                             /* 不支持时保持 none */
+  --gls-r: 18px;                                  /* 大圆角 */
+  --gls-r-sm: 14px;
+
+  /* MDUI 表面代币（对话框/按钮等 Shadow DOM 组件只能靠代币着色）
+     !important 用于压过 mdui.setColorScheme 写在 <html> 上的内联变量 */
+  --mdui-color-background-light: 233,237,246 !important;
+  --mdui-color-background-dark: 5,7,13 !important;
+  --mdui-color-on-background-light: 11,18,32 !important;
+  --mdui-color-on-background-dark: 242,245,250 !important;
+  --mdui-color-surface-light: 255,255,255 !important;
+  --mdui-color-surface-dark: 16,19,27 !important;
+  --mdui-color-surface-dim-light: 233,237,246 !important;
+  --mdui-color-surface-dim-dark: 5,7,13 !important;
+  --mdui-color-surface-bright-light: 255,255,255 !important;
+  --mdui-color-surface-bright-dark: 40,46,60 !important;
+  --mdui-color-surface-container-lowest-light: 255,255,255 !important;
+  --mdui-color-surface-container-lowest-dark: 12,15,22 !important;
+  --mdui-color-surface-container-low-light: 244,247,253 !important;
+  --mdui-color-surface-container-low-dark: 20,24,33 !important;
+  --mdui-color-surface-container-light: 246,248,253 !important;
+  --mdui-color-surface-container-dark: 26,31,42 !important;
+  --mdui-color-surface-container-high-light: 250,252,255 !important;
+  --mdui-color-surface-container-high-dark: 32,38,50 !important;
+  --mdui-color-surface-container-highest-light: 235,240,250 !important;
+  --mdui-color-surface-container-highest-dark: 42,49,63 !important;
+  --mdui-color-surface-variant-light: 235,240,250 !important;
+  --mdui-color-surface-variant-dark: 42,49,63 !important;
+  --mdui-color-on-surface-light: 11,18,32 !important;
+  --mdui-color-on-surface-dark: 242,245,250 !important;
+  --mdui-color-on-surface-variant-light: 90,102,124 !important;
+  --mdui-color-on-surface-variant-dark: 168,180,200 !important;
+  --mdui-color-outline-light: 196,206,224 !important;
+  --mdui-color-outline-dark: 74,86,106 !important;
+  --mdui-color-outline-variant-light: 220,228,240 !important;
+  --mdui-color-outline-variant-dark: 52,61,76 !important;
+  --mdui-color-inverse-surface-light: 24,30,42 !important;
+  --mdui-color-inverse-surface-dark: 242,245,250 !important;
+  --mdui-color-inverse-on-surface-light: 242,245,250 !important;
+  --mdui-color-inverse-on-surface-dark: 24,30,42 !important;
+  --mdui-color-secondary-light: 236,240,249 !important;
+  --mdui-color-secondary-dark: 42,49,63 !important;
+  --mdui-color-on-secondary-light: 24,30,42 !important;
+  --mdui-color-on-secondary-dark: 242,245,250 !important;
+  --mdui-color-secondary-container-light: 236,240,249 !important;
+  --mdui-color-secondary-container-dark: 42,49,63 !important;
+  --mdui-color-on-secondary-container-light: 24,30,42 !important;
+  --mdui-color-on-secondary-container-dark: 242,245,250 !important;
+  --mdui-color-error-light: 240,71,84 !important;
+  --mdui-color-error-dark: 214,60,74 !important;
+  --mdui-color-on-error-light: 255,255,255 !important;
+  --mdui-color-on-error-dark: 255,255,255 !important;
+  --mdui-color-error-container-light: 255,228,231 !important;
+  --mdui-color-error-container-dark: 96,24,33 !important;
+  --mdui-color-on-error-container-light: 96,24,33 !important;
+  --mdui-color-on-error-container-dark: 255,228,231 !important;
+
+  /* 形状：玻璃模式整体更圆 */
+  --mdui-shape-corner-extra-small: .375rem;
+  --mdui-shape-corner-small: .625rem;
+  --mdui-shape-corner-medium: .875rem;
+  --mdui-shape-corner-large: 1.125rem;
+  --mdui-shape-corner-extra-large: 1.5rem;
+  --cm-radius: 18px;
+}
+
+html[data-ui-preset="glass"].mdui-theme-dark {
+  --gls-bg: #05070d;
+  --gls-fg: #f2f5fa;
+  --gls-fg2: rgba(242, 245, 250, .6);
+  --gls-border: rgba(255, 255, 255, .14);
+  --gls-sep: rgba(255, 255, 255, .10);
+  --gls-card: rgba(24, 29, 40, .82);              /* 兜底（较实） */
+  --gls-shadow: 0 10px 30px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .18);
+  --gls-shadow-sm: 0 4px 16px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .14);
+}
+
+/* 支持毛玻璃的内核：降透明度 + 开模糊（旧内核自动跳过） */
+@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  html[data-ui-preset="glass"] {
+    --gls-filter: blur(22px) saturate(180%);
+    --gls-card: rgba(255, 255, 255, .58);
+  }
+  html[data-ui-preset="glass"].mdui-theme-dark {
+    --gls-card: rgba(255, 255, 255, .07);
+  }
+}
+
+/* ---- 2. 强调色：用户没选过配色时用玻璃模式的蓝紫 ---- */
+html[data-ui-preset="glass"]:not([style*="--cm-primary"]) { --cm-primary: #0a84ff; }
+html[data-ui-preset="glass"].mdui-theme-dark:not([style*="--cm-primary"]) { --cm-primary: #4d9bff; }
+/* 主色代币（MDUI 组件用）：未选配色时给同色系三元组 */
+html[data-ui-preset="glass"]:not([style*="--mdui-color-primary-light"]) {
+  --mdui-color-primary-light: 10,132,255 !important;
+  --mdui-color-on-primary-light: 255,255,255 !important;
+  --mdui-color-primary-container-light: 224,238,255 !important;
+  --mdui-color-on-primary-container-light: 4,58,116 !important;
+  --mdui-color-primary-dark: 77,155,255 !important;
+  --mdui-color-on-primary-dark: 4,20,40 !important;
+  --mdui-color-primary-container-dark: 16,48,88 !important;
+  --mdui-color-on-primary-container-dark: 214,232,255 !important;
+}
+
+/* ---- 3. 页面底色：给玻璃一点「可折射」的东西 ---- */
+html[data-ui-preset="glass"] body {
+  background:
+    radial-gradient(120% 78% at 8% 0%, rgba(120, 160, 255, .38), transparent 62%),
+    radial-gradient(120% 78% at 92% 8%, rgba(255, 150, 220, .30), transparent 58%),
+    radial-gradient(120% 80% at 50% 100%, rgba(120, 255, 224, .22), transparent 60%),
+    var(--gls-bg) !important;
+  color: var(--gls-fg) !important;
+}
+html[data-ui-preset="glass"].mdui-theme-dark body,
+html[data-ui-preset="glass"] .mdui-theme-dark body {
+  background:
+    radial-gradient(120% 78% at 8% 0%, rgba(58, 108, 255, .40), transparent 62%),
+    radial-gradient(120% 78% at 92% 8%, rgba(176, 60, 210, .32), transparent 58%),
+    radial-gradient(120% 80% at 50% 100%, rgba(20, 200, 180, .18), transparent 60%),
+    var(--gls-bg) !important;
+  color: var(--gls-fg) !important;
+}
+
+/* ---- 4. 顶栏 / 底栏 / 迷你播放条：玻璃条 ---- */
+html[data-ui-preset="glass"] #topbar,
+html[data-ui-preset="glass"] #topbar.scrolled {
+  background: var(--gls-card) !important;
+  border-bottom: 1px solid var(--gls-border);
+  box-shadow: none !important;
+  -webkit-backdrop-filter: var(--gls-filter);
+  backdrop-filter: var(--gls-filter);
+}
+html[data-ui-preset="glass"] #bottomNav {
+  background: var(--gls-card) !important;
+  border-top: 1px solid var(--gls-border) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: var(--gls-filter);
+  backdrop-filter: var(--gls-filter);
+}
+html[data-ui-preset="glass"] .cm-mini-inner {
+  background: var(--gls-card) !important;
+  border: 1px solid var(--gls-border);
+  border-radius: var(--gls-r);
+  box-shadow: var(--gls-shadow) !important;
+  -webkit-backdrop-filter: var(--gls-filter);
+  backdrop-filter: var(--gls-filter);
+}
+
+/* ---- 5. 卡片 / 面板：玻璃片 ---- */
+html[data-ui-preset="glass"] .cm-quick,
+html[data-ui-preset="glass"] .cm-setting-list,
+html[data-ui-preset="glass"] .cm-login-tip,
+html[data-ui-preset="glass"] .cm-bindbox,
+html[data-ui-preset="glass"] .cm-acard,
+html[data-ui-preset="glass"] .cm-roomcard,
+html[data-ui-preset="glass"] .cm-rnow,
+html[data-ui-preset="glass"] .cm-ucard,
+html[data-ui-preset="glass"] .cm-up-stats > div,
+html[data-ui-preset="glass"] .cmt-be,
+html[data-ui-preset="glass"] .upd-log,
+html[data-ui-preset="glass"] .upd-src,
+html[data-ui-preset="glass"] .cm-hot,
+html[data-ui-preset="glass"] .cm-hist,
+html[data-ui-preset="glass"] .cm-decor-bar,
+html[data-ui-preset="glass"] .cm-sq-stats,
+html[data-ui-preset="glass"] .cm-cast-item,
+html[data-ui-preset="glass"] .cm-cast-now,
+html[data-ui-preset="glass"] .cm-pl-pick-item {
+  background: var(--gls-card) !important;
+  border: 1px solid var(--gls-border);
+  border-radius: var(--gls-r);
+  box-shadow: var(--gls-shadow) !important;
+  -webkit-backdrop-filter: var(--gls-filter);
+  backdrop-filter: var(--gls-filter);
+}
+/* 更轻的玻璃片（小控件） */
+html[data-ui-preset="glass"] .cm-tag,
+html[data-ui-preset="glass"] .cm-decor-count,
+html[data-ui-preset="glass"] .cm-cast-q,
+html[data-ui-preset="glass"] .cm-song-cover,
+html[data-ui-preset="glass"] .cm-artist-ava,
+html[data-ui-preset="glass"] .cm-artist-bigava {
+  background: var(--gls-card) !important;
+  border: 1px solid var(--gls-border);
+  box-shadow: var(--gls-shadow-sm) !important;
+}
+html[data-ui-preset="glass"] .cm-tag { border-radius: 999px; color: var(--gls-fg) !important; }
+html[data-ui-preset="glass"] .cm-tag.admin,
+html[data-ui-preset="glass"] .cm-tag.super {
+  background: linear-gradient(135deg, var(--cm-primary), #5e5ce6) !important;
+  color: #fff !important;
+  border-color: transparent;
+}
+
+/* 占位图 / 骨架：玻璃态浅底，避免 MD3 粉彩与玻璃冲突 */
+html[data-ui-preset="glass"] .sk,
+html[data-ui-preset="glass"] .cm-card img,
+html[data-ui-preset="glass"] .cm-song-pic,
+html[data-ui-preset="glass"] .cm-mini-inner img,
+html[data-ui-preset="glass"] .cm-mini-ph,
+html[data-ui-preset="glass"] .cmt-item img,
+html[data-ui-preset="glass"] .cmt-avaph,
+html[data-ui-preset="glass"] .cm-rnow-cover {
+  background: var(--gls-card) !important;
+  box-shadow: none !important;
+}
+
+/* ---- 6. 选中/悬停：玻璃高光而非色块 ---- */
+html[data-ui-preset="glass"] .cm-song:hover,
+html[data-ui-preset="glass"] .cm-song:active,
+html[data-ui-preset="glass"] .cm-queue-item:active,
+html[data-ui-preset="glass"] .cm-qm-item:active,
+html[data-ui-preset="glass"] .cm-pl-pick-item:active,
+html[data-ui-preset="glass"] .cm-quick:active,
+html[data-ui-preset="glass"] .cm-roomcard:active,
+html[data-ui-preset="glass"] .upd-src.on,
+html[data-ui-preset="glass"] .cm-decor-item.on {
+  background: rgba(255, 255, 255, .5) !important;
+}
+html[data-ui-preset="glass"].mdui-theme-dark .cm-song:hover,
+html[data-ui-preset="glass"].mdui-theme-dark .cm-song:active,
+html[data-ui-preset="glass"].mdui-theme-dark .cm-queue-item:active,
+html[data-ui-preset="glass"].mdui-theme-dark .cm-qm-item:active,
+html[data-ui-preset="glass"].mdui-theme-dark .cm-pl-pick-item:active,
+html[data-ui-preset="glass"].mdui-theme-dark .cm-quick:active,
+html[data-ui-preset="glass"].mdui-theme-dark .cm-roomcard:active,
+html[data-ui-preset="glass"].mdui-theme-dark .upd-src.on,
+html[data-ui-preset="glass"].mdui-theme-dark .cm-decor-item.on {
+  background: rgba(255, 255, 255, .10) !important;
+}
+/* 当前播放行：主色渐变的玻璃高亮 */
+html[data-ui-preset="glass"] .cm-queue-item.cur,
+html[data-ui-preset="glass"] .cm-rq.playing,
+html[data-ui-preset="glass"] .cm-up-now {
+  background: linear-gradient(120deg, rgba(10, 132, 255, .22), rgba(94, 92, 230, .16)) !important;
+  border-radius: var(--gls-r-sm);
+}
+html[data-ui-preset="glass"] .cm-queue-item.cur .q-idx {
+  background: linear-gradient(135deg, var(--cm-primary), #5e5ce6) !important;
+  color: #fff !important;
+}
+
+/* 文字层级：次级信息用统一的冷灰 */
+html[data-ui-preset="glass"] .cm-ubio,
+html[data-ui-preset="glass"] .cm-usub,
+html[data-ui-preset="glass"] .cm-card-sub,
+html[data-ui-preset="glass"] .cm-setting > i,
+html[data-ui-preset="glass"] .cm-empty,
+html[data-ui-preset="glass"] .cm-loading {
+  color: var(--gls-fg2) !important;
+}
+
+/* ---- 7. MDUI 组件：能进 Shadow DOM 的只有代币与 ::part ---- */
+/* 对话框 / 弹出菜单的玻璃面板（::part 需较新内核，旧内核用上面的中性代币） */
+html[data-ui-preset="glass"] mdui-dialog::part(panel),
+html[data-ui-preset="glass"] mdui-menu::part(panel) {
+  background: var(--gls-card) !important;
+  border: 1px solid var(--gls-border);
+  border-radius: 20px !important;
+  box-shadow: var(--gls-shadow) !important;
+  -webkit-backdrop-filter: var(--gls-filter);
+  backdrop-filter: var(--gls-filter);
+}
+/* 主按钮：玻璃模式用蓝紫渐变胶囊 */
+html[data-ui-preset="glass"] mdui-button::part(container) {
+  border-radius: 999px !important;
+}
+html[data-ui-preset="glass"] mdui-button[variant="filled"]::part(container) {
+  background: linear-gradient(135deg, var(--cm-primary), #5e5ce6) !important;
+  box-shadow: 0 6px 18px rgba(90, 120, 255, .32), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+html[data-ui-preset="glass"] mdui-button[variant="tonal"]::part(container) {
+  background: var(--gls-card) !important;
+  border: 1px solid var(--gls-border);
+  box-shadow: var(--gls-shadow-sm) !important;
+}
+/* 顶部动作按钮的点按反馈 */
+html[data-ui-preset="glass"] #topSearch:active,
+html[data-ui-preset="glass"] #topAction:active,
+html[data-ui-preset="glass"] .cm-dl-apk-top,
+html[data-ui-preset="glass"] .cm-auth-apk {
+  background: var(--gls-card) !important;
+  color: var(--gls-fg) !important;
+}
+
+/* ---- 8. 播放页：保留沉浸暗色，但把玻璃质感延伸过去 ---- */
+html[data-ui-preset="glass"] .pl-bg.grad {
+  --g1: linear-gradient(155deg, #0a84ff 0%, #3b2a86 50%, #05070d 100%);
+  --g2: linear-gradient(205deg, #5e5ce6 0%, #0a84ff 55%, #05070d 100%);
+}
+html[data-ui-preset="glass"] .pl-lyric-tools {
+  background: linear-gradient(rgba(5, 7, 13, .85) 30%, transparent) !important;
+}
+html[data-ui-preset="glass"] .pl-lyric-mode,
+html[data-ui-preset="glass"] .cm-plmenu {
+  background: rgba(255, 255, 255, .14) !important;
+  border: 1px solid rgba(255, 255, 255, .18);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+}
+html[data-ui-preset="glass"] .pl-btn.on { color: #9dc7ff !important; }
+html[data-ui-preset="glass"] .cm-ncmbadge {
+  background: linear-gradient(135deg, var(--cm-primary), #5e5ce6) !important;
+  color: #fff !important;
+}
+
+/* ---- 9. 评论区 ---- */
+html[data-ui-preset="glass"] #commentOverlay {
+  background: var(--gls-bg) !important;
+  color: var(--gls-fg) !important;
+}
+html[data-ui-preset="glass"].mdui-theme-dark #commentOverlay,
+html[data-ui-preset="glass"] .mdui-theme-dark #commentOverlay {
+  background: var(--gls-bg) !important;
+}
+html[data-ui-preset="glass"] .cmt-composer,
+html[data-ui-preset="glass"].mdui-theme-dark .cmt-composer {
+  background: var(--gls-card) !important;
+  border-top: 1px solid var(--gls-border);
+  -webkit-backdrop-filter: var(--gls-filter);
+  backdrop-filter: var(--gls-filter);
+}
+html[data-ui-preset="glass"] .cmt-composer input,
+html[data-ui-preset="glass"].mdui-theme-dark .cmt-composer input {
+  background: rgba(255, 255, 255, .5) !important;
+  color: var(--gls-fg) !important;
+  border: 1px solid var(--gls-border);
+  border-radius: 999px;
+}
+html[data-ui-preset="glass"].mdui-theme-dark .cmt-composer input {
+  background: rgba(255, 255, 255, .1) !important;
+}
+html[data-ui-preset="glass"] #cmtReplyBar { background: var(--gls-card) !important; }
+
+/* ---- 10. 头像占位 / 二维码卡 ---- */
+html[data-ui-preset="glass"] .cm-avatar.ph {
+  background: linear-gradient(135deg, rgba(10, 132, 255, .35), rgba(94, 92, 230, .35)) !important;
+}
+html[data-ui-preset="glass"] .cm-qrbox {
+  background: rgba(255, 255, 255, .92) !important;
+  border: 1px solid var(--gls-border);
+  border-radius: var(--gls-r);
+  box-shadow: var(--gls-shadow) !important;
+}
+
+/* ---- 11. 设置页「界面风格」里的色板预览 ---- */
+.cm-swatch.glass {
+  background:
+    radial-gradient(60% 60% at 20% 10%, rgba(120, 160, 255, .95), transparent 70%),
+    radial-gradient(60% 60% at 85% 25%, rgba(255, 150, 220, .9), transparent 70%),
+    linear-gradient(135deg, rgba(255, 255, 255, .85), rgba(210, 225, 255, .8));
+}
+.cm-swatch.md3 { background: linear-gradient(135deg, #6750a4, #d0bcff); }
