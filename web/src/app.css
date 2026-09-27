@@ -1942,13 +1942,8 @@ html[data-ui-preset="frost"] #topbar.scrolled {
   backdrop-filter: var(--frs-filter);
   font-size: 17px; font-weight: 600; letter-spacing: -.012em;
 }
-html[data-ui-preset="frost"] #bottomNav {
-  background: var(--frs-glass) !important;
-  border-top: 1px solid var(--frs-glass-line) !important;
-  box-shadow: none !important;
-  -webkit-backdrop-filter: var(--frs-filter);
-  backdrop-filter: var(--frs-filter);
-}
+/* 底栏：材质在下方「iOS 玻璃栏」小节统一定义（边框需按窄屏/宽屏区分，
+   宽屏时底栏会变成左侧竖栏，加 border-top 会多出一条横线）。 */
 html[data-ui-preset="frost"] .cm-mini-inner {
   background: var(--frs-glass) !important;
   border: 1px solid var(--frs-hair);
@@ -2144,3 +2139,82 @@ html[data-ui-preset="frost"] .cm-qrbox {
     linear-gradient(180deg, rgba(255, 255, 255, .95) 0%, rgba(255, 255, 255, .55) 55%, rgba(242, 243, 247, .9) 100%),
     linear-gradient(135deg, #007aff, #64b5ff);
 }
+
+/* ==========================================================================
+   简约玻璃 · 续：让玻璃栏真的"像 iOS"
+   --------------------------------------------------------------------------
+   默认布局把 #out 的底边停在底栏之上、顶边停在顶栏之下（见 #out 的 top/bottom），
+   于是栏后面永远只有一层纯色 body —— backdrop-filter 没有可折射的内容，
+   玻璃看上去就是一条纯色带。iOS 的做法正相反：滚动内容会**从栏底下穿过**，
+   栏的半透明与模糊才成立。
+
+   因此这里（仅在本预设 + 窄屏下）：
+   1) 让 #out 延伸到屏幕边缘，用 padding 保证内容仍能完整滚出（滚到底最后一项可露全）；
+   2) 标签栏材质按 iOS 调：更淡的底色 + 更细的发丝线；
+   3) 去掉 MD3 的"激活项胶囊"，改为 iOS 的"强调色图标 + 文字"；
+   4) 迷你播放条改成两侧留白的悬浮圆角卡片（Apple Music 的形态）。
+   桌面/Pad（≥900px）是左侧导航栏布局，不在此列，保持原样。
+   ========================================================================== */
+html[data-ui-preset="frost"] {
+  /* iOS 标签栏底色其实相当接近不透明（浅色约 .94、深色约 .8）。
+     这里取 .84/.80：既保留通透与模糊的观感，又保证任何封面滚过时文字都清晰。 */
+  --frs-tabbar: rgba(250, 250, 252, .84);
+  --frs-tabbar-line: rgba(0, 0, 0, .10);
+}
+html[data-ui-preset="frost"].mdui-theme-dark,
+html[data-ui-preset="frost"] .mdui-theme-dark {
+  --frs-tabbar: rgba(18, 19, 24, .80);
+  --frs-tabbar-line: rgba(255, 255, 255, .10);
+}
+
+@media (max-width: 899px) {
+  /* 1) 内容从栏下穿过：延伸到屏幕四边，改用 padding 留出可滚出的空间 */
+  html[data-ui-preset="frost"] #out {
+    top: 0;
+    bottom: 0;
+    padding-top: calc(56px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))) + 14px);
+    padding-bottom: calc(var(--cm-nav-h) + var(--cm-mini-h) + 30px
+      + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+  }
+  html[data-ui-preset="frost"] body.no-mini #out {
+    padding-bottom: calc(var(--cm-nav-h) + 30px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+  }
+}
+
+/* 2)+3) iOS 标签栏：更淡的玻璃 + 强调色激活项（无胶囊）
+   注意：≥900px 时底栏会变成左侧导航栏，那时不能加 border-top
+   （否则竖栏顶上会多一条横线），故边框只写在窄屏媒体查询里。 */
+html[data-ui-preset="frost"] #bottomNav {
+  background: var(--frs-tabbar) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+@media (max-width: 899px) {
+  html[data-ui-preset="frost"] #bottomNav { border-top: 1px solid var(--frs-tabbar-line) !important; }
+}
+@media (min-width: 900px) {
+  /* 宽屏是左侧竖栏：只换上发丝竖线，保持 border-top: none */
+  html[data-ui-preset="frost"] #bottomNav { border-right-color: var(--frs-tabbar-line) !important; }
+}
+html[data-ui-preset="frost"] .navItem.cur .nav-ic::before { opacity: 0 !important; }
+html[data-ui-preset="frost"] .nav-ic { width: auto; height: 30px; border-radius: 0; }
+html[data-ui-preset="frost"] .navItem { font-size: 10px; letter-spacing: .01em; }
+html[data-ui-preset="frost"] .navItem.cur {
+  color: var(--cm-primary) !important;
+  font-weight: 500;
+}
+html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: 23px; }
+
+/* 4) 迷你播放条：两侧留白的悬浮圆角卡片 */
+@media (max-width: 899px) {
+  html[data-ui-preset="frost"] #mini { left: 10px; right: 10px; }
+  html[data-ui-preset="frost"] .cm-mini-inner {
+    border-radius: 16px;
+    border: 1px solid var(--frs-hair);
+  }
+  /* 进度线跟着卡片内缩 */
+  html[data-ui-preset="frost"] .cm-mini-prog { left: 10px; right: 10px; border-radius: 2px; }
+}
+/* 顶栏也让它有内容可折射：滚动时内容从其下穿过，栏的半透明才看得出来 */
+html[data-ui-preset="frost"] #topbar { border-bottom-color: var(--frs-tabbar-line); }
