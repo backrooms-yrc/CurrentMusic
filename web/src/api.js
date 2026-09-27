@@ -205,7 +205,11 @@ export const api = {
   commentDelete: (ncmId, commentId) => call('DELETE', `/ncmbind/comment/${ncmId}`, { body: { commentId }, auth: true }),
 
   // NCM 音源
-  search: (keywords, offset = 0, limit = 30) => call('GET', `/ncm/search?keywords=${encodeURIComponent(keywords)}&offset=${offset}&limit=${limit}`),
+  // type 可指定 'song'/'artist'/'album'/'playlist'：只请求需要的类型。
+  // 上游各类型耗时差异大（歌手曾达 6s+），而搜索页默认展示「单曲」，
+  // 因此按类型分开取，首屏不必等其它类型。省略 type 则返回全部类型（旧行为）。
+  search: (keywords, offset = 0, limit = 30, type = '') => call('GET',
+    `/ncm/search?keywords=${encodeURIComponent(keywords)}&offset=${offset}&limit=${limit}${type ? `&type=${type}` : ''}`),
   album: (id) => call('GET', `/ncm/album?id=${id}`),
   artistAlbums: (id, offset = 0, limit = 30) => call('GET', `/ncm/artist/albums?id=${id}&offset=${offset}&limit=${limit}`),
   artist: (id, offset = 0, limit = 100) => call('GET', `/ncm/artist?id=${id}&offset=${offset}&limit=${limit}`),

@@ -360,7 +360,8 @@ function songPicker(roomId, onDone) {
     timer = setTimeout(async () => {
       box.innerHTML = '<div class="cm-loading small"><mdui-circular-progress></mdui-circular-progress></div>';
       try {
-        const d = await (await import('../api.js')).api.search(kw, 0, 20);
+        // 只取单曲：这里只用 d.songs，没必要让房间点歌去等上游最慢的「歌手」（实测 6s+）
+          const d = await (await import('../api.js')).api.search(kw, 0, 20, 'song');
         const songs = d.songs || [];
         if (!songs.length) { box.innerHTML = '<div class="cm-empty small">没有找到结果</div>'; return; }
         // onPlay 置空：点行行为完全由下方 onclick 接管（避免重复入队）
