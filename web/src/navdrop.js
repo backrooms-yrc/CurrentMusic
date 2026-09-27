@@ -12,9 +12,19 @@
 const DROP_ID = 'navDrop';
 const NAV_SEL = '#bottomNav';
 const ITEM_SEL = '.navItem';
-const PAD_X = 11;          // 水滴比图标+文字外框左右各多出的留白
-const PAD_Y = 5;           // 上下留白
-const MOVE_MS = 460;       // 与 CSS 过渡时长保持一致
+// 尺寸与动效参数取自参考实现（github.com/mikonyaa/LiquidGlassTabBars，
+// 其 LiquidTabBar.swift / LiquidTabBarTheme.swift 把 iOS 26 浮动标签栏的参数写成了默认值）：
+//   · 动画：Animation.spring(response: 0.32, dampingFraction: 0.82)
+//     → 换算成 CSS：时长 0.439s（稳定时间），缓动用 linear() 精确复刻该弹簧
+//   · 尺寸：.frame(minWidth: minimumItemHeight, minHeight: barHeight) + .padding(6)
+//     → 内项高度 = 条高 - 12；且**宽度不得小于自身高度**（这是"太窄"的根因，
+//       原来 52×57 是宽比高还小，看起来是竖条而不是胶囊）
+//   · 选中态左右留白 16（我们按比例取 20，视觉上更像横向胶囊）
+const PAD_X = 20;          // 水滴比「图标 + 文字」外框左右各多出的留白
+const PAD_Y = 6;           // 上下留白（与参考实现一致）
+const MIN_W_RATIO = 1.35;  // 宽度下限 = 高度 × 1.35（参考实现是 ≥1.0，取 1.35 更耐看）
+const STRETCH = 1.05;      // 移动中的轻微拉伸（原来 1.16 太夸张，是"生硬"的来源之一）
+const MOVE_MS = 439;       // 对应 response 0.32 / dampingFraction 0.82 的稳定时间
 
 let drop = null, nav = null;
 let lastX = null, lastW = null;
@@ -44,19 +54,17 @@ function measure() {
   const right = Math.max.apply(null, parts.map(r => r.right));
   const top = Math.min.apply(null, parts.map(r => r.top));
   const bottom = Math.max.apply(null, parts.map(r => r.bottom));
-  // 横向包裹「图标 + 文字」；纵向同样贴合内容，但不超出导航条
-  let h = (bottom - top) + PAD_Y * 2;
-  const maxH = Math.max(0, nr.height - 4);
-  if (h > maxH) h = maxH;
-  let y = (top - nr.top) - PAD_Y;
-  if (y < 2) y = 2;
-  if (y + h > nr.height - 2) y = Math.max(2, nr.height - 2 - h);
-  return {
-    x: left - nr.left - PAD_X,
-    w: (right - left) + PAD_X * 2,
-    h,
-    y,
-  };
+  // 高度取「条内高度」（参考实现：条高 - 2×6 的内边距），保证水滴与胶囊同心
+  const h = Math.max(24, nr.height - PAD_Y * 2);
+  let w = (right - left) + PAD_X * 2;
+  const minW = h * MIN_W_RATIO;          // 宽度下限：不得窄于自身高度（再乘 1.35）
+  if (w < minW) w = minW;
+  const y = (nr.height - h) / 2;
+  // 横向以「图标 + 文字」的中心为基准，超出导航条时贴边收回来
+  let x = (left + right) / 2 - nr.left - w / 2;
+  if (x < 4) x = 4;
+  if (x + w > nr.width - 4) x = Math.max(4, nr.width - 4 - w);
+  return { x, w, h, y };
 }
 
 /** 落位（不带动画）：首次定位、尺寸变化、皮肤刚切过来时用。 */
@@ -71,9 +79,14 @@ function place(noAnim) {
   drop.style.setProperty('--nd-y', m.y.toFixed(1) + 'px');
   drop.style.setProperty('--nd-h', m.h.toFixed(1) + 'px');
   if (noAnim) {
-    // 强制一次回流后再打开过渡，避免"首次也飞过来"
+    // 强制一次回流后再打开过渡，避免"首次也飞过来"。
+    // 注意：不能只靠 requestAnimationFrame —— 后台标签/被节流时 rAF 可能不触发，
+    // 那样 no-anim（transition:none）会一直留着，水滴变成"瞬移"。
+    // 故 rAF 与定时器双保险，谁先到谁生效（移除不存在的 class 是幂等的）。
     void drop.offsetWidth;
-    requestAnimationFrame(() => drop.classList.remove('no-anim'));
+    const clear = () => drop.classList.remove('no-anim');
+    requestAnimationFrame(clear);
+    setTimeout(clear, 60);
   }
   lastX = m.x; lastW = m.w;
 }
@@ -104,7 +117,7 @@ function move() {
   // 拉伸（liquid 的关键）：与位移动画共用同一条过渡；
   // 落位后由 transitionend 复位到 1，并用定时器兜底 —— 过渡即使被中断也不会卡在"被压扁"的状态。
   drop.classList.add('moving');
-  drop.style.setProperty('--nd-sx', '1.16');
+  drop.style.setProperty('--nd-sx', String(STRETCH));
   clearTimeout(animTimer);
   animTimer = setTimeout(resetStretch, MOVE_MS + 160);
 
