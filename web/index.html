@@ -10,6 +10,13 @@
     try {
       var p = localStorage.getItem('cm.uiPreset');
       if (p && p !== 'md3') document.documentElement.setAttribute('data-ui-preset', p);
+      // 个性化（背景图 / 玻璃效果值）也要在样式表之前打上，否则会先闪一帧默认底色
+      var bg = localStorage.getItem('cm.bgImage');
+      if (bg) document.documentElement.style.setProperty('--cm-bg-image', 'url("' + bg.replace(/["\\]/g, '\\$&') + '")');
+      var gb = parseFloat(localStorage.getItem('cm.glassBlur'));
+      if (isFinite(gb)) document.documentElement.style.setProperty('--frs-lens-blur', String(gb));
+      var gt = localStorage.getItem('cm.glassTint');
+      if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
   <link rel="stylesheet" href="app.css">

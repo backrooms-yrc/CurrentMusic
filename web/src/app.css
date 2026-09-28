@@ -26,6 +26,18 @@ body {
   color: var(--mdui-color-on-surface, #1d1b20);
 }
 
+/* 自定义背景图（设置 → 外观 → 背景图片）。
+   未设置时 var 的 fallback 是 none → 等于没写这条，默认外观不受影响；
+   设置后图片铺满视口固定，内容卡片/玻璃浮层浮在其上，配合「玻璃效果」
+   的模糊值可直观看到磨砂/折射的变化。 */
+body {
+  background-image: var(--cm-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
 /* ---------- 顶栏（MD3 top app bar：title-large + 滚动 elevation） ---------- */
 #topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 20;
@@ -656,6 +668,8 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .pl-right { padding: 0 4px; }
   .pl-lyric { max-width: 640px; margin: 0 auto; }
 }
+
+
 .pl-top { width: 100%; display: flex; align-items: center; justify-content: space-between; padding-top: min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))); }
 .pl-quality { font-size: 12px; padding: 4px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.5); cursor: pointer; }
 .pl-btn { cursor: pointer; opacity: .9; padding: 6px; }
@@ -710,6 +724,31 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 22px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
 .pl-transport .material-icons-outlined { font-size: 38px; }
 .pl-transport .huge .material-icons-outlined { font-size: 62px; }
+
+/* ---------- PC / 宽屏（≥900px）：播放器双栏限宽居中 ----------
+   ≥600px 只是把 .pl-body 换成双栏，但既不限宽也不居中：
+   封面块贴左、歌词一路拉到屏幕右缘，1920px 宽下中间一大块空白，松散失衡。
+   这里把顶栏与主体收进同一个限宽容器并水平居中，两栏比例固定，
+   封面随视口/高度放大到合理尺寸（不再永远 320px 顶在左上）。 */
+@media (min-width: 900px) {
+  .pl-page { padding-left: 40px; padding-right: 40px; }
+  .pl-top,
+  .pl-body { width: 100%; max-width: 1020px; margin-left: auto; margin-right: auto; }
+  .pl-body { gap: clamp(48px, 8vw, 110px); align-items: center; }
+  .pl-left { flex: 0 0 min(34vw, 390px); }
+  #plCover { width: min(30vw, 380px, 46vh); height: min(30vw, 380px, 46vh); }
+  .pl-info { max-width: min(30vw, 380px, 46vh); }
+  .pl-right { flex: 1 1 auto; min-width: 0; }
+  .pl-lyric { max-width: 560px; }
+  .pl-transport { margin: 10px 0 18px; }
+  .pl-transport .huge .material-icons-outlined { font-size: 76px; }
+}
+/* 超宽（≥1400px）：封面不再继续放大，多出的空间留给歌词呼吸 */
+@media (min-width: 1400px) {
+  .pl-top,
+  .pl-body { max-width: 1120px; }
+  .pl-lyric { max-width: 620px; }
+}
 /* ---------- 歌词行样式（统一版：只用不影响布局的属性）----------
  * 绝不在 .cur 上改 font-size / font-weight / line-height —— 那会触发整列回流，
  * 滚动目标基于旧布局计算 → 实际位置偏移 → 表现为"跳闪"。
@@ -1918,17 +1957,32 @@ html[data-ui-preset="frost"]:not([style*="--mdui-color-primary-light"]) {
 }
 
 /* ---- 3. 页面底色：只加一层很轻的顶部冷色渐隐（给玻璃条可折射的内容） ---- */
+/* 长写 background-image（不再用简写）：自定义背景图叠在**原有渐变之下**、
+   --frs-bg 纯色挪到 background-color。用户设了背景图后 frost 仍保留自己的
+   顶部渐变层次；没设时 var(--cm-bg-image, none) 为 none，与原来完全一致。
+   （原先是 background 简写 + !important，会把上面通用 body 的
+   background-image 直接抹掉，自定义背景在 frost 下就失效了。） */
 html[data-ui-preset="frost"] body {
-  background:
+  background-image:
     linear-gradient(180deg, rgba(120, 150, 220, .12), rgba(120, 150, 220, 0) 340px),
-    var(--frs-bg) !important;
+    var(--cm-bg-image, none) !important;
+  background-color: var(--frs-bg) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+  background-repeat: no-repeat !important;
   color: var(--frs-fg) !important;
 }
 html[data-ui-preset="frost"].mdui-theme-dark body,
 html[data-ui-preset="frost"] .mdui-theme-dark body {
-  background:
+  background-image:
     linear-gradient(180deg, rgba(70, 110, 200, .16), rgba(70, 110, 200, 0) 340px),
-    var(--frs-bg) !important;
+    var(--cm-bg-image, none) !important;
+  background-color: var(--frs-bg) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+  background-repeat: no-repeat !important;
   color: var(--frs-fg) !important;
 }
 
@@ -2156,14 +2210,23 @@ html[data-ui-preset="frost"] {
   /* ★ 玻璃的两个"手感"旋钮，想调只改这里 ★
      --frs-lens-blur 只写数字（px），由 glass.js 读走拼成 blur(Npx)；
      它同时决定"毛"的程度：越大越磨砂、越小越透亮（折射在边缘仍然保留）。 */
+  /* 以下两个值可由用户在「设置 → 外观 → 玻璃效果」里调（customize.js 写到
+     <html> 的内联 style 上，优先级高于这里的默认值）：
+       --frs-lens-blur  折射透镜的模糊（数字，无单位；glass.js 读走拼成 blur(Npx)）
+       --frs-alpha      玻璃本体的不透明度（0~1） */
   --frs-lens-blur: 4;
-  --frs-lens: blur(12px) saturate(150%);     /* 旧内核兜底；支持折射时由 glass.js 覆写为 url(#…) */
-  --frs-capsule: rgba(255, 255, 255, .58);   /* 玻璃本体（比上一版 .42 更实，不再"太透"） */
+  --frs-alpha: .58;
+  --frs-lens: blur(calc(var(--frs-lens-blur) * 3px)) saturate(150%);   /* 旧内核兜底；支持折射时由 glass.js 覆写为 url(#…) */
+  --frs-capsule: rgba(255, 255, 255, var(--frs-alpha));   /* 玻璃本体 */
   --frs-capsule-line: rgba(255, 255, 255, .62);
   --frs-capsule-float: 0 12px 32px rgba(16, 24, 40, .22);
 }
 html[data-ui-preset="frost"].mdui-theme-dark {
-  --frs-capsule: rgba(30, 32, 40, .52);
+  /* 暗色默认略实一点。注意要覆盖 --frs-alpha 本身而不是写 var(..., .52)——
+     fallback 只在变量"未定义"时生效，基础块已定义为 .58，写了也永远不触发。
+     用户在 <html> 内联设置的值优先级高于这里，会同时作用于亮/暗两种模式。 */
+  --frs-alpha: .52;
+  --frs-capsule: rgba(30, 32, 40, var(--frs-alpha));
   --frs-capsule-line: rgba(255, 255, 255, .28);
   --frs-capsule-float: 0 12px 34px rgba(0, 0, 0, .55);
 }
@@ -2234,6 +2297,12 @@ html[data-ui-preset="frost"].mdui-theme-dark {
    几何由 navdrop.js 写入 --nd-x/-w/-y/-h，本处只负责外观与过渡。 */
 #navDrop { display: none; }
 
+/* 水滴只在**手机形态的底栏**（≤899px）出现。
+   ≥900px 时底栏是 MD3 的左侧纵向导航栏（88px 宽），而水滴的几何
+   （--nd-x 横向位移、宽度 = 高度×1.35、上下留白按条高算）全是按横向条设计的，
+   套在纵栏上会得到一个越界的巨大椭圆盖住整栏 —— 这是
+   「简约玻璃在 Pad/PC 下排版错乱」的主要来源之一。 */
+@media (max-width: 899px) {
 html[data-ui-preset="frost"] #navDrop {
   display: block;
   position: absolute;
@@ -2291,6 +2360,8 @@ html[data-ui-preset="frost"] #navDrop.moving {
     inset 0 -2px 4px rgba(255, 255, 255, .3),
     0 3px 10px rgba(16, 24, 40, .2);
 }
+}   /* ← 结束 @media (max-width:899px)：水滴相关规则到此为止 */
+
 /* 导航项浮在水滴之上；touch-action 交给我们自己处理，
    否则横向滑动会被浏览器当成滚动/手势抢走，就"拖不动"了 */
 html[data-ui-preset="frost"] #bottomNav .navItem {
@@ -2304,11 +2375,29 @@ html[data-ui-preset="frost"] #navDrop.scrubbing {
 /* 拖动经过的项：强调色提示（松手才真正切换） */
 html[data-ui-preset="frost"] #bottomNav .navItem.hover { color: var(--cm-primary); }
 
-/* 激活项：iOS 用强调色图标 + 文字（去掉 MD3 的胶囊指示器） */
-html[data-ui-preset="frost"] .navItem.cur .nav-ic::before { opacity: 0 !important; }
-html[data-ui-preset="frost"] .nav-ic { width: auto; height: 30px; border-radius: 0; }
+/* 激活项：iOS 用强调色图标 + 文字（去掉 MD3 的胶囊指示器）。
+   同样只限 ≤899px：≥900px 的纵栏没有水滴，再把 MD3 指示器抹掉就
+   完全看不出选中项了。 */
+@media (max-width: 899px) {
+  html[data-ui-preset="frost"] .navItem.cur .nav-ic::before { opacity: 0 !important; }
+  html[data-ui-preset="frost"] .nav-ic { width: auto; height: 30px; border-radius: 0; }
+}
 html[data-ui-preset="frost"] .navItem { font-size: 10px; letter-spacing: .01em; }
 html[data-ui-preset="frost"] .navItem.cur { color: var(--cm-primary) !important; font-weight: 500; }
 html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: 23px; }
+
+/* ≥900px：简约玻璃下的左侧导航栏 —— 保留 MD3 纵栏结构与选中指示器，
+   只把表面换成同款玻璃（与内容区的磨砂卡片一致，避免"半边玻璃半边默认"）。 */
+@media (min-width: 900px) {
+  html[data-ui-preset="frost"] #bottomNav {
+    background: var(--frs-capsule) !important;
+    border-right: 0 !important;
+    box-shadow:
+      inset -0.5px 0 0 var(--frs-capsule-line),
+      inset 0 0 0 .5px var(--frs-capsule-line) !important;
+    -webkit-backdrop-filter: var(--frs-lens);
+    backdrop-filter: var(--frs-lens);
+  }
+}
 /* 顶栏同样让内容从其下穿过 */
 html[data-ui-preset="frost"] #topbar { border-bottom-color: var(--frs-tabbar-line); }

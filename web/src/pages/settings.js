@@ -5,6 +5,7 @@ import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSch
 import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
 import { UI_PRESETS, uiPresetKey, uiPresetName, setUiPreset } from '../uipreset.js';
+import { bgImage, glassBlur, glassTint, glassRange, setBgImage, setGlass, resetGlass, applyCustomize } from '../customize.js';
 
 export function applyTheme() {
   const root = document.documentElement;
@@ -33,6 +34,8 @@ export async function render(el) {
       <div class="cm-setting" id="scheme"><span class="material-icons-outlined">palette</span>配色方案<i>${esc((COLOR_SCHEMES.find(s => s.key === getColorSchemeKey()) || {}).label || '动态取色')}</i></div>
       <div class="cm-setting" id="theme"><span class="material-icons-outlined">dark_mode</span>外观主题<i>${themeName()}</i></div>
       <div class="cm-setting" id="uiPreset"><span class="material-icons-outlined">auto_awesome</span>界面风格<i>${esc(uiPresetName())}</i></div>
+        <div class="cm-setting" id="bgImage"><span class="material-icons-outlined">wallpaper</span>背景图片<i>${bgImage() ? '已自定义' : '默认'}</i></div>
+        <div class="cm-setting" id="glassFx"><span class="material-icons-outlined">blur_on</span>玻璃效果<i>${glassTint() == null ? '默认' : '已自定义'}</i></div>
     </div>
     <div class="cm-sec-head"><h2>播放与下载</h2></div>
     <div class="cm-setting-list">
@@ -115,13 +118,18 @@ export async function render(el) {
   };
   el.querySelector('#uiPreset').onclick = () => {
     const cur = uiPresetKey();
+    // 「液体玻璃」暂不对外提供：实现完整保留（uipreset.js / app.css / glass.js），
+    // 想恢复入口删掉 HIDING_PRESETS 里的 'glass' 即可。
+    // 当前正处于该皮肤时仍要显示，否则用户会被锁在里面无法切走。
+    const HIDING_PRESETS = ['glass'];
+    const picks = UI_PRESETS.filter(p => !HIDING_PRESETS.includes(p.key) || p.key === cur);
     const diag = mdui.dialog({
       headline: '界面风格',
       body: `<div class="cm-more">
-        <div class="cm-more-chips">${UI_PRESETS.map(p =>
+        <div class="cm-more-chips">${picks.map(p =>
           `<mdui-chip ${p.key === cur ? 'selected' : ''} data-k="${p.key}"><i class="cm-swatch ${p.swatch}"></i>${p.name}</mdui-chip>`).join('')}</div>
         <div class="cm-more-s" style="margin-top:10px">${esc((UI_PRESETS.find(p => p.key === cur) || {}).desc || '')}</div>
-        <div class="cm-more-s" style="margin-top:6px">「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影；「液体玻璃」整体更通透华丽。旧版系统会自动降级为半透明纯色，不影响使用。默认保持原样式。</div>
+        <div class="cm-more-s" style="margin-top:6px">「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影。旧版系统会自动降级为半透明纯色，不影响使用。默认保持原样式。</div>
       </div>`,
       actions: [{ text: '关闭' }],
     });
@@ -136,6 +144,106 @@ export async function render(el) {
       });
     }, 0);
   };
+  // ---- 背景图片：URL 或本地上传（存 localStorage，dataURL 过大时拒绝）----
+  el.querySelector('#bgImage').onclick = () => {
+    const cur = bgImage();
+    const diag = mdui.dialog({
+      headline: '背景图片',
+      body: `<div class="cm-more">
+        <mdui-text-field id="bgUrl" label="图片地址（https:// 或 http://）" variant="outlined" value="${esc(cur.startsWith('data:') ? '' : cur)}" style="width:100%"></mdui-text-field>
+        <div class="cm-more-row">
+          <div>
+            <div class="cm-more-t">本地上传</div>
+            <div class="cm-more-s">转成数据内联保存，仅适合小图（&lt; 1.5MB）</div>
+          </div>
+          <mdui-button variant="tonal" id="bgPick">选择图片</mdui-button>
+        </div>
+        <div class="cm-more-s" style="margin-top:8px">设置后图片铺满屏幕并固定，内容与玻璃浮层浮在其上；「简约玻璃」下配合玻璃效果可直观看到磨砂变化。留空并点确定即恢复默认背景。</div>
+      </div>`,
+      actions: [
+        { text: '清除', onClick: () => { setBgImage(''); toast('已恢复默认背景'); render(el); } },
+        { text: '取消' },
+        {
+          text: '确定',
+          onClick: () => {
+            const v = (diag.querySelector('#bgUrl')?.value || '').trim();
+            setBgImage(v);
+            toast(v ? '背景图片已应用' : '已恢复默认背景');
+            diag.open = false;
+            render(el);
+          },
+        },
+      ],
+    });
+    setTimeout(() => {
+      const pick = diag.querySelector('#bgPick');
+      if (!pick) return;
+      pick.onclick = () => {
+        const fi = document.createElement('input');
+        fi.type = 'file'; fi.accept = 'image/*';
+        fi.onchange = () => {
+          const f = fi.files && fi.files[0];
+          if (!f) return;
+          if (f.size > 1.5 * 1024 * 1024) { toast('图片过大（' + Math.round(f.size / 1024) + 'KB），请压缩到 1.5MB 以内或改用图片链接'); return; }
+          const r = new FileReader();
+          r.onload = () => {
+            const data = String(r.result);
+            try { localStorage.setItem('cm.bgImage', data); } catch (e) {
+              toast('保存失败：本地存储空间不足，建议改用图片链接'); return;
+            }
+            setBgImage(data);
+            toast('背景图片已应用');
+            diag.open = false;
+            render(el);
+          };
+          r.readAsDataURL(f);
+        };
+        fi.click();
+      };
+    }, 0);
+  };
+
+  // ---- 玻璃效果：模糊 + 浓度，拖动即时生效（关闭时才重建折射透镜）----
+  el.querySelector('#glassFx').onclick = () => {
+    let blur = glassBlur(), tint = glassTint();
+    const tintDef = 0.58;
+    const diag = mdui.dialog({
+      headline: '玻璃效果',
+      body: `<div class="cm-more" style="min-width:min(84vw,340px)">
+        <div class="cm-more-row">
+          <div class="cm-more-t">模糊强度</div>
+          <span id="fxBlurV" style="font-size:12px;opacity:.7">${blur}</span>
+        </div>
+        <input type="range" id="fxBlur" min="${glassRange.BLUR_MIN}" max="${glassRange.BLUR_MAX}" step="0.5" value="${blur}" style="width:100%">
+        <div class="cm-more-row" style="margin-top:10px">
+          <div class="cm-more-t">玻璃浓度</div>
+          <span id="fxTintV" style="font-size:12px;opacity:.7">${tint == null ? '默认' : Math.round(tint * 100) + '%'}</span>
+        </div>
+        <input type="range" id="fxTint" min="${Math.round(glassRange.TINT_MIN * 100)}" max="${Math.round(glassRange.TINT_MAX * 100)}" step="5" value="${Math.round((tint == null ? tintDef : tint) * 100)}" style="width:100%">
+        <div class="cm-more-s" style="margin-top:10px">作用于「简约玻璃」的底栏胶囊、迷你播放条与桌面侧栏。浓度调低更通透、调高更实；模糊影响折射的柔和度。</div>
+      </div>`,
+      actions: [
+        { text: '恢复默认', onClick: () => { resetGlass(); toast('玻璃效果已恢复默认'); diag.open = false; render(el); } },
+        { text: '关闭', onClick: () => { applyCustomize({ rebuild: true }); } },
+      ],
+    });
+    setTimeout(() => {
+      const b = diag.querySelector('#fxBlur'), t = diag.querySelector('#fxTint');
+      const bv = diag.querySelector('#fxBlurV'), tv = diag.querySelector('#fxTintV');
+      if (!b || !t) return;
+      b.oninput = () => {
+        blur = parseFloat(b.value);
+        bv.textContent = String(blur);
+        setGlass({ blur });          // 即时生效（不重建透镜，拖动才流畅）
+      };
+      t.oninput = () => {
+        tint = parseInt(t.value, 10) / 100;
+        tv.textContent = Math.round(tint * 100) + '%';
+        setGlass({ tint });
+      };
+    }, 0);
+  };
+
   el.querySelector('#theme').onclick = () => {
     const order = ['auto', 'light', 'dark'];
     const next = order[(order.indexOf(settings.theme) + 1) % 3];

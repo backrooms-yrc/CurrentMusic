@@ -95,7 +95,11 @@ function place(noAnim) {
 function move() {
   if (!drop || !nav) return;
   const m = measure();
+  // 隐藏（opacity=0）只发生在"无选中项"时（比如停在 #/artist/123 这类非底栏页面）。
+  // **恢复可见必须在成功路径里做**：曾经只写在 place() 里，而从非底栏页面切回
+  // 底栏页面走的是 move()，水滴就一直藏着不出来（表现为"水滴包裹样式消失"）。
   if (!m) { drop.style.opacity = '0'; return; }
+  drop.style.opacity = '';
   const first = lastX === null;
   if (first) { place(true); return; }
 
