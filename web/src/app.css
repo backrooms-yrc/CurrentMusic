@@ -722,13 +722,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: 10px; opacity: .85; }
 .pl-seek input[type=range] { flex: 1; accent-color: var(--cm-primary, #d0bcff); }
 .pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 22px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
-/* 控制舱容器：进度条 + 走带的包裹层。
-   默认皮肤下是**纯布局容器**（透明、无内边距），视觉与包裹前完全一致；
-   frost 皮肤下变成液态玻璃胶囊（见 frost 段）。
-   注意必须复刻 .pl-left 的居中方式：原来这两个元素是 .pl-left
-   （flex column + align-items:center）的直接子元素靠它居中，
-   包进 div 后不复刻的话 .pl-transport 会贴左。 */
-.pl-dock { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .pl-transport .material-icons-outlined { font-size: 38px; }
 .pl-transport .huge .material-icons-outlined { font-size: 62px; }
 
@@ -2140,35 +2133,75 @@ html[data-ui-preset="frost"] .cm-auth-apk {
   color: var(--frs-fg) !important;
 }
 
-/* ---- 8. 播放页：液态玻璃控制舱 + 工具条与角标 ---- */
-/* 控制舱（进度条 + 走带）：浮在模糊封面之上的玻璃胶囊，边缘带折射
-   （透镜由 glass.js 的 TARGETS 生成并写入 --frs-lens）。
-   播放器底是**深色模糊封面**，与亮色底栏不同：这里用低透明白
-   （与 .pl-lyric-mode 等既有深底玻璃一致），否则 .58 的白会把
-   白色歌名/图标衬得没有对比。 */
-html[data-ui-preset="frost"] .pl-dock {
-  position: relative;
-  padding: 14px 20px 8px;
-  margin: 16px 0 6px;
-  border-radius: 28px;
-  background: rgba(255, 255, 255, .13);
-  box-shadow:
-    inset 0 0 0 .5px rgba(255, 255, 255, .28),
-    inset 0 1px 0 .5px rgba(255, 255, 255, .34),
-    0 12px 34px rgba(0, 0, 0, .3);
-  -webkit-backdrop-filter: var(--frs-lens);
-  backdrop-filter: var(--frs-lens);
+/* ---- 8. 播放页：Apple Music 风格（frost）----
+   设计值取自 GitHub 上的 Apple Music 还原项目（可核对）：
+     · samselikoff/ios-apple-music-clone —— 网页版逐像素还原：
+       标题块**左对齐**（歌名 20px/medium、歌手同块淡薰衣草 #A49FC3，
+       右侧 ••• 圆钮）；进度条 3px 细轨（底 #5A526F、填充 #A29CC0、
+       白色圆球）；走带 42px 图标**两端对齐**铺满；底部图标条
+       淡薰衣草 #A29CC0、按下才白。
+     · sebjvidal/Apple-Music-UI-Demo —— UIKit 还原：封面上缘距安全区、
+       控件浮在渐变之上，**没有任何容器盒子**。
+   背景沿用本项目的模糊封面（这正是真 Apple Music 的做法），
+   这里只重排版式与配色；全部限定在 frost 作用域，默认外观不变。 */
+
+/* 容器：子块铺满整行（默认皮肤是 align-items:center，子块会缩成内容宽，
+   space-between 就铺不开、标题也贴不了左）。封面在 .pl-cover-wrap 内部
+   居中——这正是 Apple Music 的排布：封面居中、文字左对齐。 */
+html[data-ui-preset="frost"] .pl-left { align-items: stretch; }
+html[data-ui-preset="frost"] .pl-transport,
+html[data-ui-preset="frost"] .pl-ctrl { width: 100%; }
+
+/* 标题块：左对齐；歌手不再是 12px 小字，而是接近歌号的可读尺寸、淡薰衣草 */
+html[data-ui-preset="frost"] .pl-info { text-align: left; width: 100%; }
+html[data-ui-preset="frost"] .pl-name {
+  font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -.01em;
 }
-html[data-ui-preset="frost"] .pl-dock .pl-transport { margin: 4px 0 6px; }
-html[data-ui-preset="frost"] .pl-dock .pl-seek { padding: 0 2px; }
-/* 音质档位：同款小玻璃药丸 */
-html[data-ui-preset="frost"] .pl-quality {
-  background: rgba(255, 255, 255, .14) !important;
-  border: 0 !important;
-  box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .3);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  backdrop-filter: blur(14px) saturate(160%);
+html[data-ui-preset="frost"] .pl-artist {
+  font-size: 16px; font-weight: 400; margin-top: 2px;
+  color: #a49fc3; opacity: .95;
 }
+html[data-ui-preset="frost"] .pl-artist a { color: #a49fc3; }
+html[data-ui-preset="frost"] .pl-stats { font-size: 11.5px; color: rgba(162, 156, 192, .8); }
+
+/* 进度条：Apple Music 的细轨道 + 淡薰衣草填充 + 白色圆球。
+   原生 range 读不到 value，填充比例由 player-ui.js 写入 --val。 */
+html[data-ui-preset="frost"] .pl-seek { font-size: 11px; color: #a29cc0; }
+html[data-ui-preset="frost"] .pl-seek input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  height: 22px; margin: 0; background: transparent;
+}
+html[data-ui-preset="frost"] .pl-seek input[type=range]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, #a29cc0 var(--val, 0%), rgba(90, 82, 111, .55) var(--val, 0%));
+}
+html[data-ui-preset="frost"] .pl-seek input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%; margin-top: -5px;
+  background: #fff; box-shadow: 0 1px 5px rgba(0, 0, 0, .45);
+}
+
+/* 走带：两端对齐铺满（Apple Music 的标志性排布），图标放大、无任何容器 */
+html[data-ui-preset="frost"] .pl-transport {
+  justify-content: space-between; padding: 0 18px; margin: 10px 0 6px;
+}
+html[data-ui-preset="frost"] .pl-transport .material-icons-outlined { font-size: 38px; }
+html[data-ui-preset="frost"] .pl-transport .huge .material-icons-outlined { font-size: 60px; }
+html[data-ui-preset="frost"] .pl-transport .pl-btn:active { transform: scale(.86); }
+
+/* 图标条（喜欢/加入/评论/模式/队列）：淡薰衣草、两端铺满、激活才白 */
+html[data-ui-preset="frost"] .pl-ctrl {
+  justify-content: space-between; padding: 0 8px; margin: 16px 0 2px;
+}
+html[data-ui-preset="frost"] .pl-ctrl .pl-btn { color: #a29cc0; }
+/* 既有 frost 规则 .pl-btn.on 是 #8fc0ff !important，这里要白必须同样加 !important */
+html[data-ui-preset="frost"] .pl-ctrl .pl-btn.on { color: #fff !important; }
+html[data-ui-preset="frost"] .pl-ctrl .material-icons-outlined { font-size: 22px; }
+
+/* 封面与标题块之间的间距（参考：clone 里封面上 45px 的留白节奏） */
+html[data-ui-preset="frost"] .pl-cover-wrap { margin: 14px 0 18px; }
+
+/* ---- 8. 播放页（原有）：保持沉浸暗色，玻璃只加在工具条与角标 ---- */
 html[data-ui-preset="frost"] .pl-bg.grad {
   --g1: linear-gradient(155deg, #1b3a6b 0%, #0d1a33 52%, #05070d 100%);
   --g2: linear-gradient(205deg, #0a84ff 0%, #123 55%, #05070d 100%);

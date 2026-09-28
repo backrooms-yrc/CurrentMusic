@@ -68,7 +68,12 @@ on('time', () => {
   const t = document.getElementById('plCur'), d = document.getElementById('plDur'), s = document.getElementById('plSeek');
   if (t) t.textContent = fmtDur(pos);
   if (d && dur) d.textContent = fmtDur(dur);
-  if (s && !s.dataset.drag) s.value = dur ? (pos / dur) * 100 : 0;
+  if (s && !s.dataset.drag) {
+    // --val 供 frost 皮肤画「已播放段」的渐变填充（原生 range 无法用 CSS 读 value）
+    const pct = dur ? (pos / dur) * 100 : 0;
+    s.value = pct;
+    s.style.setProperty('--val', pct.toFixed(2) + '%');
+  }
 });
 
 // ---------- 全屏播放页 ----------
@@ -399,12 +404,9 @@ async function openFull() {
             <span class="pl-btn ${player.playMode !== 'order' ? 'on' : ''}" id="plMode" title="${PLAY_MODES.find(x => x.key === player.playMode).label}"><span class="material-icons-outlined">${PLAY_MODES.find(x => x.key === player.playMode).icon}</span></span>
             <span class="pl-btn" id="plQueue" title="当前播放列表"><span class="material-icons-outlined">queue_music</span></span>
           </div>
-          <!-- 液态玻璃控制舱：进度条 + 走带包在一个胶囊里（frost 皮肤下有折射，
-             其余皮肤是透明容器，布局与原先完全一致） -->
-        <div class="pl-dock">
           <div class="pl-seek">
             <span id="plCur">0:00</span>
-            <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0">
+            <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0" style="--val:0%">
             <span id="plDur">0:00</span>
           </div>
           <div class="pl-transport">
@@ -412,7 +414,6 @@ async function openFull() {
             <span class="pl-btn huge" id="plPlay"><span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (player.isPlaying() ? 'pause_circle' : 'play_circle')}</span></span>
             <span class="pl-btn big" id="plNext"><span class="material-icons-outlined">skip_next</span></span>
           </div>
-        </div>
         </div>
         <div class="pl-right">
           <div class="pl-lyric" id="plLyric"></div>
@@ -447,7 +448,10 @@ async function openFull() {
   };
   ov.querySelector('#plQueue').onclick = openQueue;
   const seek = ov.querySelector('#plSeek');
-  seek.oninput = () => { seek.dataset.drag = '1'; };
+  seek.oninput = () => {
+    seek.dataset.drag = '1';
+    seek.style.setProperty('--val', (+seek.value).toFixed(2) + '%');
+  };
   seek.onchange = () => {
     const dur = player.durMs();
     if (dur) player.seek(seek.value / 100 * dur / 1000);
