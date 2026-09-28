@@ -5,6 +5,24 @@ import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, ens
 import { player, on } from './player.js';
 import { castIconHTML, openCastDialog } from './cast.js';
 
+// Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
+// 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
+// 换成 play_arrow/pause 虽无圈但棱角生硬，故直接用 SVG 画出圆角。
+// stroke+linejoin:round 把三角形的角变圆（Apple 的标志性细节），fill=currentColor 随文字色。
+const AM_ICON = {
+  play: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8 5.1v13.8L19.2 12z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.4" y="5" width="3.7" height="14" rx="1.5"/><rect x="13.9" y="5" width="3.7" height="14" rx="1.5"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="5" y="5" width="2.1" height="14" rx="1.05" stroke="none"/><path d="M19 5.6v12.8L9.6 12z"/></svg>',
+  next: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="16.9" y="5" width="2.1" height="14" rx="1.05" stroke="none"/><path d="M5 5.6v12.8L14.4 12z"/></svg>',
+};
+/** 播放键内容：加载中仍用 Material 的沙漏（瞬态提示，不属于走带图标集） */
+function amPlayIcon() {
+  return player.loading
+    ? '<span class="material-icons-outlined">hourglass_empty</span>'
+    : (player.isPlaying() ? AM_ICON.pause : AM_ICON.play);
+}
+
+
 // ---------- 网易云评论表情：方括号码 → emoji ----------
 // NCM 客户端表情在接口里是纯文本码（如 [爱心]/[呲牙]），网页端直接显示会看到
 // 原始方括号。这里映射为语义等价的通用 emoji（选用 Chrome58 即可渲染的早期码位）。
@@ -68,12 +86,7 @@ on('time', () => {
   const t = document.getElementById('plCur'), d = document.getElementById('plDur'), s = document.getElementById('plSeek');
   if (t) t.textContent = fmtDur(pos);
   if (d && dur) d.textContent = fmtDur(dur);
-  if (s && !s.dataset.drag) {
-    // --val 供 frost 皮肤画「已播放段」的渐变填充（原生 range 无法用 CSS 读 value）
-    const pct = dur ? (pos / dur) * 100 : 0;
-    s.value = pct;
-    s.style.setProperty('--val', pct.toFixed(2) + '%');
-  }
+  if (s && !s.dataset.drag) s.value = dur ? (pos / dur) * 100 : 0;
 });
 
 // ---------- 全屏播放页 ----------
@@ -406,13 +419,13 @@ async function openFull() {
           </div>
           <div class="pl-seek">
             <span id="plCur">0:00</span>
-            <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0" style="--val:0%">
+            <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0">
             <span id="plDur">0:00</span>
           </div>
           <div class="pl-transport">
-            <span class="pl-btn big" id="plPrev"><span class="material-icons-outlined">skip_previous</span></span>
-            <span class="pl-btn huge" id="plPlay"><span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (player.isPlaying() ? 'pause_circle' : 'play_circle')}</span></span>
-            <span class="pl-btn big" id="plNext"><span class="material-icons-outlined">skip_next</span></span>
+            <span class="pl-btn big" id="plPrev" title="上一首">${AM_ICON.prev}</span>
+            <span class="pl-btn huge" id="plPlay" title="播放/暂停">${amPlayIcon()}</span>
+            <span class="pl-btn big" id="plNext" title="下一首">${AM_ICON.next}</span>
           </div>
         </div>
         <div class="pl-right">
@@ -448,10 +461,7 @@ async function openFull() {
   };
   ov.querySelector('#plQueue').onclick = openQueue;
   const seek = ov.querySelector('#plSeek');
-  seek.oninput = () => {
-    seek.dataset.drag = '1';
-    seek.style.setProperty('--val', (+seek.value).toFixed(2) + '%');
-  };
+  seek.oninput = () => { seek.dataset.drag = '1'; };
   seek.onchange = () => {
     const dur = player.durMs();
     if (dur) player.seek(seek.value / 100 * dur / 1000);
@@ -703,7 +713,7 @@ on('song', () => {
 on('state', () => {
   if (!player.isPlaying()) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');
-  if (b) b.innerHTML = `<span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (player.isPlaying() ? 'pause_circle' : 'play_circle')}</span>`;
+  if (b) b.innerHTML = amPlayIcon();
   renderMini();
 });
 

@@ -68,6 +68,15 @@ export const player = {
       this.loading = false;
       toast(`「${this.meta.name}」${e.message || '播放失败'}`);
       emit('song');
+      // 解析失败与 audio error 是两条失败路径，都要计入熔断
+      // （否则整队解析失败时仍会「失败→换下一首→再失败」无限循环）
+      errStreak++;
+      const cap = Math.min(3, Math.max(1, this.queue.length));
+      if (errStreak >= cap) {
+        errStreak = 0;
+        this.wantPlaying = false;
+        return;
+      }
       // 自动跳下一首（避免队列卡死）
       if (this.queue.length > 1) setTimeout(() => this.next(true), 800);
       return;
@@ -95,7 +104,15 @@ export const player = {
   wantPlaying: false,
 
   play() {
-    if (!this.urlInfo) { if (this.index === -1 && this.queue.length) this.playAt(0); return; }
+    if (!this.urlInfo) {
+      // urlInfo 不持久化：重启后 restore() 只恢复了队列与元数据。
+      // 此时按播放应当对**当前曲目**重新解析——原先只在 index === -1 时
+      // 才 playAt(0)，index 有效时直接 return，表现为
+      // 「退出软件重进后点迷你条/播放键没有任何反应」。
+      if (this.index >= 0 && this.meta) this.playAt(this.index);
+      else if (this.index === -1 && this.queue.length) this.playAt(0);
+      return;
+    }
     this.wantPlaying = true;
     audio.play().catch(() => { /* 交由 paused 兜底重试 */ });
   },
@@ -247,6 +264,7 @@ audio.addEventListener('timeupdate', () => {
 audio.addEventListener('play', () => {
   player.wantPlaying = true;
   clearTimeout(resumeTimer); resumeTries = 0;
+  errStreak = 0;                     // 真正开始播放了：连续失败计数清零
   emit('state'); keepAlive(true); player.pushMediaState();
 });
 audio.addEventListener('pause', () => {
@@ -286,7 +304,23 @@ export function stopPlayback() {
   clearTimeout(resumeTimer);
   keepAlive(false);
 }
-audio.addEventListener('error', () => { if (player.urlInfo) { toast('播放出错，尝试下一首'); player.next(true); } });
+// 连续播放失败熔断：error 会 next() 换下一首，但若整队都解析失败
+// （上游风控/断网）会无限循环「解析→失败→换下一首」刷爆接口与提示。
+// 超过 3 次（或绕完整个队列）即停下并说明原因。
+let errStreak = 0;
+audio.addEventListener('error', () => {
+  if (!player.urlInfo) return;
+  errStreak++;
+  const cap = Math.min(3, Math.max(1, player.queue.length));
+  if (errStreak >= cap) {
+    errStreak = 0;
+    player.wantPlaying = false;
+    toast('连续播放失败，已停止（请检查网络后重试）');
+    return;
+  }
+  toast('播放出错，尝试下一首');
+  player.next(true);
+});
 
 // 调试/测试入口
 window.__cmPlayer = { audio, player };

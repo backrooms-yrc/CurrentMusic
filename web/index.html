@@ -9,7 +9,10 @@
   <script>
     try {
       var p = localStorage.getItem('cm.uiPreset');
-      if (p && p !== 'md3') document.documentElement.setAttribute('data-ui-preset', p);
+      // 默认皮肤 = 简约玻璃（v1.21.14 起）：未选择过 → frost；
+      // 显式选了 Material 3 → 不打属性（基础样式）；其余按所存值。
+      if (p === 'frost' || p === 'glass') document.documentElement.setAttribute('data-ui-preset', p);
+      else if (p !== 'md3') document.documentElement.setAttribute('data-ui-preset', 'frost');
       // 个性化（背景图 / 玻璃效果值）也要在样式表之前打上，否则会先闪一帧默认底色
       var bg = localStorage.getItem('cm.bgImage');
       if (bg) document.documentElement.style.setProperty('--cm-bg-image', 'url("' + bg.replace(/["\\]/g, '\\$&') + '")');

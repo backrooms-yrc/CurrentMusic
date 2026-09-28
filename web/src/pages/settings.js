@@ -129,7 +129,7 @@ export async function render(el) {
         <div class="cm-more-chips">${picks.map(p =>
           `<mdui-chip ${p.key === cur ? 'selected' : ''} data-k="${p.key}"><i class="cm-swatch ${p.swatch}"></i>${p.name}</mdui-chip>`).join('')}</div>
         <div class="cm-more-s" style="margin-top:10px">${esc((UI_PRESETS.find(p => p.key === cur) || {}).desc || '')}</div>
-        <div class="cm-more-s" style="margin-top:6px">「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影。旧版系统会自动降级为半透明纯色，不影响使用。默认保持原样式。</div>
+        <div class="cm-more-s" style="margin-top:6px">「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影。旧版系统会自动降级为半透明纯色，不影响使用。Material 3 为无玻璃的原版样式。</div>
       </div>`,
       actions: [{ text: '关闭' }],
     });
