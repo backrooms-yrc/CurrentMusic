@@ -1,6 +1,7 @@
 // 用户广场：所有用户（头像/昵称/个签）· 多排序（管理员置顶）· 搜索 · 分页
 import { api } from '../api.js';
 import { esc, toast, avatarHTML, fmtListen } from '../ui.js';
+import { mountPosts } from '../posts.js';
 
 const SORTS = [
   { key: 'reg', label: '注册最新' },
@@ -12,6 +13,15 @@ const SORTS = [
 ];
 const PAGE = 30;
 
+const TAB_KEY = 'cm.sqTab';
+
+/** TAB 切换：记住选择（会话级）。posts 走独立模块，users 用本文件原有逻辑。 */
+function switchTab(k) {
+  sessionStorage.setItem(TAB_KEY, k);
+  const out = document.getElementById('out');
+  if (out) render(out, null, { tab: k });
+}
+
 export async function render(el, params, state = {}) {
   const query = state.query ?? ((params && params.q) || '');
   const sort = state.sort ?? (sessionStorage.getItem('cm.sqSort') || 'reg');
@@ -19,8 +29,23 @@ export async function render(el, params, state = {}) {
   const listening = state.listening ?? (sessionStorage.getItem('cm.sqListening') === '1');
   const users = state.users ?? null;
   const total = state.total ?? 0;
+  const tab = state.tab ?? (sessionStorage.getItem(TAB_KEY) || 'users');
 
-  el.innerHTML = `
+  const tabs = `
+      <div class="cm-sqtabs" id="sqTabs">
+        <button class="cm-sqtab${tab === 'users' ? ' on' : ''}" data-k="users">用户</button>
+        <button class="cm-sqtab${tab === 'posts' ? ' on' : ''}" data-k="posts">帖子</button>
+      </div>`;
+
+  if (tab === 'posts') {
+    // 帖子 TAB：只保留 TAB 栏 + 帖子容器（用户广场那套排序/筛选不显示）
+    el.innerHTML = tabs + '<div id="sqPostBox"></div>';
+    el.querySelectorAll('#sqTabs .cm-sqtab').forEach(b => { b.onclick = () => switchTab(b.dataset.k); });
+    mountPosts(el.querySelector('#sqPostBox'));
+    return;
+  }
+
+  el.innerHTML = tabs + `
     <div class="cm-sq-stats" id="sqStats"><span class="material-icons-outlined">groups</span>正在统计…</div>
     <div class="cm-search-bar">
       <mdui-text-field id="sq" label="搜索昵称 / 个签（回车）" variant="outlined" clearable style="width:100%"></mdui-text-field>
@@ -119,6 +144,8 @@ export async function render(el, params, state = {}) {
   // 顶部提示：过滤生效时说明当前口径
   const hint = el.querySelector('#sqFilterHint');
   if (hint) hint.textContent = listening ? '（近 5 分钟内有播放）' : '';
+
+  el.querySelectorAll('#sqTabs .cm-sqtab').forEach(b => { b.onclick = () => switchTab(b.dataset.k); });
 
   load(0, false);
 }

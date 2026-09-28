@@ -216,6 +216,16 @@ export const api = {
   followArtist: (id, on, name, pic) => call('POST', `/artists/${id}/follow`, { body: { on, name, pic }, auth: true }),
   followedArtists: (refresh = false) => call('GET', `/artists/followed${refresh ? '?refresh=1' : ''}`, { auth: true }),
   songUrl: (ncmId, level) => call('GET', `/ncm/song/url?id=${ncmId}&level=${level}`),
+
+  // ---- 帖子（发现页） ----
+  posts: (offset = 0, limit = 20, author = null) => call('GET',
+    `/posts?offset=${offset}&limit=${limit}${author ? `&author=${author}` : ''}`),
+  postCreate: (content, attachments) => call('POST', '/posts', { body: { content, attachments }, auth: true }),
+  postDelete: (id) => call('DELETE', `/posts/${id}`, { auth: true }),
+  postLike: (id, on) => call('POST', `/posts/${id}/like`, { body: { on }, auth: true }),
+  postComments: (id) => call('GET', `/posts/${id}/comments`),
+  postComment: (id, content) => call('POST', `/posts/${id}/comments`, { body: { content }, auth: true }),
+  postCommentDelete: (cid) => call('DELETE', `/posts/comments/${cid}`, { auth: true }),
   songDetail: (ids) => call('GET', `/ncm/song/detail?ids=${ids.slice(0, 100).join(',')}`),
   lyric: (ncmId) => call('GET', `/ncm/lyric?id=${ncmId}`),
   commentCount: (ncmId) => call('GET', `/ncm/comment-count?id=${ncmId}`),

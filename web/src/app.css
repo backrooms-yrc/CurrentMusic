@@ -663,6 +663,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   .pl-lyric { font-size: 16px; line-height: 2.3; }
   .pl-transport { margin: 8px 0 14px; }
   .pl-transport .huge .material-icons-outlined { font-size: 68px; }
+    .pl-transport .pl-btn.huge svg { width: 68px; height: 68px; }
 }
 @media (min-width: 600px) and (min-height: 500px) {
   .pl-right { padding: 0 4px; }
@@ -724,6 +725,10 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 22px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
 .pl-transport .material-icons-outlined { font-size: 38px; }
 .pl-transport .huge .material-icons-outlined { font-size: 62px; }
+/* Apple 风走带图标（SVG，仿 SF Symbols）：尺寸与原先的 Material 图标一致，
+   保证除图标形状外视觉不变。fill=currentColor 继承原色。 */
+.pl-transport .pl-btn svg { display: block; width: 38px; height: 38px; }
+.pl-transport .pl-btn.huge svg { width: 62px; height: 62px; }
 
 /* ---------- PC / 宽屏（≥900px）：播放器双栏限宽居中 ----------
    ≥600px 只是把 .pl-body 换成双栏，但既不限宽也不居中：
@@ -2133,75 +2138,7 @@ html[data-ui-preset="frost"] .cm-auth-apk {
   color: var(--frs-fg) !important;
 }
 
-/* ---- 8. 播放页：Apple Music 风格（frost）----
-   设计值取自 GitHub 上的 Apple Music 还原项目（可核对）：
-     · samselikoff/ios-apple-music-clone —— 网页版逐像素还原：
-       标题块**左对齐**（歌名 20px/medium、歌手同块淡薰衣草 #A49FC3，
-       右侧 ••• 圆钮）；进度条 3px 细轨（底 #5A526F、填充 #A29CC0、
-       白色圆球）；走带 42px 图标**两端对齐**铺满；底部图标条
-       淡薰衣草 #A29CC0、按下才白。
-     · sebjvidal/Apple-Music-UI-Demo —— UIKit 还原：封面上缘距安全区、
-       控件浮在渐变之上，**没有任何容器盒子**。
-   背景沿用本项目的模糊封面（这正是真 Apple Music 的做法），
-   这里只重排版式与配色；全部限定在 frost 作用域，默认外观不变。 */
-
-/* 容器：子块铺满整行（默认皮肤是 align-items:center，子块会缩成内容宽，
-   space-between 就铺不开、标题也贴不了左）。封面在 .pl-cover-wrap 内部
-   居中——这正是 Apple Music 的排布：封面居中、文字左对齐。 */
-html[data-ui-preset="frost"] .pl-left { align-items: stretch; }
-html[data-ui-preset="frost"] .pl-transport,
-html[data-ui-preset="frost"] .pl-ctrl { width: 100%; }
-
-/* 标题块：左对齐；歌手不再是 12px 小字，而是接近歌号的可读尺寸、淡薰衣草 */
-html[data-ui-preset="frost"] .pl-info { text-align: left; width: 100%; }
-html[data-ui-preset="frost"] .pl-name {
-  font-size: 20px; font-weight: 600; line-height: 1.25; letter-spacing: -.01em;
-}
-html[data-ui-preset="frost"] .pl-artist {
-  font-size: 16px; font-weight: 400; margin-top: 2px;
-  color: #a49fc3; opacity: .95;
-}
-html[data-ui-preset="frost"] .pl-artist a { color: #a49fc3; }
-html[data-ui-preset="frost"] .pl-stats { font-size: 11.5px; color: rgba(162, 156, 192, .8); }
-
-/* 进度条：Apple Music 的细轨道 + 淡薰衣草填充 + 白色圆球。
-   原生 range 读不到 value，填充比例由 player-ui.js 写入 --val。 */
-html[data-ui-preset="frost"] .pl-seek { font-size: 11px; color: #a29cc0; }
-html[data-ui-preset="frost"] .pl-seek input[type=range] {
-  -webkit-appearance: none; appearance: none;
-  height: 22px; margin: 0; background: transparent;
-}
-html[data-ui-preset="frost"] .pl-seek input[type=range]::-webkit-slider-runnable-track {
-  height: 4px; border-radius: 2px;
-  background: linear-gradient(to right, #a29cc0 var(--val, 0%), rgba(90, 82, 111, .55) var(--val, 0%));
-}
-html[data-ui-preset="frost"] .pl-seek input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none;
-  width: 14px; height: 14px; border-radius: 50%; margin-top: -5px;
-  background: #fff; box-shadow: 0 1px 5px rgba(0, 0, 0, .45);
-}
-
-/* 走带：两端对齐铺满（Apple Music 的标志性排布），图标放大、无任何容器 */
-html[data-ui-preset="frost"] .pl-transport {
-  justify-content: space-between; padding: 0 18px; margin: 10px 0 6px;
-}
-html[data-ui-preset="frost"] .pl-transport .material-icons-outlined { font-size: 38px; }
-html[data-ui-preset="frost"] .pl-transport .huge .material-icons-outlined { font-size: 60px; }
-html[data-ui-preset="frost"] .pl-transport .pl-btn:active { transform: scale(.86); }
-
-/* 图标条（喜欢/加入/评论/模式/队列）：淡薰衣草、两端铺满、激活才白 */
-html[data-ui-preset="frost"] .pl-ctrl {
-  justify-content: space-between; padding: 0 8px; margin: 16px 0 2px;
-}
-html[data-ui-preset="frost"] .pl-ctrl .pl-btn { color: #a29cc0; }
-/* 既有 frost 规则 .pl-btn.on 是 #8fc0ff !important，这里要白必须同样加 !important */
-html[data-ui-preset="frost"] .pl-ctrl .pl-btn.on { color: #fff !important; }
-html[data-ui-preset="frost"] .pl-ctrl .material-icons-outlined { font-size: 22px; }
-
-/* 封面与标题块之间的间距（参考：clone 里封面上 45px 的留白节奏） */
-html[data-ui-preset="frost"] .pl-cover-wrap { margin: 14px 0 18px; }
-
-/* ---- 8. 播放页（原有）：保持沉浸暗色，玻璃只加在工具条与角标 ---- */
+/* ---- 8. 播放页：保持沉浸暗色，玻璃只加在工具条与角标 ---- */
 html[data-ui-preset="frost"] .pl-bg.grad {
   --g1: linear-gradient(155deg, #1b3a6b 0%, #0d1a33 52%, #05070d 100%);
   --g2: linear-gradient(205deg, #0a84ff 0%, #123 55%, #05070d 100%);
@@ -2469,3 +2406,165 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: 23px
 }
 /* 顶栏同样让内容从其下穿过 */
 html[data-ui-preset="frost"] #topbar { border-bottom-color: var(--frs-tabbar-line); }
+
+/* ---------- 发现页：TAB 栏 ---------- */
+.cm-sqtabs {
+  display: flex; gap: 6px; margin: 4px 0 12px;
+}
+.cm-sqtab {
+  flex: 1; padding: 9px 10px; border: 0; cursor: pointer; font: inherit; font-size: 14px;
+  border-radius: 999px; background: rgba(120, 128, 145, .1);
+  color: var(--mdui-color-on-surface-variant, #49454f);
+  transition: background .16s ease, color .16s ease;
+}
+.cm-sqtab.on { background: var(--cm-primary); color: #fff; font-weight: 600; }
+
+/* ---------- 帖子：列表 ---------- */
+.cm-post-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.cm-post-hint { font-size: 12px; opacity: .6; }
+.cm-post {
+  padding: 14px 14px 6px; margin-bottom: 12px;
+  border-radius: var(--cm-radius, 16px);
+  background: var(--mdui-color-surface-container-low, #f7f2fa);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+}
+.cm-post-head { display: flex; align-items: center; gap: 10px; }
+.cm-post-ava { flex: none; cursor: pointer; display: inline-flex; }
+.cm-post-who { flex: 1; min-width: 0; }
+.cm-post-name {
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.cm-post-name:hover { color: var(--cm-primary); }
+.cm-post-time { font-size: 11px; opacity: .55; margin-top: 2px; }
+.cm-post-more { font-size: 20px; opacity: .5; cursor: pointer; padding: 4px; border-radius: 50%; }
+.cm-post-more:hover { background: rgba(120, 128, 145, .12); opacity: .9; }
+
+/* 正文（markdown 渲染结果）：首个/末个块不要多余外边距 */
+.cm-post-body { font-size: 14px; line-height: 1.65; margin: 10px 0 4px; word-break: break-word; }
+.cm-post-body > *:first-child { margin-top: 0; }
+.cm-post-body > *:last-child { margin-bottom: 0; }
+.cm-post-body h1, .cm-post-body h2, .cm-post-body h3,
+.cm-post-body h4, .cm-post-body h5, .cm-post-body h6 { margin: 12px 0 6px; line-height: 1.35; }
+.cm-post-body h1 { font-size: 19px; }
+.cm-post-body h2 { font-size: 17px; }
+.cm-post-body h3 { font-size: 15.5px; }
+.cm-post-body p { margin: 8px 0; }
+.cm-post-body ul, .cm-post-body ol { margin: 8px 0; padding-left: 22px; }
+.cm-post-body li { margin: 3px 0; }
+.cm-post-body blockquote {
+  margin: 8px 0; padding: 6px 12px; border-left: 3px solid var(--cm-primary);
+  background: rgba(120, 128, 145, .08); border-radius: 0 8px 8px 0; opacity: .92;
+}
+.cm-post-body code {
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em;
+  background: rgba(120, 128, 145, .16); padding: 1px 5px; border-radius: 5px;
+}
+.cm-post-body pre {
+  margin: 8px 0; padding: 10px 12px; overflow-x: auto;
+  background: rgba(20, 22, 30, .06); border-radius: 10px;
+}
+.cm-post-body pre code { background: none; padding: 0; }
+.cm-post-body a { color: var(--cm-primary); }
+.cm-post-body hr { border: 0; border-top: 1px solid rgba(120, 128, 145, .3); margin: 12px 0; }
+
+/* 附带内容：横向卡片 */
+.cm-post-atts { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px; }
+.cm-post-att {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer;
+  border-radius: 12px; border: 1px solid rgba(120, 128, 145, .2);
+  transition: background .14s ease, transform .14s ease;
+}
+.cm-post-att:hover { background: rgba(120, 128, 145, .1); }
+.cm-post-att:active { transform: scale(.99); }
+.cm-post-att-pic {
+  width: 40px; height: 40px; border-radius: 8px; overflow: hidden; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(120, 128, 145, .14); color: var(--cm-primary);
+}
+.cm-post-att-pic img { width: 100%; height: 100%; object-fit: cover; }
+.cm-post-att-t { flex: 1; min-width: 0; }
+.cm-post-att-name { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-post-att-sub { font-size: 11px; opacity: .6; margin-top: 2px; }
+
+/* 互动栏 */
+.cm-post-foot {
+  display: flex; align-items: center; gap: 22px; margin-top: 6px; padding-top: 4px;
+  border-top: 1px solid rgba(120, 128, 145, .16);
+}
+.cm-post-act {
+  display: inline-flex; align-items: center; gap: 5px; padding: 8px 2px; cursor: pointer;
+  font-size: 12.5px; opacity: .7; transition: opacity .14s ease, color .14s ease;
+}
+.cm-post-act:hover { opacity: 1; }
+.cm-post-act .material-icons-outlined { font-size: 19px; }
+.cm-post-act i { font-style: normal; min-width: 12px; }
+.cm-post-act.on { color: #e5484d; opacity: 1; }
+
+/* ---------- 帖子：发帖编辑器 ---------- */
+.cm-peditor { display: flex; flex-direction: column; gap: 8px; min-width: min(88vw, 460px); }
+.cm-peditor-tools {
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+  padding-bottom: 6px; border-bottom: 1px solid rgba(120, 128, 145, .2);
+}
+.cm-peditor-tool {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px; cursor: pointer; opacity: .75;
+}
+.cm-peditor-tool:hover { background: rgba(120, 128, 145, .14); opacity: 1; }
+.cm-peditor-tool.on { color: var(--cm-primary); opacity: 1; }
+.cm-peditor-tool .material-icons-outlined { font-size: 19px; }
+.cm-peditor-sp { flex: 1; }
+.cm-peditor-text {
+  width: 100%; min-height: 160px; max-height: 46vh; resize: vertical;
+  padding: 10px 12px; border-radius: 12px; font: inherit; font-size: 14px; line-height: 1.6;
+  border: 1px solid rgba(120, 128, 145, .3); background: transparent; color: inherit;
+}
+.cm-peditor-preview {
+  min-height: 160px; max-height: 46vh; overflow-y: auto; padding: 10px 12px;
+  border-radius: 12px; border: 1px dashed rgba(120, 128, 145, .3); font-size: 14px;
+}
+.cm-peditor-atts { border-top: 1px solid rgba(120, 128, 145, .2); padding-top: 8px; }
+.cm-peditor-atts-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.cm-peditor-atts-n { font-size: 12px; opacity: .55; margin-right: auto; }
+.cm-peditor-atts-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.cm-peditor-empty { font-size: 12px; opacity: .5; }
+.cm-peditor-att {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px 5px 10px;
+  font-size: 12.5px; border-radius: 999px; background: rgba(120, 128, 145, .14);
+}
+.cm-peditor-att .material-icons-outlined { font-size: 15px; opacity: .6; cursor: pointer; }
+.cm-peditor-att .material-icons-outlined:hover { opacity: 1; }
+
+/* ---------- 帖子：附带内容选择器 ---------- */
+.cm-picker { display: flex; flex-direction: column; gap: 8px; min-width: min(88vw, 440px); }
+.cm-picker-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.cm-picker-list { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.cm-picker-item {
+  display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; cursor: pointer;
+}
+.cm-picker-item:hover { background: rgba(120, 128, 145, .1); }
+.cm-picker-item.on { background: color-mix(in srgb, var(--cm-primary) 14%, transparent); }
+.cm-picker-pic {
+  width: 36px; height: 36px; border-radius: 8px; overflow: hidden; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(120, 128, 145, .14); color: var(--cm-primary);
+}
+.cm-picker-pic img { width: 100%; height: 100%; object-fit: cover; }
+.cm-picker-t { flex: 1; min-width: 0; }
+.cm-picker-name { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-picker-sub { font-size: 11px; opacity: .6; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-picker-check { font-size: 20px; color: var(--cm-primary); opacity: .8; }
+
+/* ---------- 帖子：评论弹层 ---------- */
+.cm-pcmt { display: flex; flex-direction: column; gap: 10px; min-width: min(88vw, 420px); }
+.cm-pcmt-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.cm-pcmt-item { display: flex; gap: 9px; }
+.cm-pcmt-ava { flex: none; cursor: pointer; display: inline-flex; }
+.cm-pcmt-main { flex: 1; min-width: 0; }
+.cm-pcmt-who { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.cm-pcmt-who b { cursor: pointer; font-size: 13px; }
+.cm-pcmt-who b:hover { color: var(--cm-primary); }
+.cm-pcmt-who span { opacity: .5; }
+.cm-pcmt-text { font-size: 13.5px; line-height: 1.55; margin-top: 2px; word-break: break-word; }
+.cm-pcmt-input { display: flex; align-items: center; gap: 8px; }
