@@ -399,6 +399,9 @@ async function openFull() {
             <span class="pl-btn ${player.playMode !== 'order' ? 'on' : ''}" id="plMode" title="${PLAY_MODES.find(x => x.key === player.playMode).label}"><span class="material-icons-outlined">${PLAY_MODES.find(x => x.key === player.playMode).icon}</span></span>
             <span class="pl-btn" id="plQueue" title="当前播放列表"><span class="material-icons-outlined">queue_music</span></span>
           </div>
+          <!-- 液态玻璃控制舱：进度条 + 走带包在一个胶囊里（frost 皮肤下有折射，
+             其余皮肤是透明容器，布局与原先完全一致） -->
+        <div class="pl-dock">
           <div class="pl-seek">
             <span id="plCur">0:00</span>
             <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0">
@@ -409,6 +412,7 @@ async function openFull() {
             <span class="pl-btn huge" id="plPlay"><span class="material-icons-outlined">${player.loading ? 'hourglass_empty' : (player.isPlaying() ? 'pause_circle' : 'play_circle')}</span></span>
             <span class="pl-btn big" id="plNext"><span class="material-icons-outlined">skip_next</span></span>
           </div>
+        </div>
         </div>
         <div class="pl-right">
           <div class="pl-lyric" id="plLyric"></div>

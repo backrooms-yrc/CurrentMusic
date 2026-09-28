@@ -722,6 +722,13 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: 10px; opacity: .85; }
 .pl-seek input[type=range] { flex: 1; accent-color: var(--cm-primary, #d0bcff); }
 .pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 22px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
+/* 控制舱容器：进度条 + 走带的包裹层。
+   默认皮肤下是**纯布局容器**（透明、无内边距），视觉与包裹前完全一致；
+   frost 皮肤下变成液态玻璃胶囊（见 frost 段）。
+   注意必须复刻 .pl-left 的居中方式：原来这两个元素是 .pl-left
+   （flex column + align-items:center）的直接子元素靠它居中，
+   包进 div 后不复刻的话 .pl-transport 会贴左。 */
+.pl-dock { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .pl-transport .material-icons-outlined { font-size: 38px; }
 .pl-transport .huge .material-icons-outlined { font-size: 62px; }
 
@@ -2133,7 +2140,35 @@ html[data-ui-preset="frost"] .cm-auth-apk {
   color: var(--frs-fg) !important;
 }
 
-/* ---- 8. 播放页：保持沉浸暗色，玻璃只加在工具条与角标 ---- */
+/* ---- 8. 播放页：液态玻璃控制舱 + 工具条与角标 ---- */
+/* 控制舱（进度条 + 走带）：浮在模糊封面之上的玻璃胶囊，边缘带折射
+   （透镜由 glass.js 的 TARGETS 生成并写入 --frs-lens）。
+   播放器底是**深色模糊封面**，与亮色底栏不同：这里用低透明白
+   （与 .pl-lyric-mode 等既有深底玻璃一致），否则 .58 的白会把
+   白色歌名/图标衬得没有对比。 */
+html[data-ui-preset="frost"] .pl-dock {
+  position: relative;
+  padding: 14px 20px 8px;
+  margin: 16px 0 6px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, .13);
+  box-shadow:
+    inset 0 0 0 .5px rgba(255, 255, 255, .28),
+    inset 0 1px 0 .5px rgba(255, 255, 255, .34),
+    0 12px 34px rgba(0, 0, 0, .3);
+  -webkit-backdrop-filter: var(--frs-lens);
+  backdrop-filter: var(--frs-lens);
+}
+html[data-ui-preset="frost"] .pl-dock .pl-transport { margin: 4px 0 6px; }
+html[data-ui-preset="frost"] .pl-dock .pl-seek { padding: 0 2px; }
+/* 音质档位：同款小玻璃药丸 */
+html[data-ui-preset="frost"] .pl-quality {
+  background: rgba(255, 255, 255, .14) !important;
+  border: 0 !important;
+  box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .3);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+}
 html[data-ui-preset="frost"] .pl-bg.grad {
   --g1: linear-gradient(155deg, #1b3a6b 0%, #0d1a33 52%, #05070d 100%);
   --g2: linear-gradient(205deg, #0a84ff 0%, #123 55%, #05070d 100%);

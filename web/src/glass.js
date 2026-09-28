@@ -150,6 +150,9 @@ function lensBlurOf(el) {
 const TARGETS = [
   { sel: '#bottomNav',     id: 'cmLensNav',  radius: null, bevel: 22, maxd: 18 },
   { sel: '.cm-mini-inner', id: 'cmLensMini', radius: 16,   bevel: 18, maxd: 14 },
+  // 播放器「控制舱」（进度条 + 走带）：每次打开播放器都会重建这段 DOM，
+  // 依赖下方 watchSize 的元素身份比对把折射补到新节点上。
+  { sel: '.pl-dock',       id: 'cmLensDock', radius: 28,   bevel: 16, maxd: 12 },
 ];
 
 /** 按当前皮肤与尺寸重建所有折射图（非 frost 皮肤时直接跳过）。 */
@@ -203,7 +206,11 @@ function watchSize() {
     const r = el.getBoundingClientRect();
     if (r.width < 8 || r.height < 8) return;          // 尚未布局
     const sig = Math.round(r.width) + 'x' + Math.round(r.height);
-    if (lastSig[t.id] === sig) return;
+    // 除尺寸外还要比对**元素实例**：播放器每次打开都会 innerHTML 重建，
+    // .pl-dock 尺寸恰好相同时 lastSig 命中会跳过重建——新节点上没有
+    // 内联的 --frs-lens，折射就丢了（只剩 CSS 的模糊兜底）。
+    const sameEl = built[t.id] && built[t.id].el === el;
+    if (lastSig[t.id] === sig && sameEl) return;
     lastSig[t.id] = sig;
     const radius = t.radius != null ? t.radius : r.height / 2;
     attachLens(el, t.id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
