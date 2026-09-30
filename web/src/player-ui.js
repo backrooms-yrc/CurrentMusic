@@ -1,8 +1,9 @@
 // 播放器 UI：底部迷你条 + 全屏播放页（封面/歌词/进度/音质/点赞/收藏/加入歌单）。
 import { mdui } from './md.js';
+import { createWaveform } from './waveform.js';
 import { api, auth, settings } from './api.js';
 import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, ensureStatus, openLikeMenu, isNcmLiked, ensureNcmLiked, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
-import { player, on } from './player.js';
+import { player, wave, on } from './player.js';
 import { castIconHTML, openCastDialog } from './cast.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
@@ -50,12 +51,12 @@ function renderEmoticons(escaped) {
 
 const overlay = () => document.getElementById('playerOverlay');
 
-// 播放页的波形使用固定节奏，避免每次重绘随机跳动；实际播放状态和进度由下方
-// 的事件实时驱动。保留足够的高低起伏，在窄屏下也仍能辨认出波形轮廓。
-const WAVE_BARS = [30, 54, 76, 43, 64, 92, 58, 36, 70, 48, 84, 61, 38, 74, 52, 96, 67, 41, 79, 57, 88, 46, 69, 34, 73, 55, 90, 63, 40, 81, 50, 72];
+// 播放页波形：由**真实音频频谱**驱动（见 waveform.js），占位只有一张 canvas。
+// 之前这里是一组固定高度的柱子 + CSS 呼吸动画 —— 那与音乐无关，只是看起来在动；
+// 现在只有拿到真实频谱才画起伏，拿不到就画静默基线（不假装有律动）。
+let waveCtl = null;          // 当前播放页的波形控制器（关闭时销毁）
 function waveformHTML() {
-  return `<div class="pl-waveform ${player.isPlaying() ? 'playing' : ''}" id="plWaveform" aria-hidden="true"><div class="pl-wave-bars">${WAVE_BARS.map((height, i) =>
-    `<i style="--wave-height:${height}%;--wave-delay:-${(i % 9) * 0.16}s"></i>`).join('')}</div></div>`;
+  return `<div class="pl-waveform" id="plWaveform" aria-hidden="true"><canvas id="plWaveCanvas"></canvas></div>`;
 }
 
 // ---------- 迷你条 ----------
@@ -95,8 +96,7 @@ on('time', () => {
   if (t) t.textContent = fmtDur(pos);
   if (d && dur) d.textContent = fmtDur(dur);
   if (s && !s.dataset.drag) s.value = dur ? (pos / dur) * 100 : 0;
-  const wave = document.getElementById('plWaveform');
-  if (wave) wave.style.setProperty('--wave-progress', dur ? Math.min(100, pos / dur * 100) + '%' : '0%');
+  if (waveCtl) waveCtl.setProgress(dur ? pos / dur : 0);
 });
 
 // ---------- 全屏播放页 ----------
@@ -232,7 +232,12 @@ function layoutLyricPads() {
   if (top) top.style.height = h + 'px';
   if (bot) bot.style.height = h + 'px';
 }
-window.addEventListener('resize', () => { layoutLyricPads(); });
+window.addEventListener('resize', () => {
+  layoutLyricPads();
+  // 旋转/分栏/改窗口大小后重新量取画布（控制器随播放页存在与否，安全空转）
+  if (waveCtl) waveCtl.resize();
+});
+if (window.addEventListener) window.addEventListener('orientationchange', () => { if (waveCtl) waveCtl.resize(); });
 
 // ---------- 逐字点亮（卡拉OK） ----------
 let karaokeRaf = 0, karaokeLine = -1, karaokeIdx = -1, karaokeTick = 0;
@@ -474,9 +479,20 @@ async function openFull() {
   };
   ov.querySelector('#plQueue').onclick = openQueue;
   const seek = ov.querySelector('#plSeek');
-  const wave = ov.querySelector('#plWaveform');
-  const dur = player.durMs();
-  if (wave) wave.style.setProperty('--wave-progress', dur ? Math.min(100, player.posMs() / dur * 100) + '%' : '0%');
+  // 波形控制器：数据来自真实频谱（wave.read），进度来自 posMs/durMs
+  // （投屏时这两个值来自设备上报，直接读 audio 会是 0）
+  const canvas = ov.querySelector('#plWaveCanvas');
+  if (waveCtl) { waveCtl.destroy(); waveCtl = null; }
+  if (canvas) {
+    waveCtl = createWaveform(canvas, {
+      read: u8 => wave.read(u8),
+      bins: () => wave.bins,
+      progress: () => { const d = player.durMs(); return d ? player.posMs() / d : 0; },
+    });
+    waveCtl.setProgress(player.durMs() ? player.posMs() / player.durMs() : 0);
+    waveCtl.setPlaying(player.isPlaying());
+    window.__cmWave = waveCtl;          // 调试/测试入口（只读引用）
+  }
   seek.oninput = () => { seek.dataset.drag = '1'; };
   seek.onchange = () => {
     const dur = player.durMs();
@@ -539,6 +555,9 @@ function closeFull() {
   const ov = overlay();
   if (ov.hidden) return;
   stopKaraoke();
+  // 关键：销毁波形控制器。否则关闭播放页后 rAF 仍会每帧读频谱并往**已脱离 DOM**
+  // 的 canvas 上绘制——后台空转费电（AI 审查指出的一处真实泄漏）。
+  if (waveCtl) { waveCtl.destroy(); waveCtl = null; window.__cmWave = null; }
   if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }
   ov.classList.add('closing');
   setTimeout(() => { ov.hidden = true; ov.innerHTML = ''; ov.classList.remove('closing'); }, 240);
@@ -730,8 +749,7 @@ on('state', () => {
   if (!player.isPlaying()) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');
   if (b) b.innerHTML = amPlayIcon();
-  const wave = document.getElementById('plWaveform');
-  if (wave) wave.classList.toggle('playing', player.isPlaying());
+  if (waveCtl) waveCtl.setPlaying(player.isPlaying());
   renderMini();
 });
 

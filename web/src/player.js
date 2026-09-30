@@ -3,8 +3,150 @@ import { mdui } from './md.js';
 import { api, auth, settings } from './api.js';
 import { toast, tierLabel } from './ui.js';
 
-const audio = new Audio();
-audio.preload = 'auto';
+// ---------- 音频元素（可替换） ----------
+// 为什么要"可替换"：可视化需要把 <audio> 接入 Web Audio 图，而**一旦接入，
+// 元素音频就只走图输出**（不再直出）。若某个音源是跨域"污染"的（无 CORS 头），
+// 图输入恒为静音 → 声音会彻底消失。所以遇到这种情况必须**换一个新元素**才能
+// 恢复直出，不能只是断开节点。详见下文 loadUrl() 的 CORS 策略。
+let audio = makeAudio();
+
+// Web Audio 分析器状态：analyser 非空即代表「可视化可用」
+let actx = null, analyser = null, srcNode = null, graphEl = null;
+let vizDisabled = false;      // 系统级不可用（无 AudioContext / 上下文起不来）→ 本次会话不再尝试
+const corsFailHosts = {};     // 不支持 CORS 的**域名**（AI 审查建议：按域名降级，
+                              // 换到别的 CDN 域名仍可尝试可视化，不因一次失败永久放弃）
+
+/** 供可视化层读取频谱；不可用时返回 false（调用方据此画静默基线）。 */
+export const wave = {
+  get ready() { return !!analyser; },
+  get bins() { return analyser ? analyser.frequencyBinCount : 256; },
+  read(u8) {
+    if (!analyser) return false;
+    try { analyser.getByteFrequencyData(u8); return true; } catch (e) { return false; }
+  },
+  /** 用户手势后恢复上下文（自动播放策略可能让新建的上下文停在 suspended）。 */
+  resume() {
+    try { if (actx && actx.state === 'suspended') actx.resume(); } catch (e) { /* 忽略 */ }
+  },
+};
+
+// 音频图看门狗：**接了图之后声音只从图输出**——上下文一旦不在 running
+// （后台挂起、系统回收、自动播放策略），用户就会"歌在放但没声音"。
+// 持续巡检：能恢复就恢复，恢复不了就拆图换元素回到直出——宁可没可视化，不能没声音。
+let watchTimer = 0, watchStrikes = 0;
+function watchGraph() {
+  if (watchTimer || !graphEl) return;
+  watchStrikes = 0;
+  watchTimer = setInterval(() => {
+    if (!graphEl) { clearInterval(watchTimer); watchTimer = 0; return; }
+    if (audio.paused) { watchStrikes = 0; return; }        // 暂停时上下文挂起属正常
+    if (actx && actx.state === 'running') { watchStrikes = 0; return; }
+    watchStrikes++;
+    try { if (actx && actx.state === 'suspended') actx.resume(); } catch (e) { /* 忽略 */ }
+    if (watchStrikes >= 2) {                                // 约 4s 仍未恢复 → 回退直出
+      clearInterval(watchTimer); watchTimer = 0;
+      fallbackNoViz();
+    }
+  }, 2000);
+}
+
+/** 丢弃一个音频元素：停播 + 清源。监听器都有 el!==audio 守卫，不会误触发换歌。 */
+function disposeAudio(old) {
+  try { old.pause(); } catch (e) { /* 忽略 */ }
+  try { old.removeAttribute('src'); old.src = ''; old.load(); } catch (e) { /* 忽略 */ }
+}
+
+function teardownGraph() {
+  if (watchTimer) { clearInterval(watchTimer); watchTimer = 0; }
+  try { if (srcNode) srcNode.disconnect(); } catch (e) { /* 忽略 */ }
+  try { if (analyser) analyser.disconnect(); } catch (e) { /* 忽略 */ }
+  try { if (actx && actx.close) actx.close(); } catch (e) { /* 忽略 */ }
+  actx = analyser = srcNode = null;
+  graphEl = null;
+}
+
+/** 建图：**只在确认音源 CORS 干净之后**调用（否则会把声音吞掉）。 */
+function buildGraph(el) {
+  if (analyser || vizDisabled) return false;
+  el = el || audio;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) { vizDisabled = true; return false; }
+  try {
+    actx = new AC();
+    srcNode = actx.createMediaElementSource(el);
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.72;
+    srcNode.connect(analyser);
+    analyser.connect(actx.destination);      // 必须接回目的地，否则没声音
+    graphEl = el;
+  } catch (e) {
+    teardownGraph();
+    vizDisabled = true;
+    return false;
+  }
+  // 上下文若因自动播放策略停在 suspended，图会静音 → 尝试恢复，失败则立刻拆图回退
+  if (actx.state !== 'running') {
+    try { actx.resume(); } catch (e) { /* 忽略 */ }
+    setTimeout(() => {
+      if (actx && actx.state !== 'running') fallbackNoViz();
+    }, 1200);
+  }
+  return true;
+}
+
+/** 可视化不可用时的兜底：拆图重建元素，保住声音（位置与播放态尽量保留）。 */
+function fallbackNoViz() {
+  if (vizDisabled && !graphEl) return;
+  vizDisabled = true;
+  const pos = audio.currentTime || 0;
+  const wasPlaying = !audio.paused;
+  const url = audio.src;
+  teardownGraph();
+  disposeAudio(audio);
+  const fresh = makeAudio();
+  audio = fresh;
+  if (url) {
+    fresh.src = url;                       // 新元素直出，不再经过图
+    try { if (pos > 0) fresh.currentTime = pos; } catch (e) { /* 元数据未就绪时忽略 */ }
+    // 新元素上不会触发 pause，scheduleResume 不会自己跑 → 显式兜底重试
+    if (wasPlaying) fresh.play().catch(() => scheduleResume());
+  }
+  emit('state');      // 通知 UI 重绘（元素换了、可视化已降级）
+}
+
+/** 取 URL 的域名（按域名记 CORS 失败）。 */
+function hostOf(url) {
+  try { return new URL(url, location.href).host; } catch (e) { return ''; }
+}
+
+/** 装载音源：带 crossOrigin 尝试（可视化前提），失败由 error 处理器回退。 */
+let corsPending = null;         // 待回退重试的 { url, pos, host }（带 CORS 加载失败时用）
+function loadUrl(url, pos) {
+  corsPending = null;
+  const host = hostOf(url);
+  const badHost = !!(host && corsFailHosts[host]);   // 该域名已知不支持 CORS
+  // 【危险路径防御】已知不支持 CORS 的域名 + 当前元素已挂音频图 → 必须**先换新元素**
+  // 再普通加载。否则跨域污染的音源会让音频图输出静音，且**不会触发 error 事件**
+  // （context.state 仍是 running，看门狗也发现不了）→ 表现为"歌在放但没声音"，
+  // 是最难排查的一类故障。
+  if (badHost && graphEl) { teardownGraph(); disposeAudio(audio); audio = makeAudio(); }
+  if (!vizDisabled && !badHost) {
+    audio.crossOrigin = 'anonymous';       // CDN 实测带 access-control-allow-origin: *
+    corsPending = { url: url, pos: pos || 0, host: host };
+  } else {
+    audio.crossOrigin = null;              // 普通播放（该源无可视化）
+  }
+  audio.src = url;
+  if (pos > 0) { try { audio.currentTime = pos; } catch (e) { /* 忽略 */ } }
+}
+
+function makeAudio() {
+  const a = new Audio();
+  a.preload = 'auto';
+  bindAudio(a);
+  return a;
+}
 
 // 调试/测试入口（未挂 DOM 的 audio 实例经此可达）
 const listeners = {};
@@ -84,7 +226,7 @@ export const player = {
     if (!this.meta || this.queue[this.index] !== this.meta) return; // 已切歌
     this.urlInfo = info;
     this.loading = false;
-    audio.src = info.url;
+    loadUrl(info.url, 0);          // 优先 CORS 干净加载（可视化前提），失败自动回退
     this.wantPlaying = true;
     audio.play().catch(() => toast('点击播放键开始播放'));
     emit('song');
@@ -186,8 +328,7 @@ export const player = {
     try {
       const info = await api.songUrl(this.meta.ncm_id, level);
       this.urlInfo = info;
-      audio.src = info.url;
-      audio.currentTime = at;
+      loadUrl(info.url, at);       // 换档保留播放位置
       if (wasPlaying) audio.play();
       emit('song');
       toast(`音质：${tierLabel(info.level)}`);
@@ -250,37 +391,91 @@ export const player = {
   get audio() { return audio; },
 };
 
-audio.addEventListener('ended', () => player.next(true));
+// ---------- 音频元素事件（集中绑定；元素被 CORS 回退重建时重新绑定）----------
 let lastMediaPushSec = -1;
-audio.addEventListener('timeupdate', () => {
-  emit('time');
-  // 蓝牙/通知进度：每 5s 同步一次（AVRCP 由系统按 playbackState 自推进度，无需逐帧）
-  const sec = Math.floor(audio.currentTime);
-  if (!audio.seeking && sec !== lastMediaPushSec && sec % 5 === 0) {
-    lastMediaPushSec = sec;
-    player.pushMediaState();
-  }
+let resumeTimer = 0, resumeTries = 0;
+let errStreak = 0;
+
+function bindAudio(el) {
+  el.addEventListener('ended', () => {
+  if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+  player.next(true);
 });
-audio.addEventListener('play', () => {
-  player.wantPlaying = true;
-  clearTimeout(resumeTimer); resumeTries = 0;
-  errStreak = 0;                     // 真正开始播放了：连续失败计数清零
-  emit('state'); keepAlive(true); player.pushMediaState();
+  el.addEventListener('timeupdate', () => {
+  if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    emit('time');
+    // 蓝牙/通知进度：每 5s 同步一次（AVRCP 由系统按 playbackState 自推进度，无需逐帧）
+    const sec = Math.floor(el.currentTime);
+    if (!el.seeking && sec !== lastMediaPushSec && sec % 5 === 0) {
+      lastMediaPushSec = sec;
+      player.pushMediaState();
+    }
+  });
+  el.addEventListener('play', () => {
+  if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    wave.resume();                     // 用户手势后恢复音频上下文
+    watchGraph();                      // 后台/系统挂起上下文时兜底（否则会没声音）
+    player.wantPlaying = true;
+    clearTimeout(resumeTimer); resumeTries = 0;
+    errStreak = 0;                     // 真正开始播放了：连续失败计数清零
+    emit('state'); keepAlive(true); player.pushMediaState();
+  });
+  el.addEventListener('pause', () => {
+  if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    emit('state'); player.pushMediaState();
+    // 注意：暂停不改保活状态——锁屏/系统音频焦点抖动会触发 pause，
+    // 此时若释放唤醒锁+停前台服务，进程可能在息屏下被冻结，出现「突然暂停且不再恢复」。
+    if (player.wantPlaying && !player.audio.ended) scheduleResume();
+  });
+  el.addEventListener('seeked', () => {
+  if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+  player.pushMediaState();
 });
-audio.addEventListener('pause', () => {
-  emit('state'); player.pushMediaState();
-  // 注意：暂停不改保活状态——锁屏/系统音频焦点抖动会触发 pause，
-  // 此时若释放唤醒锁+停前台服务，进程可能在息屏下被冻结，出现「突然暂停且不再恢复」。
-  if (player.wantPlaying && !player.audio.ended) scheduleResume();
-});
-audio.addEventListener('seeked', () => player.pushMediaState());
+  el.addEventListener('loadedmetadata', () => {
+  if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    // 带 crossOrigin 能走到 loadedmetadata = 该音源 CORS 干净 → 可安全建图
+    if (el.crossOrigin && graphEl !== el && !vizDisabled) {
+      if (buildGraph(el)) { wave.resume(); corsPending = null; }
+    }
+    if (isFinite(el.duration) && el.duration > 0) player.updateMediaSession();
+  });
+  el.addEventListener('error', () => {
+  if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    // ① CORS 回退：带 crossOrigin 加载失败（该音源无 CORS 头）→
+    // 去掉 crossOrigin 重试一次，**保证有声音**，可视化降级为静默基线。
+    // 必须换新元素：图一旦建立，元素音频只走图输出，仅断开节点无法恢复直出。
+  if (corsPending && el === audio) {
+      const pend = corsPending; corsPending = null;
+      // 只记这个**域名**（下次同域名直接普通播放），不做全会话降级——
+      // 换到别的 CDN 域名仍可继续尝试可视化
+      if (pend.host) corsFailHosts[pend.host] = 1;
+      teardownGraph();
+      disposeAudio(el);
+      const fresh = makeAudio();
+      audio = fresh;
+      fresh.crossOrigin = null;
+      fresh.src = pend.url;
+      if (pend.pos > 0) { try { fresh.currentTime = pend.pos; } catch (e) { /* 忽略 */ } }
+      if (player.wantPlaying) fresh.play().catch(() => scheduleResume());
+      return;                       // 不计入连续失败熔断
+    }
+    if (!player.urlInfo) return;
+    errStreak++;
+    const cap = Math.min(3, Math.max(1, player.queue.length));
+    if (errStreak >= cap) {
+      errStreak = 0;
+      player.wantPlaying = false;
+      toast('连续播放失败，已停止（请检查网络后重试）');
+      return;
+    }
+    toast('播放出错，尝试下一首');
+    player.next(true);
+  });
+}
+
 // 时长此时才实测可得：重推一次元数据，蓝牙/车机拿到准确曲长（避免用估计值或被旧值卡住）
-audio.addEventListener('loadedmetadata', () => {
-  if (isFinite(audio.duration) && audio.duration > 0) player.updateMediaSession();
-});
 
 // 意外暂停自动恢复：系统抢焦点/锁屏瞬断后重新起播（最多 3 次，间隔递增）
-let resumeTimer = 0, resumeTries = 0;
 function scheduleResume() {
   if (resumeTries >= 3) return;
   resumeTries++;
@@ -307,23 +502,9 @@ export function stopPlayback() {
 // 连续播放失败熔断：error 会 next() 换下一首，但若整队都解析失败
 // （上游风控/断网）会无限循环「解析→失败→换下一首」刷爆接口与提示。
 // 超过 3 次（或绕完整个队列）即停下并说明原因。
-let errStreak = 0;
-audio.addEventListener('error', () => {
-  if (!player.urlInfo) return;
-  errStreak++;
-  const cap = Math.min(3, Math.max(1, player.queue.length));
-  if (errStreak >= cap) {
-    errStreak = 0;
-    player.wantPlaying = false;
-    toast('连续播放失败，已停止（请检查网络后重试）');
-    return;
-  }
-  toast('播放出错，尝试下一首');
-  player.next(true);
-});
 
 // 调试/测试入口
-window.__cmPlayer = { audio, player };
+window.__cmPlayer = { get audio() { return audio; }, player, wave };
 
 // MDUI 主色（品牌紫）
 if (mdui.setColorScheme) mdui.setColorScheme('#6750A4');
