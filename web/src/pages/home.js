@@ -28,40 +28,21 @@ export async function render(el) {
       <div class="cm-greet-date">${esc(today)}</div>
       <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
     </div>
-    <div id="decorBanner"></div>
-    <section class="cm-sec"><div class="cm-sec-head"><h2>每日推荐</h2></div>${skelCards(8)}</section>
-    <section class="cm-sec">${skelList(3)}</section>`;
-  // 横幅不阻塞首屏：与每日推荐并行请求；结果先存起来，整页重渲染后再插入
-  let bannerHTML = '';
-  const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
-  let daily = [], forYou = [], recent = [], artists = [];
-  let recPls = [], ncmBound = false;
-  const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => {})];
-  // 每日推荐歌单是账号维度接口（T1）：必须用用户自己的网易云 cookie，未绑定则整体跳过
-  if (auth.token) {
-    jobs.push(api.bindStatus().then(b => {
-      if (!b || !b.bound) return;
-      ncmBound = true;
-      return Promise.allSettled([
-        api.ncm('/recommend/resource').then(d => { recPls = d.recommend || []; }),
-        // T1：账号维度的每日推荐。拿到就用它覆盖服务端 SVIP 档（对已绑定用户更准确）
-        api.ncm('/recommend/songs').then(d => {
-          const own = ncmSongs(((d.data || {}).dailySongs) || []);
-          if (own.length) daily = own;
-        }),
-      ]);
-    }).catch(() => {}));
-  }
-  if (auth.token) jobs.push(api.recentPlays(20).then(d => { recent = d.songs || []; }).catch(() => {}));
-  await Promise.allSettled(jobs);
-  await bannerJob;   // 横幅请求通常更快，这里几乎立即返回
-
-  el.innerHTML = `
-    <div class="cm-greet">
-      <div class="cm-greet-date">${esc(today)}</div>
-      <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
-    </div>
     ${bannerHTML}
+    ${recent.length ? `
+    <section class="cm-sec">
+      <div class="cm-sec-head"><h2>继续播放</h2><span class="cm-sec-more" id="playRecent"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
+      <div id="recentList"></div>
+    </section>` : ''}
+    <section class="cm-sec">
+      <div class="cm-sec-head"><h2>一键开听</h2><span class="cm-sec-sub">按听歌动线排</span></div>
+      <div class="cm-quickrow">
+        <a class="cm-quick" href="#/podcast"><span class="material-icons-outlined">radio</span><b>私人 FM</b><i>无限电台</i></a>
+        <span class="cm-quick" id="quickHeart"><span class="material-icons-outlined">auto_awesome</span><b>心动模式</b><i>按口味续播</i></span>
+        <span class="cm-quick" id="quickDaily"><span class="material-icons-outlined">play_circle</span><b>每日推荐</b><i>${daily.length ? `${daily.length} 首` : '今日待出'}</i></span>
+        <a class="cm-quick" href="#/library"><span class="material-icons-outlined">queue_music</span><b>我的歌单</b><i>收藏与自建</i></a>
+      </div>
+    </section>
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>每日推荐</h2><span class="cm-sec-more" id="playDaily"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
       ${daily.length ? `<div class="cm-hscroll" id="dailyRow">${
@@ -73,6 +54,11 @@ export async function render(el) {
           </div>`).join('')
       }</div>` : `<div class="cm-empty small">今日推荐暂不可用</div>`}
     </section>
+    ${forYou.length ? `
+    <section class="cm-sec">
+      <div class="cm-sec-head"><h2>猜你喜欢</h2><span class="cm-sec-sub">基于你点赞的歌手：${esc(artists.join('、'))}</span></div>
+      <div id="forYouList"></div>
+    </section>` : ''}
     ${recPls.length ? `
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>每日推荐歌单</h2><span class="cm-sec-sub">来自你的网易云账号</span></div>
@@ -84,7 +70,7 @@ export async function render(el) {
         </div>`).join('')}</div>
     </section>` : ''}
     <section class="cm-sec">
-      <div class="cm-sec-head"><h2>排行榜</h2></div>
+      <div class="cm-sec-head"><h2>排行榜</h2><span class="cm-sec-more" id="goNcmPls"><span class="material-icons-outlined">trending_up</span> 更多榜单</span></div>
       <div class="cm-quickrow">
         <a class="cm-quick" href="#/ncmpl/3778678"><span class="material-icons-outlined">local_fire_department</span><b>热歌榜</b></a>
         <a class="cm-quick" href="#/ncmpl/19723756"><span class="material-icons-outlined">trending_up</span><b>飙升榜</b></a>
@@ -98,15 +84,6 @@ export async function render(el) {
         <a class="cm-quick" href="#/rooms"><span class="material-icons-outlined">meeting_room</span><b>加入房间</b><i>多人同步播放</i></a>
         <a class="cm-quick" id="quickCreateRoom"><span class="material-icons-outlined">add_circle</span><b>创建房间</b><i>可设密码</i></a>
       </div>
-    </section>
-    <section class="cm-sec">
-      <div class="cm-sec-head"><h2>猜你喜欢</h2><span class="cm-sec-sub">基于你点赞的歌手：${esc(artists.join('、'))}</span></div>
-      <div id="forYouList"></div>
-    </section>` : ''}
-    ${recent.length ? `
-    <section class="cm-sec">
-      <div class="cm-sec-head"><h2>最近播放</h2><span class="cm-sec-more" id="playRecent"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
-      <div id="recentList"></div>
     </section>` : ''}
     ${!auth.token ? `
     <section class="cm-sec">
@@ -122,6 +99,17 @@ export async function render(el) {
     c.onclick = () => player.playList(daily, +c.dataset.i);
   });
   el.querySelector('#playDaily')?.addEventListener('click', () => player.playList(daily, 0));
+  // 一键开听：心动模式以「最近播放第一首」优先做种子（更贴近"接着刚才的口味听"），
+  // 其次用每日推荐首曲；两者都没有时明确说明原因，不给假按钮。
+  el.querySelector('#quickDaily')?.addEventListener('click', () => {
+    if (!daily.length) return toast('今日推荐还没出来，稍后再试');
+    player.playList(daily, 0);
+  });
+  el.querySelector('#quickHeart')?.addEventListener('click', () => {
+    const seed = recent[0] || daily[0];
+    if (!seed) return toast('需要先有播放记录或每日推荐才能起播心动模式');
+    player.startHeart(seed);
+  });
   el.querySelectorAll('#recPlsGrid .cm-plcard').forEach(c => {
     c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.id}`; };
   });
@@ -147,6 +135,8 @@ export async function render(el) {
     c.style.position = 'relative';
     c.appendChild(btn);
   });
+  // 「更多榜单」→ 发现页（那里有完整榜单与分组切换），别做点不动的假入口
+  el.querySelector('#goNcmPls')?.addEventListener('click', () => { location.hash = '#/square'; });
   el.querySelector('#quickCreateRoom')?.addEventListener('click', () => {
     import('./rooms.js').then(m => m.createRoomDialog());   // 首页直达创建
   });

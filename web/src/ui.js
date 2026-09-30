@@ -115,7 +115,24 @@ function _shadeL(hex, dl) {
   return '#' + ((1 << 24) + (to(r) << 16) + (to(g) << 8) + to(b)).toString(16).slice(1);
 }
 
+// 色相（0~1），用于挑「与主色差得够远」的强调色
+function _hue(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d) return 0;
+  let h;
+  if (mx === r) h = ((g - b) / d) % 6;
+  else if (mx === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h /= 6;
+  return h < 0 ? h + 1 : h;
+}
+
 // 画布取色（crossOrigin 匿名；CDN 带 ACAO:* 不污染 canvas）
+//
+// 从「饱和度加权平均」改成**分桶直方图**：平均会把封面里的大面积灰底/白边一起拌进来，
+// 结果普遍发灰发闷；分桶后按「频次 × 饱和度 × 中间亮度权重」取最高分桶，既鲜活又稳定，
+// 再挑一个色相相距较远的桶做强调色（同色系双色会让界面发闷）。
 function _extract(imgUrl) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -123,21 +140,39 @@ function _extract(imgUrl) {
     img.onload = () => {
       try {
         const cv = document.createElement('canvas');
-        cv.width = cv.height = 24;
+        cv.width = cv.height = 32;
         const cx = cv.getContext('2d', { willReadFrequently: true });
-        cx.drawImage(img, 0, 0, 24, 24);
-        const d = cx.getImageData(0, 0, 24, 24).data;
-        // 饱和度加权平均，避开接近黑白的背景
-        let r = 0, g = 0, b = 0, w = 0;
+        cx.drawImage(img, 0, 0, 32, 32);
+        const d = cx.getImageData(0, 0, 32, 32).data;
+        const buckets = new Map();
         for (let i = 0; i < d.length; i += 4) {
-          const R = d[i], G = d[i + 1], B = d[i + 2];
+          const R = d[i], G = d[i + 1], B = d[i + 2], A = d[i + 3];
+          if (A < 128) continue;                       // 透明像素不算
           const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
-          const sat = (mx - mn) / 255, lum = mx / 255;
-          const wt = .25 + sat * (1 - Math.abs(lum - .5) * 1.4);
-          r += R * wt; g += G * wt; b += B * wt; w += wt;
+          const lum = mx / 255;
+          if (lum < .08 || lum > .97) continue;        // 死黑/纯白不算（多是边框留白）
+          const sat = (mx - mn) / (mx || 1);
+          const key = ((R >> 4) << 8) | ((G >> 4) << 4) | (B >> 4);
+          const cur = buckets.get(key) || { r: 0, g: 0, b: 0, n: 0, sat: 0 };
+          cur.r += R; cur.g += G; cur.b += B; cur.n++; cur.sat += sat;
+          buckets.set(key, cur);
         }
-        if (!w) return reject(new Error('empty'));
-        resolve('#' + ((1 << 24) + (Math.round(r / w) << 16) + (Math.round(g / w) << 8) + Math.round(b / w)).toString(16).slice(1));
+        if (!buckets.size) return reject(new Error('empty'));
+        const avg = v => ({ r: v.r / v.n, g: v.g / v.n, b: v.b / v.n, sat: v.sat / v.n, n: v.n });
+        const ranked = [...buckets.values()].map(avg).map(c => {
+          const lum = Math.max(c.r, c.g, c.b) / 255;
+          // 中间亮度（.45~.65）最讨喜：太亮在深色播放页上发飘，太暗又看不出色
+          c.score = c.n * (.35 + c.sat) * (1 - Math.abs(lum - .55) * 1.2);
+          return c;
+        }).sort((a, b) => b.score - a.score);
+        const toHex = c => '#' + ((1 << 24) + (Math.round(c.r) << 16) + (Math.round(c.g) << 8) + Math.round(c.b)).toString(16).slice(1);
+        const main = ranked[0];
+        const h0 = _hue(main.r, main.g, main.b);
+        const accent = ranked.find(c => {
+          const dh = Math.abs(_hue(c.r, c.g, c.b) - h0);
+          return Math.min(dh, 1 - dh) > .08;           // 色相至少差 ~29°
+        }) || ranked[1] || main;
+        resolve({ hex: toHex(main), accent: toHex(accent) });
       } catch (e) { reject(e); }   // canvas 污染等
     };
     img.onerror = () => reject(new Error('load'));
@@ -146,18 +181,41 @@ function _extract(imgUrl) {
 }
 
 // 取色入口：缩略图直连 → 后端代理兜底 → null（调用方用默认色组）
+// 最近一次成功的色组：某张封面取不到色时沿用它，而不是掉回默认紫
+// （默认紫闪一下比"沿用上一个封面色"更割裂；这也直接提高了动态取色的覆盖率）
+let _lastPalette = null;
+
+/** 主色 + 深浅档 + 强调色（强调色给进度条/高亮等次级元素用）。 */
+function _paletteOf(raw) {
+  const p = _clampL(raw.hex), a = _clampL(raw.accent || raw.hex);
+  return {
+    primary: p,
+    deep: _shadeL(p, -.16),
+    dark: _shadeL(p, -.30),
+    accent: a,
+    accentDeep: _shadeL(a, -.22),
+  };
+}
+
 export async function coverColors(pic) {
-  if (!pic) return null;
+  if (!pic) return _lastPalette;
   if (_coverColorCache.has(pic)) return _coverColorCache.get(pic);
-  const thumb = pic + (pic.includes('?') ? '&' : '?') + 'param=120y120';
+  const thumb = pic + (pic.includes('?') ? '&' : '?') + 'param=240y240';
   const base = localStorage.getItem('cm.base') || '';
-  let hex = null;
-  try { hex = await _extract(thumb); }
-  catch {
-    try { hex = await _extract(base + '/img?url=' + encodeURIComponent(thumb)); }
-    catch { hex = null; }
+  // 多源依次尝试：直连缩略图 → 后端代理缩略图 → 直连原图 → 后端代理原图。
+  // 任一条成功即可出图（热链/跨域被拦时后面的兜住），这也是"覆盖率"的一部分。
+  const sources = [
+    thumb,
+    base ? `${base}/img?url=${encodeURIComponent(thumb)}` : null,
+    pic,
+    base ? `${base}/img?url=${encodeURIComponent(pic)}` : null,
+  ].filter(Boolean);
+  let raw = null;
+  for (const src of sources) {
+    try { raw = await _extract(src); break; } catch { /* 换下一个源 */ }
   }
-  const out = hex ? { primary: _clampL(hex), deep: _shadeL(_clampL(hex), -.16), dark: _shadeL(_clampL(hex), -.30) } : null;
+  if (raw) _lastPalette = _paletteOf(raw);
+  const out = raw ? _lastPalette : _lastPalette;    // 取不到就沿用上一个色组
   _coverColorCache.set(pic, out);
   return out;
 }
@@ -180,10 +238,19 @@ export function setColorSchemeKey(key) {
   if (key !== 'dynamic') applyColorScheme((COLOR_SCHEMES.find(s => s.key === key) || {}).color || '#6750A4');
 }
 
-export function applyColorScheme(hex) {
+export function applyColorScheme(hex, pal) {
   if (!hex) return;
   try { mdui.setColorScheme(hex); } catch { /* 部分内核 */ }
-  document.documentElement.style.setProperty('--cm-primary', hex);
+  const st = document.documentElement.style;
+  st.setProperty('--cm-primary', hex);
+  // 深色档 + 强调色：播放页背景、缓冲条底衬、进度条等若继续用写死色，
+  // 换封面时就只有零散几处跟着变，观感割裂——这几个变量把取色"覆盖"到它们。
+  if (pal) {
+    if (pal.deep) st.setProperty('--cm-primary-deep', pal.deep);
+    if (pal.dark) st.setProperty('--cm-primary-dark', pal.dark);
+    if (pal.accent) st.setProperty('--cm-accent', pal.accent);
+    if (pal.accentDeep) st.setProperty('--cm-accent-deep', pal.accentDeep);
+  }
 }
 
 export function bootColorScheme() {

@@ -34,16 +34,26 @@ export async function mountDiscover(el) {
   root.className = 'cm-disc';
   root.innerHTML = `
     <div id="discBanner"></div>
+    <div class="cm-anchorbar" id="discNav">
+      <span class="cm-hot" data-go="discHeart">心动模式</span>
+      <span class="cm-hot" data-go="discNew">新歌</span>
+      <span class="cm-hot" data-go="discRec">歌单</span>
+      <span class="cm-hot" data-go="discPriv">独家</span>
+      <span class="cm-hot" data-go="discTop">榜单</span>
+      <span class="cm-hot" data-go="discStyle">曲风</span>
+      <span class="cm-hot" data-go="discAlbum">新碟</span>
+      <span class="cm-hot" data-go="discMv">MV</span>
+    </div>
     ${cardShell('discHeart', '心动模式')}
-    ${cardShell('discRec', '推荐歌单')}
     ${cardShell('discNew', '推荐新歌')}
+    ${cardShell('discRec', '推荐歌单')}
+    ${cardShell('discPriv', '独家放送')}
     ${cardShell('discTop', '排行榜')}
     ${cardShell('discStyle', '曲风分类')}
     ${cardShell('discHq', '精品歌单')}
     ${cardShell('discAlbum', '新碟上架')}
     ${cardShell('discMv', 'MV 排行')}
-    ${cardShell('discArtistTop', '歌手榜')}
-    ${cardShell('discPriv', '独家放送')}`;
+    ${cardShell('discArtistTop', '歌手榜')}`;
   el.appendChild(root);
   const q = sel => root.querySelector(sel);
 
@@ -54,6 +64,15 @@ export async function mountDiscover(el) {
     const title = s.querySelector('h2') ? s.querySelector('h2').textContent : '';
     s.innerHTML = `<div class="cm-sec-head"><h2>${title}</h2></div><div class="cm-empty small">${msg}</div>`;
   };
+
+  // 顶部导航：点一下滚到对应分区（粘性条，长页面里不用一路划）
+  const nav = q('#discNav');
+  if (nav) nav.querySelectorAll('[data-go]').forEach(c => {
+    c.onclick = () => {
+      const t = q('#' + c.dataset.go);
+      if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+  });
 
   const jobs = [];
 

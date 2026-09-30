@@ -47,7 +47,7 @@ function renderMini() {
   el.style.display = '';
   const m = player.meta;
   el.innerHTML = `
-    <div class="cm-mini-prog"><i id="miniProg"></i></div>
+    <div class="cm-mini-prog"><i id="miniBuf"></i><i id="miniProg"></i></div>
     <div class="cm-mini-inner">
       ${m.pic ? `<img src="${esc(m.pic)}">` : `<div class="cm-mini-ph"><span class="material-icons-outlined">music_note</span></div>`}
       <div class="cm-mini-text">
@@ -71,6 +71,12 @@ on('time', () => {
   const pos = player.posMs(), dur = player.durMs();
   const bar = document.getElementById('miniProg');
   if (bar) bar.style.width = dur ? (pos / dur * 100) + '%' : '0%';
+  const mbuf = document.getElementById('miniBuf');
+  if (mbuf) mbuf.style.width = player.bufferPct() + '%';
+  const pbuf = document.getElementById('plBuf');
+  if (pbuf) pbuf.style.width = player.bufferPct() + '%';
+  const pfill = document.getElementById('plFill');
+  if (pfill && dur) pfill.style.width = (pos / dur * 100) + '%';
   syncLyric();
   const t = document.getElementById('plCur'), d = document.getElementById('plDur'), s = document.getElementById('plSeek');
   if (t) t.textContent = fmtDur(pos);
@@ -433,8 +439,16 @@ async function openFull() {
             ${waveformHTML()}
             <div class="pl-seek">
               <span id="plCur">0:00</span>
-              <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0">
+              <div class="pl-seekbar" id="plSeekbar">
+                <i class="pl-buf" id="plBuf" title="已缓冲"></i>
+                <i class="pl-fill" id="plFill"></i>
+                <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0" aria-label="播放进度">
+              </div>
               <span id="plDur">0:00</span>
+            </div>
+            <div class="pl-stall" id="plStall" hidden>
+              <mdui-circular-progress style="width:13px;height:13px"></mdui-circular-progress>
+              <span id="plStallText">缓冲中…</span>
             </div>
           </div>
           <div class="pl-transport">
@@ -719,18 +733,35 @@ async function applyPlayerBg() {
   };
   setG('linear-gradient(155deg, #6750a4 0%, #4a3a78 48%, #322653 100%)',
        'linear-gradient(205deg, #4a3a78 0%, #6750a4 55%, #322653 100%)');   // 兜底色组，取色成功后覆盖
+  // 先用「上一次成功的色组」立即上色（coverColors 在取不到时也会返回它），
+  // 再等本次取色回来覆盖：这样切歌不会先闪一下默认紫。
+  const quick = await coverColors(player.meta.pic);
+  if (quick && player.meta && document.getElementById('plBg') === el) {
+    setG(g(quick, 155), g({ ...quick, primary: quick.deep, deep: quick.primary }, 205));
+  }
   const cs = await coverColors(player.meta.pic);
   if (!cs || !player.meta || document.getElementById('plBg') !== el) return;
   setG(g(cs, 155), g({ ...cs, primary: cs.deep, deep: cs.primary }, 205));
 }
 
-// 动态取色：配色方案为 dynamic 时随封面切换全局主色
+// 动态取色：配色方案为 dynamic 时随封面切换全局主色（含深色档/强调色，见 applyColorScheme）
 async function applyDynamicScheme() {
   if (getColorSchemeKey() !== 'dynamic' || !player.meta) return;
   const cs = await coverColors(player.meta.pic);
-  if (cs && player.meta) applyColorScheme(cs.primary);
+  if (cs && player.meta) applyColorScheme(cs.primary, cs);
 }
 on('song', () => { applyDynamicScheme(); });
+// 缓冲进度：progress 事件与 tick 都会驱动，这里保证进度条上的缓冲区间实时更新
+on('buffer', () => {
+  const pct = player.bufferPct() + '%';
+  const b = document.getElementById('plBuf'); if (b) b.style.width = pct;
+  const mb = document.getElementById('miniBuf'); if (mb) mb.style.width = pct;
+});
+// 卡顿提示：waiting/stalled 时显示「缓冲中…」，恢复或自愈成功即隐藏
+on('stalling', on => {
+  const box = document.getElementById('plStall');
+  if (box) box.hidden = !on;
+});
 
 /** 切歌时轻量更新播放页的歌曲字段（封面/标题/歌手/统计/音质），不重建 overlay——
  * 重建会导致歌词区被清空再异步填充，产生"突然消失又出现"的闪烁。 */

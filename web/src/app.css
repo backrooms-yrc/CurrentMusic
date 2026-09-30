@@ -195,7 +195,9 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
   height: var(--cm-mini-h);
 }
 .cm-mini-prog { position: absolute; top: 0; left: 0; right: 0; height: 3px; z-index: 2; background: transparent; }
-.cm-mini-prog i { display: block; height: 100%; width: 0; background: var(--cm-primary); transition: width .3s linear; }
+.cm-mini-prog i { position: absolute; left: 0; top: 0; display: block; height: 100%; width: 0; background: var(--cm-primary); transition: width .3s linear; }
+/* 缓冲层压在进度层下面：一眼看出"已经缓存到哪"，弱网时心里有底 */
+.cm-mini-prog #miniBuf { background: color-mix(in srgb, var(--cm-primary) 32%, transparent); transition: width .5s linear; }
 .cm-mini-inner {
   display: flex; align-items: center; gap: 10px; height: 100%; padding: 0 12px;
   background: var(--mdui-color-surface-container-high, #ece6f0);
@@ -278,7 +280,7 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 .cm-empty .material-icons-outlined { font-size: 40px; opacity: .4; }
 .cm-empty.small { padding: 18px 0; font-size: 13px; }
 
-.cm-sec { margin-bottom: 20px; }
+.cm-sec { margin-bottom: 20px; scroll-margin-top: 58px; }   /* 顶部粘性导航的高度：跳转后标题不被遮住 */
 .cm-sec-head { display: flex; align-items: baseline; justify-content: space-between; margin: 6px 2px 10px; }
 .cm-sec-head h2 { margin: 0; font-size: 16px; font-weight: 500; letter-spacing: .1px; }  /* MD3 title-medium */
 .cm-sec-more { font-size: 12px; font-weight: 500; color: var(--cm-primary); cursor: pointer; display: flex; align-items: center; gap: 2px; }
@@ -324,6 +326,18 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 .cm-pop, .cm-like-n { border-radius: 6px; padding: 0 4px; background: color-mix(in srgb, var(--cm-primary) 10%, transparent); }
 
 /* ---------- 歌单库 ---------- */
+/* 发现页顶部找歌导航：粘住顶部（长页面里随时能跳分区），可横向滚动 */
+.cm-anchorbar {
+  position: sticky; top: 0; z-index: 6;
+  display: flex; gap: 8px; overflow-x: auto; padding: 8px 2px;
+  margin: -4px 0 10px;
+  background: color-mix(in srgb, var(--mdui-color-surface, #fef7ff) 86%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid color-mix(in srgb, var(--mdui-color-outline-variant, #cac4d0) 26%, transparent);
+  scrollbar-width: none;
+}
+.cm-anchorbar::-webkit-scrollbar { display: none; }
+.cm-anchorbar .cm-hot { flex: none; }
 .cm-quickrow { display: flex; gap: 10px; margin-bottom: 16px; }
 .cm-quick {
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 6px;
@@ -617,7 +631,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 /* 毛玻璃遮罩：fixed 相对视口 + 60px 出血，永远铺满全屏；无封面时深色底兜底 */
 .pl-bg {
   position: fixed; top: -60px; right: -60px; bottom: -60px; left: -60px; inset: -60px; z-index: 0;
-  background-color: #2a2732; background-size: cover; background-position: center;
+  background-color: var(--cm-primary-dark, #2a2732); background-size: cover; background-position: center;
   filter: blur(60px) brightness(.62) saturate(1.35);
 }
 .pl-page { position: relative; z-index: 1; }
@@ -709,17 +723,17 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-cast-vol { display: flex; align-items: center; gap: 10px; }
 .cm-cast-vol .material-icons-outlined { font-size: 20px; opacity: .7; }
 .cm-cast-vol input { flex: 1; accent-color: var(--cm-primary); }
-.pl-btn.on { color: #d0bcff; }
-.pl-cover-wrap { margin: 18px 0 14px; flex: none; }
+.pl-btn.on { color: var(--cm-primary, #d0bcff); }
+.pl-cover-wrap { margin: 10px 0 10px; flex: none; }
 #plCover {
-  width: min(72vw, 300px, 42vh); height: min(72vw, 300px, 42vh); border-radius: 20px; object-fit: cover;
+  width: min(68vw, 286px, 40vh); height: min(68vw, 286px, 40vh); border-radius: 20px; object-fit: cover;
   box-shadow: 0 12px 48px rgba(0,0,0,.45); background: rgba(255,255,255,.08);
 }
 .pl-info { text-align: center; max-width: 100%; }
 .pl-name { font-size: 19px; font-weight: 750; }
 .pl-artist { font-size: 12px; opacity: .8; margin-top: 3px; }
 .pl-stats { display: flex; gap: 12px; font-size: 11px; opacity: .85; margin-top: 6px; min-height: 16px; }
-.pl-ctrl { display: flex; gap: 18px; align-items: center; margin: 12px 0 4px; }
+.pl-ctrl { display: flex; gap: 18px; align-items: center; margin: 8px 0 2px; }
 .pl-ctrl .material-icons-outlined { font-size: 22px; }
 .pl-progress-stack { width: 100%; }
 /* 进度条上方的音乐波形：canvas 由真实频谱绘制（waveform.js）。
@@ -728,14 +742,40 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-waveform {
   /* 高度：30px 偏薄，柱子的起伏看不太出来；加高后既更有存在感，
      也让同样的能量差在视觉上更明显（宽屏再高一些，见下方断点） */
-  position: relative; height: 46px; margin: 8px 10px 0;
+  position: relative; height: 46px; margin: 3px 10px 0;
 }
 .pl-waveform canvas { display: block; width: 100%; height: 100%; }
 /* 宽屏（Pad / 桌面）有更多纵向空间，波形再高一些 */
 @media (min-width: 600px) { .pl-waveform { height: 58px; } }
 .pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: 10px; opacity: .85; }
 .pl-seek input[type=range] { flex: 1; accent-color: var(--cm-primary, #d0bcff); }
-.pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 22px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
+/* 进度条三层：底槽 → 已缓冲 → 已播放。range 自身轨道透明，只保留可拖的滑块，
+   这样"缓冲进度"才画得出来（原生 range 没法同时表达播放点与缓冲点）。 */
+.pl-seekbar { position: relative; flex: 1; min-width: 0; height: 22px; display: flex; align-items: center; }
+.pl-seekbar::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+  height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .22);
+}
+.pl-buf, .pl-fill {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  height: 4px; width: 0; border-radius: 999px; pointer-events: none;
+}
+.pl-buf { background: color-mix(in srgb, var(--cm-primary, #d0bcff) 42%, rgba(255, 255, 255, .38)); transition: width .5s linear; }
+.pl-fill { background: var(--cm-primary, #d0bcff); }
+.pl-seekbar input[type=range] { position: relative; z-index: 1; flex: 1; margin: 0; background: transparent; }
+.pl-seekbar input[type=range]::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+.pl-seekbar input[type=range]::-moz-range-track { height: 4px; background: transparent; }
+.pl-seekbar input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 13px; height: 13px; margin-top: -4.5px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+}
+.pl-seekbar input[type=range]::-moz-range-thumb {
+  width: 13px; height: 13px; border: 0; border-radius: 50%; background: #fff;
+}
+/* 卡顿提示：waiting/stalled 时出现，位置就在进度条下方（不挤动控件布局） */
+.pl-stall { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 3px; font-size: 11px; opacity: .85; }
+.pl-stall[hidden] { display: none; }
+.pl-transport { display: flex; align-items: center; gap: 26px; margin: 2px 0 28px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
 .pl-transport .material-icons-outlined { font-size: 38px; }
 .pl-transport .huge .material-icons-outlined { font-size: 62px; }
 /* Apple 风走带图标（SVG，仿 SF Symbols）：尺寸与原先的 Material 图标一致，

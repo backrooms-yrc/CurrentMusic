@@ -191,6 +191,45 @@ export const player = {
   // ---------- 心动模式（/playmode/intelligence/list）----------
   // 与上面「播放模式四合一」正交：那四个管**队列怎么轮**，这个管**队列怎么续**。
   // 开启后，队列快见底时自动以当前曲目为种子取一批续播追加到队尾，实现持续智能播放。
+  // 下一首预取：提前解析地址并按网络情况预拉（见 _prefetchNext）
+  _prefetch: null,
+  _prefetchBusy: false,
+
+  /** 已缓冲到的百分比（进度条据此画出缓冲区间）。 */
+  bufferPct() { updateBufPct(); return bufPct; },
+  /** 是否正在卡顿（UI 显示"缓冲中"）。 */
+  get stalling() { return stallNotified; },
+
+  /**
+   * 提前解析下一首的播放地址，并按网络情况用隐藏 audio 预拉一段。
+   * 省流模式与 2G/3G 下直接跳过——宁可慢一点，也不偷跑用户流量。
+   * 无论是否预拉成功，"地址已解析"本身就省掉了切歌时的一次往返。
+   */
+  async _prefetchNext() {
+    if (!this.queue.length || this._prefetchBusy) return;
+    const nx = this.queue[this.index + 1] || this.queue[0];
+    if (!nx || !nx.ncm_id) return;
+    if (this._prefetch && String(this._prefetch.id) === String(nx.ncm_id)) return;
+    try {
+      const c = navigator.connection || navigator.mozConnection || {};
+      if (c.saveData) return;
+      if (c.effectiveType && /(^|-)2g$|(^|-)3g$/.test(c.effectiveType)) return;
+    } catch { /* 忽略 */ }
+    this._prefetchBusy = true;
+    try {
+      const info = await resolveSongUrl(nx, settings.quality);
+      // 期间可能已切歌或又预取了别的：过期结果直接丢弃
+      const still = this.queue[this.index + 1] || this.queue[0];
+      if (!still || String(still.ncm_id) !== String(nx.ncm_id)) return;
+      const el = new Audio();
+      el.preload = 'auto';
+      el.muted = true;                       // 不发声（也不接 Web Audio 图）
+      try { el.src = info.url; el.load(); } catch { /* 忽略 */ }
+      this._prefetch = { id: nx.ncm_id, url: info.url, type: info.type, level: info.level, el };
+    } catch { /* 预取失败不影响正常播放 */ }
+    finally { this._prefetchBusy = false; }
+  },
+
   heartMode: localStorage.getItem('cm.heart') === '1',
   _heartBusy: false,
   _heartMiss: 0,          // 连续取不到新曲目的次数（上游异常时不无脑续）
@@ -315,7 +354,13 @@ export const player = {
     }
     let info;
     try {
-      info = await resolveSongUrl(this.meta, settings.quality);
+      const pf = this._prefetch;
+      if (pf && String(pf.id) === String(this.meta.ncm_id) && pf.url) {
+        info = { url: pf.url, type: pf.type || 'mp3', level: pf.level || 'auto' };
+        this._prefetch = null;             // 用完即弃（元素随之可回收）
+      } else {
+        info = await resolveSongUrl(this.meta, settings.quality);
+      }
     } catch (e) {
       this.loading = false;
       toast(`「${this.meta.name}」${e.message || '播放失败'}`);
@@ -540,6 +585,67 @@ export const player = {
   get audio() { return audio; },
 };
 
+// ---------- 播放抗卡顿（缓冲可视化 / 卡顿自愈 / 下一首预取）----------
+// 网络抖动是移动端最主要的"听着听着顿一下"来源。这里做三件事：
+//   ① 把浏览器真实缓冲到的位置暴露给 UI（进度条上画出已缓冲区间）；
+//   ② 卡住不动超过 6s 就**用新地址在原位置续播**（签名地址失效/连接半死都能救回来），
+//      而不是直接跳下一首；
+//   ③ 提前解析下一首的播放地址并按网络情况悄悄预拉，切歌时省掉一次往返。
+let bufPct = 0;              // 已缓冲到的百分比（相对总时长）
+let stallTimer = 0;
+let lastPos = 0;
+let recovering = false;
+let stallNotified = false;
+
+function updateBufPct() {
+  try {
+    const d = audio.duration;
+    if (!d || !isFinite(d) || !audio.buffered || !audio.buffered.length) { bufPct = 0; return; }
+    const t = audio.currentTime;
+    let end = 0;
+    // 优先取「包含当前播放位置」的那段缓冲的末端：多段 Range 时这才是用户理解的"缓存到哪"
+    for (let i = 0; i < audio.buffered.length; i++) {
+      if (audio.buffered.start(i) <= t + .25 && t <= audio.buffered.end(i) + .25) end = audio.buffered.end(i);
+    }
+    if (!end) end = audio.buffered.end(audio.buffered.length - 1);
+    bufPct = Math.max(0, Math.min(100, (end / d) * 100));
+  } catch { bufPct = 0; }
+}
+
+/** 卡顿看门狗：只在"想播却在等待"时武装，位置一前进就解除。 */
+function armStallWatch() {
+  clearTimeout(stallTimer);
+  lastPos = audio.currentTime || 0;
+  stallTimer = setTimeout(() => {
+    stallTimer = 0;
+    if (!player.wantPlaying || audio.paused) return;
+    if (Math.abs((audio.currentTime || 0) - lastPos) < .3) recoverStalled();
+  }, 6000);
+}
+function clearStallWatch() {
+  if (stallTimer) { clearTimeout(stallTimer); stallTimer = 0; }
+  if (stallNotified) { stallNotified = false; emit('stalling', false); }
+}
+
+/** 卡顿自愈：重新解析地址并在**原位置**续播（比"卡住就跳下一首"体面得多）。 */
+async function recoverStalled() {
+  if (recovering || !player.meta) return;
+  recovering = true;
+  if (!stallNotified) { stallNotified = true; emit('stalling', true); }
+  try {
+    const at = audio.currentTime || 0;
+    const info = await resolveSongUrl(player.meta, settings.quality);
+    player.urlInfo = info;
+    loadUrl(info.url, at);
+    if (player.wantPlaying) audio.play().catch(() => {});
+    toast('网络波动，已在原位置续播');
+  } catch { /* 自愈失败：交给上层失败计数与跳曲逻辑 */ }
+  finally {
+    recovering = false;
+    if (stallNotified) { stallNotified = false; emit('stalling', false); }
+  }
+}
+
 // ---------- 音频元素事件（集中绑定；元素被 CORS 回退重建时重新绑定）----------
 let lastMediaPushSec = -1;
 let resumeTimer = 0, resumeTries = 0;
@@ -553,6 +659,12 @@ function bindAudio(el) {
   el.addEventListener('timeupdate', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
     emit('time');
+    updateBufPct();
+    if (stallNotified) { stallNotified = false; emit('stalling', false); }   // 位置前进了 = 卡顿结束
+    if (stallTimer) clearStallWatch();
+    // 缓冲过半后悄悄预取下一首（省流/弱网下跳过，见 _prefetchNext）
+    if (el.buffered && el.buffered.length && el.duration && isFinite(el.duration)
+        && el.buffered.end(el.buffered.length - 1) / el.duration > .5) player._prefetchNext();
     // 蓝牙/通知进度：每 5s 同步一次（AVRCP 由系统按 playbackState 自推进度，无需逐帧）
     const sec = Math.floor(el.currentTime);
     if (!el.seeking && sec !== lastMediaPushSec && sec % 5 === 0) {
@@ -562,6 +674,25 @@ function bindAudio(el) {
       const half = isFinite(el.duration) && el.duration > 0 ? el.duration / 2 : Infinity;
       if (sec >= 30 || sec >= half) player.scrobble();
     }
+  });
+  el.addEventListener('waiting', () => {
+    if (el !== audio) return;
+    // 缓冲等待：先让 UI 说话（"缓冲中"），6s 还没动静才自愈
+    if (!stallNotified) { stallNotified = true; emit('stalling', true); }
+    armStallWatch();
+  });
+  el.addEventListener('stalled', () => {
+    if (el !== audio) return;
+    armStallWatch();                   // 上游断流：同样交给看门狗
+  });
+  el.addEventListener('canplay', () => {
+    if (el !== audio) return;
+    clearStallWatch();
+  });
+  el.addEventListener('progress', () => {
+    if (el !== audio) return;
+    updateBufPct();
+    emit('buffer');                    // 让进度条重画已缓冲区间
   });
   el.addEventListener('play', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
