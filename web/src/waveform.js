@@ -37,6 +37,8 @@ const ATTACK_MS = 45;
 const RELEASE_MS = 190;
 const PEAK_HOLD_MS = 480;               // 峰值帽保持时间（audioMotion peakHoldTime 500ms）
 const PEAK_FALL = 1.9;                  // 峰值回落加速度（相对高度/秒²）
+const DROP_G = 3.2;                     // 暂停后柱子下落的加速度（相对高度/秒²，约 0.8s 落到底）
+const DROP_EPS = 0.004;                 // 落到底的判定阈值（避免浮点残值让循环不退出）
 
 export function createWaveform(canvas, opts) {
   const read = opts.read;
@@ -47,7 +49,7 @@ export function createWaveform(canvas, opts) {
   const ctx = canvas.getContext('2d');
   let dpr = 1, cssW = 0, cssH = 0;
   let bars = 0;
-  let level = null, peak = null, peakAt = null, peakVel = null;
+  let level = null, peak = null, peakAt = null, peakVel = null, dropVel = null;
   let raf = 0, lastTs = 0;
   let playing = false, hasData = false;
   let reduced = false, alive = true;
@@ -81,6 +83,7 @@ export function createWaveform(canvas, opts) {
     peak = new Float32Array(bars);
     peakAt = new Float32Array(bars);
     peakVel = new Float32Array(bars);
+    dropVel = new Float32Array(bars);
     grad = null;
   }
 
@@ -233,10 +236,16 @@ export function createWaveform(canvas, opts) {
   function frame(ts) {
     if (!alive) return;
     raf = 0;
-    if (!playing || reduced) { stop(); return; }
+    if (reduced) { stop(); return; }
     const dt = lastTs ? Math.min(64, Math.max(8, ts - lastTs)) : 16;
     lastTs = ts;
-    sample(dt);
+    if (playing) {
+      sample(dt);
+    } else if (!drop(dt)) {          // 暂停后一直下落，落到底才收工（不再瞬间归零）
+      draw();
+      stop();
+      return;
+    }
     draw();
     raf = requestAnimationFrame(frame);
   }
@@ -256,17 +265,40 @@ export function createWaveform(canvas, opts) {
     if (level) level.fill(0);
     if (peak) peak.fill(0);
     if (peakVel) peakVel.fill(0);
+    if (dropVel) dropVel.fill(0);
+  }
+
+  /**
+   * 暂停后的自然下落（用户反馈：原先暂停瞬间归零，没有下落过程）。
+   * 柱子按重力加速下落、峰值帽略快跟下；全部落到底返回 false，让帧循环收工。
+   */
+  function drop(dt) {
+    const s = dt / 1000;
+    let top = 0;
+    for (let i = 0; i < level.length; i++) {
+      dropVel[i] += DROP_G * s;
+      level[i] = Math.max(0, level[i] - dropVel[i] * s);
+      const pv = dropVel[i] * 1.15;                       // 峰值帽跟得稍快，视觉上一起落下
+      peak[i] = Math.max(level[i], peak[i] - pv * s);
+      if (level[i] > top) top = level[i];
+    }
+    return top > DROP_EPS;
   }
 
   return {
     style,
     setPlaying(on) {
       playing = !!on;
-      if (playing && !reduced) { hasData = false; start(); }
-      else {                                   // 暂停/无数据：停循环并回到静默基线
-        stop();
-        resetLevels();
-        draw();
+      if (playing && !reduced) {
+        hasData = false;
+        if (dropVel) dropVel.fill(0);          // 恢复播放：取消下落速度，重新跟频谱
+        start();
+      } else if (reduced) {                    // 无障碍偏好：不做下落动画，直接回基线
+        stop(); resetLevels(); draw();
+      } else if (raf) {
+        if (dropVel) dropVel.fill(0);          // 正在显示：交给帧循环自然下落（不立刻清零）
+      } else {                                 // 本来就没在动（如刚打开播放页且已暂停）
+        resetLevels(); draw();
       }
     },
     levels() { return level ? Array.prototype.slice.call(level) : []; },
