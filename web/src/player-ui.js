@@ -50,6 +50,14 @@ function renderEmoticons(escaped) {
 
 const overlay = () => document.getElementById('playerOverlay');
 
+// 播放页的波形使用固定节奏，避免每次重绘随机跳动；实际播放状态和进度由下方
+// 的事件实时驱动。保留足够的高低起伏，在窄屏下也仍能辨认出波形轮廓。
+const WAVE_BARS = [30, 54, 76, 43, 64, 92, 58, 36, 70, 48, 84, 61, 38, 74, 52, 96, 67, 41, 79, 57, 88, 46, 69, 34, 73, 55, 90, 63, 40, 81, 50, 72];
+function waveformHTML() {
+  return `<div class="pl-waveform ${player.isPlaying() ? 'playing' : ''}" id="plWaveform" aria-hidden="true"><div class="pl-wave-bars">${WAVE_BARS.map((height, i) =>
+    `<i style="--wave-height:${height}%;--wave-delay:-${(i % 9) * 0.16}s"></i>`).join('')}</div></div>`;
+}
+
 // ---------- 迷你条 ----------
 
 function renderMini() {
@@ -87,6 +95,8 @@ on('time', () => {
   if (t) t.textContent = fmtDur(pos);
   if (d && dur) d.textContent = fmtDur(dur);
   if (s && !s.dataset.drag) s.value = dur ? (pos / dur) * 100 : 0;
+  const wave = document.getElementById('plWaveform');
+  if (wave) wave.style.setProperty('--wave-progress', dur ? Math.min(100, pos / dur * 100) + '%' : '0%');
 });
 
 // ---------- 全屏播放页 ----------
@@ -417,10 +427,13 @@ async function openFull() {
             <span class="pl-btn ${player.playMode !== 'order' ? 'on' : ''}" id="plMode" title="${PLAY_MODES.find(x => x.key === player.playMode).label}"><span class="material-icons-outlined">${PLAY_MODES.find(x => x.key === player.playMode).icon}</span></span>
             <span class="pl-btn" id="plQueue" title="当前播放列表"><span class="material-icons-outlined">queue_music</span></span>
           </div>
-          <div class="pl-seek">
-            <span id="plCur">0:00</span>
-            <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0">
-            <span id="plDur">0:00</span>
+          <div class="pl-progress-stack">
+            ${waveformHTML()}
+            <div class="pl-seek">
+              <span id="plCur">0:00</span>
+              <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0">
+              <span id="plDur">0:00</span>
+            </div>
           </div>
           <div class="pl-transport">
             <span class="pl-btn big" id="plPrev" title="上一首">${AM_ICON.prev}</span>
@@ -441,7 +454,7 @@ async function openFull() {
   const bodyEl = ov.querySelector('.pl-body');
   bodyEl.addEventListener('click', e => {
     if (window.matchMedia('(min-width: 600px)').matches) return;
-    if (e.target.closest('.pl-ctrl, .pl-seek, .pl-transport')) return;      // 控制区不触发
+    if (e.target.closest('.pl-ctrl, .pl-progress-stack, .pl-transport')) return;      // 控制区不触发
     if (e.target.closest('.pl-lyric-line')) return;                          // 歌词行点击=跳播
     setPlayerView(playerView === 'cover' ? 'lyric' : 'cover');
   });
@@ -461,6 +474,9 @@ async function openFull() {
   };
   ov.querySelector('#plQueue').onclick = openQueue;
   const seek = ov.querySelector('#plSeek');
+  const wave = ov.querySelector('#plWaveform');
+  const dur = player.durMs();
+  if (wave) wave.style.setProperty('--wave-progress', dur ? Math.min(100, player.posMs() / dur * 100) + '%' : '0%');
   seek.oninput = () => { seek.dataset.drag = '1'; };
   seek.onchange = () => {
     const dur = player.durMs();
@@ -714,6 +730,8 @@ on('state', () => {
   if (!player.isPlaying()) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');
   if (b) b.innerHTML = amPlayIcon();
+  const wave = document.getElementById('plWaveform');
+  if (wave) wave.classList.toggle('playing', player.isPlaying());
   renderMini();
 });
 

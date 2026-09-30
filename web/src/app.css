@@ -720,6 +720,38 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-stats { display: flex; gap: 12px; font-size: 11px; opacity: .85; margin-top: 6px; min-height: 16px; }
 .pl-ctrl { display: flex; gap: 18px; align-items: center; margin: 12px 0 4px; }
 .pl-ctrl .material-icons-outlined { font-size: 22px; }
+.pl-progress-stack { width: 100%; }
+/* 进度条上方的音乐波形：静止时保持清晰的节奏轮廓，播放时各柱独立呼吸。
+   --wave-progress 由播放器时间轴更新，亮起的扫描线与可拖动进度保持同步。 */
+.pl-waveform {
+  --wave-progress: 0%;
+  position: relative; height: 32px; margin: 1px 10px 0; overflow: hidden;
+  border-radius: 9px; opacity: .72;
+  background: linear-gradient(90deg, rgba(255,255,255,.14), rgba(255,255,255,.035));
+}
+.pl-waveform::after {
+  content: ''; position: absolute; top: 3px; bottom: 3px; left: 0; width: var(--wave-progress);
+  border-right: 1px solid rgba(255,255,255,.95); border-radius: inherit;
+  background: linear-gradient(90deg, rgba(208,188,255,.24), rgba(255,255,255,.08));
+  box-shadow: 3px 0 12px rgba(208,188,255,.7); pointer-events: none;
+}
+.pl-wave-bars { position: absolute; top: 4px; right: 7px; bottom: 4px; left: 7px; display: flex; align-items: center; justify-content: space-between; }
+.pl-wave-bars i {
+  display: block; width: 3px; min-height: 4px; height: var(--wave-height); border-radius: 4px;
+  background: linear-gradient(to top, rgba(208,188,255,.72), rgba(255,255,255,.96));
+  box-shadow: 0 0 6px rgba(208,188,255,.22); transform-origin: center;
+  animation: cmWavePulse 1.15s ease-in-out var(--wave-delay) infinite alternate; animation-play-state: paused;
+}
+.pl-waveform.playing { opacity: 1; }
+.pl-waveform.playing .pl-wave-bars i { animation-play-state: running; }
+@keyframes cmWavePulse { from { transform: scaleY(.5); } to { transform: scaleY(1); } }
+/* 「减少动态效果」：波形柱不再呼吸起伏，只保留静态轮廓与进度扫描线
+   （README 声称遵循该偏好，但原先的 reduced-motion 块只作用于 #playerOverlay 自身，
+   管不到内部的柱子，这里补齐） */
+@media (prefers-reduced-motion: reduce) {
+  .pl-wave-bars i { animation: none !important; }
+  .pl-waveform::after { transition: none !important; }
+}
 .pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: 10px; opacity: .85; }
 .pl-seek input[type=range] { flex: 1; accent-color: var(--cm-primary, #d0bcff); }
 .pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 22px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
