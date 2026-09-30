@@ -20,9 +20,12 @@ const corsFailHosts = {};     // 不支持 CORS 的**域名**（AI 审查建议�
 export const wave = {
   get ready() { return !!analyser; },
   get bins() { return analyser ? analyser.frequencyBinCount : 256; },
-  read(u8) {
+  /** 填充**浮点 dB** 频谱（无能量处为 -Infinity）。不可用时返回 false。
+   *  用浮点而非 byte：byte 会被 min/maxDecibels 截断到 0~255，响的音乐整片顶格、
+   *  动态范围丢失（用户反馈"指示器一直高位、没有律动"就是它导致的）。 */
+  read(f32) {
     if (!analyser) return false;
-    try { analyser.getByteFrequencyData(u8); return true; } catch (e) { return false; }
+    try { analyser.getFloatFrequencyData(f32); return true; } catch (e) { return false; }
   },
   /** 用户手势后恢复上下文（自动播放策略可能让新建的上下文停在 suspended）。 */
   resume() {
@@ -75,15 +78,13 @@ function buildGraph(el) {
     actx = new AC();
     srcNode = actx.createMediaElementSource(el);
     analyser = actx.createAnalyser();
-    // 参考 audioMotion-analyzer 的默认档位：
-    //  · fftSize 2048 → 频率分辨率更高，柱与柱之间过渡自然（默认 2048，比 512 细腻）
-    //  · min/maxDecibels -85/-25 → **关键**。浏览器默认 -100/-30 会把正常音量的
-    //    频谱整片顶到 255（每根柱都满格、糊成一片），-85/-25 才有层次感
-    //  · smoothing 0.5~0.75 → 平滑但不糊
+    // fftSize 2048 → 频率分辨率更高，柱与柱之间过渡自然
+    // smoothing 0.5 → 与 audioMotion 默认一致。原先用 0.72 在 FFT 层就把起伏压平了，
+    // 真机上表现为"柱子不爱动"（柱高另有快攻击/慢释放包络负责顺滑）
+    // 注：min/maxDecibels 只影响 getByteFrequencyData，波形改用浮点 dB（见 wave.read），
+    // 因此不再设置它们——固定 dB 窗口正是"始终高位、没有律动"的根因。
     analyser.fftSize = 2048;
-    analyser.minDecibels = -85;
-    analyser.maxDecibels = -25;
-    analyser.smoothingTimeConstant = 0.72;
+    analyser.smoothingTimeConstant = 0.5;
     srcNode.connect(analyser);
     analyser.connect(actx.destination);      // 必须接回目的地，否则没声音
     graphEl = el;
