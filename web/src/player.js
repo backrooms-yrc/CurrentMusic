@@ -75,7 +75,14 @@ function buildGraph(el) {
     actx = new AC();
     srcNode = actx.createMediaElementSource(el);
     analyser = actx.createAnalyser();
-    analyser.fftSize = 512;
+    // 参考 audioMotion-analyzer 的默认档位：
+    //  · fftSize 2048 → 频率分辨率更高，柱与柱之间过渡自然（默认 2048，比 512 细腻）
+    //  · min/maxDecibels -85/-25 → **关键**。浏览器默认 -100/-30 会把正常音量的
+    //    频谱整片顶到 255（每根柱都满格、糊成一片），-85/-25 才有层次感
+    //  · smoothing 0.5~0.75 → 平滑但不糊
+    analyser.fftSize = 2048;
+    analyser.minDecibels = -85;
+    analyser.maxDecibels = -25;
     analyser.smoothingTimeConstant = 0.72;
     srcNode.connect(analyser);
     analyser.connect(actx.destination);      // 必须接回目的地，否则没声音
