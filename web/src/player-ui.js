@@ -426,6 +426,7 @@ async function openFull() {
             <span class="pl-btn" id="plAdd"><span class="material-icons-outlined">playlist_add</span></span>
             <span class="pl-btn" id="plComments" title="评论区"><span class="material-icons-outlined">forum</span></span>
             <span class="pl-btn ${player.playMode !== 'order' ? 'on' : ''}" id="plMode" title="${PLAY_MODES.find(x => x.key === player.playMode).label}"><span class="material-icons-outlined">${PLAY_MODES.find(x => x.key === player.playMode).icon}</span></span>
+            <span class="pl-btn ${player.heartMode ? 'on' : ''}" id="plHeart" title="${player.heartMode ? '心动模式已开启：队列快见底自动续播（点击关闭）' : '心动模式：以当前曲目为种子持续智能续播（点击开启）'}"><span class="material-icons-outlined">auto_awesome</span></span>
             <span class="pl-btn" id="plQueue" title="当前播放列表"><span class="material-icons-outlined">queue_music</span></span>
           </div>
           <div class="pl-progress-stack">
@@ -472,6 +473,21 @@ async function openFull() {
     modeBtn.title = next.label;
     modeBtn.querySelector('.material-icons-outlined').textContent = next.icon;
     toast(next.label);
+  };
+  // 心动模式开关：开了就立即补一批（队列够长时也会等到快见底才续）
+  const heartBtn = ov.querySelector('#plHeart');
+  heartBtn.onclick = async () => {
+    const on = player.toggleHeartMode();
+    heartBtn.classList.toggle('on', on);
+    heartBtn.title = on
+      ? '心动模式已开启：队列快见底自动续播（点击关闭）'
+      : '心动模式：以当前曲目为种子持续智能续播（点击开启）';
+    if (!on) { toast('心动模式已关闭'); return; }
+    toast('心动模式已开启');
+    if (player.queue.length - player.index <= 3) {
+      const n = await player.heartExtend();
+      if (!n) toast(player._heartErr || '暂时没取到续播推荐');
+    }
   };
   ov.querySelector('#plQueue').onclick = openQueue;
   const seek = ov.querySelector('#plSeek');

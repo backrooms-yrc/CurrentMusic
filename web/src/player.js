@@ -1,6 +1,6 @@
 // 播放引擎：单例 audio、队列、音质选择（默认自动最高，后端并行探测母带档）、循环/随机、MediaSession。
 import { mdui } from './md.js';
-import { api, auth, settings } from './api.js';
+import { api, auth, settings, ncmSongs } from './api.js';
 import { toast, tierLabel } from './ui.js';
 import { resolveSongUrl } from './songurl.js';   // 三级音源回退（P2）：
 // 曾因漏 import 上线即 ReferenceError 全站无法播放——见 tools/check-js-refs.py
@@ -188,6 +188,106 @@ export const player = {
   })(),
   loading: false,
 
+  // ---------- 心动模式（/playmode/intelligence/list）----------
+  // 与上面「播放模式四合一」正交：那四个管**队列怎么轮**，这个管**队列怎么续**。
+  // 开启后，队列快见底时自动以当前曲目为种子取一批续播追加到队尾，实现持续智能播放。
+  heartMode: localStorage.getItem('cm.heart') === '1',
+  _heartBusy: false,
+  _heartMiss: 0,          // 连续取不到新曲目的次数（上游异常时不无脑续）
+  _heartErr: '',
+
+  setHeartMode(on) {
+    this.heartMode = !!on;
+    try { localStorage.setItem('cm.heart', this.heartMode ? '1' : '0'); } catch { /* 忽略 */ }
+    if (this.heartMode) { this._heartMiss = 0; this._heartErr = ''; }
+    emit('state');
+    return this.heartMode;
+  },
+  toggleHeartMode() { return this.setHeartMode(!this.heartMode); },
+
+  _heartPidCache: null,
+
+  /**
+   * 心动模式要的「上游歌单 id」：**只支持「我喜欢的音乐」（specialType=5）**。
+   * 实测：pid 留空 → 400 参数错误；传普通自建歌单 → 400 不支持该歌单类型；
+   * 传我喜欢 → 200 并返回一个 150 首的池子（其中约一半 recommended=true）。
+   * 故这里先解析出本人「我喜欢的音乐」的歌单 id 并缓存。
+   */
+  async _heartPid() {
+    if (this._heartPidCache) return this._heartPidCache;
+    const st = await api.bindStatus();                 // 项目专用入口（T3 那条不泛化转发）
+    const uid = ((st || {}).profile || {}).uid;
+    if (!uid) throw new Error('需要先绑定网易云账号');
+    const d = await api.ncm('/user/playlist', { uid, limit: 200 });
+    const liked = (d.playlist || []).find(x => x && !x.subscribed && Number(x.specialType) === 5);
+    if (!liked) throw new Error('没找到「我喜欢的音乐」（心动模式只支持这个歌单类型）');
+    this._heartPidCache = liked.id;
+    return liked.id;
+  },
+
+  /**
+   * 取一批心动推荐（已剔除队内已有曲目）。公开：播客页要展示同一份列表，
+   * 复用这里才能避免「pid 解析」与「songInfo 解包」两处各错一遍。
+   */
+  async heartList(seedId, count = 10) {
+    const pid = await this._heartPid();
+    const d = await api.ncm('/playmode/intelligence/list', { id: seedId, sid: seedId, pid, count });
+    // 上游返回的是 { alg, id, recommended, songInfo } 包装：歌曲本体在 songInfo 里，
+    // 直接对 data 调 ncmSongs 会全部映射成空（原实现取不到数据的第二个原因）。
+    const raw = (d.data || []).map(x => (x && x.songInfo) ? x.songInfo : x);
+    const have = new Set(this.queue.map(x => x && String(x.ncm_id)));
+    return ncmSongs(raw).filter(x => x && x.ncm_id && !have.has(String(x.ncm_id))).slice(0, count);
+  },
+
+  /** 心动模式：以 seed（默认当前曲目）为种子续一批到队尾，返回新增条数。 */
+  async heartExtend(seed) {
+    if (this._heartBusy) return 0;
+    const id = ((seed || this.meta) || {}).ncm_id;
+    if (!id) return 0;
+    this._heartBusy = true;
+    try {
+      const fresh = await this.heartList(id);
+      if (!fresh.length) { this._heartMiss++; this._heartErr = '上游没有返回新的续播推荐'; return 0; }
+      this.queue.push(...fresh);
+      this._heartMiss = 0; this._heartErr = '';
+      this.persist();
+      emit('song');                      // 播放列表与角标刷新
+      toast(`心动模式：续上 ${fresh.length} 首`);
+      return fresh.length;
+    } catch (e) {
+      this._heartMiss++;
+      this._heartErr = (e && e.message) || '取续播推荐失败';
+      return 0;
+    } finally { this._heartBusy = false; }
+  },
+
+  /** 队列快见底就提前续（异步补齐，不阻塞切歌）。 */
+  _heartEnsure() {
+    if (!this.heartMode || this._heartBusy) return;
+    if (this._heartMiss >= 3) return;                 // 连续失败：停手，不给上游刷请求
+    if (this.queue.length - this.index > 3) return;   // 还够听
+    this.heartExtend(this.meta);
+  },
+
+  /** 以某首歌为种子开播心动模式（歌曲详情页 / 发现页 / 私人 FM 都走这里）。 */
+  async startHeart(seed) {
+    if (!seed || !seed.ncm_id) { toast('这首没有可用的网易云曲目 ID'); return false; }
+    this.setHeartMode(true);
+    this._heartMiss = 0; this._heartErr = '';
+    let fresh = [];
+    try {
+      fresh = await this.heartList(seed.ncm_id, 12);
+    } catch (e) {
+      toast((e && e.message) || '心动模式取歌失败');
+      this.playList([seed], 0);
+      return false;
+    }
+    const rest = fresh.filter(x => String(x.ncm_id) !== String(seed.ncm_id));
+    this.playList([seed, ...rest], 0);
+    toast(rest.length ? `心动模式：已开播 ${rest.length + 1} 首，播完自动续` : '心动模式：暂时没取到续播，先播这首');
+    return true;
+  },
+
   playList(songs, startIndex = 0) {
     this.queue = songs.filter(Boolean).slice();
     if (this.playMode === 'shuffle' && startIndex === 0) startIndex = Math.floor(Math.random() * this.queue.length);
@@ -210,6 +310,7 @@ export const player = {
       this.report();
       this.persist();
       this.updateMediaSession();
+      this._heartEnsure();          // 投屏中同样要续队列
       return;
     }
     let info;
@@ -244,6 +345,7 @@ export const player = {
     this.report();
     this.persist();
     this.updateMediaSession();
+    this._heartEnsure();            // 队列快见底就提前续（心动模式）
   },
 
   async report() {

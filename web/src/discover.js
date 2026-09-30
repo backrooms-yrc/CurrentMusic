@@ -34,6 +34,7 @@ export async function mountDiscover(el) {
   root.className = 'cm-disc';
   root.innerHTML = `
     <div id="discBanner"></div>
+    ${cardShell('discHeart', '心动模式')}
     ${cardShell('discRec', '推荐歌单')}
     ${cardShell('discNew', '推荐新歌')}
     ${cardShell('discTop', '排行榜')}
@@ -55,6 +56,39 @@ export async function mountDiscover(el) {
   };
 
   const jobs = [];
+
+  // --- 心动模式（账号态）：以「每日推荐」首曲为种子，之后按口味自动续播 ---
+  jobs.push((async () => {
+    const s = sec('discHeart');
+    if (!s || !auth.token) return;                  // 未登录项目账号：不请求，留着占位
+    const head = `<div class="cm-sec-head"><h2>心动模式</h2>`
+      + `<span class="cm-sec-sub">/playmode/intelligence/list</span></div>`;
+    let bound = false;
+    try { bound = !!(await api.bindStatus()).bound; } catch { /* 视为未绑定 */ }
+    if (!bound) {
+      // 未绑定给明确指引，而不是一个点不动的空区块
+      s.innerHTML = head + `<div class="cm-empty small">绑定网易云账号后可用（心动模式按你的口味持续续播）</div>`;
+      return;
+    }
+    s.innerHTML = head
+      + `<div class="cm-chips"><span class="cm-hot" id="heartStart">用每日推荐开启心动模式</span></div>`
+      + `<div class="cm-pe-hint" id="heartHint">以「每日推荐」第一首为种子、「我喜欢的音乐」为池，播完自动续</div>`;
+    s.querySelector('#heartStart').onclick = async () => {
+      const hint = s.querySelector('#heartHint');
+      hint.textContent = '正在取种子曲目…';
+      try {
+        const d = await api.ncm('/recommend/songs');
+        const seed = ncmSongs(((d.data || {}).dailySongs) || [])[0];
+        if (!seed) { hint.textContent = '每日推荐暂时为空，可去「播客与私人 FM」用私人 FM 开启'; return; }
+        hint.textContent = `种子：${seed.name || ''}`;
+        await player.startHeart(seed);
+      } catch (e) {
+        hint.textContent = /绑定/.test(e.message || '')
+          ? '请先在「我的」页绑定网易云账号'
+          : `开启失败：${e.message}`;
+      }
+    };
+  })());
 
   // --- Banner ---
   jobs.push(api.banner(0).then(d => {

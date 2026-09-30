@@ -50,6 +50,7 @@ export async function openSongInfo(meta) {
       </div>
       <div id="siBody">${loading}</div>
       <div class="cm-si-acts">
+        <mdui-button variant="filled" id="siHeart">心动模式播放</mdui-button>
         <mdui-button variant="tonal" id="siLike">同步红心到网易云</mdui-button>
         <mdui-button variant="tonal" id="siShare">分享到网易云动态</mdui-button>
       </div>
@@ -58,6 +59,13 @@ export async function openSongInfo(meta) {
   });
 
   const body = diag.querySelector('#siBody');
+
+  // 心动模式：以这首歌为种子开播并持续智能续播（等价于私人 FM 的「智能续播」，
+  // 但种子由用户自己选）。关闭对话再开播，避免弹窗挡住播放页。
+  diag.querySelector('#siHeart').onclick = async () => {
+    diag.open = false;
+    await player.startHeart(meta);
+  };
 
   // 账号维度写操作（T2，均带 confirm=1）：未绑定会 401，给出明确提示
   diag.querySelector('#siLike').onclick = async () => {

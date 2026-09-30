@@ -83,8 +83,15 @@ export async function render(el, params = {}) {
         <div class="cm-pe-hint" id="fmModeHint">${mode.mode ? `当前：${esc(mode.mode)} / ${esc(mode.submode || '')}` : '点上面的模式切换（上游返回为空表示该模式无内容）'}</div>
       </section>
       <section class="cm-sec">
-        <div class="cm-sec-head"><h2>智能续播</h2><span class="cm-sec-sub">/playmode/intelligence/list</span></div>
-        <div id="fmIntel"><div class="cm-empty small">${songs.length ? '按第一首私人 FM 曲目取续播推荐…' : '没有种子曲目'}</div></div>
+        <div class="cm-sec-head"><h2>心动模式（智能续播）</h2><span class="cm-sec-sub">/playmode/intelligence/list</span></div>
+        <div class="cm-pe-hint">心动模式 = 以「我喜欢的音乐」为池、以种子曲目起播，持续智能续播：
+          点下面任一首即以此开播，队列快见底会自动续上；播放页的 ✨ 开关可随时关闭。</div>
+        <div id="fmIntel"><div class="cm-empty small">${songs.length
+          ? '按第一首私人 FM 曲目取续播推荐…'
+          : '绑定网易云账号后可用（心动模式走账号态推荐）'}</div></div>
+        ${songs.length ? `<div class="cm-pe-acts">
+          <mdui-button variant="filled" id="fmHeart">以这首开启心动模式</mdui-button>
+        </div>` : ''}
       </section>
       ${aidj.length ? `<section class="cm-sec">
         <div class="cm-sec-head"><h2>场景推荐</h2><span class="cm-sec-sub">/aidj/content/rcmd</span></div>
@@ -143,19 +150,26 @@ export async function render(el, params = {}) {
     });
     // 智能续播：以第一首私人 FM 曲目为种子（上游要 id + sid，pid 可空）
     if (songs.length) {
-      api.ncm('/playmode/intelligence/list', { id: songs[0].ncm_id, sid: songs[0].ncm_id, pid: '', count: 6 }).then(d => {
-        const list = ncmSongs(d.data || []);
+      // 复用播放器的心动模式取数：上游只认「我喜欢的音乐」歌单（pid 必填）且
+      // 歌曲包在 songInfo 里，这两点都由 player.heartList 统一处理。
+      player.heartList(songs[0].ncm_id, 8).then(list => {
         const box = body.querySelector('#fmIntel');
         if (!box) return;
         box.innerHTML = list.length
           ? `<div class="cm-chips">${list.map((x, i) => `<span class="cm-hot" data-intel="${i}">${esc(x.name)}</span>`).join('')}</div>`
           : '<div class="cm-empty small">上游没有返回续播推荐</div>';
         box.querySelectorAll('[data-intel]').forEach(c => {
-          c.onclick = () => player.playList(list, +c.dataset.intel);
+          c.onclick = () => player.startHeart(list[+c.dataset.intel]);
         });
+        const hb = body.querySelector('#fmHeart');
+        if (hb) hb.onclick = () => player.startHeart(songs[0]);
       }).catch(e => {
         const box = body.querySelector('#fmIntel');
-        if (box) box.textContent = `续播推荐加载失败：${e.message}`;
+        if (box) {
+          box.textContent = /绑定/.test(e.message || '')
+            ? '绑定网易云账号后可用（心动模式走账号态推荐）'
+            : `续播推荐加载失败：${e.message}`;
+        }
       });
     }
     if (sport.length) {
