@@ -1,5 +1,5 @@
 // 首页：每日推荐 + 排行榜 + 猜你喜欢（登录后） + 最近播放（登录后）
-import { api, auth } from '../api.js';
+import { api, auth, ncmSongs } from '../api.js';
 import { esc, renderSongList, skelCards, skelList } from '../ui.js';
 import { player } from '../player.js';
 
@@ -35,7 +35,23 @@ export async function render(el) {
   let bannerHTML = '';
   const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
   let daily = [], forYou = [], recent = [], artists = [];
+  let recPls = [], ncmBound = false;
   const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => {})];
+  // 每日推荐歌单是账号维度接口（T1）：必须用用户自己的网易云 cookie，未绑定则整体跳过
+  if (auth.token) {
+    jobs.push(api.bindStatus().then(b => {
+      if (!b || !b.bound) return;
+      ncmBound = true;
+      return Promise.allSettled([
+        api.ncm('/recommend/resource').then(d => { recPls = d.recommend || []; }),
+        // T1：账号维度的每日推荐。拿到就用它覆盖服务端 SVIP 档（对已绑定用户更准确）
+        api.ncm('/recommend/songs').then(d => {
+          const own = ncmSongs(((d.data || {}).dailySongs) || []);
+          if (own.length) daily = own;
+        }),
+      ]);
+    }).catch(() => {}));
+  }
   if (auth.token) jobs.push(api.recentPlays(20).then(d => { recent = d.songs || []; }).catch(() => {}));
   await Promise.allSettled(jobs);
   await bannerJob;   // 横幅请求通常更快，这里几乎立即返回
@@ -57,6 +73,16 @@ export async function render(el) {
           </div>`).join('')
       }</div>` : `<div class="cm-empty small">今日推荐暂不可用</div>`}
     </section>
+    ${recPls.length ? `
+    <section class="cm-sec">
+      <div class="cm-sec-head"><h2>每日推荐歌单</h2><span class="cm-sec-sub">来自你的网易云账号</span></div>
+      <div class="cm-plgrid" id="recPlsGrid">${recPls.slice(0, 6).map(pl => `
+        <div class="cm-plcard" data-id="${pl.id}">
+          <div class="cm-plcover">${pl.picUrl ? `<img src="${esc(pl.picUrl)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''}<span class="material-icons-outlined">queue_music</span></div>
+          <div class="cm-plname">${esc(pl.name)}</div>
+          <div class="cm-plsub">${pl.trackCount || 0} 首</div>
+        </div>`).join('')}</div>
+    </section>` : ''}
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>排行榜</h2></div>
       <div class="cm-quickrow">
@@ -96,6 +122,31 @@ export async function render(el) {
     c.onclick = () => player.playList(daily, +c.dataset.i);
   });
   el.querySelector('#playDaily')?.addEventListener('click', () => player.playList(daily, 0));
+  el.querySelectorAll('#recPlsGrid .cm-plcard').forEach(c => {
+    c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.id}`; };
+  });
+  // 「不感兴趣」：T2 写操作，需用户绑定 + confirm=1；成功后本地移除该曲
+  el.querySelectorAll('#dailyRow .cm-card').forEach(c => {
+    const i = +c.dataset.i;
+    const s2 = daily[i];
+    if (!s2) return;
+    const btn = document.createElement('span');
+    btn.className = 'material-icons-outlined';
+    btn.textContent = 'block';
+    btn.title = '不感兴趣';
+    btn.style.cssText = 'position:absolute;top:4px;right:4px;font-size:16px;opacity:.55';
+    btn.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      if (!ncmBound) return toast('需先绑定网易云账号');
+      try {
+        await api.ncm('/recommend/songs/dislike', { id: s2.ncm_id, confirm: 1 });
+        toast('已标记不感兴趣');
+        c.remove();
+      } catch (e) { toast('操作失败：' + e.message); }
+    });
+    c.style.position = 'relative';
+    c.appendChild(btn);
+  });
   el.querySelector('#quickCreateRoom')?.addEventListener('click', () => {
     import('./rooms.js').then(m => m.createRoomDialog());   // 首页直达创建
   });

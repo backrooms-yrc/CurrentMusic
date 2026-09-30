@@ -21,6 +21,7 @@ import * as home from './pages/home.js';
 import * as search from './pages/search.js';
 import * as library from './pages/library.js';
 import * as playlist from './pages/playlist.js';
+import * as plazaPage from './pages/plaza.js';
 import * as user from './pages/user.js';
 import * as settingsPage from './pages/settings.js';
 import * as adminPage from './pages/admin.js';
@@ -29,7 +30,27 @@ import * as roomPage from './pages/room.js';
 import * as squarePage from './pages/square.js';
 import * as profilePage from './pages/profile.js';
 import * as artistPage from './pages/artist.js';
+import * as artistsPage from './pages/artists.js';
 import * as followedPage from './pages/followed.js';
+import * as stylePage from './pages/style.js';
+import * as lyricMarksPage from './pages/lyricmarks.js';
+import * as assetsPage from './pages/assets.js';
+import * as albumPage from './pages/album.js';
+import * as mvPage from './pages/mv.js';
+import * as videoPage from './pages/video.js';
+import * as albumsPage from './pages/albums.js';
+import * as ugcPage from './pages/ugc.js';
+import * as footprintPage from './pages/footprint.js';
+import * as messagesPage from './pages/messages.js';
+import * as followPage from './pages/follow.js';
+import * as eventsPage from './pages/events.js';
+import * as accountPage from './pages/account.js';
+import * as cloudPage from './pages/cloud.js';
+import * as radioPage from './pages/radio.js';
+import * as podcastPage from './pages/podcast.js';
+import * as memberPage from './pages/member.js';
+import * as servicesPage from './pages/services.js';
+import * as repPage from './pages/rep.js';
 
 const ROUTES = [
   { re: /^#\/home$/, page: home, title: 'CurrentMusic' },
@@ -37,8 +58,32 @@ const ROUTES = [
   { re: /^#\/square$/, page: squarePage, title: '发现' },
   { re: /^#\/u\/(\d+)$/, page: profilePage, title: '用户主页', fixed: m => [m[1]] },
   { re: /^#\/artist\/(\d+)$/, page: artistPage, title: '歌手', fixed: m => [m[1]] },
+  { re: /^#\/artists$/, page: artistsPage, title: '歌手分类' },
+  { re: /^#\/style\/(\d+)$/, page: stylePage, title: '曲风', fixed: m => [m[1]] },
+  { re: /^#\/lyricmarks$/, page: lyricMarksPage, title: '我的歌词本' },
+  { re: /^#\/assets$/, page: assetsPage, title: '我的音乐资产' },
+  { re: /^#\/album\/(\d+)$/, page: albumPage, title: '专辑', fixed: m => [m[1]] },
+  { re: /^#\/mv\/(\d+)$/, page: mvPage, title: 'MV', fixed: m => [m[1]] },
+  { re: /^#\/mvlist$/, page: mvPage, title: 'MV', fixed: ['list'] },
+  { re: /^#\/albums$/, page: albumsPage, title: '新碟' },
+  { re: /^#\/ugc$/, page: ugcPage, title: '百科贡献' },
+  { re: /^#\/footprint$/, page: footprintPage, title: '听歌足迹' },
+  { re: /^#\/messages$/, page: messagesPage, title: '消息' },
+  { re: /^#\/follow$/, page: followPage, title: '关注与状态' },
+  { re: /^#\/events$/, page: eventsPage, title: '动态与话题' },
+  { re: /^#\/account$/, page: accountPage, title: '网易云账号' },
+  { re: /^#\/cloud$/, page: cloudPage, title: '音乐云盘' },
+  { re: /^#\/radio$/, page: radioPage, title: '电台', fixed: ['list'] },
+  { re: /^#\/radio\/(\d+)$/, page: radioPage, title: '电台', fixed: m => [m[1]] },
+  { re: /^#\/podcast$/, page: podcastPage, title: '播客与 FM' },
+  { re: /^#\/member$/, page: memberPage, title: '会员与云贝' },
+  { re: /^#\/services$/, page: servicesPage, title: '网易云服务' },
+  { re: /^#\/rep$/, page: repPage, title: '云小编' },
+  { re: /^#\/video\/([A-Za-z0-9]+)$/, page: videoPage, title: '视频', fixed: m => [m[1]] },
+  { re: /^#\/videohome$/, page: videoPage, title: '视频广场', fixed: ['home'] },
   { re: /^#\/followed$/, page: followedPage, title: '关注的歌手' },
   { re: /^#\/library$/, page: library, title: '歌单' },
+  { re: /^#\/plaza$/, page: plazaPage, title: '歌单广场' },
   { re: /^#\/user$/, page: user, title: '我的' },
   { re: /^#\/settings$/, page: settingsPage, title: '设置' },
   { re: /^#\/admin$/, page: adminPage, title: '管理员' },

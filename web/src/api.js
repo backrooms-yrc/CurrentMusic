@@ -103,7 +103,9 @@ export async function call(method, path, { body, auth: needAuth = false } = {}) 
   try {
     return await rawRequest(method, settings.base + path, headers, bodyStr);
   } catch (e) {
-    if (e.status === 401 && needAuth && onAuthExpired) onAuthExpired();
+    // 401 有两种来源：项目会话失效（该提示重新登录）与「尚未绑定网易云」（该引导去绑定）。
+    // 后者按状态码一律当成会话失效会误报「登录已失效」，所以按文案区分。
+    if (e.status === 401 && needAuth && onAuthExpired && !/绑定/.test(e.message || '')) onAuthExpired();
     throw e;
   }
 }
@@ -126,6 +128,46 @@ export function deviceInfo() {
     label = [isApp ? 'App' : '网页', os, ch ? 'Chromium ' + ch[1].split('.')[0] : ''].filter(Boolean).join(' · ');
   }
   return { device: label, platform: isApp ? 'app' : 'web' };
+}
+
+/** File/Blob → base64（去掉 data URL 前缀）。 */
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).replace(/^data:[^,]*,/, ''));
+    fr.onerror = () => reject(new Error('读取文件失败'));
+    fr.readAsDataURL(blob);
+  });
+}
+
+/**
+ * 图片降采样：最长边压到 1024、转 JPEG。
+ * 为什么必须做：手机原图 4~8MB，而服务端请求体上限 2MB（base64 还要再涨 1/3），
+ * 原样上传必然 400；上游封面/头像也只需要一张方图。
+ * 非图片或 canvas 不可用时抛错，由调用方回退原文件。
+ */
+function shrinkImage(file, maxSide = 1024, quality = 0.86) {
+  return new Promise((resolve, reject) => {
+    if (!/^image\//.test(file.type || '')) return reject(new Error('不是图片'));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        cv.toBlob(b => {
+          URL.revokeObjectURL(url);
+          b ? resolve(b) : reject(new Error('图片压缩失败'));
+        }, 'image/jpeg', quality);
+      } catch (e) { URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('图片解码失败')); };
+    img.src = url;
+  });
 }
 
 export const api = {
@@ -192,6 +234,9 @@ export const api = {
   qrImg: (key) => call('GET', `/ncmbind/qr/img?key=${encodeURIComponent(key)}`, { auth: true }),
   qrCheck: (key) => call('GET', `/ncmbind/qr/check?key=${encodeURIComponent(key)}`, { auth: true }),
   unbindNcm: () => call('DELETE', '/ncmbind', { body: {}, auth: true }),
+  // 绑定有效性：走项目专用入口（上游 /login/status、/login/refresh 属 T3，不允许泛化转发）
+  ncmLive: () => call('GET', '/ncmbind/live', { auth: true }),
+  ncmRefresh: () => call('POST', '/ncmbind/refresh', { body: {}, auth: true }),
   syncNcm: () => call('POST', '/ncmbind/sync', { body: {}, auth: true }),
   ncmLike: (meta, like) => call('POST', `/ncmbind/like/${meta.ncm_id}`, { body: { ...meta, like }, auth: true }),
   ncmLikelist: () => call('GET', '/ncmbind/likelist', { auth: true }),
@@ -232,11 +277,100 @@ export const api = {
   ncmPlaylist: (pid) => call('GET', `/ncm/playlist?id=${pid}`),
   daily: () => call('GET', '/daily', { auth: true }),
 
+  // ---- NCM 泛化网关（阶段一：发现 / 榜单 / 曲风 / 搜索增强）----
+  // 统一走 /ncm/<上游路径>。路径必须在后端登记表（backend/cm_ncm_registry.py）内，
+  // 且阶段已启用；未登记返回 404，敏感路径（T3）返回 403。
+  ncm: (path, params = {}) => {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    // 必须带 Bearer：T1/T2 分级要拿调用者自己的 ncmbind cookie，没 token 一律 401「未登录」。
+    // （T0 带了也无害——后端只对 T0 用服务端 SVIP 档并剥离身份字段。）
+    return call('GET', `/ncm${path}${qs ? `?${qs}` : ''}`, { auth: true });
+  },
+  /**
+   * 带文件的 NCM 写接口（封面/头像这类，后端白名单见 cm_ncm_gateway.UPLOAD_FIELD）。
+   * 图片会先按最长边降采样再上传：手机原图动辄 4~8MB，而服务端请求体上限 2MB，
+   * 且上游只需一张正方形的封面/头像。降采样失败（老内核/canvas 异常）时回退为原文件。
+   */
+  ncmUpload: async (path, params = {}, file) => {
+    const blob = await shrinkImage(file).catch(() => file);
+    // 服务端请求体上限 2MB（MAX_BODY，base64 后还要涨 1/3）。压不动的（非图片、老内核）
+    // 就在这里拦住并给出可读提示，别让服务端读到一半断管道。
+    if (blob.size > 1400 * 1024) throw new Error('文件过大（需小于 1.4MB，请换一张图片或先裁剪）');
+    const b64 = await blobToBase64(blob);
+    const qs = Object.entries({ ...params, confirm: 1 })
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    return call('POST', `/ncm${path}${qs ? `?${qs}` : ''}`, {
+      auth: true,
+      body: { file: b64, filename: file.name || 'upload.jpg', contentType: blob.type || file.type || 'image/jpeg' },
+    });
+  },
+  // 首页与推荐
+  banner: (type = 0) => api.ncm('/banner', { type }),
+  personalized: (limit = 12) => api.ncm('/personalized', { limit }),
+  personalizedNewSong: (limit = 12) => api.ncm('/personalized/newsong', { limit }),
+  personalizedMv: (limit = 6) => api.ncm('/personalized/mv', { limit }),
+  personalizedDj: (limit = 6) => api.ncm('/personalized/djprogram', { limit }),
+  privateContent: () => api.ncm('/personalized/privatecontent'),
+  privateContentList: (limit = 6) => api.ncm('/personalized/privatecontent/list', { limit }),
+  homePage: () => api.ncm('/homepage/block/page'),
+  homeDragon: () => api.ncm('/homepage/dragon/ball'),
+  // 榜单
+  toplist: () => api.ncm('/toplist'),
+  toplistDetail: () => api.ncm('/toplist/detail'),
+  topPlaylist: (cat = '全部', limit = 12, offset = 0, order = 'hot') =>
+    api.ncm('/top/playlist', { cat, limit, offset, order }),
+  topSong: (type = 0, limit = 20, offset = 0) => api.ncm('/top/song', { type, limit, offset }),
+  topArtists: (limit = 12, offset = 0) => api.ncm('/top/artists', { limit, offset }),
+  topList: (type = 0) => api.ncm('/top/list', { type }),
+  // 曲风
+  styleList: () => api.ncm('/style/list'),
+  styleDetail: (tagId) => api.ncm('/style/detail', { tagId }),
+  styleSongs: (tagId, size = 20, cursor = 0) => api.ncm('/style/song', { tagId, size, cursor }),
+  stylePlaylists: (tagId, size = 12, cursor = 0) => api.ncm('/style/playlist', { tagId, size, cursor }),
+  styleArtists: (tagId, size = 12, cursor = 0) => api.ncm('/style/artist', { tagId, size, cursor }),
+  styleAlbums: (tagId, size = 12, cursor = 0) => api.ncm('/style/album', { tagId, size, cursor }),
+  // 搜索增强
+  searchHotDetail: () => api.ncm('/search/hot/detail'),
+  searchSuggest: (keywords, type = 'mobile') => api.ncm('/search/suggest', { keywords, type }),
+  searchDefault: () => api.ncm('/search/default'),
+  // 音乐日历 / 国家码
+  calendar: (startTime, endTime) => api.ncm('/calendar', { startTime, endTime }),
+  countries: () => api.ncm('/countries/code/list'),
+
   avatarUrl: (fname) => fname ? `${settings.base}/avatar/${fname}` : '',
   decorUrl: (id) => id ? `${settings.base}/decor/${encodeURIComponent(id)}.gif` : '',
   // 挂件放大比例表（id → 比例）：广场/主页等只拿到挂件 id，需靠它换算渲染尺寸
   decorScales: () => call('GET', '/decorations/scales'),
 };
+
+/** 上游原始歌曲对象 → 项目规范歌曲对象（字段与后端 cm_ncm._norm_song 保持一致）。
+ *  泛化网关返回的是上游原始 JSON（ar/al/dt），前端消费前必须过这一层归一。 */
+export function ncmSong(s) {
+  if (!s || !s.id) return null;
+  const ar = s.ar || s.artists || [];
+  const al = s.al || s.album || {};
+  return {
+    ncm_id: s.id,
+    name: s.name || '',
+    artists: ar.map(a => a && a.name).filter(Boolean).join(' / '),
+    artist_ids: ar.map(a => a && a.id).filter(Boolean),
+    album: al.name || '',
+    pic: (al.picUrl || s.picUrl || '').replace(/^http:/, 'https:'),
+    duration: s.dt || s.duration || 0,
+    fee: s.fee == null ? 0 : s.fee,
+    pop: s.pop == null ? 0 : s.pop,
+  };
+}
+
+/** 批量归一 + 丢弃无效项。 */
+export function ncmSongs(list) {
+  return (list || []).map(ncmSong).filter(Boolean);
+}
 
 // ---------- 挂件比例表：版本门控的内存 + localStorage 缓存 ----------
 // 挂件素材自带透明留白（圆环外径常常只有画布的 ~0.6），渲染时必须按比例放大，

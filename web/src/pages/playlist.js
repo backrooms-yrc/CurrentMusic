@@ -76,11 +76,15 @@ export async function render(el, params) {
           <mdui-button variant="filled" id="playAll"><span class="material-icons-outlined">play_arrow</span>播放全部</mdui-button>
           ${kind !== 'pl' || !owner ? '' : `<mdui-button variant="tonal" id="addSongs"><span class="material-icons-outlined">add</span>添加歌曲</mdui-button>`}
           ${kind === 'pl' ? `<mdui-button variant="tonal" id="refreshPl"><span class="material-icons-outlined">refresh</span>刷新</mdui-button>` : ''}
+          ${kind === 'ncmpl' ? `<mdui-button variant="tonal" id="plComments"><span class="material-icons-outlined">comment</span>评论</mdui-button>` : ''}
+          ${kind === 'ncmpl' && auth.token ? `<mdui-button variant="tonal" id="editPl"><span class="material-icons-outlined">edit</span>编辑歌单</mdui-button>` : ''}
+          ${kind === 'ncmpl' ? `<mdui-button variant="tonal" id="saveOrder"><span class="material-icons-outlined">save</span>保存排序</mdui-button>` : ''}
           ${kind === 'pl' && owner ? `<mdui-button variant="tonal" id="delPl"><span class="material-icons-outlined">delete</span>删除</mdui-button>` : ''}
         </div>
       </div>
     </div>
-    <div id="list"></div>`;
+    <div id="list"></div>
+    <section class="cm-sec" id="plSimiSec" hidden><div class="cm-sec-head"><h2>相似歌单</h2></div><div class="cm-plgrid" id="plSimi"></div></section>`;
 
   el.querySelectorAll('#plSort mdui-chip').forEach(ch => {
     ch.onclick = () => {
@@ -90,6 +94,31 @@ export async function render(el, params) {
   });
 
   const list = el.querySelector('#list');
+  // 把当前列表顺序写回网易云歌单（T2 写操作，需绑定 + confirm=1）
+  const saveOrderBtn = el.querySelector('#saveOrder');
+  if (saveOrderBtn) saveOrderBtn.onclick = async () => {
+    const ids = (songs || []).map(s2 => s2.ncm_id).filter(Boolean);
+    if (!ids.length) return toast('列表为空');
+    if (!await confirmDialog(`把当前顺序保存到网易云歌单？\n（共 ${ids.length} 首，会覆盖云端顺序）`)) return;
+    try {
+      await api.ncm('/song/order/update', { pid: id, ids: ids.join(','), confirm: 1 });
+      toast('已保存到网易云');
+    } catch (e) { toast(e.message.includes('绑定') || /401/.test(e.message) ? '需先绑定网易云账号' : e.message); }
+  };
+
+  const plCmtBtn = el.querySelector('#plComments');
+  if (plCmtBtn) plCmtBtn.onclick = () => {
+    import('../comments.js').then(m => m.openComments({ type: 2, id, title })).catch(() => {});
+  };
+
+  // 编辑网易云歌单（阶段三）：改信息 / 收藏 / 增删曲目 / 排序 / 导入，全部走 T2 写接口
+  const editBtn = el.querySelector('#editPl');
+  if (editBtn) editBtn.onclick = () => {
+    import('../playlist-edit.js')
+      .then(m => m.openPlaylistEditor({ id, name: title, onChanged: () => render(el, params) }))
+      .catch(e => toast('编辑器加载失败：' + e.message));
+  };
+
   await renderSongList(list, songs, {
     onPlay: i => player.playList(songs, i),
     onRemove: removable ? async i => {
@@ -104,6 +133,25 @@ export async function render(el, params) {
   });
 
   el.querySelector('#playAll').onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
+
+  // 相似歌单（/simi/playlist；上游该维度常返回空，空则不显示区块）
+  if (kind === 'ncmpl') {
+    api.ncm('/simi/playlist', { id, limit: 6, offset: 0 }).then(r => {
+      const list = (r.playlists || []).slice(0, 6);
+      if (!list.length) return;
+      const sec = el.querySelector('#plSimiSec');
+      sec.hidden = false;
+      el.querySelector('#plSimi').innerHTML = list.map(pl => `
+        <div class="cm-plcard" data-pid="${pl.id}">
+          <div class="cm-plcover">${pl.coverImgUrl ? `<img src="${esc(pl.coverImgUrl)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''}<span class="material-icons-outlined">queue_music</span></div>
+          <div class="cm-plname">${esc(pl.name)}</div>
+          <div class="cm-plsub">${pl.trackCount || 0} 首</div>
+        </div>`).join('');
+      el.querySelectorAll('#plSimi .cm-plcard').forEach(c => {
+        c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.pid}`; };
+      });
+    }).catch(() => {});
+  }
   const refreshBtn = el.querySelector('#refreshPl');
   if (refreshBtn) refreshBtn.onclick = async () => {
     if (refreshBtn.dataset.loading) return;

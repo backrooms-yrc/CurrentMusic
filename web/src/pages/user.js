@@ -362,6 +362,8 @@ async function renderProfile(el, autoDecor) {
       <div class="cm-quickrow">
         <a class="cm-quick" href="#/pl/likes"><span class="material-icons-outlined">favorite</span><b>我喜欢的音乐</b></a>
         <a class="cm-quick" href="#/library"><span class="material-icons-outlined">queue_music</span><b>我的歌单</b></a>
+        <a class="cm-quick" href="#/lyricmarks"><span class="material-icons-outlined">format_quote</span><b>我的歌词本</b></a>
+        <a class="cm-quick" href="#/assets"><span class="material-icons-outlined">inventory_2</span><b>音乐资产</b></a>
       </div>
 
       ${follows.length ? `
@@ -384,6 +386,9 @@ async function renderProfile(el, autoDecor) {
              </div>
              <div class="cm-bindbtns">
                ${bind.stale ? `<mdui-button variant="tonal" id="rebind">重新绑定</mdui-button>` : `<mdui-button variant="tonal" id="syncNow">立即同步</mdui-button>`}
+               <mdui-button variant="tonal" id="ncmLive">检查登录态</mdui-button>
+               <mdui-button variant="tonal" id="ncmRefresh">刷新登录态</mdui-button>
+               <mdui-button variant="text" id="advOps">高级操作</mdui-button>
                <mdui-button variant="text" id="unbind">解绑</mdui-button>
              </div>`
           : `<div class="cm-bindinfo">
@@ -392,11 +397,28 @@ async function renderProfile(el, autoDecor) {
              </div>
              <mdui-button variant="filled" id="goBind">立即绑定</mdui-button>`
       }</div>
+      ${bind.bound && bind.profile && bind.profile.uid ? `
+      <section class="cm-sec" id="simiUserSec" hidden>
+        <div class="cm-sec-head"><h2>相似用户</h2><span class="cm-sec-sub">按你的网易云口味推荐</span></div>
+        <div class="cm-artist-grid" id="simiUser"></div>
+      </section>` : ''}
 
         <div class="cm-sec-head"><h2>账号管理</h2></div>
         <div class="cm-setting-list">
           <div class="cm-setting" id="setDecor"><span class="material-icons-outlined">face_retouching_natural</span>头像挂件<i id="decorVal">${decorValue(decor)}</i></div>
           <div class="cm-setting" id="chgPass"><span class="material-icons-outlined">password</span>修改密码</div>
+          <div class="cm-setting" id="goUgc"><span class="material-icons-outlined">menu_book</span>百科贡献<i>我的词条</i></div>
+          <div class="cm-setting" id="goFoot"><span class="material-icons-outlined">insights</span>听歌足迹<i>播放记录 / 年度报告</i></div>
+          <div class="cm-setting" id="goMsg"><span class="material-icons-outlined">forum</span>消息与私信<i>私信 / 评论 / 通知</i></div>
+          <div class="cm-setting" id="goFollow"><span class="material-icons-outlined">group</span>关注与状态<i>关注 / 粉丝 / 我的状态</i></div>
+          <div class="cm-setting" id="goEvents"><span class="material-icons-outlined">dynamic_feed</span>动态与话题<i>广场 / 我的动态 / 评论历史</i></div>
+          <div class="cm-setting" id="goAccount"><span class="material-icons-outlined">manage_accounts</span>网易云账号资料<i>资料 / 签到 / 设备</i></div>
+          <div class="cm-setting" id="goCloud"><span class="material-icons-outlined">cloud</span>音乐云盘<i>我的云盘 / 音频</i></div>
+          <div class="cm-setting" id="goRadio"><span class="material-icons-outlined">radio</span>电台<i>推荐 / 分类 / 榜单 / 订阅</i></div>
+          <div class="cm-setting" id="goPodcast"><span class="material-icons-outlined">podcasts</span>播客与私人 FM<i>我的播客 / 发现 / 广播 / FM</i></div>
+          <div class="cm-setting" id="goMember"><span class="material-icons-outlined">workspace_premium</span>会员与云贝<i>乐签 / 成长值 / 云贝 / 音乐人</i></div>
+          <div class="cm-setting" id="goServices"><span class="material-icons-outlined">spa</span>网易云服务<i>助眠 / 话题热榜 / 服务信息</i></div>
+          <div class="cm-setting" id="goRep"><span class="material-icons-outlined">badge</span>云小编与审核<i>权益 / 活动 / 考核 / 审核</i></div>
         </div>
 
       ${accounts.length ? `
@@ -413,6 +435,49 @@ async function renderProfile(el, autoDecor) {
   el.querySelectorAll('#followRow .cm-artist-card').forEach(c => {
     c.onclick = () => { location.hash = `#/artist/${c.dataset.aid}`; };
   });
+
+  // 绑定有效性：上游 /login/status 给权威结论，/login/refresh 一键续期（均为项目专用入口）
+  el.querySelector('#advOps')?.addEventListener('click', () => {
+    import('../ncmbind.js').then(m => m.advancedDialog(() => renderProfile(el)));
+  });
+  el.querySelector('#ncmLive')?.addEventListener('click', async ev => {
+    const btn = ev.currentTarget;
+    btn.loading = true;
+    try {
+      const d = await api.ncmLive();
+      if (!d.bound) toast('尚未绑定网易云');
+      else if (d.ok) { toast(`登录态正常：${(d.profile && d.profile.nickname) || ''}`); renderProfile(el); }
+      else toast(d.note || '登录态已失效');
+    } catch (e) { toast('检查失败：' + e.message); }
+    finally { btn.loading = false; }
+  });
+  el.querySelector('#ncmRefresh')?.addEventListener('click', async ev => {
+    const btn = ev.currentTarget;
+    btn.loading = true;
+    try {
+      await api.ncmRefresh();
+      toast('登录态已刷新');
+      renderProfile(el);
+    } catch (e) { toast(e.message); }
+    finally { btn.loading = false; }
+  });
+
+  // 相似用户（/simi/user，以绑定的网易云 uid 为种子；上游该维度常为空，空则整块不显示）
+  if (bind.bound && bind.profile && bind.profile.uid) {
+    api.ncm('/simi/user', { id: bind.profile.uid, limit: 12, offset: 0 }).then(r => {
+      const users = (r.userprofiles || []).filter(u => u && (u.userId || u.id));
+      if (!users.length) return;
+      const sec = el.querySelector('#simiUserSec');
+      if (!sec) return;
+      sec.hidden = false;
+      el.querySelector('#simiUser').innerHTML = users.map(u => `
+        <div class="cm-artist-card">
+          <div class="cm-artist-ava">${u.avatarUrl ? `<img src="${esc(u.avatarUrl)}?param=160y160" loading="lazy">` : '<span class="material-icons-outlined">person</span>'}</div>
+          <div class="cm-artist-name">${esc(u.nickname || '')}</div>
+          ${u.signature ? `<div class="cm-artist-sub">${esc(u.signature)}</div>` : ''}
+        </div>`).join('');
+    }).catch(() => {});
+  }
 
   // 网易云绑定交互
   el.querySelector('#goBind')?.addEventListener('click', () => {
@@ -460,6 +525,18 @@ async function renderProfile(el, autoDecor) {
   // 首页横幅深链（#/user?decor=1）：数据就绪后自动弹出选择器（目录加载失败则不弹，避免空弹窗）
   if (autoDecor && !decor.failed) setTimeout(() => decorDialog(decor, () => renderProfile(el)), 120);
 
+  el.querySelector('#goUgc').onclick = () => { location.hash = '#/ugc'; };
+  el.querySelector('#goFoot').onclick = () => { location.hash = '#/footprint'; };
+  el.querySelector('#goMsg').onclick = () => { location.hash = '#/messages'; };
+  el.querySelector('#goFollow').onclick = () => { location.hash = '#/follow'; };
+  el.querySelector('#goEvents').onclick = () => { location.hash = '#/events'; };
+  el.querySelector('#goAccount').onclick = () => { location.hash = '#/account'; };
+  el.querySelector('#goCloud').onclick = () => { location.hash = '#/cloud'; };
+  el.querySelector('#goRadio').onclick = () => { location.hash = '#/radio'; };
+  el.querySelector('#goPodcast').onclick = () => { location.hash = '#/podcast'; };
+  el.querySelector('#goMember').onclick = () => { location.hash = '#/member'; };
+  el.querySelector('#goServices').onclick = () => { location.hash = '#/services'; };
+  el.querySelector('#goRep').onclick = () => { location.hash = '#/rep'; };
   el.querySelector('#chgPass').onclick = () => {
     const diag = mdui.dialog({
       headline: '修改密码',

@@ -56,28 +56,77 @@ function animateIn(els, { y = 8, stagger = 26, cap = 160 } = {}) {
 
 let seq = 0;
 
-export async function render(el) {
+export async function render(el, params = []) {
   el.innerHTML = `
     <div class="cm-search-bar">
       <mdui-text-field id="kw" label="搜索歌曲 / 歌手 / 专辑" variant="outlined" clearable style="width:100%"></mdui-text-field>
     </div>
+    <div id="sugBox"></div>
     <div id="histBox"></div>
+    <div class="cm-plsort" id="matchRow">
+      <span class="cm-plsort-l"><span class="material-icons-outlined">graphic_eq</span>听歌识曲式匹配</span>
+      <mdui-chip id="matchLocal">本地文件匹配</mdui-chip>
+      <mdui-chip id="matchMulti">多重匹配</mdui-chip>
+    </div>
+    <div id="matchBox"></div>
     <div id="resultBox"></div>`;
 
   const input = el.querySelector('#kw');
+  const sugBox = el.querySelector('#sugBox');
   const histBox = el.querySelector('#histBox');
   const resultBox = el.querySelector('#resultBox');
   const hotBox = document.createElement('div');
   histBox.after(hotBox);
 
+  // 两个"匹配"接口（/search/match 本地文件匹配、/search/multimatch 多重匹配）：
+  // 上游都要把音频指纹/文件摘要作为入参，浏览器端生成不了，所以这里**只做结果查询**，
+  // 参数由调用方粘贴（例如从桌面端工具算好后带过来），不伪造指纹。
+  const matchBox = el.querySelector('#matchBox');
+  const runMatch = async (path, label) => {
+    matchBox.innerHTML = `<div class="cm-pe-field"><label>${label}：粘贴上游需要的指纹/摘要参数</label>
+      <input id="matchArg" placeholder="例如 md5 或 fingerprint（上游要求）"></div>
+      <div class="cm-pe-acts"><mdui-button variant="tonal" id="matchGo">查询</mdui-button></div>
+      <div class="cm-pe-hint" id="matchHint">没有指纹参数时上游会返回参数错误——这是预期行为，不做假数据。</div>`;
+    matchBox.querySelector('#matchGo').onclick = async () => {
+      const arg = matchBox.querySelector('#matchArg').value.trim();
+      const hint = matchBox.querySelector('#matchHint');
+      hint.textContent = '查询中…';
+      try {
+        const d = path === '/search/match'
+          ? await api.ncm('/search/match', { md5: arg })
+          : await api.ncm('/search/multimatch', { md5: arg });
+        hint.textContent = `返回：${JSON.stringify(d).slice(0, 200)}`;
+      } catch (e) { hint.textContent = `失败：${e.message}`; }
+    };
+  };
+  el.querySelector('#matchLocal').onclick = () => runMatch('/search/match', '本地文件匹配');
+  el.querySelector('#matchMulti').onclick = () => runMatch('/search/multimatch', '多重匹配');
+
+  // 默认搜索关键词（占位提示）：失败保持原 label，不影响使用
+  api.searchDefault().then(d => {
+    const k = ((d.data || {}).realkeyword || (d.data || {}).showKeyword || '').trim();
+    if (k) input.setAttribute('label', `搜索歌曲 / 歌手 / 专辑（试试「${k}」）`);
+  }).catch(() => {});
+
   async function renderHot() {
     if ((input.value || '').trim() || (hotBox.dataset.for ?? '') !== '') return;
     hotBox.innerHTML = '<div class="cm-loading"><mdui-linear-progress style="width:120px"></mdui-linear-progress></div>';
     try {
-      const list = (await api.hotSearch()).list || [];
-      hotBox.innerHTML = list.length ? `<div class="cm-sec-head"><h2>热门搜索</h2></div>
-        <div class="cm-chips">${list.map((x, i) =>
-          `<span class="cm-hot" data-k="${esc(x.name)}"><b>${i + 1}</b>${esc(x.name)}</span>`).join('')}</div>` : '';
+      // 优先用「热搜详情」（带热度分与标签）；不可用时回退到简略热搜
+      let chips = '';
+      try {
+        const data = (await api.searchHotDetail()).data || [];
+        chips = data.slice(0, 12).map((x, i) =>
+          `<span class="cm-hot" data-k="${esc(x.searchWord)}"><b>${i + 1}</b>${esc(x.searchWord)}</span>`).join('');
+      } catch { /* 回退 */ }
+      if (!chips) {
+        // 简略热搜的形状是 { result: { hots: [{ first }] } }
+        const hots = ((await api.ncm('/search/hot')).result || {}).hots || [];
+        chips = hots.slice(0, 12).map((x, i) =>
+          `<span class="cm-hot" data-k="${esc(x.first)}"><b>${i + 1}</b>${esc(x.first)}</span>`).join('');
+      }
+      hotBox.innerHTML = chips ? `<div class="cm-sec-head"><h2>热门搜索</h2></div>
+        <div class="cm-chips">${chips}</div>` : '';
       hotBox.querySelectorAll('.cm-hot').forEach(c => { c.onclick = () => { input.value = c.dataset.k; doSearch(c.dataset.k); }; });
     } catch { hotBox.innerHTML = ''; }
   }
@@ -238,14 +287,7 @@ export async function render(el) {
       </div>`).join(''));
     const els = [...box.querySelectorAll('.cm-album-card')].slice(-added.length);
     els.forEach(c => {
-      c.onclick = async () => {
-        toast('正在打开专辑…');
-        try {
-          const al = await api.album(c.dataset.id);
-          if (!al.songs || !al.songs.length) return toast('专辑暂无曲目');
-          player.playList(al.songs, 0);
-        } catch (e) { toast('打开专辑失败：' + e.message); }
-      };
+      c.onclick = () => { location.hash = `#/album/${c.dataset.id}`; };
     });
     if (from) { animateIn(els); refreshMore('album'); }
     else if (items) animateIn(els);
@@ -404,10 +446,48 @@ export async function render(el) {
 
   // 输入不触发搜索：只有回车（或点击热搜/历史词条这类明确动作）才发起请求
   input.addEventListener('input', () => {
-    if (!(input.value || '').trim()) { seq++; S = null; resultBox.innerHTML = ''; renderHist(); renderHot(); }
+    if (!(input.value || '').trim()) { seq++; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; renderHist(); renderHot(); return; }
+    queueSuggest(input.value.trim());
   });
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { const kw = (input.value || '').trim(); if (kw) doSearch(kw); }
+    if (e.key === 'Enter') { const kw = (input.value || '').trim(); if (kw) { sugBox.innerHTML = ''; doSearch(kw); } }
   });
+
+  /* ---------- 搜索建议：输入防抖 300ms，逐字不发请求 ---------- */
+  let sugTimer = null, sugSeq = 0;
+  function queueSuggest(kw) {
+    clearTimeout(sugTimer);
+    sugBox.innerHTML = '';
+    if (!kw) return;
+    sugTimer = setTimeout(async () => {
+      const my = ++sugSeq;
+      try {
+        let words = [];
+        try {
+          const d = await api.searchSuggest(kw);
+          words = (((d || {}).result || {}).allMatch || []).map(x => x.keyword).filter(Boolean);
+        } catch { /* 回退 PC 端 */ }
+        if (!words.length) {
+          try {
+            const d2 = await api.ncm('/search/suggest/pc', { keywords: kw });
+            words = ((((d2 || {}).data || {}).suggests) || []).map(x => x.keyword || x.name).filter(Boolean);
+          } catch { /* 两路都失败 */ }
+        }
+        if (my !== sugSeq) return;                       // 过期响应丢弃
+        words = words.slice(0, 10);
+        if (!words.length || (input.value || '').trim() !== kw) { sugBox.innerHTML = ''; return; }
+        sugBox.innerHTML = `<div class="cm-chips">${words.map(w =>
+          `<span class="cm-hist-k" data-k="${esc(w)}">${esc(w)}</span>`).join('')}</div>`;
+        sugBox.querySelectorAll('[data-k]').forEach(c => {
+          c.onclick = () => { input.value = c.dataset.k; sugBox.innerHTML = ''; doSearch(c.dataset.k); };
+        });
+      } catch { if (my === sugSeq) sugBox.innerHTML = ''; }
+    }, 300);
+  }
+
+  // 从发现页等入口带关键词直达（#/search?q=xxx）
+  const preset = ((params && params.query) || {}).q || '';
+  if (preset.trim()) { input.value = preset.trim(); doSearch(preset.trim()); }
+
   setTimeout(() => input.focus(), 100);
 }

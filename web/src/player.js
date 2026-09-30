@@ -212,7 +212,7 @@ export const player = {
     }
     let info;
     try {
-      info = await api.songUrl(this.meta.ncm_id, settings.quality);
+      info = await resolveSongUrl(this.meta, settings.quality);
     } catch (e) {
       this.loading = false;
       toast(`「${this.meta.name}」${e.message || '播放失败'}`);
@@ -238,6 +238,7 @@ export const player = {
     audio.play().catch(() => toast('点击播放键开始播放'));
     emit('song');
     emit('state');
+    this._scrobbled = null;
     this.report();
     this.persist();
     this.updateMediaSession();
@@ -246,6 +247,43 @@ export const player = {
   async report() {
     if (!auth.token || !this.meta) return;
     try { await api.recordPlay(this.meta); } catch { /* 静默 */ }
+    // 听歌打卡（/scrobble）延后到「听够一半或 30 秒」再发，避免只点一下就污染网易云历史
+    this._scrobblePending = { id: this.meta.ncm_id, at: Date.now() };
+  },
+
+  /** 听歌打卡：达到阈值后每首只报一次；未绑定网易云时静默跳过（401）。
+   *  优先用新版 /scrobble/v1（字段更全，能带上歌曲名/歌手/码率），失败回退旧版。 */
+  async scrobble() {
+    const pend = this._scrobblePending;
+    if (!pend || !auth.token) return;
+    if (this._scrobbled === pend.id) return;
+    const m = this.meta || {};
+    const sec = Math.floor(this.position() / 1000);
+    const src = (this.queue && this.queue[this.index] && this.queue[this.index].source_pl_id) || 0;
+    try {
+      await api.ncm('/scrobble/v1', {
+        id: pend.id, sourceid: src || 0, time: sec, source: 'list',
+        name: m.name || '', artist: m.artists || '',
+        bitrate: 320000, level: 'exhigh', total: Math.floor((m.duration || 0) / 1000),
+        confirm: 1,
+      });
+      this._scrobbled = pend.id;
+    } catch {
+      try {
+        await api.ncm('/scrobble', { id: pend.id, sourceid: src || 0, time: sec, confirm: 1 });
+        this._scrobbled = pend.id;
+      } catch { /* 未绑定/风控：不打扰用户 */ }
+    }
+    // 播放状态上报（网易云「一起听」链路；失败无副作用）
+    try {
+      if (!this._relaySession) {
+        this._relaySession = Array.from({ length: 12 },
+          () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+      }
+      await api.ncm('/relay/play/state/submit', {
+        id: pend.id, sessionId: this._relaySession, progress: sec, playMode: 'list_loop', type: 'song', confirm: 1,
+      });
+    } catch { /* 忽略 */ }
   },
 
   // wantPlaying：我们「期望」的播放状态。系统打断（音频焦点被抢、锁屏瞬断、车机接管）
@@ -333,7 +371,7 @@ export const player = {
     const at = audio.currentTime;
     const wasPlaying = !audio.paused;
     try {
-      const info = await api.songUrl(this.meta.ncm_id, level);
+      const info = await resolveSongUrl(this.meta, level);
       this.urlInfo = info;
       loadUrl(info.url, at);       // 换档保留播放位置
       if (wasPlaying) audio.play();
@@ -416,6 +454,9 @@ function bindAudio(el) {
     if (!el.seeking && sec !== lastMediaPushSec && sec % 5 === 0) {
       lastMediaPushSec = sec;
       player.pushMediaState();
+      // 打卡阈值：听过 30s，或已过曲目一半
+      const half = isFinite(el.duration) && el.duration > 0 ? el.duration / 2 : Infinity;
+      if (sec >= 30 || sec >= half) player.scrobble();
     }
   });
   el.addEventListener('play', () => {

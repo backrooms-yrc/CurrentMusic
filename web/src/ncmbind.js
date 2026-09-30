@@ -206,3 +206,139 @@ export function unbindFlow(onDone) {
     },
   });
 }
+
+/**
+ * 网易云账号「高级操作」抽屉。
+ *
+ * 这一组上游接口在登记表里是 **T3**（登录/验证码/注册/换绑/设置），泛化转发对 T3 一律 403，
+ * 所以它们只能走项目**专用入口** `/ncm/<上游路径>`（后端 `_T3_ROUTES`，见 cm_server.py）。
+ * 专用入口与 T2 的安全属性一致：项目 Bearer 鉴权 + 用户自己的 cookie + 写操作 confirm=1 + 审计。
+ *
+ * 为什么仍然做得"门槛高一点"：这些操作会动到用户的网易云账号本身（登录态、绑定手机、注册），
+ * 界面上每一类都先给说明再要求确认；注册类额外标注"会创建新的网易云账号"。
+ */
+export function advancedDialog(onChanged) {
+  if (!auth.token) return toast('请先登录 CurrentMusic 账号');
+  const diag = mdui.dialog({
+    headline: '网易云账号高级操作',
+    body: `
+      <div class="cm-pe">
+        <div class="cm-pe-hint">这些接口属 T3：只走项目专用入口，不经通用转发。写操作都会带 confirm=1 并记审计日志。</div>
+
+        <div class="cm-pe-acts">
+          <mdui-button variant="tonal" id="advSetting">消息与隐私设置</mdui-button>
+          <mdui-button variant="text" id="advLogout">登出网易云</mdui-button>
+        </div>
+        <div class="cm-pe-hint" id="advSettingBox"></div>
+
+        <div class="cm-pe-field"><label>手机号（发送验证码 / 换绑用）</label><input id="advPhone" placeholder="如 13800000000"></div>
+        <div class="cm-pe-acts">
+          <mdui-button variant="tonal" id="advCaptcha">发送验证码 v1</mdui-button>
+          <mdui-button variant="tonal" id="advCaptchaSafe">发送安全验证码</mdui-button>
+        </div>
+        <div class="cm-pe-hint" id="advCaptchaBox"></div>
+
+        <div class="cm-pe-field"><label>邮箱登录（网易云邮箱 + 密码）</label>
+          <div class="cm-pe-inline"><input id="advEmail" placeholder="邮箱"><input id="advPass" type="password" placeholder="密码"></div></div>
+        <div class="cm-pe-acts">
+          <mdui-button variant="filled" id="advLogin">登录并绑定</mdui-button>
+        </div>
+
+        <div class="cm-pe-field"><label>换绑手机（原手机 / 新手机 / 验证码 / 密码）</label>
+          <div class="cm-pe-inline"><input id="advOldPhone" placeholder="原手机"><input id="advNewPhone" placeholder="新手机"></div>
+          <div class="cm-pe-inline" style="margin-top:6px"><input id="advCode" placeholder="验证码"><input id="advPwd" type="password" placeholder="密码"></div></div>
+        <div class="cm-pe-acts">
+          <mui-button id="advRebind" hidden></mui-button>
+          <mdui-button variant="tonal" id="advReplace">换绑手机</mdui-button>
+          <mdui-button variant="tonal" id="advBindPhone">绑定新手机</mdui-button>
+        </div>
+        <div class="cm-pe-hint" id="advBindBox"></div>
+
+        <div class="cm-pe-acts">
+          <mdui-button variant="text" id="advRegAnon">匿名注册（会创建新的网易云账号）</mdui-button>
+          <mdui-button variant="text" id="advRegPhone">手机号注册（会创建新的网易云账号）</mdui-button>
+        </div>
+      </div>`,
+    actions: [{ text: '关闭' }],
+  });
+  const q = sel => diag.querySelector(sel);
+  const val = sel => (q(sel) ? q(sel).value.trim() : '');
+  const act = async (label, fn) => {
+    try {
+      const r = await fn();
+      toast(r && (r.message || r.msg) ? `${label}：${r.message || r.msg}` : `${label}完成`);
+      if (onChanged) onChanged();
+      return r;
+    } catch (e) {
+      toast(`${label}失败：${e.message}`);
+      return null;
+    }
+  };
+
+  q('#advSetting').onclick = async () => {
+    const box = q('#advSettingBox');
+    box.textContent = '读取中…';
+    const d = await act('读取设置', () => api.ncm('/setting'));
+    box.textContent = d ? `设置：${JSON.stringify(d).slice(0, 220)}` : '读取失败';
+  };
+  q('#advLogout').onclick = () => confirmDialog({
+    title: '登出网易云账号？', body: '会调用上游 /logout，之后需要重新绑定。',
+    onOk: () => act('登出', () => api.ncm('/logout', { confirm: 1 })),
+  });
+  q('#advCaptcha').onclick = () => {
+    const phone = val('#advPhone');
+    if (!phone) return toast('先填手机号');
+    return act('发送验证码', () => api.ncm('/captcha/sent/v1', { phone, ctcode: '86', confirm: 1 }));
+  };
+  q('#advCaptchaSafe').onclick = () => {
+    const phone = val('#advPhone');
+    if (!phone) return toast('先填手机号');
+    return act('发送安全验证码', () => api.ncm('/captcha/safe/sent', { phone, ctcode: '86', confirm: 1 }));
+  };
+  q('#advLogin').onclick = () => {
+    const email = val('#advEmail');
+    const password = val('#advPass');
+    if (!email || !password) return toast('邮箱和密码都要填');
+    return confirmDialog({
+      title: `用 ${email} 登录网易云并绑定？`, body: '成功后会用该账号的 cookie 覆盖当前绑定。',
+      onOk: () => act('邮箱登录', () => api.ncm('/login', { email, password, confirm: 1 })),
+    });
+  };
+  q('#advReplace').onclick = () => {
+    const phone = val('#advNewPhone') || val('#advPhone');
+    const captcha = val('#advCode');
+    const oldPhone = val('#advOldPhone');
+    if (!phone || !captcha) return toast('新手机号与验证码都要填');
+    return confirmDialog({
+      title: `把绑定手机换成 ${phone}？`, body: '对应上游 /user/replacephone。',
+      onOk: () => act('换绑手机', () => api.ncm('/user/replacephone', {
+        phone, captcha, oldphone: oldPhone, confirm: 1,
+      })),
+    });
+  };
+  q('#advBindPhone').onclick = () => {
+    const phone = val('#advNewPhone') || val('#advPhone');
+    const captcha = val('#advCode');
+    if (!phone || !captcha) return toast('手机号与验证码都要填');
+    return act('绑定手机', () => api.ncm('/user/bindingcellphone', { phone, captcha, confirm: 1 }));
+  };
+  q('#advRebind').onclick = () => act('换绑', () => api.ncm('/rebind', {
+    phone: val('#advNewPhone'), captcha: val('#advCode'), confirm: 1,
+  }));
+  q('#advRegAnon').onclick = () => confirmDialog({
+    title: '匿名注册一个新的网易云账号？', body: '会创建一个你并不拥有的新账号，仅在明确需要时使用。',
+    onOk: () => act('匿名注册', () => api.ncm('/register/anonimous', { confirm: 1 })),
+  });
+  q('#advRegPhone').onclick = () => {
+    const phone = val('#advPhone');
+    const captcha = val('#advCode');
+    const password = val('#advPwd');
+    if (!phone || !password) return toast('手机号与密码都要填');
+    return confirmDialog({
+      title: `用 ${phone} 注册网易云账号？`, body: '会创建新账号（上游该接口同时用于改密）。',
+      onOk: () => act('手机号注册', () => api.ncm('/register/cellphone', {
+        phone, password, captcha, nickname: `cm${Date.now() % 100000}`, confirm: 1,
+      })),
+    });
+  };
+}

@@ -33,9 +33,19 @@ export async function render(el, params, state = {}) {
 
   const tabs = `
       <div class="cm-sqtabs" id="sqTabs">
+        <button class="cm-sqtab${tab === 'music' ? ' on' : ''}" data-k="music">音乐</button>
         <button class="cm-sqtab${tab === 'users' ? ' on' : ''}" data-k="users">用户</button>
         <button class="cm-sqtab${tab === 'posts' ? ' on' : ''}" data-k="posts">帖子</button>
       </div>`;
+
+  if (tab === 'music') {
+    // 音乐 TAB：Banner / 推荐歌单 / 推荐新歌 / 榜单 / 曲风 / 独家放送
+    el.innerHTML = tabs + '<div id="sqMusicBox"></div>';
+    el.querySelectorAll('#sqTabs .cm-sqtab').forEach(b => { b.onclick = () => switchTab(b.dataset.k); });
+    const { mountDiscover } = await import('../discover.js');
+    await mountDiscover(el.querySelector('#sqMusicBox'));
+    return;
+  }
 
   if (tab === 'posts') {
     // 帖子 TAB：只保留 TAB 栏 + 帖子容器（用户广场那套排序/筛选不显示）

@@ -28,27 +28,6 @@ function amPlayIcon() {
 // ---------- 网易云评论表情：方括号码 → emoji ----------
 // NCM 客户端表情在接口里是纯文本码（如 [爱心]/[呲牙]），网页端直接显示会看到
 // 原始方括号。这里映射为语义等价的通用 emoji（选用 Chrome58 即可渲染的早期码位）。
-const NCM_EMOTICONS = {
-  '微笑': '😊', '嘿嘿': '😄', '大笑': '😃', '哈哈哈': '😂', '笑哭': '😂', '呲牙': '😁',
-  '偷笑': '🤭', '尴尬': '😅', '卖萌': '😋', '傲娇': '😤', '无奈': '😔', '叹气': '😩',
-  '汗': '😓', '流汗': '😓', '流泪': '😢', '哭泣': '😭', '泪奔': '😭', '伤心': '😞',
-  '衰': '😖', '愤怒': '😠', '生气': '😡', '骂': '🤬', '惊吓': '😱', '恐惧': '😨',
-  '疑问': '❓', '疑惑': '🤔', '瞌睡': '😴', '睡觉': '😴', '困': '😪', '揉脸': '🤦',
-  '拍手': '👏', '敬礼': '🙋', '抱拳': '🙏', '祈祷': '🙏', '勾引': '😏', '飞吻': '😘',
-  '亲亲': '😍', '爱心': '❤️', '心碎': '💔', '玫瑰': '🌹', '花': '🌸', '星星': '✨',
-  '太阳': '☀️', '月亮': '🌙', '蛋糕': '🎂', '礼物': '🎁', '啤酒': '🍺', '咖啡': '☕',
-  '点赞': '👍', '弱': '👎', '真棒': '👌', '耶': '✌️', '加油': '💪', '拳头': '✊',
-  '猪头': '🐷', '狗': '🐶', '猫': '🐱', '666': '🔥', '鼓掌': '👏', '比心': '💖',
-  '憨笑': '😆', '大笑': '😃', '酷': '😎', '酷酷': '😎', '鼓掌': '👏', '挥手': '👋',
-  '拜拜': '👋', 'ok': '👌', 'no': '🙅', '胜利': '✌️', '拳头': '✊', '强': '👍',
-  '干杯': '🍻', '酒': '🍺', '茶': '🍵', '饭': '🍚', '香蕉': '🍌', '苹果': '🍎',
-  '音符': '🎵', '音乐': '🎶', '话筒': '🎤', '耳机': '🎧', '电影': '🎬', '礼物': '🎁',
-  '害羞': '😳', '可怜': '🥺', '委屈': '🥺', '难受': '😣', '生病': '🤒', '吐': '🤮',
-  '抓狂': '😫', '崩溃': '😫', '发怒': '😡', '敲打': '🔨', '刀': '🔪', '药': '💊',
-};
-function renderEmoticons(escaped) {
-  return escaped.replace(/\[([^\[\]]{1,6})\]/g, (m, name) => NCM_EMOTICONS[name] || m);
-}
 
 const overlay = () => document.getElementById('playerOverlay');
 
@@ -208,7 +187,24 @@ function renderLyric() {
     }).join('') +
     `<div class="pl-lyric-pad" id="padBot"></div>`;
   box.querySelectorAll('.pl-lyric-line').forEach(el => {
-    el.onclick = e => { e.stopPropagation(); player.seek(lyricLines[+el.dataset.i].t / 1000); };
+    let lp = null, lpFired = false;
+    el.onclick = e => {
+      e.stopPropagation();
+      if (lpFired) { lpFired = false; return; }   // 长按已摘录：不要再 seek
+      player.seek(lyricLines[+el.dataset.i].t / 1000);
+    };
+    // 长按摘录歌词（阶段二）：/song/lyrics/mark/add 是写操作，需登录 + 绑定网易云
+    el.addEventListener('pointerdown', () => {
+      lp = setTimeout(async () => {
+        lp = null; lpFired = true;
+        const line = lyricLines[+el.dataset.i];
+        if (!line || !player.meta) return;
+        const { addLyricMark } = await import('./pages/lyricmarks.js');
+        addLyricMark(player.meta, line.txt);
+      }, 600);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt =>
+      el.addEventListener(evt, () => { if (lp) { clearTimeout(lp); lp = null; } }));
   });
   layoutLyricPads();
   // 只在真实用户输入时暂停自动跟随 3 秒。
@@ -600,6 +596,11 @@ function openMoreDrawer() {
         <div><div class="cm-more-t">沉浸模式</div><div class="cm-more-s">封面主色流动渐变铺满播放页</div></div>
         <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
       </div>
+      <div class="cm-more-sec">歌曲信息</div>
+      <div class="cm-more-row" id="mSongInfo" style="cursor:pointer">
+        <div><div class="cm-more-t">查看歌曲详情</div><div class="cm-more-s">音质档位 / 副歌时间 / 红心数 / 创作者 / 百科 / 相似歌曲 / 乐谱</div></div>
+        <span class="material-icons-outlined">chevron_right</span>
+      </div>
       <div class="cm-more-sec">下载到本机</div>
       <div class="cm-more-chips" id="chipsDl">${QUALITY_TIERS.map(t =>
         `<mdui-chip data-g="dl" data-k="${t.key}" ${t.key === settings.quality ? 'selected' : ''}>${t.label}</mdui-chip>`).join('')}</div>
@@ -608,6 +609,11 @@ function openMoreDrawer() {
     actions: [{ text: '关闭' }],
   });
   setTimeout(() => {
+    const si = diag.querySelector('#mSongInfo');
+    if (si) si.onclick = () => {
+      diag.open = false;
+      import('./songinfo.js').then(m => m.openSongInfo(player.meta)).catch(() => {});
+    };
     diag.querySelectorAll('mdui-chip[data-g="lang"]').forEach(ch => {
       ch.onclick = () => {
         lyricMode = ch.dataset.k;
@@ -647,7 +653,23 @@ async function doDownload(level) {
   if (!m) return;
   toast('正在解析下载地址…');
   try {
-    const info = await api.songUrl(m.ncm_id, level);
+    // 优先用上游「客户端下载链接」（/song/download/url/v1）：直接给出带 size/md5/type 的下载地址，
+    // 拿不到再回退到播放用的音源地址。
+    let info = null;
+    try {
+      const d = await api.ncm('/song/download/url/v1', { id: m.ncm_id, level: level || 'exhigh' });
+      const dd = d.data || {};
+      if (dd.url) info = { url: dd.url, type: dd.type || 'mp3' };
+    } catch { /* 回退 */ }
+    if (!info) {
+      // 第二层：老版客户端下载链接（参数是码率 br，不是档位名）
+      try {
+        const d2 = await api.ncm('/song/download/url', { id: m.ncm_id, br: 320000 });
+        const dd2 = d2.data || d2;
+        if (dd2 && dd2.url) info = { url: dd2.url, type: dd2.type || 'mp3' };
+      } catch { /* 继续回退 */ }
+    }
+    if (!info) info = await api.songUrl(m.ncm_id, level);
     const ext = (info.type || 'mp3').toLowerCase();
     const name = `${m.name} - ${m.artists}.${ext}`.replace(/[\\/:*?"<>|]/g, '_');
     const dir = localStorage.getItem('cm.downloadDir') || 'CurrentMusic';
@@ -823,219 +845,16 @@ export function openQueue() {
 
 // ---------- 评论区（内容同步网易云，发评走绑定账号） ----------
 
-function fmtCmtTime(ms) {
-  if (!ms) return '';
-  const d = new Date(ms), now = new Date();
-  const diff = (now - d) / 1000;
-  if (diff < 60) return '刚刚';
-  if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
-  if (d.toDateString() === now.toDateString()) return Math.floor(diff / 3600) + ' 小时前';
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
-}
 
+// 歌曲评论：统一走通用评论抽屉（web/src/comments.js），覆盖 6 个维度
+// 说明：此处原先是一份 200 行的「只在歌曲维度可用」的实现，已抽到 comments.js，
+// 以免同一套热门/最新/楼层/点赞/回复逻辑在多处分叉。
 export async function openComments(meta) {
   if (!meta) return;
-  const old = document.getElementById('commentOverlay');
-  if (old) old.remove();
-  const ov = document.createElement('div');
-  ov.id = 'commentOverlay';
-  document.body.appendChild(ov);
-
-  let offset = 0, total = 0, more = true, meUid = 0, loading = false;
-
-  const render = () => {
-    ov.innerHTML = `
-      <div class="cmt-page">
-        <div class="cmt-top">
-          <span class="pl-btn" id="cmtClose"><span class="material-icons-outlined">keyboard_arrow_down</span></span>
-          <div class="cmt-title">评论区 · ${meta.name}</div>
-          <span style="width:36px"></span>
-        </div>
-        <div class="cmt-list" id="cmtList">${skelComments(5)}</div>
-        <div class="cmt-composer">
-          <div id="cmtReplyBar" hidden><span></span><i id="cmtReplyCancel"><span class="material-icons-outlined">close</span></i></div>
-          <input id="cmtInput" type="text" maxlength="140" placeholder="${meUid ? '以网易云账号发表评论…' : '绑定网易云账号后可发评'}" ${meUid ? '' : 'disabled'}>
-          <mdui-button variant="filled" id="cmtSend" ${meUid ? '' : 'disabled'}>发送</mdui-button>
-        </div>
-      </div>`;
-    ov.querySelector('#cmtClose').onclick = () => {
-      ov.classList.add('closing');
-      setTimeout(() => ov.remove(), 240);
-    };
-    ov.querySelector('#cmtSend').onclick = send;
-    ov.querySelector('#cmtInput').onkeydown = e => { if (e.key === 'Enter') send(); };
-    ov.querySelector('#cmtReplyCancel').onclick = () => setReply(null);
-  };
-
-  const likedSet = new Set(JSON.parse(sessionStorage.getItem('cm.cmtLiked') || '[]'));
-  const saveLiked = () => sessionStorage.setItem('cm.cmtLiked', JSON.stringify([...likedSet]));
-
-  const cmtHTML = c => {
-    const liked = likedSet.has(c.id);
-    const hasReply = !!(c.beNickname || c.replyCount);
-    return `
-    <div class="cmt-item" data-cid="${c.id}">
-      ${c.avatar ? `<img src="${esc(c.avatar)}" loading="lazy">` : `<div class="cmt-avaph"></div>`}
-      <div class="cmt-main">
-        <div class="cmt-head">
-          <span class="cmt-nick">${esc(c.nickname)}</span>
-          ${c.userId && c.userId === meUid ? '<span class="cmt-mine">我</span><span class="cmt-del" title="删除">删除</span>' : ''}
-        </div>
-        ${c.beNickname ? `<div class="cmt-be">回复 @${esc(c.beNickname)}：${esc(c.beContent)}</div>` : ''}
-        <div class="cmt-content">${renderEmoticons(esc(c.content))}</div>
-        <div class="cmt-foot">
-          <span>${fmtCmtTime(c.time)}</span>
-          <span class="cmt-like ${liked ? 'on' : ''}" data-like="${c.id}"><span class="mi">${liked ? 'thumb_up' : 'thumb_up_alt'}</span> ${c.liked || 0}</span>
-          <span class="cmt-reply" data-rep="${c.id}">回复</span>
-          ${hasReply ? `<span class="cmt-floor-btn" data-floor="${c.id}">查看回复${c.replyCount ? `(${c.replyCount})` : ''}</span>` : ''}
-        </div>
-        <div class="cmt-floor" id="floor-${c.id}" hidden></div>
-      </div>
-    </div>`;
-  };
-
-  async function load(reset) {
-    if (loading) return;
-    loading = true;
-    if (reset) { offset = 0; more = true; }
-    if (!more) { loading = false; return; }
-    try {
-      // 「加载更多」→ 进度指示
-      const pg = document.getElementById('cmtMore');
-      if (pg) pg.outerHTML = '<div class="cmt-more-loading" id="cmtMoreWrap"><mdui-circular-progress></mdui-circular-progress> 加载中…</div>';
-      const d = await api.comments(meta.ncm_id, offset);
-      meUid = d.meUid || meUid;
-      total = d.total;
-      if (reset) render();                       // 重建（含骨架屏），数据到达后替换
-      const box = ov.querySelector('#cmtList');
-      box.querySelectorAll('.cmt-skel').forEach(el => el.remove());
-      const html = (offset === 0 && d.hot && d.hot.length
-        ? `<div class="cmt-sec">热门评论</div>` + d.hot.map(cmtHTML).join('') : '') +
-        (offset === 0 ? `<div class="cmt-sec">最新评论（${total}）</div>` : '') +
-        d.comments.map(cmtHTML).join('');
-      // 批次渐入（stagger）
-      const wrapEl = document.createElement('div');
-      wrapEl.className = 'cmt-batch';
-      wrapEl.innerHTML = html;
-      box.appendChild(wrapEl);
-      document.getElementById('cmtMoreWrap')?.remove();
-      offset += d.comments.length;
-      more = d.more;
-      if (more) {
-        box.insertAdjacentHTML('beforeend', `<div class="cm-empty small" id="cmtMore" style="cursor:pointer">加载更多</div>`);
-        box.querySelector('#cmtMore').onclick = () => { load(false); };
-      }
-      bindDels();
-    } catch (e) {
-      document.getElementById('cmtMoreWrap')?.remove();
-      toast(`评论加载失败：${e.message}`);
-    } finally {
-      loading = false;
-    }
-  }
-
-  function bindDels() {
-    ov.querySelectorAll('.cmt-del').forEach(el => {
-      el.onclick = async () => {
-        const item = el.closest('.cmt-item');
-        const cid = +item.dataset.cid;
-        try {
-          await api.commentDelete(meta.ncm_id, cid);
-          item.remove();
-          toast('评论已删除');
-        } catch (e2) { toast(e2.message); }
-      };
-    });
-    // 点赞
-    ov.querySelectorAll('.cmt-like').forEach(el => {
-      el.onclick = async () => {
-        const cid = +el.dataset.like;
-        const cur = likedSet.has(cid);
-        try {
-          await api.commentLike(meta.ncm_id, cid, !cur);
-          if (cur) likedSet.delete(cid); else likedSet.add(cid);
-          saveLiked();
-          const n = el.textContent.replace(/^\D+/, '');
-          el.classList.toggle('on', !cur);
-          el.querySelector('.mi').textContent = !cur ? 'thumb_up' : 'thumb_up_alt';
-          el.innerHTML = el.querySelector('.mi').outerHTML + ' ' + Math.max(0, parseInt(n || '0', 10) + (cur ? -1 : 1));
-          toast(cur ? '已取消点赞' : '已点赞');
-        } catch (e2) {
-          toast(e2.message.includes('绑定') ? '点赞需先绑定网易云账号' : e2.message);
-        }
-      };
-    });
-    // 回复
-    ov.querySelectorAll('.cmt-reply').forEach(el => {
-      el.onclick = () => {
-        const item = el.closest('.cmt-item');
-        setReply({ id: +el.dataset.rep, nickname: item.querySelector('.cmt-nick').textContent });
-        ov.querySelector('#cmtList').scrollTo({ top: ov.querySelector('#cmtList').scrollHeight, behavior: 'smooth' });
-      };
-    });
-    // 展开楼层回复
-    ov.querySelectorAll('.cmt-floor-btn').forEach(el => {
-      el.onclick = async () => {
-        const cid = +el.dataset.floor;
-        const box = ov.querySelector(`#floor-${cid}`);
-        if (!box.hidden) { box.hidden = true; return; }
-        box.hidden = false;
-        if (box.dataset.loaded) return;
-        box.innerHTML = '<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>';
-        try {
-          const d = await api.commentFloor(meta.ncm_id, cid);
-          box.dataset.loaded = '1';
-          box.innerHTML = d.comments.map(c => `
-            <div class="cmt-floor-item" data-cid="${c.id}">
-              <div class="cmt-head"><span class="cmt-nick">${esc(c.nickname)}</span>
-              ${c.beNickname ? `<span class="cmt-be-in">@${esc(c.beNickname)}</span>` : ''}</div>
-              <div class="cmt-content">${renderEmoticons(esc(c.content))}</div>
-              <div class="cmt-foot"><span>${fmtCmtTime(c.time)}</span><span><span class="mi">thumb_up</span> ${c.liked || 0}</span><span class="cmt-reply" data-rep="${c.id}">回复</span></div>
-            </div>`).join('') || '<div class="cm-empty small">暂无回复</div>';
-          bindDels();   // 楼层内也有回复按钮
-        } catch (e2) { box.innerHTML = `<div class="cm-empty small">回复加载失败</div>`; }
-      };
-    });
-  }
-
-  let replyTo = null;   // {id, nickname}
-  function setReply(r) {
-    replyTo = r;
-    const bar = ov.querySelector('#cmtReplyBar');
-    const input = ov.querySelector('#cmtInput');
-    if (!bar || !input) return;
-    bar.hidden = !r;
-    if (r) {
-      bar.querySelector('span').textContent = `回复 @${r.nickname}`;
-      input.placeholder = `回复 @${r.nickname}…`;
-      input.focus();
-    } else {
-      input.placeholder = meUid ? '以网易云账号发表评论…' : '绑定网易云账号后可发评';
-    }
-  }
-
-  async function send() {
-    const input = ov.querySelector('#cmtInput');
-    const content = (input.value || '').trim();
-    if (!content) return;
-    const btn = ov.querySelector('#cmtSend');
-    btn.loading = true;
-    try {
-      await api.commentPost(meta.ncm_id, content, replyTo && replyTo.id);
-      input.value = '';
-      toast(replyTo ? '回复已发表' : '评论已发表（同步网易云）');
-      setReply(null);
-      await load(true);
-    } catch (e) {
-      toast(e.message.includes('绑定') ? '请先在「我的」页绑定网易云账号' : e.message);
-    } finally {
-      btn.loading = false;
-    }
-  }
-
-  render();
-  await load(true);
+  const { openComments: openEntityComments } = await import('./comments.js');
+  return openEntityComments({ type: 0, id: meta.ncm_id, title: meta.name || '歌曲' });
 }
+
 
 // ---------- 加入歌单 bottom sheet ----------
 

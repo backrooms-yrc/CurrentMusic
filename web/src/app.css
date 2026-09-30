@@ -2581,3 +2581,135 @@ html[data-ui-preset="frost"] #topbar { border-bottom-color: var(--frs-tabbar-lin
 .cm-pcmt-who span { opacity: .5; }
 .cm-pcmt-text { font-size: 13.5px; line-height: 1.55; margin-top: 2px; word-break: break-word; }
 .cm-pcmt-input { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- 发现页「音乐」TAB（阶段一新增）----------
+   仅作用于 .cm-disc 内部：该类只由 web/src/discover.js 挂载，
+   因此不会影响默认皮肤下任何既有元素的观感。 */
+.cm-disc .cm-disc-banner { width: clamp(240px, 72vw, 360px); }
+.cm-disc .cm-disc-banner img { aspect-ratio: 5 / 2; }
+.cm-disc .cm-sec:empty { display: none; }
+
+/* ---------- 歌曲详情抽屉（阶段二新增，仅作用于 .cm-si 内部）---------- */
+.cm-si-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.cm-si-head img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; }
+.cm-si-name { font-size: 15px; font-weight: 650; }
+.cm-si-sub { font-size: 12px; opacity: .65; margin-top: 2px; }
+.cm-si-sec { margin: 12px 0; }
+.cm-si-sec-h { font-size: 12.5px; font-weight: 650; color: var(--cm-primary); margin-bottom: 6px; }
+.cm-si-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--mdui-color-outline-variant, rgba(0,0,0,.06)); }
+.cm-si-row:last-child { border-bottom: none; }
+.cm-si-row span { opacity: .6; font-size: 12px; text-align: right; }
+.cm-si-act { color: var(--cm-primary); font-size: 12px; cursor: pointer; font-weight: 600; }
+.cm-si-empty, .cm-si-load { font-size: 12px; opacity: .55; padding: 4px 0; }
+.cm-si-load { display: flex; justify-content: center; padding: 20px 0; }
+.cm-si-wiki p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.6; opacity: .8; }
+.cm-si-simi-i { display: flex; gap: 8px; align-items: center; padding: 5px 0; cursor: pointer; }
+.cm-si-simi-i img { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; }
+.cm-si-simi-n { font-size: 12.5px; font-weight: 600; }
+.cm-si-simi-a { font-size: 11px; opacity: .6; }
+
+/* ---------- 我的歌词本（阶段二新增）---------- */
+.cm-lm-item { padding: 10px 2px; border-bottom: 1px solid var(--mdui-color-outline-variant, rgba(0,0,0,.06)); }
+.cm-lm-item:last-child { border-bottom: none; }
+.cm-lm-lyric { font-size: 14px; line-height: 1.55; }
+.cm-lm-meta { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; font-size: 11.5px; opacity: .6; }
+.cm-lm-meta .material-icons-outlined { font-size: 16px; cursor: pointer; }
+
+/* 通用评论抽屉的动作项（阶段二新增，与既有 .cmt-reply 同规格） */
+.cmt-foot .cmt-hug, .cmt-foot .cmt-report { cursor: pointer; transition: transform .12s ease; }
+.cmt-foot .cmt-hug:active, .cmt-foot .cmt-report:active { transform: scale(.88); }
+.cmt-time { font-size: 11px; opacity: .55; margin-left: 6px; }
+.cmt-floor-item .cmt-head { align-items: baseline; }
+
+/* 歌曲详情：乐谱谱面（阶段二） */
+.cm-si-sheet { cursor: pointer; }
+.cm-si-sheet-imgs { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.cm-si-sheet-imgs img { width: 100%; border-radius: 8px; background: #fff; }
+
+/* 评论排序切换（阶段二） */
+.cmt-modes { display: flex; gap: 14px; padding: 8px 16px 4px; font-size: 12.5px; }
+.cmt-mode { cursor: pointer; opacity: .55; padding-bottom: 3px; }
+.cmt-mode.on { opacity: 1; font-weight: 650; color: var(--cm-primary); border-bottom: 2px solid var(--cm-primary); }
+
+/* 歌曲详情：底部动作按钮（阶段二） */
+.cm-si-acts { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+/* ---------- 专辑详情页（阶段三新增）---------- */
+.cm-al-desc { font-size: 13px; line-height: 1.7; opacity: .8; white-space: pre-wrap; }
+.cm-al-desc-clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.cm-album-head .cm-detail-cover span.material-icons-outlined { font-size: 48px; }
+
+/* ---------- MV / 视频（阶段三新增）---------- */
+.cm-media-box { width: 100%; background: #000; border-radius: 14px; overflow: hidden; margin: 4px 0 12px; }
+.cm-media-box:empty { display: none; }
+.cm-media { width: 100%; max-height: 62vh; display: block; background: #000; }
+.cm-mv-head { padding-top: 2px; }
+.cm-plcover.cm-cover-16x9 { aspect-ratio: 16 / 9; }
+.cm-plcover.cm-cover-16x9 img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ---------- 歌单编辑器 / 歌单广场（阶段三新增）---------- */
+.cm-pe-tabs { display: flex; gap: 16px; padding: 0 4px 8px; border-bottom: 1px solid var(--mdui-color-outline-variant, rgba(0,0,0,.08)); }
+.cm-pe-tab { font-size: 13.5px; cursor: pointer; opacity: .6; padding-bottom: 6px; }
+.cm-pe-tab.on { opacity: 1; font-weight: 650; color: var(--cm-primary); border-bottom: 2px solid var(--cm-primary); }
+.cm-pe-panel { padding: 12px 2px; max-height: 58vh; overflow: auto; }
+.cm-pe-field { margin-bottom: 10px; }
+.cm-pe-field > label { display: block; font-size: 12px; opacity: .65; margin-bottom: 4px; }
+.cm-pe-field input, .cm-pe-field textarea {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 13.5px; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--mdui-color-outline-variant, rgba(0,0,0,.15)); background: transparent; color: inherit;
+}
+.cm-pe-inline { display: flex; gap: 8px; align-items: center; }
+.cm-pe-inline input { flex: 1; }
+.cm-pe-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.cm-pe-hint { font-size: 12px; opacity: .6; padding: 4px 0; }
+.cm-pe-list { margin-top: 6px; }
+.cm-pe-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--mdui-color-outline-variant, rgba(0,0,0,.06)); }
+.cm-pe-row i { font-style: normal; opacity: .55; font-size: 11.5px; }
+.cm-pe-ids { font-size: 11.5px; opacity: .6; line-height: 1.6; word-break: break-all; max-height: 180px; overflow: auto; }
+.cm-pe-kv { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; margin-bottom: 10px; }
+.cm-pe-kv > div { display: flex; justify-content: space-between; font-size: 13px; }
+.cm-pe-kv span { opacity: .6; }
+.cm-mlog-card .cm-plcover span.material-icons-outlined { font-size: 28px; }
+
+/* ---------- 听歌足迹（阶段四新增）---------- */
+.cm-stat-row { padding: 2px 0 8px; }
+.cm-card.cm-stat-card { width: clamp(120px, 32vw, 158px); padding: 14px 12px; border-radius: 16px; background: var(--mdui-color-surface-container-high, rgba(127,127,127,.10)); }
+.cm-stat-num { font-size: 19px; font-weight: 700; line-height: 1.25; }
+.cm-stat-l { font-size: 11.5px; opacity: .6; margin-top: 4px; }
+.cm-stat-list { display: flex; flex-direction: column; }
+
+/* ---------- 消息与私信（阶段四新增）---------- */
+.cm-msg-row { display: flex; align-items: center; gap: 10px; padding: 10px 2px; cursor: pointer; border-bottom: 1px solid var(--mdui-color-outline-variant, rgba(0,0,0,.06)); }
+.cm-msg-row:last-child { border-bottom: none; }
+.cm-msg-ava { width: 42px; height: 42px; border-radius: 50%; overflow: hidden; flex: none; background: var(--mdui-color-surface-container-highest, #e6e0e9); display: flex; align-items: center; justify-content: center; }
+.cm-msg-ava img { width: 100%; height: 100%; object-fit: cover; }
+.cm-msg-main { flex: 1; min-width: 0; }
+.cm-msg-name { font-size: 14px; font-weight: 600; }
+.cm-msg-sub { font-size: 12px; opacity: .6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-msg-time { font-size: 11px; opacity: .5; flex: none; }
+.cm-msg-recent { flex: none; width: 132px; flex-direction: column; text-align: center; border-bottom: none; }
+.cm-chat { max-height: 46vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.cm-chat-line { display: flex; flex-direction: column; align-items: flex-start; }
+.cm-chat-line.mine { align-items: flex-end; }
+.cm-chat-bubble { max-width: 78%; padding: 8px 12px; border-radius: 14px; font-size: 13.5px; line-height: 1.5; background: var(--mdui-color-surface-container-high, rgba(127,127,127,.14)); white-space: pre-wrap; word-break: break-word; }
+.cm-chat-line.mine .cm-chat-bubble { background: var(--cm-primary); color: #fff; }
+.cm-chat-time { font-size: 10.5px; opacity: .45; margin: 2px 6px 0; }
+.cm-user-ava { border-radius: 50%; }
+
+/* ---------- 动态与话题（阶段四新增）---------- */
+.cm-ev-card { padding: 12px 2px; border-bottom: 1px solid var(--mdui-color-outline-variant, rgba(0,0,0,.07)); }
+.cm-ev-head { display: flex; align-items: center; gap: 10px; }
+.cm-ev-text { font-size: 13.5px; line-height: 1.6; margin: 8px 0 6px; white-space: pre-wrap; word-break: break-word; }
+.cm-ev-pics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+.cm-ev-pics img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; background: var(--mdui-color-surface-container-highest, #e6e0e9); }
+.cm-ev-foot { display: flex; gap: 16px; align-items: center; font-size: 11.5px; opacity: .7; flex-wrap: wrap; }
+
+/* ---------- 账号资料 / 签到 / 设备（阶段四新增）---------- */
+.cm-card.cm-medal { width: 88px; text-align: center; }
+.cm-card.cm-medal img { border-radius: 50%; }
+.cm-si-row .cm-si-act { margin-left: 8px; }
+
+/* ---------- 会员 / 云贝 / 音乐人（阶段五新增）---------- */
+.cm-kv-sub { padding: 4px 0 4px 10px; border-left: 2px solid var(--mdui-color-outline-variant, rgba(0,0,0,.12)); margin: 4px 0; }
+.cm-kv-sub > b { display: block; font-size: 12px; opacity: .65; margin-bottom: 2px; }

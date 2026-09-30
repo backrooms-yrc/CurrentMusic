@@ -55,14 +55,7 @@ function bindAttach(box, list) {
       }
       if (a.type === 'playlist') { location.hash = `#/ncmpl/${a.id}`; return; }
       if (a.type === 'artist') { location.hash = `#/artist/${a.id}`; return; }
-      if (a.type === 'album') {
-        toast('正在打开专辑…');
-        try {
-          const al = await api.album(a.id);
-          if (!al.songs || !al.songs.length) return toast('专辑暂无曲目');
-          player.playList(al.songs, 0);
-        } catch (e) { toast('打开专辑失败：' + e.message); }
-      }
+      if (a.type === 'album') { location.hash = `#/album/${a.id}`; return; }
     };
   });
 }

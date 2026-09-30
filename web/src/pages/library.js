@@ -72,6 +72,7 @@ export async function render(el) {
     </div>`}
 
     <div class="cm-sec-head"><h2>我的歌单</h2>
+      <span class="cm-sec-more" id="plazaEntry"><span class="material-icons-outlined">explore</span> 歌单广场</span>
       <span class="cm-sec-more" id="newPl"><span class="material-icons-outlined">add</span> 新建</span></div>
     <div class="cm-plgrid" id="plGrid">
       ${localPls.map(p => `
@@ -111,6 +112,7 @@ export async function render(el) {
       onOk: async name => { await api.createPlaylist(name, ''); toast('歌单已创建'); render(el); },
     });
   };
+  el.querySelector('#plazaEntry').onclick = () => { location.hash = '#/plaza'; };
   el.querySelectorAll('.cm-plcard').forEach(c => {
     c.onclick = e => { if (!e.target.closest('.cm-plmenu')) location.hash = `#/pl/${c.dataset.id}`; };
   });
