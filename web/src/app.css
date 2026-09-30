@@ -648,6 +648,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   }
   .pl-body.view-lyric .pl-lyric { padding-bottom: 12px; }
 }
+
 @keyframes cmViewIn {
   from { opacity: 0; transform: scale(.965); }
   to { opacity: 1; transform: none; }
@@ -725,9 +726,13 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
    刻意**不加底色/圆角/发光**——参考 audioMotion-analyzer 与 wavesurfer.js 的默认观感，
    波形直接落在播放页背景上，不套"盒子"，避免显得像个频谱小玩具。 */
 .pl-waveform {
-  position: relative; height: 30px; margin: 2px 10px 0;
+  /* 高度：30px 偏薄，柱子的起伏看不太出来；加高后既更有存在感，
+     也让同样的能量差在视觉上更明显（宽屏再高一些，见下方断点） */
+  position: relative; height: 46px; margin: 8px 10px 0;
 }
 .pl-waveform canvas { display: block; width: 100%; height: 100%; }
+/* 宽屏（Pad / 桌面）有更多纵向空间，波形再高一些 */
+@media (min-width: 600px) { .pl-waveform { height: 58px; } }
 .pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: 10px; opacity: .85; }
 .pl-seek input[type=range] { flex: 1; accent-color: var(--cm-primary, #d0bcff); }
 .pl-transport { display: flex; align-items: center; gap: 26px; margin: 6px 0 22px; }   /* 底部留白加大：控件整体上移，视觉更协调 */
