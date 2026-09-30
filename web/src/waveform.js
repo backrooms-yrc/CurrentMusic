@@ -12,13 +12,23 @@
 //      形态是连续的填充轮廓，而不是一根根圆柱。
 //
 // 因此本文件提供三种风格，全部走同一套频谱分析，只是画法不同：
-//   wave    —— 平滑镜像波形轮廓（wavesurfer 形态，最贴合当前播放页的克制风格）★默认
-//   bars    —— 密实方柱 + 峰值帽（audioMotion 默认形态）
-//   capsule —— 少量圆角粗柱 + 两段配色（现代流媒体播放器常见）
+//   bars    —— 密实方柱 + 峰值帽（audioMotion 默认形态）★默认
+//   wave    —— 平滑镜像波形轮廓（wavesurfer 形态）
+//   capsule —— 少量圆角粗柱（现代流媒体播放器常见）
+//
+// **本控件只做"波形指示"，不表达播放进度**：下面已有专门的可拖动进度条，
+// 波形上再画"已播放/未播放"分段或扫描线属于重复表达，因此这里不接收进度、
+// 不画分段、不画播放头——整幅只有随音乐起伏的波形。
 //
 // 数据不足时一律画**静默基线**，不假装有律动。
 
-export const WAVE_STYLE = 'wave';        // 换风格改这里：wave | bars | capsule
+// 默认方案 B（密实方柱）。用户可在「设置 → 外观 → 波形样式」改，存 localStorage。
+export const WAVE_STYLE = 'bars';
+export const WAVE_STYLES = [
+  { key: 'bars', name: '密实方柱', desc: '频谱方柱 + 峰值帽（默认）' },
+  { key: 'wave', name: '平滑波形', desc: '连续剪影轮廓，最克制' },
+  { key: 'capsule', name: '圆角胶囊', desc: '少量粗柱，最轻' },
+];
 
 const STYLES = ['wave', 'bars', 'capsule'];
 
@@ -30,7 +40,6 @@ const PEAK_FALL = 1.9;                  // 峰值回落加速度（相对高度/
 
 export function createWaveform(canvas, opts) {
   const read = opts.read;
-  const progressOf = opts.progress;
   const binsOf = opts.bins || function () { return 1024; };
   const want = opts.style || WAVE_STYLE;
   const style = STYLES.indexOf(want) >= 0 ? want : WAVE_STYLE;
@@ -41,7 +50,6 @@ export function createWaveform(canvas, opts) {
   let level = null, peak = null, peakAt = null, peakVel = null;
   let raf = 0, lastTs = 0;
   let playing = false, hasData = false;
-  let progress = 0;
   let reduced = false, alive = true;
   let u8 = null, bins = binsOf();
   let grad = null, gradKey = '';
@@ -151,42 +159,23 @@ export function createWaveform(canvas, opts) {
     ctx.closePath();
   }
 
-  // ── 风格一：平滑镜像波形（wavesurfer 形态）──
+  // ── 风格 wave：平滑镜像波形轮廓（wavesurfer 形态）──
   function drawWave() {
     const w = cssW, h = cssH, mid = h / 2;
     const maxH = h - 4;
     const n = bars;
     const step = w / (n - 1);
-    const head = progress * w;
     const pts = new Array(n);
     for (let i = 0; i < n; i++) {
       const v = hasData ? Math.min(1, level[i] * 1.25) : 0;
       pts[i] = Math.max(1.2, v * maxH) / 2;
     }
-    // 未播放：低对比轮廓（wavesurfer 的"低调灰"取向）
+    const g = ctx.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, ACCENT + '0.55)');
+    g.addColorStop(1, ACCENT + '0.95)');
     wavePath(pts, step, mid);
-    ctx.fillStyle = WHITE + '0.16)';
+    ctx.fillStyle = g;
     ctx.fill();
-    // 已播放：淡紫渐变覆盖
-    if (head > 0) {
-      ctx.save();
-      ctx.beginPath(); ctx.rect(0, 0, head, h); ctx.clip();
-      wavePath(pts, step, mid);
-      ctx.fillStyle = WHITE + '0.32)';
-      ctx.fill();
-      const g = ctx.createLinearGradient(0, 0, w, 0);
-      g.addColorStop(0, ACCENT + '0.5)');
-      g.addColorStop(1, ACCENT + '0.9)');
-      wavePath(pts, step, mid);
-      ctx.fillStyle = g;
-      ctx.fill();
-      ctx.restore();
-    }
-    // 播放位置：1px 细线（原版加 shadowBlur 发光，观感偏"玩具"）
-    if (progress > 0.001 && progress < 1) {
-      ctx.fillStyle = WHITE + '0.85)';
-      ctx.fillRect(Math.round(head) - 0.5, 1, 1, h - 2);
-    }
   }
 
   // ── 风格二：密实方柱 + 峰值帽（audioMotion 默认形态）──
@@ -202,16 +191,14 @@ export function createWaveform(canvas, opts) {
       const v = hasData ? level[i] : 0;
       const bh = Math.max(1, v * maxH);
       const x = i * slot + gap / 2;
-      const played = (x + bw / 2) <= progress * w;
-      ctx.globalAlpha = played ? 1 : 0.3;
       ctx.fillStyle = g;
       ctx.fillRect(x, h - bh, bw, bh);
       if (hasData && peak[i] > v + 0.02) {        // 峰值帽
-        ctx.globalAlpha = played ? 0.95 : 0.4;
+        ctx.globalAlpha = 0.95;
         ctx.fillRect(x, h - Math.max(bh + 2, peak[i] * maxH), bw, 1.5);
+        ctx.globalAlpha = 1;
       }
     }
-    ctx.globalAlpha = 1;
   }
 
   // ── 风格三：少量圆角粗柱（现代流媒体播放器常见）──
@@ -227,13 +214,10 @@ export function createWaveform(canvas, opts) {
       const v = hasData ? level[i] : 0;
       const bh = Math.max(bw, v * maxH);          // 停播时是一排圆点，形态干净
       const x = i * slot + (slot - bw) / 2;
-      const played = (x + bw / 2) <= progress * w;
-      ctx.globalAlpha = played ? 1 : 0.24;
       ctx.fillStyle = g;
       roundRect(x, h - bh, bw, bh, r);
       ctx.fill();
     }
-    ctx.globalAlpha = 1;
   }
 
   function draw() {
@@ -252,7 +236,6 @@ export function createWaveform(canvas, opts) {
     if (!playing || reduced) { stop(); return; }
     const dt = lastTs ? Math.min(64, Math.max(8, ts - lastTs)) : 16;
     lastTs = ts;
-    if (progressOf) progress = Math.max(0, Math.min(1, progressOf() || 0));
     sample(dt);
     draw();
     raf = requestAnimationFrame(frame);
@@ -285,10 +268,6 @@ export function createWaveform(canvas, opts) {
         resetLevels();
         draw();
       }
-    },
-    setProgress(p) {
-      progress = Math.max(0, Math.min(1, p || 0));
-      if (!raf) draw();
     },
     levels() { return level ? Array.prototype.slice.call(level) : []; },
     peaks() { return peak ? Array.prototype.slice.call(peak) : []; },

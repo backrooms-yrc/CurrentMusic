@@ -1,6 +1,7 @@
 // 播放器 UI：底部迷你条 + 全屏播放页（封面/歌词/进度/音质/点赞/收藏/加入歌单）。
 import { mdui } from './md.js';
-import { createWaveform } from './waveform.js';
+import { createWaveform, WAVE_STYLE } from './waveform.js';
+import { waveStyle } from './customize.js';
 import { api, auth, settings } from './api.js';
 import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, ensureStatus, openLikeMenu, isNcmLiked, ensureNcmLiked, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
 import { player, wave, on } from './player.js';
@@ -96,7 +97,6 @@ on('time', () => {
   if (t) t.textContent = fmtDur(pos);
   if (d && dur) d.textContent = fmtDur(dur);
   if (s && !s.dataset.drag) s.value = dur ? (pos / dur) * 100 : 0;
-  if (waveCtl) waveCtl.setProgress(dur ? pos / dur : 0);
 });
 
 // ---------- 全屏播放页 ----------
@@ -484,12 +484,12 @@ async function openFull() {
   const canvas = ov.querySelector('#plWaveCanvas');
   if (waveCtl) { waveCtl.destroy(); waveCtl = null; }
   if (canvas) {
+    // 纯波形指示：不接收进度（进度由下面专门的可拖动进度条表达）
     waveCtl = createWaveform(canvas, {
       read: u8 => wave.read(u8),
       bins: () => wave.bins,
-      progress: () => { const d = player.durMs(); return d ? player.posMs() / d : 0; },
+      style: waveStyle(),
     });
-    waveCtl.setProgress(player.durMs() ? player.posMs() / player.durMs() : 0);
     waveCtl.setPlaying(player.isPlaying());
     window.__cmWave = waveCtl;          // 调试/测试入口（只读引用）
   }
@@ -562,6 +562,20 @@ function closeFull() {
   ov.classList.add('closing');
   setTimeout(() => { ov.hidden = true; ov.innerHTML = ''; ov.classList.remove('closing'); }, 240);
 }
+
+// 设置页切换波形样式时，若播放页正开着就立刻换（不必重开播放页）
+document.addEventListener('cm-wavestyle', () => {
+  const ov = overlay();
+  if (!ov || ov.hidden) return;
+  const canvas = ov.querySelector('#plWaveCanvas');
+  if (!canvas) return;
+  if (waveCtl) { waveCtl.destroy(); waveCtl = null; }
+  waveCtl = createWaveform(canvas, {
+    read: u8 => wave.read(u8), bins: () => wave.bins, style: waveStyle(),
+  });
+  waveCtl.setPlaying(player.isPlaying());
+  window.__cmWave = waveCtl;
+});
 
 // ---------- 更多抽屉：语言 / 字号 / 渐变背景 / 下载 ----------
 

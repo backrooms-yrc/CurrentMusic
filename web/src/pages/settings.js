@@ -6,6 +6,8 @@ import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
 import { UI_PRESETS, uiPresetKey, uiPresetName, setUiPreset } from '../uipreset.js';
 import { bgImage, glassBlur, glassTint, glassRange, setBgImage, setGlass, resetGlass, applyCustomize } from '../customize.js';
+import { waveStyle, setWaveStyle } from '../customize.js';
+import { WAVE_STYLES } from '../waveform.js';
 
 export function applyTheme() {
   const root = document.documentElement;
@@ -36,6 +38,7 @@ export async function render(el) {
       <div class="cm-setting" id="uiPreset"><span class="material-icons-outlined">auto_awesome</span>界面风格<i>${esc(uiPresetName())}</i></div>
         <div class="cm-setting" id="bgImage"><span class="material-icons-outlined">wallpaper</span>背景图片<i>${bgImage() ? '已自定义' : '默认'}</i></div>
         <div class="cm-setting" id="glassFx"><span class="material-icons-outlined">blur_on</span>玻璃效果<i>${glassTint() == null ? '默认' : '已自定义'}</i></div>
+        <div class="cm-setting" id="waveStyle"><span class="material-icons-outlined">graphic_eq</span>波形样式<i>${(WAVE_STYLES.find(x => x.key === waveStyle()) || WAVE_STYLES[0]).name}</i></div>
     </div>
     <div class="cm-sec-head"><h2>播放与下载</h2></div>
     <div class="cm-setting-list">
@@ -241,6 +244,33 @@ export async function render(el) {
         tv.textContent = Math.round(tint * 100) + '%';
         setGlass({ tint });
       };
+    }, 0);
+  };
+
+  el.querySelector('#waveStyle').onclick = () => {
+    const cur = waveStyle();
+    const diag = mdui.dialog({
+      headline: '波形样式',
+      body: `<div class="cm-more" style="min-width:min(84vw,340px)">
+        ${WAVE_STYLES.map(x => `<div class="cm-more-row" data-k="${x.key}">
+          <div><div class="cm-more-t">${x.name}${x.key === cur ? ' ✓' : ''}</div>
+            <div class="cm-more-s">${x.desc}</div></div>
+          <span class="material-icons-outlined">${x.key === cur ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
+        </div>`).join('')}
+        <div class="cm-more-s" style="margin-top:8px">波形只做「随音乐起伏」的指示，不表达播放进度（进度看下方进度条）。
+          想看实际效果可打开<a href="/ui-preview/waveform.html" target="_blank" rel="noopener">波形对比预览页</a>。</div>
+      </div>`,
+      actions: [{ text: '关闭' }],
+    });
+    setTimeout(() => {
+      diag.querySelectorAll('.cm-more-row').forEach(row => {
+        row.onclick = () => {
+          setWaveStyle(row.dataset.k);      // 即时生效（播放页开着也会立刻换）
+          toast('波形样式：' + ((WAVE_STYLES.find(x => x.key === row.dataset.k) || {}).name || ''));
+          diag.open = false;
+          render(el);
+        };
+      });
     }, 0);
   };
 

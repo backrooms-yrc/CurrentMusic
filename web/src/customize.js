@@ -12,6 +12,23 @@
 //   --frs-lens-blur  折射透镜模糊（数字，glass.js 读走拼 blur(Npx)）
 //   --frs-alpha      玻璃本体不透明度 0~1（frost 的胶囊/底栏/迷你条都用它）
 
+
+// 播放页波形样式（纯指示，不表达进度）：bars（默认）| wave | capsule
+const WAVE_KEY = 'cm.waveStyle';
+const WAVE_KEYS = ['bars', 'wave', 'capsule'];
+
+/** 当前波形样式（非法值/未设置 → 默认 bars）。 */
+export function waveStyle() {
+  const v = localStorage.getItem(WAVE_KEY);
+  return WAVE_KEYS.indexOf(v) >= 0 ? v : 'bars';
+}
+
+/** 设置波形样式并即时通知播放页（若正开着播放页，会立刻换成新样式）。 */
+export function setWaveStyle(k) {
+  const v = WAVE_KEYS.indexOf(k) >= 0 ? k : 'bars';
+  localStorage.setItem(WAVE_KEY, v);
+  try { document.dispatchEvent(new Event('cm-wavestyle')); } catch (e) { /* 忽略 */ }
+}
 const BG_KEY = 'cm.bgImage';
 const BLUR_KEY = 'cm.glassBlur';
 const TINT_KEY = 'cm.glassTint';
