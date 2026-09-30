@@ -2,6 +2,8 @@
 import { mdui } from './md.js';
 import { api, auth, settings } from './api.js';
 import { toast, tierLabel } from './ui.js';
+import { resolveSongUrl } from './songurl.js';   // 三级音源回退（P2）：
+// 曾因漏 import 上线即 ReferenceError 全站无法播放——见 tools/check-js-refs.py
 
 // ---------- 音频元素（可替换） ----------
 // 为什么要"可替换"：可视化需要把 <audio> 接入 Web Audio 图，而**一旦接入，
