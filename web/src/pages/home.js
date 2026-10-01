@@ -28,6 +28,39 @@ export async function render(el) {
       <div class="cm-greet-date">${esc(today)}</div>
       <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
     </div>
+    <div id="decorBanner"></div>
+    <section class="cm-sec">${skelList(3)}</section>
+    <section class="cm-sec"><div class="cm-sec-head"><h2>每日推荐</h2></div>${skelCards(8)}</section>`;
+  // 横幅不阻塞首屏：与每日推荐并行请求；结果先存起来，整页重渲染后再插入
+  let bannerHTML = '';
+  const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
+  let daily = [], forYou = [], recent = [], artists = [];
+  let recPls = [], ncmBound = false;
+  const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => {})];
+  // 每日推荐歌单是账号维度接口（T1）：必须用用户自己的网易云 cookie，未绑定则整体跳过
+  if (auth.token) {
+    jobs.push(api.bindStatus().then(b => {
+      if (!b || !b.bound) return;
+      ncmBound = true;
+      return Promise.allSettled([
+        api.ncm('/recommend/resource').then(d => { recPls = d.recommend || []; }),
+        // T1：账号维度的每日推荐。拿到就用它覆盖服务端 SVIP 档（对已绑定用户更准确）
+        api.ncm('/recommend/songs').then(d => {
+          const own = ncmSongs(((d.data || {}).dailySongs) || []);
+          if (own.length) daily = own;
+        }),
+      ]);
+    }).catch(() => {}));
+  }
+  if (auth.token) jobs.push(api.recentPlays(20).then(d => { recent = d.songs || []; }).catch(() => {}));
+  await Promise.allSettled(jobs);
+  await bannerJob;   // 横幅请求通常更快，这里几乎立即返回
+
+  el.innerHTML = `
+    <div class="cm-greet">
+      <div class="cm-greet-date">${esc(today)}</div>
+      <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
+    </div>
     ${bannerHTML}
     ${recent.length ? `
     <section class="cm-sec">
@@ -100,7 +133,7 @@ export async function render(el) {
   });
   el.querySelector('#playDaily')?.addEventListener('click', () => player.playList(daily, 0));
   // 一键开听：心动模式以「最近播放第一首」优先做种子（更贴近"接着刚才的口味听"），
-  // 其次用每日推荐首曲；两者都没有时明确说明原因，不给假按钮。
+  // 其次用每日推荐首曲；都没有时明确说明原因，不给假按钮。
   el.querySelector('#quickDaily')?.addEventListener('click', () => {
     if (!daily.length) return toast('今日推荐还没出来，稍后再试');
     player.playList(daily, 0);
@@ -110,6 +143,8 @@ export async function render(el) {
     if (!seed) return toast('需要先有播放记录或每日推荐才能起播心动模式');
     player.startHeart(seed);
   });
+  // 「更多榜单」→ 发现页（那里有完整榜单与分组切换），别做点不动的假入口
+  el.querySelector('#goNcmPls')?.addEventListener('click', () => { location.hash = '#/square'; });
   el.querySelectorAll('#recPlsGrid .cm-plcard').forEach(c => {
     c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.id}`; };
   });
@@ -135,8 +170,6 @@ export async function render(el) {
     c.style.position = 'relative';
     c.appendChild(btn);
   });
-  // 「更多榜单」→ 发现页（那里有完整榜单与分组切换），别做点不动的假入口
-  el.querySelector('#goNcmPls')?.addEventListener('click', () => { location.hash = '#/square'; });
   el.querySelector('#quickCreateRoom')?.addEventListener('click', () => {
     import('./rooms.js').then(m => m.createRoomDialog());   // 首页直达创建
   });
