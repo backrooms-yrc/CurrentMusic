@@ -279,6 +279,9 @@ export const api = {
   commentCount: (ncmId) => call('GET', `/ncm/comment-count?id=${ncmId}`),
   ncmPlaylist: (pid) => call('GET', `/ncm/playlist?id=${pid}`),
   daily: () => call('GET', '/daily', { auth: true }),
+  /** 歌曲百科（服务端已把上游页级结构归一化成「章节 + 字段 + 正文」）。 */
+  songWiki: (ncmId) => call('GET', `/song/wiki?id=${ncmId}`),
+
   /** 首屏聚合：一次拿回 me/daily/bind/recent（服务端并行取好）。旧服务端没有该端点 → 调用方回退逐个请求。 */
   bootstrap: () => call('GET', '/bootstrap', { auth: true }),
 
@@ -369,6 +372,7 @@ export function ncmSong(s) {
     duration: s.dt || s.duration || 0,
     fee: s.fee == null ? 0 : s.fee,
     pop: s.pop == null ? 0 : s.pop,
+    mv: s.mv || s.mvid || 0,      // MV id（0 = 无）：歌曲条的「播放 MV」按钮据此显示
   };
 }
 

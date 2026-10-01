@@ -633,6 +633,10 @@ function openMoreDrawer() {
         <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
       </div>
       <div class="cm-more-sec">歌曲信息</div>
+      <div class="cm-more-row" id="mWiki" style="cursor:pointer">
+        <div><div class="cm-more-t">歌曲百科</div><div class="cm-more-s">创作信息 / 基本信息 / 百科正文</div></div>
+        <span class="material-icons-outlined">chevron_right</span>
+      </div>
       <div class="cm-more-row" id="mSongInfo" style="cursor:pointer">
         <div><div class="cm-more-t">查看歌曲详情</div><div class="cm-more-s">音质档位 / 副歌时间 / 红心数 / 创作者 / 百科 / 相似歌曲 / 乐谱</div></div>
         <span class="material-icons-outlined">chevron_right</span>
@@ -645,6 +649,11 @@ function openMoreDrawer() {
     actions: [{ text: '关闭' }],
   });
   setTimeout(() => {
+    const wk = diag.querySelector('#mWiki');
+    if (wk) wk.onclick = () => {
+      diag.open = false;
+      import('./wiki.js').then(m => m.openWiki(player.meta)).catch(() => toast('百科加载失败'));
+    };
     const si = diag.querySelector('#mSongInfo');
     if (si) si.onclick = () => {
       diag.open = false;
@@ -845,7 +854,7 @@ on('state', () => {
 function qualityMenu() {
   const cur = settings.quality;
   const items = QUALITY_TIERS.map(t =>
-    `<div class="cm-qm-item" data-v="${t.key}">${t.label}${t.key === cur ? '<span class="material-icons-outlined">check</span>' : ''}</div>`).join('');
+    `<div class="cm-qm-item" data-v="${t.key}">${t.label}${t.spec ? `<em class="cm-qm-spec">${t.spec}</em>` : ''}${t.key === cur ? '<span class="material-icons-outlined">check</span>' : ''}</div>`).join('');
   const diag = mdui.dialog({
     headline: '选择音质',
     body: `<div class="cm-qm">${items}</div>`,

@@ -27,9 +27,11 @@ export const fmtCount = n => n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/,
 // 音质档位（高 → 低），与后端探测逻辑一致
 export const QUALITY_TIERS = [
   { key: 'auto', label: '自动·最高' },
-  { key: 'jymaster', label: '超清母带' },
-  { key: 'jyeffect', label: '臻音全景声' },
-  { key: 'sky', label: '沉浸环绕声' },
+  // 后三个属「高解析度/多声道」：对设备解码与重采样要求高，部分机型会有杂音，
+  // 标签里直接标出规格，让用户选之前就有预期。
+  { key: 'jymaster', label: '超清母带', spec: '192kHz/24bit' },
+  { key: 'jyeffect', label: '臻音全景声', spec: '96kHz/24bit' },
+  { key: 'sky', label: '沉浸环绕声', spec: '6 声道' },
   { key: 'hires', label: '高清臻音' },
   { key: 'lossless', label: '无损 FLAC' },
   { key: 'exhigh', label: '极高 320k' },
@@ -485,6 +487,7 @@ export async function songListHTML(songs, { removable = false, offset = 0 } = {}
           ${st[i].count ? `<span class="cm-like-n" title="CurrentMusic 点赞数"><span class="mi">favorite</span>${fmtCount(st[i].count)}</span>` : ''}
         </div>
       </div>
+      ${s.mv ? `<span class="cm-song-mv" data-act="mv" data-i="${offset + i}" title="播放 MV"><span class="material-icons-outlined">smart_display</span></span>` : ''}
       <span class="cm-song-dur">${fmtDur(s.duration)}</span>
       <span class="cm-song-like ${st[i].liked ? 'on' : ''}" data-act="like" data-i="${offset + i}" title="选择收录到哪个我喜欢">
         <span class="material-icons-outlined">${st[i].liked ? 'favorite' : 'favorite_border'}</span>
@@ -541,6 +544,12 @@ export async function renderSongList(el, songs, opts = {}) {
       if (act && act.dataset.act === 'remove') {
         e.stopPropagation();
         opts.onRemove && opts.onRemove(i);
+        return;
+      }
+      if (act && act.dataset.act === 'mv') {
+        // 用事件解耦：ui.js 不能 import player.js（player.js 已 import ui.js，会成环）
+        e.stopPropagation();
+        document.dispatchEvent(new CustomEvent('cm-playmv', { detail: songs[i] }));
         return;
       }
       opts.onPlay && opts.onPlay(i);
