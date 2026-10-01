@@ -29,8 +29,8 @@ export async function render(el) {
       <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
     </div>
     <div id="decorBanner"></div>
-    <section class="cm-sec">${skelList(3)}</section>
-    <section class="cm-sec"><div class="cm-sec-head"><h2>每日推荐</h2></div>${skelCards(8)}</section>`;
+    <section class="cm-sec"><div class="cm-sec-head"><h2>每日推荐</h2></div>${skelCards(8)}</section>
+    <section class="cm-sec">${skelList(3)}</section>`;
   // 横幅不阻塞首屏：与每日推荐并行请求；结果先存起来，整页重渲染后再插入
   let bannerHTML = '';
   const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
@@ -71,12 +71,6 @@ export async function render(el) {
         <a class="cm-quick" href="#/library"><span class="material-icons-outlined">queue_music</span><b>我的歌单</b><i>收藏与自建</i></a>
       </div>
     </section>
-    ${recent.length ? `
-    <section class="cm-sec">
-      <div class="cm-sec-head"><h2>继续播放</h2><span class="cm-sec-more" id="playRecent"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
-      <div id="recentList"></div>
-      <div class="cm-more-row" id="recentMore" hidden></div>
-    </section>` : ''}
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>每日推荐</h2><span class="cm-sec-more" id="playDaily"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
       ${daily.length ? `<div class="cm-hscroll" id="dailyRow">${
@@ -88,6 +82,12 @@ export async function render(el) {
           </div>`).join('')
       }</div>` : `<div class="cm-empty small">今日推荐暂不可用</div>`}
     </section>
+    ${recent.length ? `
+    <section class="cm-sec">
+      <div class="cm-sec-head"><h2>继续播放</h2><span class="cm-sec-more" id="playRecent"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
+      <div id="recentList"></div>
+      <div class="cm-more-row" id="recentMore" hidden></div>
+    </section>` : ''}
     ${forYou.length ? `
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>猜你喜欢</h2><span class="cm-sec-sub">基于你点赞的歌手：${esc(artists.join('、'))}</span></div>
