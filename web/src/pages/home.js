@@ -62,11 +62,6 @@ export async function render(el) {
       <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
     </div>
     ${bannerHTML}
-    ${recent.length ? `
-    <section class="cm-sec">
-      <div class="cm-sec-head"><h2>继续播放</h2><span class="cm-sec-more" id="playRecent"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
-      <div id="recentList"></div>
-    </section>` : ''}
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>一键开听</h2><span class="cm-sec-sub">按听歌动线排</span></div>
       <div class="cm-quickrow">
@@ -76,6 +71,12 @@ export async function render(el) {
         <a class="cm-quick" href="#/library"><span class="material-icons-outlined">queue_music</span><b>我的歌单</b><i>收藏与自建</i></a>
       </div>
     </section>
+    ${recent.length ? `
+    <section class="cm-sec">
+      <div class="cm-sec-head"><h2>继续播放</h2><span class="cm-sec-more" id="playRecent"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
+      <div id="recentList"></div>
+      <div class="cm-more-row" id="recentMore" hidden></div>
+    </section>` : ''}
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>每日推荐</h2><span class="cm-sec-more" id="playDaily"><span class="material-icons-outlined">play_circle</span> 播放全部</span></div>
       ${daily.length ? `<div class="cm-hscroll" id="dailyRow">${
@@ -91,6 +92,7 @@ export async function render(el) {
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>猜你喜欢</h2><span class="cm-sec-sub">基于你点赞的歌手：${esc(artists.join('、'))}</span></div>
       <div id="forYouList"></div>
+      <div class="cm-more-row" id="forYouMore" hidden></div>
     </section>` : ''}
     ${recPls.length ? `
     <section class="cm-sec">
@@ -175,12 +177,28 @@ export async function render(el) {
   });
   el.querySelector('#playRecent')?.addEventListener('click', () => player.playList(recent, 0));
 
-  if (forYou.length) {
-    const box = el.querySelector('#forYouList');
-    await renderSongList(box, forYou, { onPlay: i => player.playList(forYou, i) });
+  // 分段折叠：首屏每个列表只放前 5 条，避免整页被长列表淹没（越长越乱）。
+  // 展开即换一份切片重渲染——索引始终是原数组前缀，播放回调无需改。
+  const PREVIEW = 5;
+  async function bindCollapsible(boxId, moreId, list) {
+    const box = el.querySelector('#' + boxId);
+    const more = el.querySelector('#' + moreId);
+    if (!box || !list.length) return;
+    let expanded = false;
+    const draw = async () => {
+      await renderSongList(box, expanded ? list : list.slice(0, PREVIEW), {
+        onPlay: i => player.playList(list, i),
+      });
+      if (!more) return;
+      const rest = list.length - PREVIEW;
+      more.hidden = rest <= 0;                       // 本来就放得下就不显示按钮
+      more.innerHTML = expanded
+        ? `<span class="material-icons-outlined cm-rot180">keyboard_arrow_down</span> 收起`
+        : `查看全部（还有 ${rest} 首）<span class="material-icons-outlined">keyboard_arrow_down</span>`;
+    };
+    if (more) more.onclick = async () => { expanded = !expanded; await draw(); };
+    await draw();
   }
-  if (recent.length) {
-    const box = el.querySelector('#recentList');
-    await renderSongList(box, recent, { onPlay: i => player.playList(recent, i) });
-  }
+  if (forYou.length) await bindCollapsible('forYouList', 'forYouMore', forYou);
+  if (recent.length) await bindCollapsible('recentList', 'recentMore', recent);
 }

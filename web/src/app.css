@@ -326,6 +326,18 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 .cm-pop, .cm-like-n { border-radius: 6px; padding: 0 4px; background: color-mix(in srgb, var(--cm-primary) 10%, transparent); }
 
 /* ---------- 歌单库 ---------- */
+/* 列表「查看全部 / 收起」行：首屏只放前几条，其余折叠在这里点开 */
+.cm-more-row {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  margin-top: 6px; padding: 9px 0; border-radius: 12px;
+  font-size: 12px; font-weight: 500; color: var(--cm-primary); cursor: pointer;
+  background: color-mix(in srgb, var(--cm-primary) 7%, transparent);
+}
+.cm-more-row:active { transform: scale(.99); }
+.cm-more-row[hidden] { display: none; }
+.cm-more-row .material-icons-outlined { font-size: 16px; }
+.cm-rot180 { transform: rotate(180deg); }
+
 /* 发现页顶部找歌导航：粘住顶部（长页面里随时能跳分区），可横向滚动 */
 .cm-anchorbar {
   position: sticky; top: 0; z-index: 6;
