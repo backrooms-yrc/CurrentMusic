@@ -210,6 +210,9 @@ export const api = {
   // 元数据/历史
   pushMeta: (songs) => call('POST', '/meta', { body: { songs }, auth: true }),
   recordPlay: (meta) => call('POST', `/plays/${meta.ncm_id}`, { body: meta, auth: true }),
+  // 上报**实际收听毫秒**（增量）。带 ms 时后端累加到这首歌最近一次播放记录上，
+  // 不再用"点开就记整首时长"的旧口径（见 cm_db.listen_ms）。
+  addListenMs: (ncmId, ms) => call('POST', `/plays/${ncmId}`, { body: { ms }, auth: true }),
   recentPlays: (limit = 50) => call('GET', `/plays/recent?limit=${limit}`, { auth: true }),
 
   // 用户广场 / 公开主页（公开端点）

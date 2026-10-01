@@ -162,7 +162,14 @@ const listeners = {};
 export function on(evt, fn) { (listeners[evt] = listeners[evt] || []).push(fn); }
 function emit(evt, data) { (listeners[evt] || []).forEach(fn => fn(data)); }
 /** 供外部触发一次时间刷新（投屏时本机没有 timeupdate，由投屏侧按帧驱动）。 */
-export function tick() { emit('time'); }
+// 页面被隐藏/切走（切后台、锁屏、关闭标签）时立即结账：不依赖 timeupdate 继续触发
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushListen(); });
+
+export function tick() {
+  accumulateCast();              // 投屏：本机 audio 不前进，按设备播放态用墙钟累计
+  maybeFlushListen();
+  emit('time');
+}
 /** 供外部触发一次状态刷新（投屏时设备端播放态变化，需重绘播放键图标）。 */
 export function notifyState() { emit('state'); }
 
@@ -336,6 +343,8 @@ export const player = {
 
   async playAt(i) {
     if (i < 0 || i >= this.queue.length) return;
+    flushListen();                 // 上一首结账（此刻 meta 还是旧的那首）
+    lastTickT = -1;                // 新歌重置基准，避免把两首之间的间隔算进去
     this.index = i;
     this.meta = this.queue[i];
     this.urlInfo = null;
@@ -585,6 +594,54 @@ export const player = {
   get audio() { return audio; },
 };
 
+// ---------- 实际收听时长（给「听歌时长」统计用）----------
+// 旧口径是"开始播放就把整首时长记进去"：跳歌按整首计（虚高），同一首重播只留最后一条
+// 记录（虚低），跟真实收听无关。现在只统计**真的在播**的时间：
+//   · timeupdate 按 currentTime 的前进量累加；暂停、拖动、后台挂起都不计
+//   · 每 30s 冲一次增量；切歌 / 暂停 / 播放结束 / 页面隐藏时补冲，避免丢时长
+//   · 投屏时本机 audio 不前进，改由 tick()（投屏侧驱动）按设备播放态用墙钟累计
+let listenedMs = 0;          // 待上报的毫秒增量
+let lastTickT = -1;          // 上次 timeupdate 的 currentTime（秒）
+let lastFlushAt = 0;
+let lastCastAt = 0;
+
+function accumulateLocal(el) {
+  if (el.paused || el.seeking) { lastTickT = el.currentTime; return; }
+  const t = el.currentTime;
+  if (lastTickT >= 0 && t > lastTickT) {
+    const d = (t - lastTickT) * 1000;
+    // 单次跳变过大（后台被挂起后恢复、时钟抖动）不计，否则会凭空多出时长
+    if (d > 0 && d <= 3000) listenedMs += d;
+  }
+  lastTickT = t;
+}
+
+function accumulateCast() {
+  const c = clock();
+  const now = Date.now();
+  if (c && c.playing) {
+    const d = now - lastCastAt;
+    if (lastCastAt && d > 0 && d <= 5000) listenedMs += d;
+  }
+  lastCastAt = now;
+}
+
+/** 把增量上报给后端；失败则留着下次一起报（不丢时长）。不足 1s 不值得发。 */
+async function flushListen() {
+  const id = player.meta && player.meta.ncm_id;
+  const ms = Math.round(listenedMs);
+  if (!id || ms < 1000 || !auth.token) return;
+  listenedMs = 0;
+  try { await api.addListenMs(id, ms); } catch { listenedMs += ms; }
+}
+
+/** 30s 一次的节流冲（本地以 timeupdate 驱动、投屏以 tick 驱动，都不需要定时器）。 */
+function maybeFlushListen() {
+  const now = Date.now();
+  if (!lastFlushAt) { lastFlushAt = now; return; }
+  if (now - lastFlushAt >= 30000) { lastFlushAt = now; flushListen(); }
+}
+
 // ---------- 播放抗卡顿（缓冲可视化 / 卡顿自愈 / 下一首预取）----------
 // 网络抖动是移动端最主要的"听着听着顿一下"来源。这里做三件事：
 //   ① 把浏览器真实缓冲到的位置暴露给 UI（进度条上画出已缓冲区间）；
@@ -654,11 +711,14 @@ let errStreak = 0;
 function bindAudio(el) {
   el.addEventListener('ended', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+  flushListen();
   player.next(true);
 });
   el.addEventListener('timeupdate', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
     emit('time');
+    accumulateLocal(el);
+    maybeFlushListen();
     updateBufPct();
     if (stallNotified) { stallNotified = false; emit('stalling', false); }   // 位置前进了 = 卡顿结束
     if (stallTimer) clearStallWatch();
@@ -705,6 +765,7 @@ function bindAudio(el) {
   });
   el.addEventListener('pause', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    flushListen();                     // 暂停即结账：暂停期间的时间本来就不该计入
     emit('state'); player.pushMediaState();
     // 注意：暂停不改保活状态——锁屏/系统音频焦点抖动会触发 pause，
     // 此时若释放唤醒锁+停前台服务，进程可能在息屏下被冻结，出现「突然暂停且不再恢复」。
