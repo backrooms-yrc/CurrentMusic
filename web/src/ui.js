@@ -220,6 +220,38 @@ export async function coverColors(pic) {
   return out;
 }
 
+// ---------- 字体大小（默认「标准」；**不跟随系统字号**，由用户在设置页决定） ----------
+// 全站字号都写成 calc(Npx * var(--cm-fs))，所以这里只要改一个变量，正文/列表/歌词一起变，
+// 而布局（行高间距）不受影响。系统/浏览器的文字缩放已在 CSS 里用 text-size-adjust:none 退出，
+// 免得出同一份设置在不同机器上大小不一致。
+export const FONT_SCALES = [
+  { key: 'small', label: '小', f: 0.88, desc: '一屏放得下更多内容' },
+  { key: 'standard', label: '标准', f: 1, desc: '默认，适合大多数手机' },
+  { key: 'large', label: '大', f: 1.14, desc: '字更清楚，适合长辈或远看' },
+  { key: 'xl', label: '特大', f: 1.28, desc: '最大档，注意列表会变高' },
+];
+const LS_FONT = 'cm.fontScale';
+
+export function getFontScaleKey() {
+  const k = localStorage.getItem(LS_FONT);
+  return FONT_SCALES.some(x => x.key === k) ? k : 'standard';   // 默认标准
+}
+export function fontScaleFactor(key = getFontScaleKey()) {
+  return (FONT_SCALES.find(x => x.key === key) || FONT_SCALES[1]).f;
+}
+/** 应用字号（返回实际生效的 key）。 */
+export function applyFontScale(key = getFontScaleKey()) {
+  const k = FONT_SCALES.some(x => x.key === key) ? key : 'standard';
+  document.documentElement.style.setProperty('--cm-fs', String(fontScaleFactor(k)));
+  return k;
+}
+export function setFontScaleKey(key) {
+  localStorage.setItem(LS_FONT, key);
+  return applyFontScale(key);
+}
+/** 启动时应用（放在首屏渲染前，避免先按标准画一遍再跳）。 */
+export function bootFontScale() { applyFontScale(); }
+
 // ---------- 配色方案（默认动态取色） ----------
 
 export const COLOR_SCHEMES = [

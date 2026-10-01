@@ -7,7 +7,7 @@ import { roomApi } from '../room.js';
 export async function render(el) {
   if (!auth.token) {
     el.innerHTML = `<div class="cm-login-tip page">
-      <span class="material-icons-outlined" style="font-size:44px">groups</span>
+      <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">groups</span>
       <div>登录后可创建/加入听歌房</div>
       <mdui-button variant="filled" href="#/user">去登录</mdui-button>
     </div>`;

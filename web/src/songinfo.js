@@ -185,7 +185,7 @@ export async function openSongInfo(meta) {
     sheetVos = ((sheet.value.data || {}).musicSheetSimpleInfoVOS) || [];
     parts.push(sec('乐谱', sheetVos.length
       ? sheetVos.slice(0, 6).map((s2, i) => `<div class="cm-si-row cm-si-sheet" data-sheet="${i}">
-          <b>${esc(s2.name || '乐谱')}</b><span>${esc(s2.difficulty || '')} · 查看谱面 <span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px">chevron_right</span></span>
+          <b>${esc(s2.name || '乐谱')}</b><span>${esc(s2.difficulty || '')} · 查看谱面 <span class="material-icons-outlined" style="font-size:calc(14px * var(--cm-fs, 1));vertical-align:-2px">chevron_right</span></span>
         </div>`).join('')
       : empty('暂无乐谱')));
   }

@@ -178,7 +178,7 @@ export async function render(el, params = {}) {
 function requireBound(el, body, text) {
   if (auth.token) return true;
   body.innerHTML = `<div class="cm-login-tip page">
-    <span class="material-icons-outlined" style="font-size:40px">cloud_off</span>
+    <span class="material-icons-outlined" style="font-size:calc(40px * var(--cm-fs, 1))">cloud_off</span>
     <div>${esc(text)}</div><mdui-button variant="filled" href="#/user">去绑定网易云</mdui-button></div>`;
   return false;
 }

@@ -20,7 +20,7 @@ const pickList = (d, ...keys) => {
 export async function render(el, params = {}) {
   if (!auth.token) {
     el.innerHTML = `<div class="cm-login-tip page">
-      <span class="material-icons-outlined" style="font-size:44px">favorite</span>
+      <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">favorite</span>
       <div>登录后可查看你在网易云关注的歌手</div>
       <mdui-button variant="filled" href="#/user">去登录</mdui-button>
     </div>`;
@@ -33,7 +33,7 @@ export async function render(el, params = {}) {
   } catch (e) {
     el.innerHTML = e.status === 400
       ? `<div class="cm-login-tip page">
-           <span class="material-icons-outlined" style="font-size:44px">cloud_off</span>
+           <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">cloud_off</span>
            <div>关注歌手与你的网易云账号同步，需先绑定</div>
            <mdui-button variant="filled" href="#/user">去绑定网易云</mdui-button>
          </div>`

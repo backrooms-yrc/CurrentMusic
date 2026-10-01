@@ -176,7 +176,8 @@ function renderLyric() {
     return;
   }
   const size = LYRIC_SIZES.find(s => s.key === lyricSizeKey) || LYRIC_SIZES[1];
-  box.style.setProperty('--pl-fs', size.fs + 'px');
+  // 歌词字号 = 用户选的档位 × 全局字体大小倍率：否则选了「特大」字体后歌词还是原大小
+  box.style.setProperty('--pl-fs', `calc(${size.fs}px * var(--cm-fs, 1))`);
   // 关键：每行都渲染（缺翻译/罗马音回退原文），行号与 lyricLines 一一对应；
   // 首尾垫片让第一句/最后一句也能停在中线
   box.innerHTML =

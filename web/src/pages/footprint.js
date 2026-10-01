@@ -42,7 +42,7 @@ const RECORD_KINDS = [
 /** 统一的「未绑定」引导：T1 接口在没有绑定网易云时一定会 401。 */
 function needBind(el, text = '听歌足迹与你的网易云账号绑定，请先绑定') {
   el.innerHTML = `<div class="cm-login-tip page">
-    <span class="material-icons-outlined" style="font-size:44px">insights</span>
+    <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">insights</span>
     <div>${esc(text)}</div>
     <mdui-button variant="filled" href="#/user">去绑定网易云</mdui-button></div>`;
 }

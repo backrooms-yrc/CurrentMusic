@@ -297,7 +297,7 @@ export async function mountDiscover(el) {
     const vos = (((d.data || {}).tagPreferenceVos) || []).filter(v => v.tagId).slice(0, 8);
     if (!vos.length) return;
     s.insertAdjacentHTML('afterbegin',
-      `<div class="cm-sec-head"><h2 style="font-size:13px;opacity:.75">我的曲风偏好</h2></div>
+      `<div class="cm-sec-head"><h2 style="font-size:calc(13px * var(--cm-fs, 1));opacity:.75">我的曲风偏好</h2></div>
        <div class="cm-chips">${vos.map(v =>
          `<span class="cm-hot" data-tag="${v.tagId}">${esc(v.tagName)}${v.ratio ? ` <b>${Math.round(v.ratio * 100)}%</b>` : ''}</span>`).join('')}</div>`);
     // 只挂偏好这一行的点击；曲风分类那行的点击已在上面绑好（用最近作用域避免覆盖）

@@ -51,7 +51,7 @@ function kvHTML(obj, depth = 0) {
 
 function needBind(el, text = '云小编与审核任务跟你的网易云账号绑定，请先绑定') {
   el.innerHTML = `<div class="cm-login-tip page">
-    <span class="material-icons-outlined" style="font-size:44px">badge</span>
+    <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">badge</span>
     <div>${esc(text)}</div>
     <mdui-button variant="filled" href="#/user">去绑定网易云</mdui-button></div>`;
 }

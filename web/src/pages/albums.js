@@ -197,7 +197,7 @@ export async function render(el, params = {}) {
     // 已购数字专辑：/digitalAlbum/purchased（T1）+ 详情/下单/销量
     if (!auth.token) {
       body.innerHTML = `<div class="cm-login-tip page">
-        <span class="material-icons-outlined" style="font-size:40px">album</span>
+        <span class="material-icons-outlined" style="font-size:calc(40px * var(--cm-fs, 1))">album</span>
         <div>已购数字专辑与你的网易云账号绑定，需先登录并绑定</div>
         <mdui-button variant="filled" href="#/user">去绑定网易云</mdui-button></div>`;
       return;
@@ -241,7 +241,7 @@ export async function render(el, params = {}) {
   // 我的专辑收藏（T1）
   if (!auth.token) {
     body.innerHTML = `<div class="cm-login-tip page">
-      <span class="material-icons-outlined" style="font-size:40px">cloud_off</span>
+      <span class="material-icons-outlined" style="font-size:calc(40px * var(--cm-fs, 1))">cloud_off</span>
       <div>收藏的专辑与你的网易云账号同步，需先绑定</div>
       <mdui-button variant="filled" href="#/user">去绑定网易云</mdui-button></div>`;
     return;

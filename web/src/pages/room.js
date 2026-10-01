@@ -53,7 +53,7 @@ export async function render(el) {
     <div class="cm-rtop">
       <div class="cm-rtop-main">
         <div class="cm-rname">${esc(detail.room.name)}
-          ${detail.room.hasPassword ? '<span class="material-icons-outlined" style="font-size:15px">lock</span>' : ''}
+          ${detail.room.hasPassword ? '<span class="material-icons-outlined" style="font-size:calc(15px * var(--cm-fs, 1))">lock</span>' : ''}
           ${detail.room.freeMode ? '<span class="cm-tag">自由点歌</span>' : ''}
         </div>
         <div class="cm-rsub">

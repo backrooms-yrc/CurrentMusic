@@ -159,7 +159,7 @@ export async function render(el) {
     btn.className = 'material-icons-outlined';
     btn.textContent = 'block';
     btn.title = '不感兴趣';
-    btn.style.cssText = 'position:absolute;top:4px;right:4px;font-size:16px;opacity:.55';
+    btn.style.cssText = 'position:absolute;top:4px;right:4px;font-size:calc(16px * var(--cm-fs, 1));opacity:.55';
     btn.addEventListener('click', async ev => {
       ev.stopPropagation();
       if (!ncmBound) return toast('需先绑定网易云账号');

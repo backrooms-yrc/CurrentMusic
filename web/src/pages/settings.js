@@ -1,7 +1,7 @@
 // 设置页：配色/音质/主题/下载目录/服务器/关于（与「我的」分离，顶栏齿轮直达）
 import { mdui } from '../md.js';
 import { api, settings, auth } from '../api.js';
-import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel } from '../ui.js';
+import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel, FONT_SCALES, getFontScaleKey, setFontScaleKey } from '../ui.js';
 import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
 import { UI_PRESETS, uiPresetKey, uiPresetName, setUiPreset } from '../uipreset.js';
@@ -39,6 +39,7 @@ export async function render(el) {
         <div class="cm-setting" id="bgImage"><span class="material-icons-outlined">wallpaper</span>背景图片<i>${bgImage() ? '已自定义' : '默认'}</i></div>
         <div class="cm-setting" id="glassFx"><span class="material-icons-outlined">blur_on</span>玻璃效果<i>${glassTint() == null ? '默认' : '已自定义'}</i></div>
         <div class="cm-setting" id="waveStyle"><span class="material-icons-outlined">graphic_eq</span>波形样式<i>${(WAVE_STYLES.find(x => x.key === waveStyle()) || WAVE_STYLES[0]).name}</i></div>
+        <div class="cm-setting" id="fontScale"><span class="material-icons-outlined">format_size</span>字体大小<i>${esc((FONT_SCALES.find(x => x.key === getFontScaleKey()) || {}).label || '标准')}</i></div>
     </div>
     <div class="cm-sec-head"><h2>播放与下载</h2></div>
     <div class="cm-setting-list">
@@ -61,7 +62,7 @@ export async function render(el) {
     <div class="cm-sec-head"><h2>关于</h2></div>
     <div class="cm-setting-list">
       ${!isApp ? `<div class="cm-setting" id="dlApk"><span class="material-icons-outlined">android</span>下载安卓版 APP<i>APK · 支持后台播放</i></div>` : ''}
-      <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:15px;vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
+      <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:calc(15px * var(--cm-fs, 1));vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
       <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i>${esc(u.nickname || u.username || '未登录')}${u.isSuper ? ' · 超级管理员' : u.isAdmin ? ' · 管理员' : ''}</i></div>
       ${(auth.user && auth.user.isAdmin) ? `<div class="cm-setting" id="adminEntry"><span class="material-icons-outlined">admin_panel_settings</span>管理员面板<i>用户/设备/系统</i></div>` : ''}
       ${auth.token ? `<div class="cm-setting" id="devices"><span class="material-icons-outlined">devices</span>登录设备<i id="devCount">—</i></div>` : ''}
@@ -215,12 +216,12 @@ export async function render(el) {
       body: `<div class="cm-more" style="min-width:min(84vw,340px)">
         <div class="cm-more-row">
           <div class="cm-more-t">模糊强度</div>
-          <span id="fxBlurV" style="font-size:12px;opacity:.7">${blur}</span>
+          <span id="fxBlurV" style="font-size:calc(12px * var(--cm-fs, 1));opacity:.7">${blur}</span>
         </div>
         <input type="range" id="fxBlur" min="${glassRange.BLUR_MIN}" max="${glassRange.BLUR_MAX}" step="0.5" value="${blur}" style="width:100%">
         <div class="cm-more-row" style="margin-top:10px">
           <div class="cm-more-t">玻璃浓度</div>
-          <span id="fxTintV" style="font-size:12px;opacity:.7">${tint == null ? '默认' : Math.round(tint * 100) + '%'}</span>
+          <span id="fxTintV" style="font-size:calc(12px * var(--cm-fs, 1));opacity:.7">${tint == null ? '默认' : Math.round(tint * 100) + '%'}</span>
         </div>
         <input type="range" id="fxTint" min="${Math.round(glassRange.TINT_MIN * 100)}" max="${Math.round(glassRange.TINT_MAX * 100)}" step="5" value="${Math.round((tint == null ? tintDef : tint) * 100)}" style="width:100%">
         <div class="cm-more-s" style="margin-top:10px">作用于「简约玻璃」的底栏胶囊、迷你播放条与桌面侧栏。浓度调低更通透、调高更实；模糊影响折射的柔和度。</div>
@@ -274,6 +275,58 @@ export async function render(el) {
     }, 0);
   };
 
+  // 字体大小：档位 + **实时预览**。点一下立即全站生效（对话后面的界面同时变化），
+  // 预览区再给一份直观对照（列表行 / 歌词 / 正文三种典型文字）。
+  el.querySelector('#fontScale').onclick = () => {
+    const preview = k => {
+      const f = FONT_SCALES.find(x => x.key === k) || FONT_SCALES[1];
+      return `
+      <div class="cm-fsprev" style="--cm-fs:${f.f}">
+        <div class="cm-fsprev-row">
+          <div class="cm-fsprev-pic"><span class="material-icons-outlined">music_note</span></div>
+          <div class="cm-fsprev-main">
+            <div class="cm-fsprev-name">晴天</div>
+            <div class="cm-fsprev-sub">周杰伦 · 叶惠美</div>
+          </div>
+          <span class="material-icons-outlined cm-fsprev-play">play_circle</span>
+        </div>
+        <div class="cm-fsprev-lyric">故事的小黄花，从出生那年就飘着</div>
+        <div class="cm-fsprev-body">列表、歌词、设置项都会跟着变；只放大文字，行高与间距不变，版面不会被撑乱。</div>
+      </div>`;
+    };
+    const cur = getFontScaleKey();
+    const diag = mdui.dialog({
+      headline: '字体大小',
+      body: `<div class="cm-more">
+        <div class="cm-more-chips">${FONT_SCALES.map(x =>
+          `<mdui-chip ${x.key === cur ? 'selected' : ''} data-k="${x.key}">${x.label}</mdui-chip>`).join('')}</div>
+        <div class="cm-more-s" style="margin-top:10px" id="fsDesc"></div>
+        <div class="cm-more-s" style="margin:16px 0 8px">预览</div>
+        <div id="fsPrev">${preview(cur)}</div>
+        <div class="cm-more-s" style="margin-top:12px">默认「标准」。本 App <b>不跟随系统字体大小</b>
+          （否则同一份设置在不同手机上大小不一致），只看这里的档位。</div>
+      </div>`,
+      actions: [{ text: '完成' }],
+    });
+    setTimeout(() => {
+      const desc = diag.querySelector('#fsDesc'), prev = diag.querySelector('#fsPrev');
+      const paint = k => {
+        const f = FONT_SCALES.find(x => x.key === k) || FONT_SCALES[1];
+        desc.textContent = f.desc;
+        prev.innerHTML = preview(k);
+      };
+      paint(cur);
+      diag.querySelectorAll('mdui-chip').forEach(ch => {
+        ch.onclick = () => {
+          const k = setFontScaleKey(ch.dataset.k);          // 立即生效
+          diag.querySelectorAll('mdui-chip').forEach(c => { c.selected = c.dataset.k === k; });
+          paint(k);
+          toast('字体大小：' + ((FONT_SCALES.find(x => x.key === k) || {}).label || ''));
+        };
+      });
+    }, 0);
+  };
+
   el.querySelector('#theme').onclick = () => {
     const order = ['auto', 'light', 'dark'];
     const next = order[(order.indexOf(settings.theme) + 1) % 3];
@@ -309,7 +362,7 @@ export async function render(el) {
     if (!engineOutdated()) return toast(`当前 WebView：Chromium ${v || '未知'}，无需更新`);
     mdui.dialog({
       headline: '建议更新系统 WebView',
-      body: `<div style="font-size:13.5px;line-height:1.8">
+      body: `<div style="font-size:calc(13.5px * var(--cm-fs, 1));line-height:1.8">
         当前内核为 <b>Chromium ${v}</b>，低于建议版本 ${ENGINE_MIN_RECOMMENDED}，
         部分界面效果或播放体验可能受影响。<br>
         在应用商店更新「Android System WebView」（或 Chrome）后重启 App 即可恢复最佳效果。

@@ -4,7 +4,7 @@ import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './app.css';
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
-import { toast, initRipple, bootColorScheme, initImageFade } from './ui.js';
+import { toast, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
 import { checkUpdate } from './update.js';
 import { initPullToRefresh } from './ptr.js';
 import { engineChrome, engineOutdated } from './version.js';
@@ -161,6 +161,7 @@ async function router() {
 function boot() {
   applyTheme();
   bootColorScheme();   // 配色方案（默认动态取色，取色随播放封面变化）
+  bootFontScale();     // 字体大小（默认标准；不跟随系统字号，见 ui.js FONT_SCALES）
   // 原生窗口 insets（env(safe-area-inset-*) 在多数 WebView 上恒为 0，用桥值兜底）
   if (window.NativeApi && window.NativeApi.insets) {
     try {

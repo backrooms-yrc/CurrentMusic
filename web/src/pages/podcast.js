@@ -15,7 +15,7 @@ const KEY = 'cm.podTab';
 
 function needBind(el, text = '播客与私人 FM 跟你的网易云账号绑定，请先绑定') {
   el.innerHTML = `<div class="cm-login-tip page">
-    <span class="material-icons-outlined" style="font-size:44px">podcasts</span>
+    <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">podcasts</span>
     <div>${esc(text)}</div>
     <mdui-button variant="filled" href="#/user">去绑定网易云</mdui-button></div>`;
 }

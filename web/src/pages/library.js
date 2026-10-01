@@ -6,7 +6,7 @@ import { esc, toast, confirmDialog, promptDialog, skelGrid } from '../ui.js';
 export async function render(el) {
   if (!auth.token) {
     el.innerHTML = `<div class="cm-login-tip page">
-      <span class="material-icons-outlined" style="font-size:44px">library_music</span>
+      <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">library_music</span>
       <div>登录后即可创建歌单、收藏歌曲、同步网易云歌单</div>
       <mdui-button variant="filled" href="#/user">去登录</mdui-button>
     </div>`;

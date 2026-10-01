@@ -58,7 +58,7 @@ function eventCard(ev, { mine = false, onAction } = {}) {
 export async function render(el, params = {}) {
   if (!auth.token) {
     el.innerHTML = `<div class="cm-login-tip page">
-      <span class="material-icons-outlined" style="font-size:44px">dynamic_feed</span>
+      <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">dynamic_feed</span>
       <div>动态与话题跟你的网易云账号绑定，请先登录并绑定网易云</div>
       <mdui-button variant="filled" href="#/user">去绑定</mdui-button></div>`;
     return;
@@ -67,7 +67,7 @@ export async function render(el, params = {}) {
   try { bind = await api.bindStatus(); } catch { /* 未绑定 */ }
   if (!bind.bound) {
     el.innerHTML = `<div class="cm-login-tip page">
-      <span class="material-icons-outlined" style="font-size:44px">dynamic_feed</span>
+      <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">dynamic_feed</span>
       <div>动态与话题跟你的网易云账号绑定，请先绑定</div>
       <mdui-button variant="filled" href="#/user">去绑定网易云</mdui-button></div>`;
     return;

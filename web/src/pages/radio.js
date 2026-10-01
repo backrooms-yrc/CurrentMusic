@@ -29,7 +29,7 @@ function bindRadios(scope, sel = '.cm-plcard') {
 export async function render(el, params = []) {
   if (!auth.token) {
     el.innerHTML = `<div class="cm-login-tip page">
-      <span class="material-icons-outlined" style="font-size:44px">radio</span>
+      <span class="material-icons-outlined" style="font-size:calc(44px * var(--cm-fs, 1))">radio</span>
       <div>登录后可订阅电台、查看我的订阅</div>
       <mdui-button variant="filled" href="#/user">去登录</mdui-button></div>`;
     return;
@@ -161,7 +161,7 @@ async function renderList(el) {
       const box = body.querySelector('#rdCatExtra');
       if (!box) return;
       box.innerHTML = groups.map(([title, list, path]) => list.length ? `
-        <div class="cm-sec-head" style="margin-top:10px"><h2 style="font-size:14px">${title}</h2>
+        <div class="cm-sec-head" style="margin-top:10px"><h2 style="font-size:calc(14px * var(--cm-fs, 1))">${title}</h2>
           <span class="cm-sec-sub">${path}</span></div>
         <div class="cm-chips">${list.slice(0, 12).map(x =>
           `<span class="cm-hot" ${x.id ? `data-rid="${x.id}"` : ''}>${esc(x.name || '')}</span>`).join('')}</div>` : '').join('')
