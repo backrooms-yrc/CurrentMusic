@@ -3,7 +3,7 @@
 > 一个自用的 Android 音乐播放器：Material You 界面、自建账号体系、超清母带音质，还有多人「一起听」。
 > 前端是一份**没有框架的原生 JavaScript 单页应用**，跑在 Java WebView 壳里；界面用 MDUI 2（Material Design 3）。
 
-![version](https://img.shields.io/badge/version-1.28.5-6750A4)
+![version](https://img.shields.io/badge/version-1.28.6-6750A4)
 ![android](https://img.shields.io/badge/Android-7.0%2B-34A853)
 ![apk](https://img.shields.io/badge/APK-~477KB-4285F4)
 ![stack](https://img.shields.io/badge/JS-%E6%97%A0%E6%A1%86%E6%9E%B6-F7DF1E)
@@ -156,12 +156,12 @@ CM_KS_PASS='你的签名库口令' ./build.sh      # 首次会生成自签名 ke
 
 | 版本 | 内容 |
 |---|---|
+| v1.28.6 | 播放器清理：移除歌词区提示行，摘录入口收进「更多」 |
 | v1.28.5 | 合并协作者 @LimAimo 的前端 UI/UX 20 项优化（交互可靠性 / 无障碍 / 本地预览与回归测试） |
 | v1.28.4 | 歌曲条「播放 MV」按钮 + 播放页「更多」新增「歌曲百科」 |
 | v1.28.3 | 首屏聚合请求：登录用户 4 次请求 → 1 次 |
 | v1.28.2 | 高解析度档位提示（192kHz/多声道）+ 音质菜单标注规格 |
 | v1.28.1 | 新增「频谱倾斜」补偿，解决波形总是左高右低 |
-| v1.28.0 | 字体大小改由 App 自己控制，设置页可调带预览 |
 
 完整历史见 **[CHANGELOG.md](CHANGELOG.md)**，各版本 APK 见 [Releases](https://github.com/backrooms-yrc/CurrentMusic/releases)。
 
