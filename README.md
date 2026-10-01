@@ -3,7 +3,7 @@
 > 基于网易云音乐 SVIP 音源、自建账号体系的 Android 音乐应用。界面走 MDUI 2 / Material Design 3，
 > 前端是一份原生 JavaScript 单页应用（无框架），由 Java WebView 壳承载；本仓库同时包含后端服务与运维脚本。
 
-![version](https://img.shields.io/badge/version-1.28.8-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~477KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
+![version](https://img.shields.io/badge/version-1.28.9-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~477KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
 **目录**：[功能清单](#功能清单) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
 
@@ -172,11 +172,11 @@ cd /opt/currentmusic/web && npm install   # 首次
 
 | 版本 | 内容 |
 |---|---|
+| v1.28.9 | 修复移动端弹窗内容横向溢出（弹窗更宽更好用） |
 | v1.28.8 | 整批回退到 v1.28.4 的代码状态（撤销协作者 PR #1 的前端改动与后续播放器整理） |
 | v1.28.4 | 歌曲条「播放 MV」按钮 + 播放页「更多」新增「歌曲百科」 |
 | v1.28.3 | 首屏聚合请求：登录用户 4 次请求 → 1 次 |
 | v1.28.2 | 高解析度档位给出提示、音质菜单标注规格 |
 | v1.28.1 | 新增「频谱倾斜」补偿，解决"波形总是左高右低" |
-| v1.28.0 | 字体大小改由 App 自己控制、设置页可调、带实时预览 |
 
 完整历史（112 个版本）见 **[CHANGELOG.md](CHANGELOG.md)**；每个版本的 APK 在 [Releases](https://github.com/backrooms-yrc/CurrentMusic-Private/releases)。
