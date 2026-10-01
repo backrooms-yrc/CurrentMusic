@@ -279,6 +279,8 @@ export const api = {
   commentCount: (ncmId) => call('GET', `/ncm/comment-count?id=${ncmId}`),
   ncmPlaylist: (pid) => call('GET', `/ncm/playlist?id=${pid}`),
   daily: () => call('GET', '/daily', { auth: true }),
+  /** 首屏聚合：一次拿回 me/daily/bind/recent（服务端并行取好）。旧服务端没有该端点 → 调用方回退逐个请求。 */
+  bootstrap: () => call('GET', '/bootstrap', { auth: true }),
 
   // ---- NCM 泛化网关（阶段一：发现 / 榜单 / 曲风 / 搜索增强）----
   // 统一走 /ncm/<上游路径>。路径必须在后端登记表（backend/cm_ncm_registry.py）内，

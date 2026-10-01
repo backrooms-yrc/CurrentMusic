@@ -5,10 +5,7 @@ import { player } from '../player.js';
 
 // 头像挂件更新横幅：仅在「已登录 + 听歌时长达标 + 尚未设置挂件」时出现，设好后自动消失
 // （永久占位会打扰已设置的用户；未达标者由「我的」页设置行引导，首页不做催促）
-async function decorBannerHTML() {
-  if (!auth.token) return '';
-  let me = null;
-  try { me = await api.me(); } catch (e) { return ''; }        // 未登录/限流/断网都静默不显示
+function decorBannerFromMe(me) {
   if (!me || me.avatarDecoration || !me.decorUnlocked) return '';
   return `
     <a class="cm-decor-banner" href="#/user?decor=1">
@@ -19,6 +16,11 @@ async function decorBannerHTML() {
       </span>
       <span class="cm-decor-banner-go">点此设置<span class="material-icons-outlined">chevron_right</span></span>
     </a>`;
+}
+
+async function decorBannerHTML() {
+  if (!auth.token) return '';
+  try { return decorBannerFromMe(await api.me()); } catch (e) { return ''; }   // 未登录/限流/断网都静默不显示
 }
 
 export async function render(el) {
@@ -33,28 +35,39 @@ export async function render(el) {
     <section class="cm-sec">${skelList(3)}</section>`;
   // 横幅不阻塞首屏：与每日推荐并行请求；结果先存起来，整页重渲染后再插入
   let bannerHTML = '';
-  const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
   let daily = [], forYou = [], recent = [], artists = [];
   let recPls = [], ncmBound = false;
-  const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => {})];
-  // 每日推荐歌单是账号维度接口（T1）：必须用用户自己的网易云 cookie，未绑定则整体跳过
-  if (auth.token) {
-    jobs.push(api.bindStatus().then(b => {
-      if (!b || !b.bound) return;
-      ncmBound = true;
-      return Promise.allSettled([
-        api.ncm('/recommend/resource').then(d => { recPls = d.recommend || []; }),
-        // T1：账号维度的每日推荐。拿到就用它覆盖服务端 SVIP 档（对已绑定用户更准确）
-        api.ncm('/recommend/songs').then(d => {
-          const own = ncmSongs(((d.data || {}).dailySongs) || []);
-          if (own.length) daily = own;
-        }),
-      ]);
-    }).catch(() => {}));
+  // 首屏聚合（v1.28.3）：me/daily/bind/recent 一次请求取回，服务端并行查好。
+  // 原先这四条要各自建立连接（移动网络下每次 TLS 握手都要付出代价）。
+  // 旧服务端没有 /bootstrap → boot 为 null，走下面的回退分支，行为与之前完全一致。
+  const boot = await api.bootstrap().catch(() => null);
+  if (boot && boot.daily) {
+    daily = boot.daily.daily || [];
+    forYou = boot.daily.forYou || [];
+    artists = boot.daily.artists || [];
+    bannerHTML = decorBannerFromMe(boot.me);
+    ncmBound = !!(boot.bind && boot.bind.bound);
+    recent = (boot.recent && boot.recent.songs) || [];
+  } else {
+    const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
+    const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => {})];
+    if (auth.token) jobs.push(api.bindStatus().then(b => { if (b && b.bound) ncmBound = true; }).catch(() => {}));
+    if (auth.token) jobs.push(api.recentPlays(20).then(d => { recent = d.songs || []; }).catch(() => {}));
+    await Promise.allSettled(jobs);
+    await bannerJob;   // 横幅请求通常更快，这里几乎立即返回
   }
-  if (auth.token) jobs.push(api.recentPlays(20).then(d => { recent = d.songs || []; }).catch(() => {}));
-  await Promise.allSettled(jobs);
-  await bannerJob;   // 横幅请求通常更快，这里几乎立即返回
+  // 每日推荐歌单/每日推荐歌曲是账号维度接口（T1）：必须用用户自己的网易云 cookie，
+  // 且是**上游**接口，所以仍单独取（放进聚合会让整个首屏等上游）。未绑定则整体跳过。
+  if (auth.token && ncmBound) {
+    await Promise.allSettled([
+      api.ncm('/recommend/resource').then(d => { recPls = d.recommend || []; }),
+      // T1：账号维度的每日推荐。拿到就用它覆盖服务端 SVIP 档（对已绑定用户更准确）
+      api.ncm('/recommend/songs').then(d => {
+        const own = ncmSongs(((d.data || {}).dailySongs) || []);
+        if (own.length) daily = own;
+      }),
+    ]);
+  }
 
   el.innerHTML = `
     <div class="cm-greet">
