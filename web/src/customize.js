@@ -18,6 +18,25 @@ const WAVE_KEY = 'cm.waveStyle';
 const WAVE_KEYS = ['bars', 'wave', 'capsule'];
 
 /** 当前波形样式（非法值/未设置 → 默认 bars）。 */
+// 频谱倾斜补偿（dB/倍频程）：0 = 关闭（原始频谱，左高右低），4.5 ≈ 标准补偿
+const TILT_KEY = 'cm.waveTilt';
+export const TILT_DEFAULT = 4.5;
+
+/** 当前倾斜值（未设置 → 默认 4.5）。 */
+export function waveTilt() {
+  const raw = localStorage.getItem(TILT_KEY);
+  if (raw == null || raw === '') return TILT_DEFAULT;
+  const v = parseFloat(raw);
+  return Number.isFinite(v) ? Math.max(0, Math.min(12, v)) : TILT_DEFAULT;
+}
+
+/** 设置倾斜补偿并即时通知播放页重建波形。 */
+export function setWaveTilt(v) {
+  const n = Math.max(0, Math.min(12, Number(v) || 0));
+  localStorage.setItem(TILT_KEY, String(n));
+  try { document.dispatchEvent(new Event('cm-wavecfg')); } catch (e) { /* 忽略 */ }
+}
+
 export function waveStyle() {
   const v = localStorage.getItem(WAVE_KEY);
   return WAVE_KEYS.indexOf(v) >= 0 ? v : 'bars';

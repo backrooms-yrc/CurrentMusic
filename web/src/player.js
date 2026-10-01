@@ -10,6 +10,9 @@ import { resolveSongUrl } from './songurl.js';   // 三级音源回退（P2）�
 // 元素音频就只走图输出**（不再直出）。若某个音源是跨域"污染"的（无 CORS 头），
 // 图输入恒为静音 → 声音会彻底消失。所以遇到这种情况必须**换一个新元素**才能
 // 恢复直出，不能只是断开节点。详见下文 loadUrl() 的 CORS 策略。
+// 分析器档位（波形模块据此把 byte 还原成 dB 并做倾斜补偿）
+const MIN_DB = -110, MAX_DB = -10;
+
 let audio = makeAudio();
 
 // Web Audio 分析器状态：analyser 非空即代表「可视化可用」
@@ -21,7 +24,10 @@ const corsFailHosts = {};     // 不支持 CORS 的**域名**（AI 审查建议�
 /** 供可视化层读取频谱；不可用时返回 false（调用方据此画静默基线）。 */
 export const wave = {
   get ready() { return !!analyser; },
-  get bins() { return analyser ? analyser.frequencyBinCount : 256; },
+  get bins() { return analyser ? analyser.frequencyBinCount : 1024; },
+  get sampleRate() { return analyser ? analyser.context.sampleRate : 48000; },
+  get minDb() { return MIN_DB; },
+  get maxDb() { return MAX_DB; },
   read(u8) {
     if (!analyser) return false;
     try { analyser.getByteFrequencyData(u8); return true; } catch (e) { return false; }
@@ -77,14 +83,13 @@ function buildGraph(el) {
     actx = new AC();
     srcNode = actx.createMediaElementSource(el);
     analyser = actx.createAnalyser();
-    // 参考 audioMotion-analyzer 的默认档位：
-    //  · fftSize 2048 → 频率分辨率更高，柱与柱之间过渡自然（默认 2048，比 512 细腻）
-    //  · min/maxDecibels -85/-25 → **关键**。浏览器默认 -100/-30 会把正常音量的
-    //    频谱整片顶到 255（每根柱都满格、糊成一片），-85/-25 才有层次感
-    //  · smoothing 0.5~0.75 → 平滑但不糊
+    //  · fftSize 2048 → 频率分辨率更高，柱与柱之间过渡自然
+    //  · smoothing 0.72 → FFT 层面的平滑（柱高另有一套快攻击/慢释放包络）
     analyser.fftSize = 2048;
-    analyser.minDecibels = -85;
-    analyser.maxDecibels = -25;
+    // 档位：**-110 ~ -10（100dB）**。原先 -85/-25 会把高频段（常见 -90dB 以下）
+    // 直接截断成 0，右侧永远是平的、也没法用"频谱倾斜"抬起来。
+    analyser.minDecibels = MIN_DB;
+    analyser.maxDecibels = MAX_DB;
     analyser.smoothingTimeConstant = 0.72;
     srcNode.connect(analyser);
     analyser.connect(actx.destination);      // 必须接回目的地，否则没声音

@@ -6,7 +6,7 @@ import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
 import { UI_PRESETS, uiPresetKey, uiPresetName, setUiPreset } from '../uipreset.js';
 import { bgImage, glassBlur, glassTint, glassRange, setBgImage, setGlass, resetGlass, applyCustomize } from '../customize.js';
-import { waveStyle, setWaveStyle } from '../customize.js';
+import { waveStyle, setWaveStyle, waveTilt, setWaveTilt, TILT_DEFAULT } from '../customize.js';
 import { WAVE_STYLES } from '../waveform.js';
 
 export function applyTheme() {
@@ -39,6 +39,7 @@ export async function render(el) {
         <div class="cm-setting" id="bgImage"><span class="material-icons-outlined">wallpaper</span>背景图片<i>${bgImage() ? '已自定义' : '默认'}</i></div>
         <div class="cm-setting" id="glassFx"><span class="material-icons-outlined">blur_on</span>玻璃效果<i>${glassTint() == null ? '默认' : '已自定义'}</i></div>
         <div class="cm-setting" id="waveStyle"><span class="material-icons-outlined">graphic_eq</span>波形样式<i>${(WAVE_STYLES.find(x => x.key === waveStyle()) || WAVE_STYLES[0]).name}</i></div>
+        <div class="cm-setting" id="waveTilt"><span class="material-icons-outlined">trending_up</span>频谱倾斜<i>${waveTilt() <= 0 ? '关闭' : waveTilt().toFixed(1) + ' dB/oct'}</i></div>
         <div class="cm-setting" id="fontScale"><span class="material-icons-outlined">format_size</span>字体大小<i>${esc((FONT_SCALES.find(x => x.key === getFontScaleKey()) || {}).label || '标准')}</i></div>
     </div>
     <div class="cm-sec-head"><h2>播放与下载</h2></div>
@@ -244,6 +245,39 @@ export async function render(el) {
         tint = parseInt(t.value, 10) / 100;
         tv.textContent = Math.round(tint * 100) + '%';
         setGlass({ tint });
+      };
+    }, 0);
+  };
+
+  el.querySelector('#waveTilt').onclick = () => {
+    let cur = waveTilt();
+    const diag = mdui.dialog({
+      headline: '频谱倾斜补偿',
+      body: `<div class="cm-more" style="min-width:min(84vw,340px)">
+        <div class="cm-more-row">
+          <div class="cm-more-t">补偿强度</div>
+          <span id="tiltV" style="font-size:12px;opacity:.7">${cur <= 0 ? '关闭' : cur.toFixed(1) + ' dB/oct'}</span>
+        </div>
+        <input type="range" id="tiltR" min="0" max="9" step="0.5" value="${cur}" style="width:100%">
+        <div class="cm-more-s" style="margin-top:10px">
+          音乐能量天然集中在低频（实测左右相差约 30dB），所以原始频谱总是"左高右低"。
+          按 +N dB/倍频程 抬高高频可以让它更均衡：<b>0 = 关闭</b>（原始频谱），
+          <b>4.5 = 标准补偿</b>（行业常用），再高更平。
+        </div>
+      </div>`,
+      actions: [
+        { text: '恢复默认', onClick: () => { setWaveTilt(TILT_DEFAULT); toast('已恢复标准补偿'); diag.open = false; render(el); } },
+        // 关闭时重渲染，否则行上显示的数值不会随滑块更新
+        { text: '关闭', onClick: () => { render(el); } },
+      ],
+    });
+    setTimeout(() => {
+      const r = diag.querySelector('#tiltR'), v = diag.querySelector('#tiltV');
+      if (!r) return;
+      r.oninput = () => {
+        cur = parseFloat(r.value);
+        v.textContent = cur <= 0 ? '关闭' : cur.toFixed(1) + ' dB/oct';
+        setWaveTilt(cur);            // 即时生效（播放页开着也会立刻重建波形）
       };
     }, 0);
   };

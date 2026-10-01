@@ -33,6 +33,10 @@ export const WAVE_STYLES = [
 const STYLES = ['wave', 'bars', 'capsule'];
 
 // 包络时间常数（毫秒）→ 与帧率无关：慢帧不会让柱子"涨不上来/掉不下去"
+const TILT_DB_PER_OCT = 4.5;           // 频谱倾斜补偿默认值（dB/倍频程，以 1kHz 为轴）
+const MIN_HZ = 20;                      // 补偿时的频率下限（避免对直流/超低频过度衰减）
+const SILENCE_DB = -105;                // 静音门限：低于此值视为无信号，柱高 0
+                                        // （否则倾斜的正增益会把"零信号"也抬起来）
 const ATTACK_MS = 45;
 const RELEASE_MS = 190;
 const PEAK_HOLD_MS = 480;               // 峰值帽保持时间（audioMotion peakHoldTime 500ms）
@@ -43,6 +47,7 @@ const DROP_EPS = 0.004;                 // 落到底的判定阈值（避免浮�
 export function createWaveform(canvas, opts) {
   const read = opts.read;
   const binsOf = opts.bins || function () { return 1024; };
+  const rateOf = opts.rate || function () { return 48000; };   // 采样率：算每根柱的中心频率
   const want = opts.style || WAVE_STYLE;
   const style = STYLES.indexOf(want) >= 0 ? want : WAVE_STYLE;
 
@@ -54,6 +59,10 @@ export function createWaveform(canvas, opts) {
   let playing = false, hasData = false;
   let reduced = false, alive = true;
   let u8 = null, bins = binsOf();
+  let bandLo = null, bandHi = null, bandGain = null;   // 每根柱：bin 区间 + 倾斜补偿(dB)
+  let bandBins = -1;                      // 生成分箱时用的 bins（变化需重建，否则补偿曲线会偏）
+  let spanDb = opts.tilt != null ? Math.max(0, Math.min(12, +opts.tilt)) : TILT_DB_PER_OCT;
+  let minDb = -110, maxDb = -10;          // 分析器档位（由 player 提供）
   let grad = null, gradKey = '';
 
   try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
@@ -79,6 +88,7 @@ export function createWaveform(canvas, opts) {
       : style === 'capsule'
         ? Math.max(9, Math.min(20, Math.round(w / 22)))
         : Math.max(24, Math.min(56, Math.round(w / 6.4)));
+    bandLo = null;                        // 柱数变化 → 分箱需重建
     level = new Float32Array(bars);
     peak = new Float32Array(bars);
     peakAt = new Float32Array(bars);
@@ -87,14 +97,41 @@ export function createWaveform(canvas, opts) {
     grad = null;
   }
 
-  /** 对数分箱取每根柱的目标能量（0..1）。 */
+  /**
+   * 计算每根柱对应的 bin 区间与倾斜补偿量。
+   *  · 对数分箱：低频占更少格子
+   *  · 倾斜补偿：音乐能量天然集中在低频（实测左右相差 ~30dB），
+   *    按 +N dB/倍频程 抬高高频，让显示更均衡（0 = 关闭，即原始频谱）
+   */
+  function buildBands() {
+    const n = bars;
+    bandBins = bins;
+    const usable = Math.max(8, Math.floor(bins * 0.72));
+    const hzPerBin = (rateOf() / 2) / Math.max(1, bins);
+    bandLo = new Int32Array(n);
+    bandHi = new Int32Array(n);
+    bandGain = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const f0 = Math.pow(i / n, 1.65), f1 = Math.pow((i + 1) / n, 1.65);
+      let a = Math.floor(f0 * usable), b = Math.floor(f1 * usable);
+      if (b <= a) b = a + 1;
+      bandLo[i] = a;
+      bandHi[i] = Math.min(b, usable);
+      // 中心频率 → 以 1kHz 为轴的倾斜增益（dB 域直接相加）
+      const hz = Math.max(MIN_HZ, (bandLo[i] + bandHi[i]) / 2 * hzPerBin);
+      bandGain[i] = spanDb * Math.log2(hz / 1000);
+    }
+  }
+
+  /** 对数分箱取每根柱的目标能量（0..1），含倾斜补偿。 */
   function sample(dt) {
     const n = level.length;
     const wantBins = binsOf();
     if (wantBins !== bins || !u8 || u8.length !== wantBins) { bins = wantBins; u8 = new Uint8Array(wantBins); }
     hasData = !!read(u8);
+    // bins 或柱数任一变化都要重建分箱（否则倾斜补偿按旧频率轴计算）
+    if (!bandLo || bandLo.length !== n || bandBins !== bins) buildBands();
 
-    const usable = Math.max(8, Math.floor(u8.length * 0.72));
     const ka = 1 - Math.exp(-dt / ATTACK_MS);
     const kr = 1 - Math.exp(-dt / RELEASE_MS);
     const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -102,12 +139,20 @@ export function createWaveform(canvas, opts) {
       let v = 0;
       if (hasData) {
         // 对数映射：低频占更少格子（audioMotion frequencyScale 'log'）
-        const f0 = Math.pow(i / n, 1.65), f1 = Math.pow((i + 1) / n, 1.65);
-        let a = Math.floor(f0 * usable), b = Math.floor(f1 * usable);
-        if (b <= a) b = a + 1;
+        const a = bandLo[i], b = bandHi[i];
         let sum = 0, cnt = 0;
         for (let k = a; k < b && k < u8.length; k++) { sum += u8[k]; cnt++; }
-        v = cnt ? (sum / cnt) / 255 : 0;
+        const byteAvg = cnt ? sum / cnt : 0;
+        // byte → dB（按分析器档位还原）
+        const dbRaw = minDb + (byteAvg / 255) * (maxDb - minDb);
+        if (byteAvg <= 1 || dbRaw <= SILENCE_DB) {
+          v = 0;                                   // 无信号：不参与倾斜，柱高 0
+        } else {
+          // 加倾斜补偿后，再按同一档位回到 0..1
+          const db = dbRaw + bandGain[i];
+          v = (db - minDb) / (maxDb - minDb);
+          if (v < 0) v = 0; else if (v > 1) v = 1;
+        }
         v = Math.min(1, Math.pow(v, 1.12) * 1.05);      // 轻微伽马：弱段也保留层次
       }
       const prev = level[i];
@@ -302,6 +347,11 @@ export function createWaveform(canvas, opts) {
       }
     },
     levels() { return level ? Array.prototype.slice.call(level) : []; },
+    /** 频谱倾斜（dB/倍频程）：0 = 关闭（原始频谱），4.5 ≈ 标准补偿。 */
+    setTilt(v) { spanDb = Math.max(0, Math.min(12, +v || 0)); buildBands(); },
+    getTilt() { return spanDb; },
+    /** 分析器档位（player 提供；变更后需重建分箱）。 */
+    setDbRange(lo, hi) { minDb = +lo; maxDb = +hi; },
     peaks() { return peak ? Array.prototype.slice.call(peak) : []; },
     start, stop,
     resize() { const w = cssW, h = cssH; cssW = 0; resize(); if (w !== cssW || h !== cssH) draw(); },
