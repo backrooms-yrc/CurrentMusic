@@ -14,12 +14,19 @@ const SORTS = [
 const PAGE = 30;
 
 const TAB_KEY = 'cm.sqTab';
+// 默认落在「音乐」（发现页的主体是找歌）；TAB 顺序用于判断切换方向 → 决定入场动画往哪边滑
+const TAB_ORDER = ['music', 'users', 'posts'];
+const DEFAULT_TAB = 'music';
 
 /** TAB 切换：记住选择（会话级）。posts 走独立模块，users 用本文件原有逻辑。 */
 function switchTab(k) {
+  const cur = sessionStorage.getItem(TAB_KEY) || DEFAULT_TAB;
+  const dir = TAB_ORDER.indexOf(k) >= TAB_ORDER.indexOf(cur) ? 1 : -1;
   sessionStorage.setItem(TAB_KEY, k);
   const out = document.getElementById('out');
-  if (out) render(out, null, { tab: k });
+  if (!out) return;
+  out.scrollTop = 0;                      // 切页回到顶部：否则会停在上一个 TAB 的滚动位置
+  render(out, null, { tab: k, dir });
 }
 
 export async function render(el, params, state = {}) {
@@ -29,7 +36,13 @@ export async function render(el, params, state = {}) {
   const listening = state.listening ?? (sessionStorage.getItem('cm.sqListening') === '1');
   const users = state.users ?? null;
   const total = state.total ?? 0;
-  const tab = state.tab ?? (sessionStorage.getItem(TAB_KEY) || 'users');
+  // 优先级：显式 state → ?tab=xxx 深链 → 会话记忆 → 默认「音乐」
+  const fromQuery = ((params && params.query && params.query.get && params.query.get('tab')) || '');
+  let tab = state.tab || fromQuery || sessionStorage.getItem(TAB_KEY) || DEFAULT_TAB;
+  if (!TAB_ORDER.includes(tab)) tab = DEFAULT_TAB;      // 非法值不再静默落到「用户」
+  // 入场方向：0 = 首帧（只淡入），±1 = 左右滑入
+  const dir = state.dir || 0;
+  const paneCls = 'cm-tabpane' + (dir > 0 ? ' in-right' : dir < 0 ? ' in-left' : '');
 
   const tabs = `
       <div class="cm-sqtabs" id="sqTabs">
@@ -40,7 +53,7 @@ export async function render(el, params, state = {}) {
 
   if (tab === 'music') {
     // 音乐 TAB：Banner / 推荐歌单 / 推荐新歌 / 榜单 / 曲风 / 独家放送
-    el.innerHTML = tabs + '<div id="sqMusicBox"></div>';
+    el.innerHTML = tabs + `<div class="${paneCls}" id="sqMusicBox"></div>`;
     el.querySelectorAll('#sqTabs .cm-sqtab').forEach(b => { b.onclick = () => switchTab(b.dataset.k); });
     const { mountDiscover } = await import('../discover.js');
     await mountDiscover(el.querySelector('#sqMusicBox'));
@@ -49,13 +62,14 @@ export async function render(el, params, state = {}) {
 
   if (tab === 'posts') {
     // 帖子 TAB：只保留 TAB 栏 + 帖子容器（用户广场那套排序/筛选不显示）
-    el.innerHTML = tabs + '<div id="sqPostBox"></div>';
+    el.innerHTML = tabs + `<div class="${paneCls}" id="sqPostBox"></div>`;
     el.querySelectorAll('#sqTabs .cm-sqtab').forEach(b => { b.onclick = () => switchTab(b.dataset.k); });
     mountPosts(el.querySelector('#sqPostBox'));
     return;
   }
 
   el.innerHTML = tabs + `
+    <div class="${paneCls} cm-sqpage">
     <div class="cm-sq-stats" id="sqStats"><span class="material-icons-outlined">groups</span>正在统计…</div>
     <div class="cm-search-bar">
       <mdui-text-field id="sq" label="搜索昵称 / 个签（回车）" variant="outlined" clearable style="width:100%"></mdui-text-field>
@@ -68,7 +82,8 @@ export async function render(el, params, state = {}) {
       <span class="cm-plsort-l"><span class="material-icons-outlined">sort</span>排序</span>
       ${SORTS.map(s => `<mdui-chip ${s.key === sort ? 'selected' : ''} data-k="${s.key}">${s.label}</mdui-chip>`).join('')}
     </div>
-    <div id="sqGrid" class="cm-sq-grid"></div>`;
+    <div id="sqGrid" class="cm-sq-grid"></div>
+    </div>`;
 
   const grid = el.querySelector('#sqGrid');
   const input = el.querySelector('#sq');
