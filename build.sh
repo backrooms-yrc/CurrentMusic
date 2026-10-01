@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
+# 本文件来自公开镜像：签名口令通过环境变量 CM_KS_PASS 提供，仓库内不含任何凭据。
 # CurrentMusic APK 构建脚本（无 Gradle/AGP：aapt2 + javac + d8 + zipalign + apksigner）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-SDK="${ANDROID_HOME:-/opt/android-sdk}"
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
 BT="$SDK/build-tools/34.0.0"
 PLATFORM="$SDK/platforms/android-34/android.jar"
 APP="$ROOT/app"
@@ -51,13 +52,13 @@ cp "$OUT/base.apk" "$OUT/unsigned.apk"
 
 echo "==> [6/6] 签名"
 if [ ! -f "$KS" ]; then
-  keytool -genkeypair -keystore "$KS" -storepass currentmusic -keypass currentmusic \
+  keytool -genkeypair -keystore "$KS" -storepass "${CM_KS_PASS:?请先设置 CM_KS_PASS 环境变量（你的签名库口令）}" -keypass "${CM_KS_PASS:?请先设置 CM_KS_PASS 环境变量（你的签名库口令）}" \
     -alias cm -keyalg RSA -keysize 2048 -validity 10000 \
     -dname "CN=CurrentMusic, OU=CurrentMusic, O=Rcst20, L=Internet, ST=Internet, C=CN"
   echo "已生成自签名 keystore: $KS"
 fi
 mkdir -p "$ROOT/dist"
-"$BT/apksigner" sign --ks "$KS" --ks-pass pass:currentmusic \
+"$BT/apksigner" sign --ks "$KS" --ks-pass pass:"${CM_KS_PASS:?请先设置 CM_KS_PASS 环境变量（你的签名库口令）}" \
   --out "$APK_FINAL" "$OUT/aligned.apk"
 "$BT/apksigner" verify "$APK_FINAL" && echo "签名校验通过"
 
