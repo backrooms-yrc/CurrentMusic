@@ -52,7 +52,7 @@ const BG_KEY = 'cm.bgImage';
 const BLUR_KEY = 'cm.glassBlur';
 const TINT_KEY = 'cm.glassTint';
 
-const BLUR_MIN = 0, BLUR_MAX = 12, BLUR_DEF = 4;
+const BLUR_MIN = 0, BLUR_MAX = 12, BLUR_DEF = 6;
 const TINT_MIN = 0.2, TINT_MAX = 0.95;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -68,7 +68,7 @@ export function glassBlur() {
   return Number.isFinite(v) ? clamp(v, BLUR_MIN, BLUR_MAX) : BLUR_DEF;
 }
 
-/** 玻璃浓度 0~1（null 表示未自定义，用皮肤默认：亮 .58 / 暗 .52）。 */
+/** 玻璃浓度 0~1（null 表示未自定义，用皮肤默认：亮 .28 / 暗 .24，对标 Apple 液态玻璃的低浓度高模糊）。 */
 export function glassTint() {
   const raw = localStorage.getItem(TINT_KEY);
   if (raw == null || raw === '') return null;

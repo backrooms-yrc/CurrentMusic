@@ -2,7 +2,19 @@
 import { mdui } from './md.js';
 import { api, auth, settings, ncmSongs } from './api.js';
 import { toast, tierLabel } from './ui.js';
-import { resolveSongUrl } from './songurl.js';   // 三级音源回退（P2）：
+import { resolveSongUrl } from './songurl.js';   // 三级音源回退（P2）
+import { buildEqChain, removeEqChain } from './eq.js';   // 均衡器链（挂进音频图）
+
+// 播放实际请求的档位：开了「音效」（杜比全景声/臻音全景声/沉浸环绕声/高清臻音）时
+// 优先用音效档，否则用用户选的音质档。沉浸环绕声的声道类型（c51/ste）作为 immerse 传出。
+export function playLevel() {
+  const fx = settings.effect;
+  if (fx && fx !== 'off') {
+    if (fx === 'sky-ste') return { level: 'sky', immerse: 'ste' };
+    return { level: fx, immerse: undefined };
+  }
+  return { level: settings.quality, immerse: undefined };
+}
 // 曾因漏 import 上线即 ReferenceError 全站无法播放——见 tools/check-js-refs.py
 
 // ---------- 音频元素（可替换） ----------
@@ -67,6 +79,7 @@ function disposeAudio(old) {
 function teardownGraph() {
   if (watchTimer) { clearInterval(watchTimer); watchTimer = 0; }
   try { if (srcNode) srcNode.disconnect(); } catch (e) { /* 忽略 */ }
+  removeEqChain();                            // 均衡器链随图一起拆
   try { if (analyser) analyser.disconnect(); } catch (e) { /* 忽略 */ }
   try { if (actx && actx.close) actx.close(); } catch (e) { /* 忽略 */ }
   actx = analyser = srcNode = null;
@@ -91,7 +104,15 @@ function buildGraph(el) {
     analyser.minDecibels = MIN_DB;
     analyser.maxDecibels = MAX_DB;
     analyser.smoothingTimeConstant = 0.72;
-    srcNode.connect(analyser);
+    // 均衡器链（src → [EQ] → analyser → destination）：图存在 EQ 才生效；
+    // 增益由 eq.js 管理（预设/滑块实时改 .gain，不动图结构）
+    const eqChain = buildEqChain(actx);
+    if (eqChain) {
+      srcNode.connect(eqChain.input);
+      eqChain.output.connect(analyser);
+    } else {
+      srcNode.connect(analyser);
+    }
     analyser.connect(actx.destination);      // 必须接回目的地，否则没声音
     graphEl = el;
   } catch (e) {
@@ -249,7 +270,16 @@ export const player = {
     } catch { /* 忽略 */ }
     this._prefetchBusy = true;
     try {
-      const info = await resolveSongUrl(nx, settings.quality);
+      const _pl = playLevel();
+      let info;
+      try {
+        info = await resolveSongUrl(nx, _pl.level, _pl.immerse);
+      } catch (e) {
+        if (_pl.level !== settings.quality) {
+          toast('该音效当前不可用，已回退普通音质');
+          info = await resolveSongUrl(nx, settings.quality);
+        } else throw e;
+      }
       // 期间可能已切歌或又预取了别的：过期结果直接丢弃
       const still = this.queue[this.index + 1] || this.queue[0];
       if (!still || String(still.ncm_id) !== String(nx.ncm_id)) return;
@@ -393,7 +423,15 @@ export const player = {
         info = { url: pf.url, type: pf.type || 'mp3', level: pf.level || 'auto' };
         this._prefetch = null;             // 用完即弃（元素随之可回收）
       } else {
-        info = await resolveSongUrl(this.meta, settings.quality);
+        const _pl2 = playLevel();
+        try {
+          info = await resolveSongUrl(this.meta, _pl2.level, _pl2.immerse);
+        } catch (e) {
+          if (_pl2.level !== settings.quality) {
+            toast('该音效当前不可用，已回退普通音质');
+            info = await resolveSongUrl(this.meta, settings.quality);
+          } else throw e;
+        }
       }
     } catch (e) {
       this.loading = false;
@@ -717,7 +755,7 @@ async function recoverStalled() {
   if (!stallNotified) { stallNotified = true; emit('stalling', true); }
   try {
     const at = audio.currentTime || 0;
-    const info = await resolveSongUrl(player.meta, settings.quality);
+    const _pl3 = playLevel(); const info = await resolveSongUrl(player.meta, _pl3.level, _pl3.immerse);
     player.urlInfo = info;
     loadUrl(info.url, at);
     if (player.wantPlaying) audio.play().catch(() => {});

@@ -3,7 +3,7 @@
 > 基于网易云音乐 SVIP 音源、自建账号体系的 Android 音乐应用。界面走 MDUI 2 / Material Design 3，
 > 前端是一份原生 JavaScript 单页应用（无框架），由 Java WebView 壳承载；本仓库同时包含后端服务与运维脚本。
 
-![version](https://img.shields.io/badge/version-1.28.13-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~477KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
+![version](https://img.shields.io/badge/version-1.28.14-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~477KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
 **目录**：[功能清单](#功能清单) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
 
@@ -46,6 +46,7 @@
 |---|---|
 | 播放 | 队列/上一首下一首/列表循环/单曲循环/随机/拖动进度/MediaSession |
 | 音质 | 自动最高（默认）+ 7 档手动：超清母带/臻音全景声/沉浸环绕声/高清臻音/无损/极高/标准 |
+| 音效与均衡器 | 音效开关（杜比全景声/臻音全景声/沉浸环绕声/高清臻音）；五段均衡器（八种预设+自定义） |
 | MV / 百科 | 歌曲条「播放 MV」按钮（仅该曲有 MV 时显示，全屏播放，播放时自动暂停音乐）；播放页「更多 → 歌曲百科」查看创作信息/基本信息/百科正文 |
 | 搜索 | 回车触发（逐字输入不发请求）、封面/专辑/热度/点赞数展示、历史记录 |
 | 点赞 | 云端红心，全站计数「♥ N 人点赞」实时显示 |
@@ -172,11 +173,11 @@ cd /opt/currentmusic/web && npm install   # 首次
 
 | 版本 | 内容 |
 |---|---|
+| v1.28.14 | 液态玻璃底栏过高修复 / 玻璃默认值对标 Apple / 音效开关与切换 / 五段均衡器 |
 | v1.28.13 | 重发投屏慢放修复（CDN 同名缓存事故补救，内容同 1.28.12） |
 | v1.28.12 | 修复 DLNA 投屏声音被慢放数百倍（拦截 96/192kHz 与多声道档，默认极高 MP3） |
 | v1.28.11 | 手表端播放页重排（封面与信息并排、走带沉底，240px 屏零重叠） |
 | v1.28.10 | 修复桌面端「简约玻璃」导航点击失效；新增手表/超小屏适配 |
 | v1.28.9 | 修复移动端弹窗内容横向溢出（弹窗更宽更好用） |
-| v1.28.8 | 整批回退到 v1.28.4 的代码状态（撤销协作者 PR #1 的前端改动与后续播放器整理） |
 
 完整历史（112 个版本）见 **[CHANGELOG.md](CHANGELOG.md)**；每个版本的 APK 在 [Releases](https://github.com/backrooms-yrc/CurrentMusic-Private/releases)。

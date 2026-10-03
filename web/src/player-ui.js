@@ -609,6 +609,52 @@ function closeFull() {
   window.__cmWave = waveCtl;
 }));
 
+// ---------- 均衡器 ----------
+function openEqDialog() {
+  import('./eq.js').then(({ EQ_PRESETS, EQ_BANDS, EQ_LABELS, EQ_GAIN_MAX, eqConfig, setEqConfig, eqActive }) => {
+    let cfg = eqConfig();
+    const presetChips = () => Object.keys(EQ_PRESETS).map(k =>
+      `<mdui-chip data-p="${k}" ${cfg.preset === k ? 'selected' : ''}>${EQ_PRESETS[k].label}</mdui-chip>`).join('');
+    const sliders = () => cfg.gains.map((g, i) => `
+      <div class="cm-eq-row">
+        <span class="cm-eq-label">${EQ_LABELS[i]}<i>${EQ_BANDS[i] >= 1000 ? (EQ_BANDS[i]/1000) + 'k' : EQ_BANDS[i]}</i></span>
+        <input type="range" class="cm-eq-slider" data-i="${i}" min="${-EQ_GAIN_MAX}" max="${EQ_GAIN_MAX}" step="1" value="${g}">
+        <span class="cm-eq-val">${g > 0 ? '+' : ''}${g}dB</span>
+      </div>`).join('');
+    const diag = mdui.dialog({
+      headline: '均衡器',
+      body: `<div class="cm-eq">
+        <div class="cm-more-chips" id="eqPresets">${presetChips()}</div>
+        <div id="eqSliders">${sliders()}</div>
+        <div class="cm-more-s" id="eqHint" style="margin-top:8px">${eqActive() ? '' : '提示：均衡器在音频可视化可用时生效（若当前歌曲走了兼容回退，EQ 可能不生效）'}</div>
+      </div>`,
+      actions: [{ text: '关闭' }],
+    });
+    setTimeout(() => {
+      diag.querySelectorAll('#eqPresets mdui-chip').forEach(ch => {
+        ch.onclick = () => {
+          cfg = { preset: ch.dataset.p, gains: EQ_PRESETS[ch.dataset.p].gains.slice() };
+          setEqConfig(cfg);
+          diag.querySelector('#eqPresets').innerHTML = presetChips();
+          diag.querySelector('#eqSliders').innerHTML = sliders();
+          bindSliders();
+        };
+      });
+      const bindSliders = () => {
+        diag.querySelectorAll('.cm-eq-slider').forEach(sl => {
+          sl.oninput = () => {
+            const i = +sl.dataset.i, v = +sl.value;
+            cfg.gains[i] = v;
+            sl.closest('.cm-eq-row').querySelector('.cm-eq-val').textContent = (v > 0 ? '+' : '') + v + 'dB';
+            setEqConfig({ preset: 'custom', gains: cfg.gains });
+          };
+        });
+      };
+      bindSliders();
+    }, 0);
+  }).catch(() => toast('均衡器加载失败'));
+}
+
 // ---------- 更多抽屉：语言 / 字号 / 渐变背景 / 下载 ----------
 
 function chipsHTML(list, curKey, group) {
@@ -632,7 +678,11 @@ function openMoreDrawer() {
         <div><div class="cm-more-t">沉浸模式</div><div class="cm-more-s">封面主色流动渐变铺满播放页</div></div>
         <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
       </div>
-      <div class="cm-more-sec">歌曲信息</div>
+            <div class="cm-more-row" id="mEq" style="cursor:pointer">
+        <div><div class="cm-more-t">均衡器</div><div class="cm-more-s">五段 EQ · 预设与自定义</div></div>
+        <span class="material-icons-outlined">graphic_eq</span>
+      </div>
+<div class="cm-more-sec">歌曲信息</div>
       <div class="cm-more-row" id="mWiki" style="cursor:pointer">
         <div><div class="cm-more-t">歌曲百科</div><div class="cm-more-s">创作信息 / 基本信息 / 百科正文</div></div>
         <span class="material-icons-outlined">chevron_right</span>
@@ -649,6 +699,8 @@ function openMoreDrawer() {
     actions: [{ text: '关闭' }],
   });
   setTimeout(() => {
+    const meq = diag.querySelector('#mEq');
+    if (meq) meq.onclick = () => { diag.open = false; openEqDialog(); };
     const wk = diag.querySelector('#mWiki');
     if (wk) wk.onclick = () => {
       diag.open = false;

@@ -22,6 +22,11 @@ export const settings = {
     return raw;
   },
   set base(v) { localStorage.setItem(LS.base, v); },
+  get effect() {
+    const v = localStorage.getItem('cm.effect') || 'off';
+    return ['off','jyeffect','dolby','vivid','sky','sky-ste'].indexOf(v) >= 0 ? v : 'off';
+  },
+  set effect(v) { localStorage.setItem('cm.effect', v); },
   get secureMode() { return localStorage.getItem(LS.secure) !== '0'; },   // 默认 true
   set secureMode(v) { localStorage.setItem(LS.secure, v ? '1' : '0'); },
   get quality() { return localStorage.getItem(LS.quality) || 'auto'; },
@@ -263,7 +268,7 @@ export const api = {
   artist: (id, offset = 0, limit = 100) => call('GET', `/ncm/artist?id=${id}&offset=${offset}&limit=${limit}`),
   followArtist: (id, on, name, pic) => call('POST', `/artists/${id}/follow`, { body: { on, name, pic }, auth: true }),
   followedArtists: (refresh = false) => call('GET', `/artists/followed${refresh ? '?refresh=1' : ''}`, { auth: true }),
-  songUrl: (ncmId, level) => call('GET', `/ncm/song/url?id=${ncmId}&level=${level}`),
+  songUrl: (ncmId, level, immerse) => call('GET', `/ncm/song/url?id=${ncmId}&level=${level}${immerse ? '&immerse=' + immerse : ''}`),
 
   // ---- 帖子（发现页） ----
   posts: (offset = 0, limit = 20, author = null) => call('GET',

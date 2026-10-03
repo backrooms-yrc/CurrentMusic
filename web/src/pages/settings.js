@@ -1,6 +1,10 @@
 // 设置页：配色/音质/主题/下载目录/服务器/关于（与「我的」分离，顶栏齿轮直达）
 import { mdui } from '../md.js';
 import { api, settings, auth } from '../api.js';
+import { player, playLevel } from '../player.js';
+
+const FX_LABELS = { off: '关闭', jyeffect: '高清臻音', dolby: '杜比全景声', vivid: '臻音全景声', sky: '沉浸环绕声·5.1', 'sky-ste': '沉浸环绕声·环绕' };
+const fxLabel = () => FX_LABELS[settings.effect] || '关闭';
 import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel, FONT_SCALES, getFontScaleKey, setFontScaleKey } from '../ui.js';
 import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
@@ -39,7 +43,8 @@ export async function render(el) {
         <div class="cm-setting" id="bgImage"><span class="material-icons-outlined">wallpaper</span>背景图片<i>${bgImage() ? '已自定义' : '默认'}</i></div>
         <div class="cm-setting" id="glassFx"><span class="material-icons-outlined">blur_on</span>玻璃效果<i>${glassTint() == null ? '默认' : '已自定义'}</i></div>
         <div class="cm-setting" id="waveStyle"><span class="material-icons-outlined">graphic_eq</span>波形样式<i>${(WAVE_STYLES.find(x => x.key === waveStyle()) || WAVE_STYLES[0]).name}</i></div>
-        <div class="cm-setting" id="waveTilt"><span class="material-icons-outlined">trending_up</span>频谱倾斜<i>${waveTilt() <= 0 ? '关闭' : waveTilt().toFixed(1) + ' dB/oct'}</i></div>
+        <div class="cm-setting" id="soundFx"><span class="material-icons-outlined">spatial_audio_off</span>音效<i>${fxLabel() || '关闭'}</i></div>
+<div class="cm-setting" id="waveTilt"><span class="material-icons-outlined">trending_up</span>频谱倾斜<i>${waveTilt() <= 0 ? '关闭' : waveTilt().toFixed(1) + ' dB/oct'}</i></div>
         <div class="cm-setting" id="fontScale"><span class="material-icons-outlined">format_size</span>字体大小<i>${esc((FONT_SCALES.find(x => x.key === getFontScaleKey()) || {}).label || '标准')}</i></div>
     </div>
     <div class="cm-sec-head"><h2>播放与下载</h2></div>
@@ -246,6 +251,38 @@ export async function render(el) {
         tv.textContent = Math.round(tint * 100) + '%';
         setGlass({ tint });
       };
+    }, 0);
+  };
+
+  el.querySelector('#soundFx').onclick = () => {
+    const items = [
+      ['off', '关闭', '按普通音质播放'],
+      ['jyeffect', '高清臻音', '96kHz/24bit 上采样增强'],
+      ['dolby', '杜比全景声', '需设备支持，不支持时上游自动降为高清臻音'],
+      ['vivid', '臻音全景声', '视版权/设备而定，不可用时自动回退'],
+      ['sky', '沉浸环绕声·5.1', '5.1 声道（c51）'],
+      ['sky-ste', '沉浸环绕声·环绕', '环绕立体声类型（ste）'],
+    ];
+    const cur = settings.effect;
+    const diag = mdui.dialog({
+      headline: '音效',
+      body: `<div class="cm-qm">${items.map(([k, name, desc]) =>
+        `<div class="cm-qm-item" data-v="${k}">${name}${k === cur ? '<span class="material-icons-outlined">check</span>' : `<div style="font-size:11px;opacity:.55;margin-left:auto;margin-right:6px">${desc}</div>`}</div>`).join('')}
+        <div class="cm-more-s" style="margin-top:8px">音效来自网易云（/song/url/v1 音效档位）；开启后播放优先使用所选音效，音质档位设置对其无效。部分音效需设备支持。</div></div>`,
+      actions: [{ text: '关闭' }],
+    });
+    setTimeout(() => {
+      diag.querySelectorAll('.cm-qm-item').forEach(it => {
+        it.onclick = () => {
+          settings.effect = it.dataset.v;
+          diag.open = false;
+          toast(`音效：${it.textContent.replace('check', '').trim()}`);
+          render(el);
+          // 正在播就切到该音效（保留播放位置）
+          if (player.meta && player.isPlaying && player.isPlaying()) player.changeQuality(playLevel().level);
+          else if (player.meta) player.changeQuality(playLevel().level);
+        };
+      });
     }, 0);
   };
 

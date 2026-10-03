@@ -1016,6 +1016,14 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cmt-composer input:disabled { opacity: .5; }
 
 /* ---------- 弹层内列表 ---------- */
+/* 均衡器对话框 */
+.cm-eq { display: flex; flex-direction: column; gap: 4px; min-width: min(100%, 320px); }
+.cm-eq-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.cm-eq-label { font-size: calc(12px * var(--cm-fs, 1)); width: 64px; flex: none; display: flex; flex-direction: column; }
+.cm-eq-label i { font-style: normal; font-size: 10px; opacity: .5; }
+.cm-eq-slider { flex: 1; accent-color: var(--cm-primary, #d0bcff); }
+.cm-eq-val { font-size: 11px; opacity: .7; width: 42px; text-align: right; flex: none; }
+
 .cm-qm { display: flex; flex-direction: column; }
 .cm-qm-item { display: flex; align-items: center; gap: 10px; padding: 13px 6px; font-size: calc(15px * var(--cm-fs, 1)); cursor: pointer; border-radius: 10px; }
 .cm-qm-spec { font-style: normal; font-size: 10.5px; opacity: .55; margin-left: 6px; }
@@ -1784,6 +1792,13 @@ html[data-ui-preset="glass"] #bottomNav {
   box-shadow: none !important;
   -webkit-backdrop-filter: var(--gls-filter);
   backdrop-filter: var(--gls-filter);
+  /* 修复「部分设备上过高」：底栏原为 min-height(66px) + 底部安全区 padding 叠加，
+     在手势导航（底部 inset 可达 24~48px）的设备上总高 90~114px。
+     改为悬浮胶囊：固定高度 + 以 inset 作底部偏移——高度不随设备 inset 增长。 */
+  left: 12px; right: 12px; bottom: calc(12px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+  height: 62px; min-height: 62px; padding-bottom: 0 !important;
+  border: 1px solid var(--gls-border) !important; border-top: 1px solid var(--gls-border) !important;
+  border-radius: 31px; box-sizing: border-box;
 }
 html[data-ui-preset="glass"] .cm-mini-inner {
   background: var(--gls-card) !important;
@@ -2382,7 +2397,7 @@ html[data-ui-preset="frost"] {
        --frs-lens-blur  折射透镜的模糊（数字，无单位；glass.js 读走拼成 blur(Npx)）
        --frs-alpha      玻璃本体的不透明度（0~1） */
   --frs-lens-blur: 4;
-  --frs-alpha: .58;
+  --frs-alpha: .28;   /* 对标 Apple 液态玻璃：低浓度 + 高模糊（原来 .58 太实，像磨砂塑料） */
   --frs-lens: blur(calc(var(--frs-lens-blur) * 3px)) saturate(150%);   /* 旧内核兜底；支持折射时由 glass.js 覆写为 url(#…) */
   --frs-capsule: rgba(255, 255, 255, var(--frs-alpha));   /* 玻璃本体 */
   --frs-capsule-line: rgba(255, 255, 255, .62);
@@ -2392,7 +2407,7 @@ html[data-ui-preset="frost"].mdui-theme-dark {
   /* 暗色默认略实一点。注意要覆盖 --frs-alpha 本身而不是写 var(..., .52)——
      fallback 只在变量"未定义"时生效，基础块已定义为 .58，写了也永远不触发。
      用户在 <html> 内联设置的值优先级高于这里，会同时作用于亮/暗两种模式。 */
-  --frs-alpha: .52;
+  --frs-alpha: .24;
   --frs-capsule: rgba(30, 32, 40, var(--frs-alpha));
   --frs-capsule-line: rgba(255, 255, 255, .28);
   --frs-capsule-float: 0 12px 34px rgba(0, 0, 0, .55);
