@@ -3,12 +3,26 @@
 > 基于网易云音乐 SVIP 音源、自建账号体系的 Android 音乐应用。界面走 MDUI 2 / Material Design 3，
 > 前端是一份原生 JavaScript 单页应用（无框架），由 Java WebView 壳承载；本仓库同时包含后端服务与运维脚本。
 
-![version](https://img.shields.io/badge/version-1.28.14-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~477KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
+![version](https://img.shields.io/badge/version-1.28.15-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
-**目录**：[功能清单](#功能清单) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
+**目录**：[界面](#界面) · [功能清单](#功能清单) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
 
-![version](https://img.shields.io/badge/version-1.28.2-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~350KB-4285F4)
+## 界面
 
+默认皮肤「简约玻璃」（Apple Liquid Glass / iOS 26 的做法）：玻璃只用**浮层**，内容卡片保持实体磨砂白——
+Apple 的 Liquid Glass 同样只用于 chrome。每块浮层按自己的真实尺寸生成折射位移图（背景是被"掰弯"，
+不是糊一层），边缘高光是上游 [hyalite](https://github.com/VII-Cae/hyalite--liquid-glass) `edgeShadow()` 的原式；
+底栏选中项另有一颗会流动、可按住拖动的玻璃「水滴」。
+
+| 浅色 | 深色 | 玻璃效果 |
+|---|---|---|
+| ![简约玻璃·浅色首屏](docs/screenshots/frost-phone-light.png) | ![简约玻璃·深色首屏](docs/screenshots/frost-phone-dark.png) | ![玻璃效果设置](docs/screenshots/frost-glass-dialog.png) |
+
+宽屏（≥900px）时底栏变左侧竖栏，与顶栏、迷你播放条同一套玻璃配方：
+
+![简约玻璃·宽屏](docs/screenshots/frost-desktop.png)
+
+> 截图来自 Chromium 131 headless（402×874 @2x 与 1280×860）；真机观感以实机为准。
 
 ## 架构
 
