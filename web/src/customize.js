@@ -52,8 +52,13 @@ const BG_KEY = 'cm.bgImage';
 const BLUR_KEY = 'cm.glassBlur';
 const TINT_KEY = 'cm.glassTint';
 
-const BLUR_MIN = 0, BLUR_MAX = 12, BLUR_DEF = 6;
-const TINT_MIN = 0.2, TINT_MAX = 0.95;
+// 默认值 = 上游实现（github.com/VII-Cae/hyalite--liquid-glass v0.5.0）写明的推荐值：
+//   · 透镜中心霜化 blur = 1（`DEFAULTS.blur`）
+//   · 玻璃本体不透明度 = .13（README「colour the glass *above* the refraction」示例）
+// 滑杆范围只是"可调区间"，与上游默认值无关；TINT_MIN 必须留到默认值以下，
+// 否则默认浓度在滑杆上根本表达不出来。
+const BLUR_MIN = 0, BLUR_MAX = 12, BLUR_DEF = 1;
+const TINT_MIN = 0, TINT_MAX = 0.95;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -62,13 +67,13 @@ export function bgImage() {
   return localStorage.getItem(BG_KEY) || '';
 }
 
-/** 折射透镜模糊值（数字；未设置时为皮肤默认 4）。 */
+/** 折射透镜模糊值（数字；未设置时为皮肤默认，= 上游 DEFAULTS.blur = 1）。 */
 export function glassBlur() {
   const v = parseFloat(localStorage.getItem(BLUR_KEY));
   return Number.isFinite(v) ? clamp(v, BLUR_MIN, BLUR_MAX) : BLUR_DEF;
 }
 
-/** 玻璃浓度 0~1（null 表示未自定义，用皮肤默认：亮 .28 / 暗 .24，对标 Apple 液态玻璃的低浓度高模糊）。 */
+/** 玻璃浓度 0~1（null 表示未自定义，用皮肤默认 .13，取自上游 hyalite README 的玻璃着色值）。 */
 export function glassTint() {
   const raw = localStorage.getItem(TINT_KEY);
   if (raw == null || raw === '') return null;

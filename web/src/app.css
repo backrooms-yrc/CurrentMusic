@@ -2039,11 +2039,10 @@ html[data-ui-preset="frost"] {
   --frs-card: rgba(255, 255, 255, .82);   /* 磨砂白（不支持模糊时也好看） */
   --frs-card-solid: rgba(255, 255, 255, .92);
   --frs-hair: rgba(60, 60, 67, .14);      /* 发丝线 */
-  --frs-glass: rgba(255, 255, 255, .72);  /* 浮层玻璃 */
+  --frs-glass: rgba(var(--frs-film), var(--frs-alpha));  /* 浮层玻璃（浓度同上，随滑杆） */
   --frs-glass-line: rgba(0, 0, 0, .06);
   --frs-lip: inset 0 1px 0 rgba(255, 255, 255, .9);   /* 玻璃上沿高光 */
   --frs-float: 0 10px 28px rgba(18, 28, 48, .14);     /* 只给真正悬浮的层 */
-  --frs-filter: none;
   --frs-r: 14px;
   --frs-r-lg: 18px;
 
@@ -2114,14 +2113,10 @@ html[data-ui-preset="frost"].mdui-theme-dark {
   --frs-card: rgba(28, 29, 35, .78);
   --frs-card-solid: rgba(28, 29, 35, .92);
   --frs-hair: rgba(255, 255, 255, .10);
-  --frs-glass: rgba(22, 23, 28, .72);
+  --frs-glass: rgba(var(--frs-film), var(--frs-alpha));
   --frs-glass-line: rgba(255, 255, 255, .08);
   --frs-lip: inset 0 1px 0 rgba(255, 255, 255, .12);
   --frs-float: 0 12px 30px rgba(0, 0, 0, .55);
-}
-
-@supports ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  html[data-ui-preset="frost"] { --frs-filter: blur(20px) saturate(180%); }
 }
 
 /* ---- 2. 强调色：未选配色时用 iOS 蓝 ---- */
@@ -2172,21 +2167,21 @@ html[data-ui-preset="frost"] .mdui-theme-dark body {
 html[data-ui-preset="frost"] #topbar,
 html[data-ui-preset="frost"] #topbar.scrolled {
   background: var(--frs-glass) !important;
-  border-bottom: 1px solid var(--frs-glass-line);
-  box-shadow: none !important;
-  -webkit-backdrop-filter: var(--frs-filter);
-  backdrop-filter: var(--frs-filter);
+  border-bottom: 0;
+  box-shadow: var(--frs-edge) !important;
+  -webkit-backdrop-filter: var(--frs-lens);
+  backdrop-filter: var(--frs-lens);
   font-size: calc(17px * var(--cm-fs, 1)); font-weight: 600; letter-spacing: -.012em;
 }
 /* 底栏：材质在下方「iOS 玻璃栏」小节统一定义（边框需按窄屏/宽屏区分，
    宽屏时底栏会变成左侧竖栏，加 border-top 会多出一条横线）。 */
 html[data-ui-preset="frost"] .cm-mini-inner {
-  background: var(--frs-glass) !important;
-  border: 1px solid var(--frs-hair);
+  background: var(--frs-capsule) !important;
+  border: 0;
   border-radius: var(--frs-r);
-  box-shadow: var(--frs-lip), var(--frs-float) !important;
-  -webkit-backdrop-filter: var(--frs-filter);
-  backdrop-filter: var(--frs-filter);
+  box-shadow: var(--frs-edge), var(--frs-float) !important;
+  -webkit-backdrop-filter: var(--frs-lens);
+  backdrop-filter: var(--frs-lens);
 }
 
 /* ---- 5. 内容卡片：iOS 分组磨砂白 —— 零投影，靠描边与底色差分层 ---- */
@@ -2291,12 +2286,12 @@ html[data-ui-preset="frost"] .cm-sq-stats b { color: var(--frs-fg); }
 /* ---- 7. MDUI：弹层玻璃 + iOS 胶囊按钮 ---- */
 html[data-ui-preset="frost"] mdui-dialog::part(panel),
 html[data-ui-preset="frost"] mdui-menu::part(panel) {
-  background: var(--frs-card-solid) !important;
-  border: 1px solid var(--frs-hair);
+  background: var(--frs-panel) !important;
+  border: 0;
   border-radius: var(--frs-r-lg) !important;
-  box-shadow: var(--frs-lip), var(--frs-float) !important;
-  -webkit-backdrop-filter: var(--frs-filter);
-  backdrop-filter: var(--frs-filter);
+  box-shadow: var(--frs-edge), var(--frs-float) !important;
+  -webkit-backdrop-filter: var(--frs-lens);
+  backdrop-filter: var(--frs-lens);
 }
 html[data-ui-preset="frost"] mdui-button::part(container) { border-radius: 999px !important; }
 html[data-ui-preset="frost"] mdui-button[variant="filled"]::part(container) {
@@ -2325,10 +2320,11 @@ html[data-ui-preset="frost"] .pl-lyric-tools {
 }
 html[data-ui-preset="frost"] .pl-lyric-mode,
 html[data-ui-preset="frost"] .cm-plmenu {
-  background: rgba(255, 255, 255, .12) !important;
-  border: 1px solid rgba(255, 255, 255, .16);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  backdrop-filter: blur(14px) saturate(160%);
+  background: var(--frs-glass) !important;
+  border: 0;
+  box-shadow: var(--frs-edge) !important;
+  -webkit-backdrop-filter: var(--frs-lens);
+  backdrop-filter: var(--frs-lens);
 }
 html[data-ui-preset="frost"] .pl-btn.on { color: #8fc0ff !important; }
 html[data-ui-preset="frost"] .cm-ncmbadge { background: var(--cm-primary) !important; color: #fff !important; }
@@ -2345,9 +2341,10 @@ html[data-ui-preset="frost"] .mdui-theme-dark #commentOverlay {
 html[data-ui-preset="frost"] .cmt-composer,
 html[data-ui-preset="frost"].mdui-theme-dark .cmt-composer {
   background: var(--frs-glass) !important;
-  border-top: 1px solid var(--frs-glass-line);
-  -webkit-backdrop-filter: var(--frs-filter);
-  backdrop-filter: var(--frs-filter);
+  border-top: 0;
+  box-shadow: var(--frs-edge) !important;
+  -webkit-backdrop-filter: var(--frs-lens);
+  backdrop-filter: var(--frs-lens);
 }
 html[data-ui-preset="frost"] .cmt-composer input,
 html[data-ui-preset="frost"].mdui-theme-dark .cmt-composer input {
@@ -2377,39 +2374,71 @@ html[data-ui-preset="frost"] .cm-qrbox {
 }
 
 /* ==========================================================================
-   简约玻璃 · 续：底栏做成「悬浮折射胶囊」（Apple Liquid Glass / iOS 26）
+   简约玻璃 · 续：浮层做成「折射玻璃」（Apple Liquid Glass / iOS 26）
    --------------------------------------------------------------------------
    上一版做成了「通栏 + blur(24px) 磨砂」——那是 iOS 15~18 的老标签栏，不是 Liquid Glass。
    真实做法（见 web/src/glass.js 的注释与来源署名）：
      · 悬浮胶囊：不贴屏幕边、四角大圆角（取高度的一半）；
      · 边缘折射：按元素真实尺寸生成透镜位移图，由 backdrop-filter: url(#…) 掰弯背后画面，
        **中心保持清晰**（blur 仅 0.5px），只有靠近边缘一圈发生形变；
-     · 高光边：CSS inset 阴影（全浏览器可见，也是 Safari/旧内核下唯一还在的"玻璃感"）；
+     · 高光边：CSS inset 阴影，用的是上游 hyalite edgeShadow() 的原式（--frs-edge），
+       全浏览器可见，也是 Safari/旧内核下唯一还在的「玻璃感」；
      · 内容必须能从栏下穿过，否则没有可折射的东西（见下面 #out 的改动）。
-   兼容：不支持 backdrop-filter: url() 时，--frs-lens 回退为 blur(8px)，胶囊与高光边仍在。
+    覆盖面：底栏胶囊、迷你播放条、顶栏、对话框与菜单、评论输入条、播放页工具条——
+     即所有「浮层」，内容卡片保持实体磨砂白（Apple 的 Liquid Glass 也只用在 chrome 上）。
+   兼容：不支持 backdrop-filter: url() 时，--frs-lens 回退为上游 README 的 blur(6px)，
+     胶囊与高光边仍在。
    ========================================================================== */
 html[data-ui-preset="frost"] {
-  /* ★ 玻璃的两个"手感"旋钮，想调只改这里 ★
+  /* ★ 玻璃的两个「手感」旋钮，想调只改这里 ★
      --frs-lens-blur 只写数字（px），由 glass.js 读走拼成 blur(Npx)；
-     它同时决定"毛"的程度：越大越磨砂、越小越透亮（折射在边缘仍然保留）。 */
-  /* 以下两个值可由用户在「设置 → 外观 → 玻璃效果」里调（customize.js 写到
+     它同时决定「毛」的程度：越大越磨砂、越小越透亮（折射在边缘仍然保留）。
+
+     默认值全部取自玻璃实现所依据的上游仓库（其文档/源码里写明的默认值，不是自拟的）：
+       · 折射透镜中心霜化 = 1px      —— hyalite v0.5.0 `DEFAULTS.blur`
+       · 玻璃本体（着色层）不透明度 = .13 —— hyalite README「colour the glass *above*
+         the refraction」的示例 `background: rgba(0, 0, 0, .13)`
+       · 无折射内核的兜底 = blur(6px) —— hyalite README `var(--hyalite, blur(6px))`
+     hyalite 其余默认值（bevel 37 / thickness 59 / dispersion 1.6 / shade .46 / rim 1.76 /
+     sat .86 / smooth 1）是按它 demo 里那张 ~300px 卡片调的、与尺寸强相关（它自己的
+     rule 3：「几何随元素缩放，光学量不缩放」）；本引擎是单趟简化实现，只取其中与尺寸
+     无关、且能用在任意浮层上的两个：edge .32 + light −140° 的边缘高光（见 --frs-edge）。
+     下面两个值可由用户在「设置 → 外观 → 玻璃效果」里调（customize.js 写到
      <html> 的内联 style 上，优先级高于这里的默认值）：
        --frs-lens-blur  折射透镜的模糊（数字，无单位；glass.js 读走拼成 blur(Npx)）
        --frs-alpha      玻璃本体的不透明度（0~1） */
-  --frs-lens-blur: 4;
-  --frs-alpha: .28;   /* 对标 Apple 液态玻璃：低浓度 + 高模糊（原来 .58 太实，像磨砂塑料） */
-  --frs-lens: blur(calc(var(--frs-lens-blur) * 3px)) saturate(150%);   /* 旧内核兜底；支持折射时由 glass.js 覆写为 url(#…) */
-  --frs-capsule: rgba(255, 255, 255, var(--frs-alpha));   /* 玻璃本体 */
-  --frs-capsule-line: rgba(255, 255, 255, .62);
+  --frs-alpha: .13;
+  --frs-film: 255, 255, 255;                  /* 亮色玻璃的着色色（暗色块换成近黑） */
+  --frs-lens-blur: 1;
+  /* 6 = 上游 README 的无折射兜底 6px ÷ 上游透镜霜化 1px：保留滑杆联动，
+     于是「默认设置」在支持与不支持折射的内核下都正好落回上游推荐值。 */
+  --frs-lens: blur(calc(var(--frs-lens-blur) * 6px));
+  /* 玻璃边缘高光：上游 hyalite `edgeShadow()`（edge .32 / light −140°）的原式。
+     它写在元素自身的 inset 阴影上，因此在拿不到折射的内核里也照常出现——
+     这是「玻璃感」覆盖面里最不该缺的一层。 */
+  --frs-edge:
+    inset 0 0 0 .5px rgba(255, 255, 255, .2304),
+    inset -.64px .77px 0 .5px rgba(255, 255, 255, .176),
+    inset 0 0 0 1.5px rgba(0, 0, 0, .0512),
+    inset 0 0 6px 2px rgba(255, 255, 255, .0224);
+  /* 弹层压在半透明遮罩（mdui 的 scrim）上。若弹层也用 .13 的薄膜，在
+     「浅色主题 + 深色页面」（播放页 / 深色背景图）下会变成深色面板配深色文字——
+     .13 白薄膜压在 32% 黑遮罩上，合成后只有 ~40/255 的亮度，正文对比度约 1.2:1。
+     所以弹层取「玻璃浓度」与「内容卡磨砂白」两档中更实的一档（max()）：
+     颜色仍由 --frs-film 决定，这不是另加一个浓度，而是可读性下限。 */
+  --frs-panel-a: .82;
+  --frs-panel: rgba(var(--frs-film), max(var(--frs-alpha), var(--frs-panel-a)));
+  --frs-capsule: var(--frs-glass);   /* 玻璃本体：与浮层同一层着色 */
   --frs-capsule-float: 0 12px 32px rgba(16, 24, 40, .22);
 }
 html[data-ui-preset="frost"].mdui-theme-dark {
-  /* 暗色默认略实一点。注意要覆盖 --frs-alpha 本身而不是写 var(..., .52)——
-     fallback 只在变量"未定义"时生效，基础块已定义为 .58，写了也永远不触发。
-     用户在 <html> 内联设置的值优先级高于这里，会同时作用于亮/暗两种模式。 */
-  --frs-alpha: .24;
-  --frs-capsule: rgba(30, 32, 40, var(--frs-alpha));
-  --frs-capsule-line: rgba(255, 255, 255, .28);
+  /* 暗色只换「着色成什么颜色」，不换浓度：上游的 .13 是玻璃自身的量，
+     改浓度就不再是对标值。用户在 <html> 内联设置的值优先级高于这里，
+     会同时作用于亮/暗两种模式。 */
+  --frs-film: 22, 23, 28;
+  --frs-panel-a: .78;
+  --frs-panel: rgba(var(--frs-film), max(var(--frs-alpha), var(--frs-panel-a)));
+  --frs-capsule: rgba(var(--frs-film), var(--frs-alpha));
   --frs-capsule-float: 0 12px 34px rgba(0, 0, 0, .55);
 }
 
@@ -2422,20 +2451,9 @@ html[data-ui-preset="frost"].mdui-theme-dark {
     border: 0 !important;
     border-radius: 32px;
     background: var(--frs-capsule) !important;
-    box-shadow:
-      inset 0 0 0 .5px var(--frs-capsule-line),
-      inset -0.71px 0.71px 0 .5px rgba(255, 255, 255, .5),
-      inset 0 0 0 1.6px rgba(0, 0, 0, .14),
-      var(--frs-capsule-float) !important;
+    box-shadow: var(--frs-edge), var(--frs-capsule-float) !important;
     -webkit-backdrop-filter: var(--frs-lens);
     backdrop-filter: var(--frs-lens);
-  }
-  html[data-ui-preset="frost"].mdui-theme-dark #bottomNav {
-    box-shadow:
-      inset 0 0 0 .5px var(--frs-capsule-line),
-      inset -0.71px 0.71px 0 .5px rgba(255, 255, 255, .22),
-      inset 0 0 0 1.6px rgba(0, 0, 0, .3),
-      var(--frs-capsule-float) !important;
   }
   /* 迷你播放条：同款胶囊，浮在底栏之上（Apple Music 的形态） */
   html[data-ui-preset="frost"] #mini {
@@ -2446,18 +2464,12 @@ html[data-ui-preset="frost"].mdui-theme-dark {
     background: var(--frs-capsule) !important;
     border: 0;
     border-radius: 18px;
-    box-shadow:
-      inset 0 0 0 .5px var(--frs-capsule-line),
-      inset 0 0 0 1.4px rgba(0, 0, 0, .12),
-      0 10px 26px rgba(16, 24, 40, .22) !important;
+    box-shadow: var(--frs-edge), 0 10px 26px rgba(16, 24, 40, .22) !important;
     -webkit-backdrop-filter: var(--frs-lens);
     backdrop-filter: var(--frs-lens);
   }
   html[data-ui-preset="frost"].mdui-theme-dark .cm-mini-inner {
-    box-shadow:
-      inset 0 0 0 .5px var(--frs-capsule-line),
-      inset 0 0 0 1.4px rgba(0, 0, 0, .28),
-      0 10px 26px rgba(0, 0, 0, .5) !important;
+    box-shadow: var(--frs-edge), 0 10px 26px rgba(0, 0, 0, .5) !important;
   }
   html[data-ui-preset="frost"] .cm-mini-prog { left: 24px; right: 24px; border-radius: 2px; }
   /* 关键：滚动区延伸到屏幕四边（默认是停在顶栏之下、底栏之上），
@@ -2496,13 +2508,11 @@ html[data-ui-preset="frost"] #navDrop {
   pointer-events: none;
   z-index: 0;
   /* 玻璃本体：比整条导航略亮，才看得出"一颗液滴" */
-  background: rgba(255, 255, 255, .5);
+  background: rgba(255, 255, 255, .18);           /* 参考实现 selectedFillOpacity = .18 */
   box-shadow:
-    inset 0 0 0 .5px rgba(255, 255, 255, .9),      /* 高光描边（液滴的轮廓） */
-    inset -1px 1px 0 .5px rgba(255, 255, 255, .55), /* 朝光源一侧更亮 */
-    inset 0 2px 5px rgba(255, 255, 255, .5),        /* 顶部高光 */
-    inset 0 -2px 4px rgba(255, 255, 255, .25),      /* 底部反光 */
-    0 2px 8px rgba(16, 24, 40, .16);                /* 轻微浮起 */
+    inset 0 0 0 1px rgba(255, 255, 255, .48),     /* 参考实现 selectedBorderOpacity = .48 */
+    var(--frs-edge),
+    0 2px 8px rgba(16, 24, 40, .16);
   -webkit-backdrop-filter: blur(2px) saturate(170%);
   backdrop-filter: blur(2px) saturate(170%);
   transform: translateX(var(--nd-x, 0px)) scaleX(var(--nd-sx, 1));
@@ -2521,12 +2531,10 @@ html[data-ui-preset="frost"] #navDrop {
     height .3s ease;
 }
 html[data-ui-preset="frost"].mdui-theme-dark #navDrop {
-  background: rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .18);
   box-shadow:
-    inset 0 0 0 .5px rgba(255, 255, 255, .34),
-    inset -1px 1px 0 .5px rgba(255, 255, 255, .2),
-    inset 0 2px 5px rgba(255, 255, 255, .18),
-    inset 0 -2px 4px rgba(255, 255, 255, .08),
+    inset 0 0 0 1px rgba(255, 255, 255, .48),
+    var(--frs-edge),
     0 2px 10px rgba(0, 0, 0, .4);
 }
 /* 首帧/尺寸变化：不要动画，直接落位（否则会看到水滴从旧位置飞过来） */
@@ -2534,12 +2542,10 @@ html[data-ui-preset="frost"] #navDrop.no-anim { transition: none; }
 /* 移动中：只加一点亮度，拉伸由 --nd-sx 驱动（与位移动画共用一条过渡，
    靠 transitionend 收尾，避免过渡被打断时水滴卡在"被压扁"的状态） */
 html[data-ui-preset="frost"] #navDrop.moving {
-  background: rgba(255, 255, 255, .6);
+  background: rgba(255, 255, 255, .26);
   box-shadow:
-    inset 0 0 0 .5px rgba(255, 255, 255, .95),
-    inset -1px 1px 0 .5px rgba(255, 255, 255, .6),
-    inset 0 2px 6px rgba(255, 255, 255, .55),
-    inset 0 -2px 4px rgba(255, 255, 255, .3),
+    inset 0 0 0 1px rgba(255, 255, 255, .6),
+    var(--frs-edge),
     0 3px 10px rgba(16, 24, 40, .2);
 }
 }   /* ← 结束 @media (max-width:899px)：水滴相关规则到此为止 */
@@ -2574,15 +2580,11 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
   html[data-ui-preset="frost"] #bottomNav {
     background: var(--frs-capsule) !important;
     border-right: 0 !important;
-    box-shadow:
-      inset -0.5px 0 0 var(--frs-capsule-line),
-      inset 0 0 0 .5px var(--frs-capsule-line) !important;
+    box-shadow: var(--frs-edge) !important;
     -webkit-backdrop-filter: var(--frs-lens);
     backdrop-filter: var(--frs-lens);
   }
 }
-/* 顶栏同样让内容从其下穿过 */
-html[data-ui-preset="frost"] #topbar { border-bottom-color: var(--frs-tabbar-line); }
 
 /* ---------- 发现页：TAB 栏 ---------- */
 .cm-sqtabs {

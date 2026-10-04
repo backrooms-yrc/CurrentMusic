@@ -216,7 +216,9 @@ export async function render(el) {
   // ---- 玻璃效果：模糊 + 浓度，拖动即时生效（关闭时才重建折射透镜）----
   el.querySelector('#glassFx').onclick = () => {
     let blur = glassBlur(), tint = glassTint();
-    const tintDef = 0.58;
+    // 浓度默认值 = app.css 里 --frs-alpha 的皮肤值（上游 hyalite 的 .13），
+    // 仅用于滑杆初值：用户没自定义时显示为「默认」，拖动才写入。
+    const tintDef = 0.13;
     const diag = mdui.dialog({
       headline: '玻璃效果',
       body: `<div class="cm-more">
@@ -229,8 +231,8 @@ export async function render(el) {
           <div class="cm-more-t">玻璃浓度</div>
           <span id="fxTintV" style="font-size:calc(12px * var(--cm-fs, 1));opacity:.7">${tint == null ? '默认' : Math.round(tint * 100) + '%'}</span>
         </div>
-        <input type="range" id="fxTint" min="${Math.round(glassRange.TINT_MIN * 100)}" max="${Math.round(glassRange.TINT_MAX * 100)}" step="5" value="${Math.round((tint == null ? tintDef : tint) * 100)}" style="width:100%">
-        <div class="cm-more-s" style="margin-top:10px">作用于「简约玻璃」的底栏胶囊、迷你播放条与桌面侧栏。浓度调低更通透、调高更实；模糊影响折射的柔和度。</div>
+        <input type="range" id="fxTint" min="${Math.round(glassRange.TINT_MIN * 100)}" max="${Math.round(glassRange.TINT_MAX * 100)}" step="1" value="${Math.round((tint == null ? tintDef : tint) * 100)}" style="width:100%">
+        <div class="cm-more-s" style="margin-top:10px">作用于「简约玻璃」的全部玻璃浮层：顶栏、底栏胶囊、迷你播放条、对话框与菜单、评论输入条、播放页工具条。默认值取自上游 hyalite（透镜霜化 1px、玻璃着色 13%）：低浓度 + 低模糊 = 清澈、靠边缘折射成形。浓度调低更通透、调高更实；模糊只影响折射的柔和度。</div>
       </div>`,
       actions: [
         { text: '恢复默认', onClick: () => { resetGlass(); toast('玻璃效果已恢复默认'); diag.open = false; render(el); } },

@@ -1,9 +1,12 @@
 // 液体玻璃折射（Liquid Glass）：让「玻璃」真的把背后的画面掰弯，而不只是糊一层。
 //
 // 技法来源（GitHub，均已在注释中署名，本文件是按文档自行实现）：
-//   · VII-Cae/hyalite--liquid-glass —— 把元素当作**带斜边的玻璃**，按元素的真实尺寸
+//   · VII-Cae/hyalite--liquid-glass（v0.5.0）—— 把元素当作**带斜边的玻璃**，按元素的真实尺寸
 //     与圆角算出「透镜位移图」（R = x 位移、G = y 位移），交给 SVG feDisplacementMap，
 //     由 backdrop-filter: url(#…) 去掰弯背后的画面。
+//     它的默认值就是本项目的对标值：`DEFAULTS.blur = 1`（透镜中心霜化）、
+//     边缘高光 `edgeShadow()`（edge .32 / light −140°，落在 app.css 的 --frs-edge）、
+//     以及 README 的 CSS 兜底 `var(--hyalite, blur(6px))`。
 //     其原话："中心保持清晰；边缘把世界向内拉；沿边缘接住一条亮线；直线会弯，而不是糊。"
 //   · rdev/liquid-glass-react / dashersw/liquid-glass-js —— 参数化（位移强度、胶囊形状）。
 //
@@ -57,7 +60,11 @@ export function attachLens(el, id, o) {
   if (!el) return null;
   const rect = el.getBoundingClientRect();
   if (rect.width < 8 || rect.height < 8) return null;      // 未布局（隐藏）→ 拒绝生成废图
-  const radius = Math.min(o.radius != null ? o.radius : rect.height / 2, rect.height / 2);
+  // 圆角不得越过"短边的一半"：超过之后圆角矩形 SDF 的 W/2−R 变负、梯度在轴上翻转，
+  // 位移图会退化成一条十字缝（上游 hyalite rule 2 踩过同一个坑，它把方向场的半径
+  // 夹在短边的一半）。宽屏左侧导航栏这种又高又窄的元素就落在这一档上。
+  const maxR = Math.min(rect.width, rect.height) / 2 - 0.5;
+  const radius = Math.max(0, Math.min(o.radius != null ? o.radius : rect.height / 2, maxR));
   const bevel = Math.max(0, o.bevel);
   const maxd = Math.max(0, o.maxd);
   const blur = o.blur != null ? o.blur : 0.5;
@@ -118,7 +125,7 @@ export function attachLens(el, id, o) {
     `<feDisplacementMap in="SourceGraphic" in2="map" scale="${scale.toFixed(2)}" ` +
       `xChannelSelector="R" yChannelSelector="G"/>`;
 
-  el.style.setProperty('--frs-lens', `url(#${id}) blur(${blur}px) saturate(155%)`);
+  el.style.setProperty('--frs-lens', `url(#${id}) blur(${blur}px)`);
   built[id] = { el, sig: `${w}x${h}:${bevel}:${maxd}:${blur}`, filterNode: node };
   return { w, h, mw, mh, radius, bevel, maxd, blur, mapPx: mw * mh, filterId: id };
 }
@@ -137,10 +144,18 @@ function ensureDefs() {
   return defs;
 }
 
-// 需要折射的玻璃元素：底栏胶囊 + 迷你播放条（其余卡片不做模糊，见 app.css 注释）
+// 需要折射的玻璃元素：所有**浮层**（栏 / 胶囊 / 弹层 / 输入条），内容卡片不做
+// （Apple 的 Liquid Glass 也只用在 chrome 上，卡片是实体分组；见 app.css 注释）。
+// 几何量（bevel / maxd）沿用本引擎原有一组保守值：上游 README 里 0.3.1 版
+// 展示用的就是「28px 斜边 / 19px 玻璃」，并说明 `DEFAULTS` 一直是刻意保守的；
+// 我们这套 22/18 与 16/12 正落在同一档。上游 v0.5.0 的 DEFAULTS（bevel 37 /
+// thickness 59 / dispersion 1.6 —— 按它 demo 里 ~300px 的卡片调）若原样套到
+// 64px 高的胶囊上，斜边会被它自己的规则夹到 31px、位移达 60px 以上，
+// 那是给「厚玻璃卡片」用的量，不是给标签栏用的。
 // 模糊值刻意**不写死在这里**，而是从元素的 CSS 变量 --frs-lens-blur 读，
 // 这样"玻璃有多毛"属于样式调参，改一行 CSS 即可，不必动 JS。
-const DEFAULT_BLUR = 4;
+// 默认 1px = 上游 hyalite `DEFAULTS.blur`。
+const DEFAULT_BLUR = 1;
 function lensBlurOf(el) {
   const raw = getComputedStyle(el).getPropertyValue('--frs-lens-blur').trim();
   const n = parseFloat(raw);
@@ -148,20 +163,45 @@ function lensBlurOf(el) {
 }
 
 const TARGETS = [
-  { sel: '#bottomNav',     id: 'cmLensNav',  radius: null, bevel: 22, maxd: 18 },
-  { sel: '.cm-mini-inner', id: 'cmLensMini', radius: 16,   bevel: 18, maxd: 14 },
+  { sel: '#bottomNav',        id: 'cmLensNav',    radius: null, bevel: 22, maxd: 18 },
+  { sel: '.cm-mini-inner',    id: 'cmLensMini',   radius: 16,   bevel: 18, maxd: 14 },
+  { sel: '#topbar',           id: 'cmLensTop',    radius: 0,    bevel: 18, maxd: 12 },
+  { sel: '.cmt-composer',     id: 'cmLensCmt',    radius: 0,    bevel: 16, maxd: 10 },
+  { sel: '.pl-lyric-mode',    id: 'cmLensLyric',  radius: 999,  bevel: 12, maxd: 10 },
+  { sel: '.cm-plmenu',        id: 'cmLensPlMenu', radius: 12,   bevel: 14, maxd: 10 },
+  // mdui 的弹层：可见的「面板」在 shadow DOM 里（外面那层只是遮罩，尺寸不对），
+  // 必须钻进 shadowRoot 找 [part=panel]。面板读的是继承来的 --frs-lens，
+  // 直接写在面板元素上同样生效（::part 规则里的 var() 会取到它）。
+  { sel: 'mdui-dialog',       id: 'cmLensDialog', radius: 18,   bevel: 18, maxd: 14, panel: true },
+  { sel: 'mdui-menu',         id: 'cmLensMenu',   radius: 14,   bevel: 14, maxd: 12, panel: true },
 ];
+const MAX_PER_SEL = 4;      // 同选择器最多给几个实例挂滤镜（弹层可能同时开多个）
+
+/** 解析一个 target 当前实际要挂滤镜的元素（可能 0~4 个，每个一个滤镜 id）。 */
+function targetEls(t) {
+  const hosts = document.querySelectorAll(t.sel);
+  const out = [];
+  for (let i = 0; i < hosts.length && out.length < MAX_PER_SEL; i++) {
+    const host = hosts[i];
+    const el = t.panel
+      ? (host.shadowRoot && host.shadowRoot.querySelector('[part="panel"]'))
+      : host;
+    if (el) out.push({ el, id: out.length ? t.id + out.length : t.id });
+  }
+  return out;
+}
 
 /** 按当前皮肤与尺寸重建所有折射图（非 frost 皮肤时直接跳过）。 */
 export function refreshGlass() {
   if (!glassRefractionSupported()) return;
   if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') return;
   TARGETS.forEach(t => {
-    const el = document.querySelector(t.sel);
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const radius = t.radius != null ? t.radius : r.height / 2;
-    attachLens(el, t.id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
+    targetEls(t).forEach(({ el, id }) => {
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return;
+      const radius = t.radius != null ? t.radius : r.height / 2;
+      attachLens(el, id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
+    });
   });
   observeTargets();
 }
@@ -174,11 +214,11 @@ function observeTargets() {
   if (typeof ResizeObserver === 'undefined') return;   // 旧内核自动跳过
   if (!ro) ro = new ResizeObserver(scheduleRefresh);
   TARGETS.forEach(t => {
-    const el = document.querySelector(t.sel);
-    if (el && !el.__cmLensObserved) {
+    targetEls(t).forEach(({ el }) => {
+      if (el.__cmLensObserved) return;
       el.__cmLensObserved = true;
       ro.observe(el);
-    }
+    });
   });
 }
 
@@ -197,20 +237,24 @@ const lastSig = {};
 function watchSize() {
   if (!glassRefractionSupported()) return;
   if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') return;
+  const seen = {};
   TARGETS.forEach(t => {
-    const el = document.querySelector(t.sel);
-    if (!el) { delete lastSig[t.id]; return; }
-    const r = el.getBoundingClientRect();
-    if (r.width < 8 || r.height < 8) return;          // 尚未布局
-    const sig = Math.round(r.width) + 'x' + Math.round(r.height);
-    // 除尺寸外还要比对**元素实例**：目标元素若被 innerHTML 重建而尺寸恰好
-    // 相同，lastSig 命中会跳过重建——新节点上没有内联 --frs-lens，折射就丢了。
-    const sameEl = built[t.id] && built[t.id].el === el;
-    if (lastSig[t.id] === sig && sameEl) return;
-    lastSig[t.id] = sig;
-    const radius = t.radius != null ? t.radius : r.height / 2;
-    attachLens(el, t.id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
+    targetEls(t).forEach(({ el, id }) => {
+      seen[id] = 1;
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) return;        // 尚未布局
+      const sig = Math.round(r.width) + 'x' + Math.round(r.height);
+      // 除尺寸外还要比对**元素实例**：目标元素若被 innerHTML 重建而尺寸恰好
+      // 相同，lastSig 命中会跳过重建——新节点上没有内联 --frs-lens，折射就丢了。
+      const sameEl = built[id] && built[id].el === el;
+      if (lastSig[id] === sig && sameEl) return;
+      lastSig[id] = sig;
+      const radius = t.radius != null ? t.radius : r.height / 2;
+      attachLens(el, id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
+    });
   });
+  // 关掉的弹层要把签名清掉，否则下次打开时旧签名命中会导致不重建
+  Object.keys(lastSig).forEach(k => { if (!seen[k]) delete lastSig[k]; });
 }
 
 export function initGlass() {
