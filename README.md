@@ -14,13 +14,16 @@ Apple 的 Liquid Glass 同样只用于 chrome。每块浮层按自己的真实�
 不是糊一层），边缘高光是上游 [hyalite](https://github.com/VII-Cae/hyalite--liquid-glass) `edgeShadow()` 的原式；
 底栏选中项另有一颗会流动、可按住拖动的玻璃「水滴」。
 
-| 浅色 | 深色 | 玻璃效果 |
-|---|---|---|
-| ![简约玻璃·浅色首屏](docs/screenshots/frost-phone-light.png) | ![简约玻璃·深色首屏](docs/screenshots/frost-phone-dark.png) | ![玻璃效果设置](docs/screenshots/frost-glass-dialog.png) |
+<p align="center">
+  <img src="docs/screenshots/frost-phone-light.png" width="30%" alt="简约玻璃·浅色首屏" />
+  <img src="docs/screenshots/frost-phone-dark.png" width="30%" alt="简约玻璃·深色首屏" />
+  <img src="docs/screenshots/frost-glass-dialog.png" width="30%" alt="玻璃效果设置" />
+</p>
+<p align="center">浅色 · 深色 · 玻璃效果（模糊 1px / 浓度 13% —— 上游 hyalite 的默认值）</p>
 
 宽屏（≥900px）时底栏变左侧竖栏，与顶栏、迷你播放条同一套玻璃配方：
 
-![简约玻璃·宽屏](docs/screenshots/frost-desktop.png)
+<p align="center"><img src="docs/screenshots/frost-desktop.png" width="92%" alt="简约玻璃·宽屏" /></p>
 
 > 截图来自 Chromium 131 headless（402×874 @2x 与 1280×860）；真机观感以实机为准。
 
