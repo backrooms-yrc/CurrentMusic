@@ -224,6 +224,9 @@ function boot() {
   applyCustomize();          // 个性化：自定义背景图 + 玻璃效果值（写到 <html> 内联）
   initGlass();               // 液体玻璃折射（仅 frost 皮肤 + 支持的内核）
   initNavDrop();             // 底栏液态玻璃「水滴」指示器（仅 frost 皮肤）
+  // 一次性强制重置（逻辑在 index.html 的行内脚本里，必须早于首帧）：
+  // 只有确实覆盖过用户旧设置时才提示，没自定义过的用户不打扰。
+  if (window.__cmRecReset) toast('界面风格与玻璃效果已按推荐值重置');
   player.restore();          // 恢复上次队列（不自动播放）
   initPlayerUI();
   initMv();

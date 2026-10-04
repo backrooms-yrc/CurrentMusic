@@ -10,7 +10,11 @@
 // 相关 CSS 变量：
 //   --cm-bg-image    背景图（url(...) 字符串），body 上消费
 //   --frs-lens-blur  折射透镜模糊（数字，glass.js 读走拼 blur(Npx)）
-//   --frs-alpha      玻璃本体不透明度 0~1（frost 的胶囊/底栏/迷你条都用它）
+//   --frs-alpha      玻璃本体不透明度 0~1（frost 的全部玻璃浮层都用它）
+//
+// 注：v1.28.16 有一次**一次性强制重置**（见 index.html 行内脚本）：升级后第一次
+// 打开会清掉 cm.glassBlur / cm.glassTint，让所有用户回落到皮肤默认值，也就是
+// 上游 hyalite 的推荐值（透镜霜化 1px、玻璃着色 13%）。之后用户再调即照常保留。
 
 
 // 播放页波形样式（纯指示，不表达进度）：bars（默认）| wave | capsule

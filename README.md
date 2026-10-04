@@ -3,7 +3,7 @@
 > 基于网易云音乐 SVIP 音源、自建账号体系的 Android 音乐应用。界面走 MDUI 2 / Material Design 3，
 > 前端是一份原生 JavaScript 单页应用（无框架），由 Java WebView 壳承载；本仓库同时包含后端服务与运维脚本。
 
-![version](https://img.shields.io/badge/version-1.28.15-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
+![version](https://img.shields.io/badge/version-1.28.16-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
 **目录**：[界面](#界面) · [功能清单](#功能清单) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
 
@@ -191,6 +191,7 @@ cd /opt/currentmusic/web && npm install   # 首次
 
 | 版本 | 内容 |
 |---|---|
+| v1.28.16 | 一次性强制重置：所有人的界面风格→简约玻璃、玻璃效果→上游推荐值（只强制一次，之后可自改） |
 | v1.28.15 | 玻璃默认值改用上游 hyalite 推荐值（霜化 1px / 着色 13% / 兜底 6px）；玻璃覆盖面扩到全部浮层 |
 | v1.28.14 | 液态玻璃底栏过高修复 / 玻璃默认值对标 Apple / 音效开关与切换 / 五段均衡器 |
 | v1.28.13 | 重发投屏慢放修复（CDN 同名缓存事故补救，内容同 1.28.12） |

@@ -7,7 +7,9 @@
 const KEY = 'cm.uiPreset';
 // 默认皮肤 = 简约玻璃（v1.21.14 起按需求变更）。
 // 未做过选择的用户（localStorage 无值）都会得到 frost；
-// 显式选过 Material 3 的用户（存了 'md3'）保持原样不受影响。
+// 注意 v1.28.16 起有一次**一次性强制重置**（见 index.html 行内脚本）：
+// 升级后第一次打开会把所有用户的风格置为 frost、并清掉玻璃自定义值，
+// 之后用户自己再改（例如显式选 Material 3）照常保留、不会再被覆盖。
 export const DEFAULT_PRESET = 'frost';
 
 export const UI_PRESETS = [
