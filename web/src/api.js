@@ -188,20 +188,11 @@ export const api = {
   revokeSession: (id) => call('DELETE', `/auth/sessions/${id}`, { body: {}, auth: true }),
   revokeOtherSessions: () => call('DELETE', '/auth/sessions/others', { body: {}, auth: true }),
 
-  // CurrentStation 通行证（统一登录平台）：授权页 + 我授权的应用 + 管理员应用登记
-  passportMeta: () => call('GET', '/passport/meta'),
+  // CurrentStation 通行证：授权确认页与我授权的应用（应用登记/开发者平台是**独立页面** /developer）
   passportAuthorizeInfo: (params) => call('GET', '/passport/authorize?' + new URLSearchParams(params).toString(), { auth: true }),
   passportApprove: (payload) => call('POST', '/passport/authorize', { body: payload, auth: true }),
   passportGrants: () => call('GET', '/passport/grants', { auth: true }),
   passportRevokeGrant: (id) => call('DELETE', `/passport/grants/${id}`, { body: {}, auth: true }),
-  passportApps: () => call('GET', '/passport/apps', { auth: true }),
-  passportCreateApp: (payload) => call('POST', '/passport/apps', { body: payload, auth: true }),
-  // 更新用 PUT：App 的原生 HTTP 桥只保证了 GET/POST/PUT/DELETE（PATCH 不保证透传）
-  passportUpdateApp: (id, payload) => call('PUT', `/passport/apps/${id}`, { body: payload, auth: true }),
-  passportDisableApp: (id) => call('DELETE', `/passport/apps/${id}`, { body: {}, auth: true }),
-  passportRotateSecret: (id, revokeGrants = false) => call('POST', `/passport/apps/${id}/secret`, { body: { revokeGrants }, auth: true }),
-  passportAppsAll: () => call('GET', '/passport/apps?all=1', { auth: true }),
-  passportEvents: (limit = 50) => call('GET', `/passport/events?limit=${limit}`, { auth: true }),
 
   // 管理员
   adminOverview: () => call('GET', '/admin/overview', { auth: true }),

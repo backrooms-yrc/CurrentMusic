@@ -73,9 +73,8 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="ppId"><span class="material-icons-outlined">badge</span>通行证 ID<i id="ppIdV">${u.passportUid ? esc(u.passportUid) : '—'}</i></div>
       <div class="cm-setting" id="ppGrants"><span class="material-icons-outlined">key</span>授权管理<i id="ppGrantV">—</i></div>
-      <div class="cm-setting" id="ppDev"><span class="material-icons-outlined">developer_mode</span>开发者平台<i>登记应用 · 获取凭据</i></div>
+      <div class="cm-setting" id="ppDev"><span class="material-icons-outlined">developer_mode</span>开发者平台<i>独立页面 · 登记应用</i></div>
       <div class="cm-setting" id="ppDocs"><span class="material-icons-outlined">menu_book</span>接入文档<i>OAuth 2.0 · PKCE</i></div>
-      ${(u.isAdmin || u.isSuper) ? '<div class="cm-setting" id="ppApps"><span class="material-icons-outlined">apps</span>全部应用<i>管理员 · 含他人登记</i></div>' : ''}
     </div>
     <div class="cm-sec-head"><h2>服务器</h2></div>
     <div class="cm-setting-list">
@@ -264,7 +263,13 @@ export async function render(el) {
     if (!w) location.href = url;
   };
   el.querySelector('#ppDocs')?.addEventListener('click', openPassportDocs);
-  el.querySelector('#ppDev')?.addEventListener('click', () => { location.hash = '#/developer'; });
+  // 开发者平台是**独立页面**（不属于 CurrentMusic 客户端）：这里只做外链
+  const openDeveloper = () => {
+    const url = settings.base.replace(/\/cm\/?$/, '') + '/developer';
+    const w = window.open(url, '_blank');
+    if (!w) location.href = url;
+  };
+  el.querySelector('#ppDev')?.addEventListener('click', openDeveloper);
 
   el.querySelector('#ppId')?.addEventListener('click', async () => {
     let sub = (auth.user || {}).passportUid || '';
@@ -284,96 +289,6 @@ export async function render(el) {
       ],
     });
     void d;
-  });
-
-  el.querySelector('#ppApps')?.addEventListener('click', async () => {
-    const diag = mdui.dialog({
-      headline: '通行证应用登记',
-      body: `<div class="cm-more">
-        <div id="ppAList" class="cm-more-s">正在读取…</div>
-        <div class="cm-more-t" style="margin-top:14px">新建应用</div>
-        <mdui-text-field id="ppAName" label="应用名称" variant="outlined" style="width:100%;margin-top:6px"></mdui-text-field>
-        <div class="cm-more-s" style="margin:10px 0 4px">回调地址（每行一个，必须 https；本机调试可用 http://localhost）</div>
-        <textarea id="ppARedirect" rows="2" style="width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid rgba(120,128,145,.35);background:transparent;color:inherit;font:13px/1.6 ui-monospace,monospace"></textarea>
-        <mdui-text-field id="ppAScope" label="可申请的 scope（空格分隔）" variant="outlined" value="openid profile email offline_access" style="width:100%;margin-top:8px"></mdui-text-field>
-        <mdui-text-field id="ppAHome" label="主页（可选）" variant="outlined" style="width:100%;margin-top:8px"></mdui-text-field>
-        <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:calc(13px * var(--cm-fs, 1))">
-          <mdui-checkbox id="ppAPublic"></mdui-checkbox>公开客户端（原生 App / 纯前端：不发密钥，强制 PKCE）
-        </label>
-      </div>`,
-      actions: [
-        {
-          text: '创建',
-          // 同步 onClick（返回 false 保持弹窗）+ 内层异步：mdui 见 Promise 会自行关窗
-          onClick: () => {
-            (async () => {
-            const name = (diag.querySelector('#ppAName').value || '').trim();
-            const redirects = (diag.querySelector('#ppARedirect').value || '').split(/[\n,]/).map(x => x.trim()).filter(Boolean);
-            if (!name) { toast('请填写应用名称'); return false; }
-            if (!redirects.length) { toast('至少填一个回调地址'); return false; }
-            try {
-              const r = await api.passportCreateApp({
-                name, redirects,
-                scopes: (diag.querySelector('#ppAScope').value || 'openid profile').trim(),
-                homepage: (diag.querySelector('#ppAHome').value || '').trim(),
-                public: !!(diag.querySelector('#ppAPublic') || {}).checked,
-              });
-              const copy = (label, v) => `<div style="margin-top:8px">
-                <div style="opacity:.7;font-size:calc(12px * var(--cm-fs, 1))">${label}</div>
-                <div style="display:flex;gap:8px;align-items:center">
-                  <code style="flex:1;word-break:break-all;font-size:12.5px">${esc(v)}</code>
-                  <mdui-button variant="text" data-copy="${esc(v)}">复制</mdui-button>
-                </div></div>`;
-              const ok = mdui.dialog({
-                headline: '应用已登记',
-                body: `<div class="cm-more">
-                  <div class="cm-more-s">把下面两项填到应用的服务端配置里${r.clientSecret ? '。<b>client_secret 只显示这一次</b>，请立刻保存' : '（公开客户端只需要 client_id）'}。</div>
-                  ${copy('client_id', r.clientId)}
-                  ${r.clientSecret ? copy('client_secret', r.clientSecret) : ''}
-                </div>`,
-                actions: [{ text: '完成' }],
-              });
-              ok.querySelectorAll('mdui-button[data-copy]').forEach(b => {
-                b.onclick = () => navigator.clipboard.writeText(b.dataset.copy).then(() => toast('已复制')).catch(() => toast('复制失败'));
-              });
-              diag.open = false;
-              render(el);
-            } catch (e) { toast(e.message || '创建失败'); }
-            })();
-            return false;
-          },
-        },
-        { text: '关闭' },
-      ],
-    });
-    const box = diag.querySelector('#ppAList');
-    try {
-      const r = await api.passportApps();
-      const apps = r.apps || [];
-      box.innerHTML = apps.length ? apps.map(a => `
-        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid rgba(120,128,145,.16)">
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600">${esc(a.name)}${a.firstParty ? ' <span class="cm-tag">官方</span>' : ''}${a.disabled ? ' <span class="cm-tag">已停用</span>' : ''}</div>
-            <div style="opacity:.7;font-size:calc(12px * var(--cm-fs, 1));word-break:break-all">${esc(a.clientId)} · ${a.public ? '公开客户端' : '机密客户端'} · ${a.grants} 个在用授权</div>
-            <div style="opacity:.55;font-size:calc(11.5px * var(--cm-fs, 1));word-break:break-all">${esc((a.redirects || []).join(' , '))}</div>
-          </div>
-          <mdui-button variant="text" data-app="${esc(a.clientId)}" data-on="${a.disabled ? '0' : '1'}" style="flex:none">${a.disabled ? '启用' : '停用'}</mdui-button>
-        </div>`).join('') : '还没有登记任何应用。';
-      box.querySelectorAll('mdui-button[data-app]').forEach(b => {
-        b.onclick = async () => {
-          const off = b.dataset.on === '1';
-          try {
-            if (off) await api.passportDisableApp(b.dataset.app);
-            else await api.passportUpdateApp(b.dataset.app, { disabled: false });
-            toast(off ? '已停用，该应用全部授权已撤销' : '已启用');
-            diag.open = false;
-            el.querySelector('#ppApps').click();
-          } catch (e) { toast(e.message || '操作失败'); }
-        };
-      });
-    } catch (e) {
-      box.textContent = '读取失败：' + (e.message || '未知错误');
-    }
   });
 
   el.querySelector('#ppGrants')?.addEventListener('click', async () => {

@@ -141,7 +141,11 @@ curl https://music.20110208.xyz/cm/passport/userinfo -H "Authorization: Bearer c
 
 ## 8. CurrentDeveloper 开发者平台（自助接入）
 
-入口：`https://music.20110208.xyz/app/#/developer`，或 App 内「设置 → CurrentStation 通行证 → 开发者平台」。
+入口：**`https://music.20110208.xyz/developer`**（也支持 `/cm/developer`）。
+
+> **独立页面**：`GET /developer` 是自包含单文件页面（`backend/developer.html`），自带登录/注册，会话存 `csdev.token`，
+> **不读写 CurrentMusic 客户端的 `cm.token`**。所以它属于「通行证」而不是音乐客户端——CurrentMusic 里只留一个外链入口。
+> 将来把通行证迁到独立域名（如 `developer.20110208.xyz`）时，只需加 DNS + 复用这份 nginx 直通配置，页面本身不用改。
 
 | 能力 | 说明 |
 |---|---|
@@ -150,6 +154,23 @@ curl https://music.20110208.xyz/cm/passport/userinfo -H "Authorization: Bearer c
 | 获取令牌 | 平台内一键试取**应用令牌**（`client_credentials`），并给出可粘贴的接入代码（授权码 + PKCE 三段） |
 | 轮换密钥 | 旧密钥立即失效；可勾选「同时撤销该应用已发出的授权」 |
 | 配额与权限 | 每账号最多 **5 个**应用；只能管理自己登记的应用（管理员可管理全部） |
+
+### 部署（nginx 直通）
+
+平台页由后端直接渲染，只要把 `/developer` 直通到后端即可（已在 `music.20110208.xyz` 上启用）：
+
+```nginx
+location = /developer {
+  proxy_pass http://127.0.0.1:3010/developer;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Proto $scheme;
+  add_header Cache-Control "no-cache";
+}
+location ^~ /developer/ { proxy_pass http://127.0.0.1:3010/developer/; }
+```
+
+迁到独立域名（如 `developer.20110208.xyz` / `passport.20110208.xyz`）时：加一条 DNS 解析指向本机 →
+复用上面这段 location（`proxy_pass` 不变）→ 页面里的 `{{BASE}}` 会按请求域名自动替换，前后端都不用改代码。
 
 ## 9. 自测
 
@@ -163,5 +184,6 @@ CM_DB=/tmp/pp.db python3 tools/passport-smoke.py http://127.0.0.1:3099
 
 | 版本 | 内容 |
 |---|---|
+| 1.2（v1.28.19） | 开发者平台独立于 CurrentMusic 客户端：单文件页面 `GET /developer` + 独立会话 + nginx 直通；客户端移除内置页，仅保留外链 |
 | 1.1（v1.28.18） | 新增 CurrentDeveloper 开发者平台：自助登记（每账号 5 个）、主页/回调配置、凭据与轮换、一键试取应用令牌、停用启用 |
 | 1.0（v1.28.17） | 首个版本：授权码 + PKCE、刷新轮换、userinfo、introspect、revoke、应用登记、授权管理、审计、单点登出 |
