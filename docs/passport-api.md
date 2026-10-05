@@ -80,10 +80,11 @@ curl https://music.20110208.xyz/cm/passport/userinfo -H "Authorization: Bearer c
 |---|---|---|---|
 | GET | `/passport/meta` | 公开 | 端点表、scope 目录、令牌有效期、已接入产品 |
 | GET | `/passport/docs` | 公开 | 在线文档页（自包含 HTML） |
-| POST | `/passport/apps` | 管理员 | 登记应用（返回 clientId/clientSecret，密钥仅一次） |
-| GET | `/passport/apps` | 管理员 | 应用列表（含在用授权数） |
-| PUT/PATCH | `/passport/apps/{client_id}` | 管理员 | 改名称/回调/scope/停用 |
-| DELETE | `/passport/apps/{client_id}` | 管理员 | 停用并撤销该应用全部授权 |
+| POST | `/passport/apps` | 登录用户 | 自助登记应用（返回 clientId/clientSecret，密钥仅一次）；每账号上限 5 个 |
+| GET | `/passport/apps` | 登录用户 | 我登记的应用（含在用授权数与配额）；管理员加 `?all=1` 看全部 |
+| PUT | `/passport/apps/{client_id}` | 所有者 | 改名称/主页/回调/scope/公开↔机密/停用 |
+| POST | `/passport/apps/{client_id}/secret` | 所有者 | 轮换 client_secret（仅返回一次）；`revokeGrants` 可同时撤销该应用已发出的授权 |
+| DELETE | `/passport/apps/{client_id}` | 所有者 | 停用并撤销该应用全部授权 |
 | GET | `/passport/authorize` | 用户会话 | 同意页数据（应用名、权限、当前用户） |
 | POST | `/passport/authorize` | 用户会话 | 批准/拒绝 → 返回回调地址（带 code 或 error） |
 | POST | `/passport/token` | 客户端 | `authorization_code` / `refresh_token` / `client_credentials` |
@@ -138,7 +139,19 @@ curl https://music.20110208.xyz/cm/passport/userinfo -H "Authorization: Bearer c
 5. **用户可随时收回**：App 内「设置 → 通行证授权管理」列出已授权应用并可解除。
 6. **审计与限流**：`app.create` / `authorize.approve` / `token.issue` / `token.refresh` / `token.revoke` / 密钥错误等全部留痕（`/passport/events`）。
 
-## 8. 自测
+## 8. CurrentDeveloper 开发者平台（自助接入）
+
+入口：`https://music.20110208.xyz/app/#/developer`，或 App 内「设置 → CurrentStation 通行证 → 开发者平台」。
+
+| 能力 | 说明 |
+|---|---|
+| 新建应用 | 名称 / **应用主页** / **回调地址**（每行一个，精确匹配）/ 需要的 scope / 公开或机密客户端 |
+| 获取凭据 | `client_id` 随时代复制；`client_secret` **只在创建或轮换时显示一次**（服务端只存哈希） |
+| 获取令牌 | 平台内一键试取**应用令牌**（`client_credentials`），并给出可粘贴的接入代码（授权码 + PKCE 三段） |
+| 轮换密钥 | 旧密钥立即失效；可勾选「同时撤销该应用已发出的授权」 |
+| 配额与权限 | 每账号最多 **5 个**应用；只能管理自己登记的应用（管理员可管理全部） |
+
+## 9. 自测
 
 ```bash
 # 临时库起一个实例（不碰线上数据），跑 39 项端到端断言
@@ -150,4 +163,5 @@ CM_DB=/tmp/pp.db python3 tools/passport-smoke.py http://127.0.0.1:3099
 
 | 版本 | 内容 |
 |---|---|
+| 1.1（v1.28.18） | 新增 CurrentDeveloper 开发者平台：自助登记（每账号 5 个）、主页/回调配置、凭据与轮换、一键试取应用令牌、停用启用 |
 | 1.0（v1.28.17） | 首个版本：授权码 + PKCE、刷新轮换、userinfo、introspect、revoke、应用登记、授权管理、审计、单点登出 |

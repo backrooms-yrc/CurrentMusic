@@ -73,8 +73,9 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="ppId"><span class="material-icons-outlined">badge</span>通行证 ID<i id="ppIdV">${u.passportUid ? esc(u.passportUid) : '—'}</i></div>
       <div class="cm-setting" id="ppGrants"><span class="material-icons-outlined">key</span>授权管理<i id="ppGrantV">—</i></div>
+      <div class="cm-setting" id="ppDev"><span class="material-icons-outlined">developer_mode</span>开发者平台<i>登记应用 · 获取凭据</i></div>
       <div class="cm-setting" id="ppDocs"><span class="material-icons-outlined">menu_book</span>接入文档<i>OAuth 2.0 · PKCE</i></div>
-      ${(u.isAdmin || u.isSuper) ? '<div class="cm-setting" id="ppApps"><span class="material-icons-outlined">apps</span>应用登记<i>管理员</i></div>' : ''}
+      ${(u.isAdmin || u.isSuper) ? '<div class="cm-setting" id="ppApps"><span class="material-icons-outlined">apps</span>全部应用<i>管理员 · 含他人登记</i></div>' : ''}
     </div>
     <div class="cm-sec-head"><h2>服务器</h2></div>
     <div class="cm-setting-list">
@@ -263,6 +264,7 @@ export async function render(el) {
     if (!w) location.href = url;
   };
   el.querySelector('#ppDocs')?.addEventListener('click', openPassportDocs);
+  el.querySelector('#ppDev')?.addEventListener('click', () => { location.hash = '#/developer'; });
 
   el.querySelector('#ppId')?.addEventListener('click', async () => {
     let sub = (auth.user || {}).passportUid || '';
@@ -302,7 +304,9 @@ export async function render(el) {
       actions: [
         {
           text: '创建',
-          onClick: async () => {
+          // 同步 onClick（返回 false 保持弹窗）+ 内层异步：mdui 见 Promise 会自行关窗
+          onClick: () => {
+            (async () => {
             const name = (diag.querySelector('#ppAName').value || '').trim();
             const redirects = (diag.querySelector('#ppARedirect').value || '').split(/[\n,]/).map(x => x.trim()).filter(Boolean);
             if (!name) { toast('请填写应用名称'); return false; }
@@ -335,6 +339,7 @@ export async function render(el) {
               diag.open = false;
               render(el);
             } catch (e) { toast(e.message || '创建失败'); }
+            })();
             return false;
           },
         },

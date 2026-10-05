@@ -53,6 +53,7 @@ import * as stylePage from './pages/style.js';
 import * as lyricMarksPage from './pages/lyricmarks.js';
 import * as assetsPage from './pages/assets.js';
 import * as passportPage from './pages/passport.js';
+import * as developerPage from './pages/developer.js';
 import * as albumPage from './pages/album.js';
 import * as mvPage from './pages/mv.js';
 import * as videoPage from './pages/video.js';
@@ -109,6 +110,7 @@ const ROUTES = [
   { re: /^#\/room\/(\d+)$/, page: roomPage, title: '听歌房', fixed: m => [m[1]] },
   { re: /^#\/pl\/(.+)$/, page: playlist, title: '歌单', fixed: m => ['pl', m[1]] },
   { re: /^#\/passport\/authorize$/, page: passportPage, title: '通行证授权' },
+  { re: /^#\/developer$/, page: developerPage, title: '开发者平台' },
   { re: /^#\/daily$/, page: playlist, title: '每日推荐', fixed: ['daily'] },
   { re: /^#\/ncmpl\/(\d+)$/, page: playlist, title: '排行榜', fixed: m => ['ncmpl', m[1]] },
 ];

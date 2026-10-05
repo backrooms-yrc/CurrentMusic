@@ -199,6 +199,8 @@ export const api = {
   // 更新用 PUT：App 的原生 HTTP 桥只保证了 GET/POST/PUT/DELETE（PATCH 不保证透传）
   passportUpdateApp: (id, payload) => call('PUT', `/passport/apps/${id}`, { body: payload, auth: true }),
   passportDisableApp: (id) => call('DELETE', `/passport/apps/${id}`, { body: {}, auth: true }),
+  passportRotateSecret: (id, revokeGrants = false) => call('POST', `/passport/apps/${id}/secret`, { body: { revokeGrants }, auth: true }),
+  passportAppsAll: () => call('GET', '/passport/apps?all=1', { auth: true }),
   passportEvents: (limit = 50) => call('GET', `/passport/events?limit=${limit}`, { auth: true }),
 
   // 管理员
