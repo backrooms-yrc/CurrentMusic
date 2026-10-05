@@ -3,9 +3,9 @@
 > 基于网易云音乐 SVIP 音源、自建账号体系的 Android 音乐应用。界面走 MDUI 2 / Material Design 3，
 > 前端是一份原生 JavaScript 单页应用（无框架），由 Java WebView 壳承载；本仓库同时包含后端服务与运维脚本。
 
-![version](https://img.shields.io/badge/version-1.28.16-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
+![version](https://img.shields.io/badge/version-1.28.17-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
-**目录**：[界面](#界面) · [功能清单](#功能清单) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
+**目录**：[界面](#界面) · [功能清单](#功能清单) · [通行证](#currentstation-通行证) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
 
 ## 界面
 
@@ -65,6 +65,7 @@ Apple 的 Liquid Glass 同样只用于 chrome。每块浮层按自己的真实�
 | 播放 | 队列/上一首下一首/列表循环/单曲循环/随机/拖动进度/MediaSession |
 | 音质 | 自动最高（默认）+ 7 档手动：超清母带/臻音全景声/沉浸环绕声/高清臻音/无损/极高/标准 |
 | 音效与均衡器 | 音效开关（杜比全景声/臻音全景声/沉浸环绕声/高清臻音）；五段均衡器（八种预设+自定义） |
+| **CurrentStation 通行证** | 账号体系升级为 Current 系产品的**统一登录平台**：OAuth 2.0 授权码 + PKCE，第三方拿不到密码；`openid/profile/email/phone/offline_access` 五种 scope；刷新令牌轮换、自省、撤销、**单点登出**；应用登记 + 授权管理 + 审计流水；在线文档页 `/cm/passport/docs` |
 | MV / 百科 | 歌曲条「播放 MV」按钮（仅该曲有 MV 时显示，全屏播放，播放时自动暂停音乐）；播放页「更多 → 歌曲百科」查看创作信息/基本信息/百科正文 |
 | 搜索 | 回车触发（逐字输入不发请求）、封面/专辑/热度/点赞数展示、历史记录 |
 | 点赞 | 云端红心，全站计数「♥ N 人点赞」实时显示 |
@@ -84,6 +85,27 @@ Apple 的 Liquid Glass 同样只用于 chrome。每块浮层按自己的真实�
 | 下拉刷新 | 全页面顶部下拉重取数据（MD3 圆形指示器，触摸手势） |
 | 宽屏适配 | ≥600px（Pad/横屏/折叠屏）播放页双栏：左封面控制台、右歌词；歌单网格自适应列数 |
 | 主题 | 跟随系统/浅色/深色（MD3 配色 + 动态状态栏） |
+
+## CurrentStation 通行证
+
+CurrentMusic 的账号体系同时就是 **Current 系产品的统一登录平台**——一次注册，登录所有 Current 产品；
+每个产品只拿到一个只读被授权信息的令牌，**永远拿不到密码**。
+
+| 能力 | 说明 |
+|---|---|
+| 协议 | OAuth 2.0 授权码 + **PKCE**（RFC 6749 / 7636 / 7009 / 7662），Issuer `https://music.20110208.xyz/cm` |
+| 授权范围 | `openid`（唯一标识 sub）/ `profile`（昵称头像简介）/ `email`、`phone`（**脱敏**返回）/ `offline_access`（30 天可刷新） |
+| 令牌 | 访问令牌 2 小时、刷新令牌 30 天且**每次刷新都轮换**；令牌只存 sha256，撤销即时生效 |
+| 单点登出 | 在任一产品退出登录 → 该会话发出的通行证令牌**立即全部失效** |
+| 应用登记 | 管理员在 App 内「设置 → 通行证」或 `POST /cm/passport/apps` 登记，回调地址**精确匹配**（堵住开放重定向） |
+| 授权管理 | 用户可在「设置 → 通行证授权管理」看到用通行证登录过的应用并一键解除 |
+| 审计 | 登记 / 授权 / 换令牌 / 刷新 / 撤销 / 密钥错误全部留痕（`GET /cm/passport/events`） |
+| 文档 | 在线页 `GET /cm/passport/docs`（自包含 HTML，第三方直接打开）· 仓库镜像 [docs/passport-api.md](docs/passport-api.md) |
+| 兼容 | 账号本体（注册/登录/会话/在线设备）仍在 `/cm/auth/*`，现有 App 与网页**一行未改**；通行证是加在上面的授权层 |
+
+自测：`CM_DB=/tmp/pp.db CM_PORT=3099 python3 backend/cm_server.py &` 然后
+`CM_DB=/tmp/pp.db python3 tools/passport-smoke.py http://127.0.0.1:3099`（39 项端到端断言，覆盖 PKCE、码重放、
+错误 verifier、刷新轮换、越权 scope、撤销、单点登出、限流、审计）。
 
 ## 音质档位
 
@@ -178,7 +200,14 @@ cd /opt/currentmusic/web && npm install   # 首次
 - `POST /plays/{ncmId}`、`GET /plays/recent`
 - `GET /ncm/search|song/url|song/detail|lyric|comment-count|playlist`、`GET /daily`
 
-限速：nginx 域名级 120 req/min/IP + 后端 300 req/min/IP。
+**CurrentStation 通行证**（统一登录，OAuth 2.0 + PKCE，详见 [docs/passport-api.md](docs/passport-api.md) 与在线文档 `/cm/passport/docs`）：
+
+- `GET /passport/meta|docs`（公开）、`GET /passport/authorize`、`POST /passport/authorize`（用户会话）
+- `POST /passport/token`（`authorization_code` / `refresh_token` / `client_credentials`）、`GET /passport/userinfo`、`POST /passport/introspect|revoke`
+- `GET|POST /passport/apps`、`PUT|DELETE /passport/apps/{client_id}`（管理员）
+- `GET /passport/grants`、`DELETE /passport/grants/{id}`（用户）、`GET /passport/events`（管理员）
+
+限速：nginx 域名级 120 req/min/IP + 后端 300 req/min/IP；令牌端点另按「客户端+IP」60 秒 30 次。
 
 ## 已知限制
 
@@ -191,6 +220,7 @@ cd /opt/currentmusic/web && npm install   # 首次
 
 | 版本 | 内容 |
 |---|---|
+| v1.28.17 | CurrentMusic 账号升级为「CurrentStation 通行证」统一登录平台（OAuth 2.0 + PKCE + 授权管理 + 文档页） |
 | v1.28.16 | 一次性强制重置：所有人的界面风格→简约玻璃、玻璃效果→上游推荐值（只强制一次，之后可自改） |
 | v1.28.15 | 玻璃默认值改用上游 hyalite 推荐值（霜化 1px / 着色 13% / 兜底 6px）；玻璃覆盖面扩到全部浮层 |
 | v1.28.14 | 液态玻璃底栏过高修复 / 玻璃默认值对标 Apple / 音效开关与切换 / 五段均衡器 |

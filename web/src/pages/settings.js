@@ -13,6 +13,15 @@ import { bgImage, glassBlur, glassTint, glassRange, setBgImage, setGlass, resetG
 import { waveStyle, setWaveStyle, waveTilt, setWaveTilt, TILT_DEFAULT } from '../customize.js';
 import { WAVE_STYLES } from '../waveform.js';
 
+
+/** 时间戳 → 「2026-10-05 23:10」（授权管理里展示授权/最近使用时间）。 */
+function fmtTime(sec) {
+  if (!sec) return '—';
+  const d = new Date(sec * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export function applyTheme() {
   const root = document.documentElement;
   root.classList.remove('mdui-theme-light', 'mdui-theme-dark', 'mdui-theme-auto');
@@ -59,6 +68,13 @@ export async function render(el) {
         <i>${u.publicSquare === false ? '已关闭' : '公开中'}</i>
         <mdui-switch id="sqPublicSw" ${u.publicSquare === false ? '' : 'checked'} style="margin-left:8px"></mdui-switch>
       </div>
+    </div>
+    <div class="cm-sec-head"><h2>CurrentStation 通行证</h2></div>
+    <div class="cm-setting-list">
+      <div class="cm-setting" id="ppId"><span class="material-icons-outlined">badge</span>通行证 ID<i id="ppIdV">${u.passportUid ? esc(u.passportUid) : '—'}</i></div>
+      <div class="cm-setting" id="ppGrants"><span class="material-icons-outlined">key</span>授权管理<i id="ppGrantV">—</i></div>
+      <div class="cm-setting" id="ppDocs"><span class="material-icons-outlined">menu_book</span>接入文档<i>OAuth 2.0 · PKCE</i></div>
+      ${(u.isAdmin || u.isSuper) ? '<div class="cm-setting" id="ppApps"><span class="material-icons-outlined">apps</span>应用登记<i>管理员</i></div>' : ''}
     </div>
     <div class="cm-sec-head"><h2>服务器</h2></div>
     <div class="cm-setting-list">
@@ -239,6 +255,169 @@ export async function render(el) {
         { text: '关闭', onClick: () => { applyCustomize({ rebuild: true }); } },
       ],
     });
+  // ---- CurrentStation 通行证：我的 ID / 授权管理 / 文档 / （管理员）应用登记 ----
+  // 文档来自后端自包含页（/passport/docs），网页与 App 都能直接打开
+  const openPassportDocs = () => {
+    const url = settings.base + '/passport/docs';
+    const w = window.open(url, '_blank');
+    if (!w) location.href = url;
+  };
+  el.querySelector('#ppDocs')?.addEventListener('click', openPassportDocs);
+
+  el.querySelector('#ppId')?.addEventListener('click', async () => {
+    let sub = (auth.user || {}).passportUid || '';
+    if (!sub) {
+      try { sub = (await api.me()).passportUid || ''; } catch { /* 离线 */ }
+    }
+    if (!sub) { toast('暂时拿不到通行证 ID（需要联网）'); return; }
+    const d = mdui.dialog({
+      headline: '我的通行证 ID',
+      body: `<div class="cm-more">
+        <div class="cm-more-s">这是你的统一身份标识（sub）：所有接入 CurrentStation 通行证的应用看到的都是它，与邮箱/手机号无关，可以公开。</div>
+        <div style="font:13px/1.7 ui-monospace,monospace;word-break:break-all;padding:10px 12px;border-radius:10px;background:rgba(120,128,145,.12);margin-top:8px">${esc(sub)}</div>
+      </div>`,
+      actions: [
+        { text: '复制', onClick: () => { navigator.clipboard.writeText(sub).then(() => toast('已复制通行证 ID')).catch(() => toast('复制失败，请手动选择')); return false; } },
+        { text: '关闭' },
+      ],
+    });
+    void d;
+  });
+
+  el.querySelector('#ppApps')?.addEventListener('click', async () => {
+    const diag = mdui.dialog({
+      headline: '通行证应用登记',
+      body: `<div class="cm-more">
+        <div id="ppAList" class="cm-more-s">正在读取…</div>
+        <div class="cm-more-t" style="margin-top:14px">新建应用</div>
+        <mdui-text-field id="ppAName" label="应用名称" variant="outlined" style="width:100%;margin-top:6px"></mdui-text-field>
+        <div class="cm-more-s" style="margin:10px 0 4px">回调地址（每行一个，必须 https；本机调试可用 http://localhost）</div>
+        <textarea id="ppARedirect" rows="2" style="width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid rgba(120,128,145,.35);background:transparent;color:inherit;font:13px/1.6 ui-monospace,monospace"></textarea>
+        <mdui-text-field id="ppAScope" label="可申请的 scope（空格分隔）" variant="outlined" value="openid profile email offline_access" style="width:100%;margin-top:8px"></mdui-text-field>
+        <mdui-text-field id="ppAHome" label="主页（可选）" variant="outlined" style="width:100%;margin-top:8px"></mdui-text-field>
+        <label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:calc(13px * var(--cm-fs, 1))">
+          <mdui-checkbox id="ppAPublic"></mdui-checkbox>公开客户端（原生 App / 纯前端：不发密钥，强制 PKCE）
+        </label>
+      </div>`,
+      actions: [
+        {
+          text: '创建',
+          onClick: async () => {
+            const name = (diag.querySelector('#ppAName').value || '').trim();
+            const redirects = (diag.querySelector('#ppARedirect').value || '').split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+            if (!name) { toast('请填写应用名称'); return false; }
+            if (!redirects.length) { toast('至少填一个回调地址'); return false; }
+            try {
+              const r = await api.passportCreateApp({
+                name, redirects,
+                scopes: (diag.querySelector('#ppAScope').value || 'openid profile').trim(),
+                homepage: (diag.querySelector('#ppAHome').value || '').trim(),
+                public: !!(diag.querySelector('#ppAPublic') || {}).checked,
+              });
+              const copy = (label, v) => `<div style="margin-top:8px">
+                <div style="opacity:.7;font-size:calc(12px * var(--cm-fs, 1))">${label}</div>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <code style="flex:1;word-break:break-all;font-size:12.5px">${esc(v)}</code>
+                  <mdui-button variant="text" data-copy="${esc(v)}">复制</mdui-button>
+                </div></div>`;
+              const ok = mdui.dialog({
+                headline: '应用已登记',
+                body: `<div class="cm-more">
+                  <div class="cm-more-s">把下面两项填到应用的服务端配置里${r.clientSecret ? '。<b>client_secret 只显示这一次</b>，请立刻保存' : '（公开客户端只需要 client_id）'}。</div>
+                  ${copy('client_id', r.clientId)}
+                  ${r.clientSecret ? copy('client_secret', r.clientSecret) : ''}
+                </div>`,
+                actions: [{ text: '完成' }],
+              });
+              ok.querySelectorAll('mdui-button[data-copy]').forEach(b => {
+                b.onclick = () => navigator.clipboard.writeText(b.dataset.copy).then(() => toast('已复制')).catch(() => toast('复制失败'));
+              });
+              diag.open = false;
+              render(el);
+            } catch (e) { toast(e.message || '创建失败'); }
+            return false;
+          },
+        },
+        { text: '关闭' },
+      ],
+    });
+    const box = diag.querySelector('#ppAList');
+    try {
+      const r = await api.passportApps();
+      const apps = r.apps || [];
+      box.innerHTML = apps.length ? apps.map(a => `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid rgba(120,128,145,.16)">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600">${esc(a.name)}${a.firstParty ? ' <span class="cm-tag">官方</span>' : ''}${a.disabled ? ' <span class="cm-tag">已停用</span>' : ''}</div>
+            <div style="opacity:.7;font-size:calc(12px * var(--cm-fs, 1));word-break:break-all">${esc(a.clientId)} · ${a.public ? '公开客户端' : '机密客户端'} · ${a.grants} 个在用授权</div>
+            <div style="opacity:.55;font-size:calc(11.5px * var(--cm-fs, 1));word-break:break-all">${esc((a.redirects || []).join(' , '))}</div>
+          </div>
+          <mdui-button variant="text" data-app="${esc(a.clientId)}" data-on="${a.disabled ? '0' : '1'}" style="flex:none">${a.disabled ? '启用' : '停用'}</mdui-button>
+        </div>`).join('') : '还没有登记任何应用。';
+      box.querySelectorAll('mdui-button[data-app]').forEach(b => {
+        b.onclick = async () => {
+          const off = b.dataset.on === '1';
+          try {
+            if (off) await api.passportDisableApp(b.dataset.app);
+            else await api.passportUpdateApp(b.dataset.app, { disabled: false });
+            toast(off ? '已停用，该应用全部授权已撤销' : '已启用');
+            diag.open = false;
+            el.querySelector('#ppApps').click();
+          } catch (e) { toast(e.message || '操作失败'); }
+        };
+      });
+    } catch (e) {
+      box.textContent = '读取失败：' + (e.message || '未知错误');
+    }
+  });
+
+  el.querySelector('#ppGrants')?.addEventListener('click', async () => {
+    const diag = mdui.dialog({
+      headline: '通行证授权管理',
+      body: `<div class="cm-more"><div id="ppGList" class="cm-more-s">正在读取…</div></div>`,
+      actions: [{ text: '接入文档', onClick: () => { openPassportDocs(); return false; } }, { text: '关闭' }],
+    });
+    const box = diag.querySelector('#ppGList');
+    const load = async () => {
+      try {
+        const r = await api.passportGrants();
+        const list = r.grants || [];
+        if (box === null) return;
+        const badge = el.querySelector('#ppGrantV');
+        if (badge) badge.textContent = list.length ? `${list.length} 个应用` : '暂无';
+        if (!list.length) {
+          box.innerHTML = '还没有应用使用你的通行证登录。用通行证登录过的应用会显示在这里，可随时解除授权。';
+          return;
+        }
+        box.innerHTML = list.map(g => `
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-top:1px solid rgba(120,128,145,.16)">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600">${esc(g.app || g.clientId)}${g.firstParty ? ' <span class="cm-tag">官方</span>' : ''}</div>
+              <div style="opacity:.72;font-size:calc(12px * var(--cm-fs, 1));margin-top:2px">
+                ${esc((g.scopes || []).map(s => s.label || s.scope).join(' · ') || g.scope)}
+              </div>
+              <div style="opacity:.55;font-size:calc(11.5px * var(--cm-fs, 1));margin-top:2px">
+                授权于 ${fmtTime(g.createdAt)}${g.lastUsed ? ' · 最近使用 ' + fmtTime(g.lastUsed) : ''}
+              </div>
+            </div>
+            <mdui-button variant="text" data-gid="${esc(g.id)}" style="flex:none">解除</mdui-button>
+          </div>`).join('');
+        box.querySelectorAll('mdui-button[data-gid]').forEach(b => {
+          b.onclick = async () => {
+            try {
+              await api.passportRevokeGrant(b.dataset.gid);
+              toast('已解除该应用的授权，它的令牌立即失效');
+              load();
+            } catch (e) { toast(e.message || '解除失败'); }
+          };
+        });
+      } catch (e) {
+        if (box) box.textContent = '读取失败：' + (e.message || '未知错误');
+      }
+    };
+    load();
+  });
+
     setTimeout(() => {
       const b = diag.querySelector('#fxBlur'), t = diag.querySelector('#fxTint');
       const bv = diag.querySelector('#fxBlurV'), tv = diag.querySelector('#fxTintV');

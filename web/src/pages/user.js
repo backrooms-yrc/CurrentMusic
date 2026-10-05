@@ -3,6 +3,17 @@ import { mdui } from '../md.js';
 import { api, auth, settings, adoptDecorScales } from '../api.js';
 import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile, fmtListen } from '../ui.js';
 
+/** 登录/注册成功后的落点：如果是从通行证授权页跳来的，处理完自动回去。 */
+function afterLogin() {
+  let back = '';
+  try {
+    back = sessionStorage.getItem('cm.ppBack') || '';
+    sessionStorage.removeItem('cm.ppBack');
+  } catch { /* 隐私模式 */ }
+  location.hash = back || '#/home';
+}
+
+
 export async function render(el, params) {
   if (!auth.token) return renderAuth(el);
   // 首页横幅深链 #/user?decor=1：进页面后自动打开挂件选择器
@@ -224,7 +235,7 @@ function renderAuth(el) {
               diag.open = false;
               auth.saveLogin(r.token, r.user);
               toast('已进入内部账户');
-              location.hash = '#/home';
+              afterLogin();
             }).catch(e => toast(e.message));
             return false;
           },
@@ -295,7 +306,7 @@ function renderAuth(el) {
         const r = await api.register(payload);
         auth.saveLogin(r.token, r.user);
         toast(`欢迎，${r.user.nickname}！`);
-        location.hash = '#/home';
+        afterLogin();
       } catch (e) {
         toast(e.message);
       } finally {
@@ -308,7 +319,7 @@ function renderAuth(el) {
       const r = await api.login(username, password);
       auth.saveLogin(r.token, r.user);
       toast(`欢迎，${r.user.nickname}！`);
-      location.hash = '#/home';
+      afterLogin();
     } catch (e) {
       toast(e.message);
     } finally {
