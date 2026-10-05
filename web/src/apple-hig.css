@@ -1,0 +1,172 @@
+/* ==========================================================================
+   Apple HIG 设计令牌层（v1.28.20）
+   --------------------------------------------------------------------------
+   目的：把「对标 Apple」从零散的手感调参变成**一套有出处的令牌**，
+   默认皮肤（简约玻璃）与共享组件都从这里取值，而不是各写各的。
+
+   取值出处（GitHub 调研，2026-10 抓取，均为可复核的公开仓库）：
+     · aka-kika/hig-mcp · src/hig_mcp/data/color.json
+       —— post-WWDC25（2025-06-09 刷新）系统色与灰度梯度，注明抓取日期与校验方式
+     · aka-kika/hig-mcp · typography.json
+       —— iOS Dynamic Type 默认（Large）字号表 + macOS rams
+     · aka-kika/hig-mcp · layout.json
+       —— 44pt 命中区（apple-hig）、8pt 网格与 4/8/12/16/20/24/32/40/48 阶梯、
+          连续圆角（squircle）与同心圆角规则
+     · aka-kika/hig-mcp · materials.json
+       —— 材质分级与 Liquid Glass 的社区护栏（模糊上限、层数、对比度 4.5:1、
+          Reduce Transparency 必须给不透明降级）
+     · naplesblue/apple-design-skill · design-system.md（+ tokens.css）
+       —— Apple 官网式中性色/文字层级、圆角阶梯、双层阴影、玻璃配方、动效预算
+   规则：**先取令牌再写样式**；任何新组件都应引用下面的变量，而不是硬写数值。
+   ========================================================================== */
+
+:root {
+  /* ---------- 1. 字体（HIG：SF Pro，Display ≥20pt / Text <20pt） ---------- */
+  --sf-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+             system-ui, 'PingFang SC', 'HarmonyOS Sans', 'Hiragino Sans GB',
+             'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --sf-mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---------- 2. iOS Dynamic Type 字号表（默认 Large，× 用户字号倍率） ----------
+     17pt 是 iOS 正文字号；标题越大字距越负（HIG「字距随字号反向」）。 */
+  --ios-large-title: calc(34px * var(--cm-fs, 1));
+  --ios-title-1: calc(28px * var(--cm-fs, 1));
+  --ios-title-2: calc(22px * var(--cm-fs, 1));
+  --ios-title-3: calc(20px * var(--cm-fs, 1));
+  --ios-headline: calc(17px * var(--cm-fs, 1));
+  --ios-body: calc(17px * var(--cm-fs, 1));
+  --ios-callout: calc(16px * var(--cm-fs, 1));
+  --ios-subheadline: calc(15px * var(--cm-fs, 1));
+  --ios-footnote: calc(13px * var(--cm-fs, 1));
+  --ios-caption-1: calc(12px * var(--cm-fs, 1));
+  --ios-caption-2: calc(11px * var(--cm-fs, 1));
+
+  --track-tight: -.022em;    /* title3 及以上 */
+  --track-snug: -.012em;     /* headline/body 大字号场景 */
+  --track-normal: 0;
+
+  /* ---------- 3. 系统色（HIG 默认外观；WWDC25 刷新值） ---------- */
+  --sys-blue: #0088ff;   --sys-green: #34c759;  --sys-indigo: #6155f5;
+  --sys-orange: #ff8d28; --sys-pink: #ff2d55;   --sys-purple: #cb30e0;
+  --sys-red: #ff383c;    --sys-teal: #00c3d0;   --sys-yellow: #ffcc00;
+  --sys-gray: #8e8e93;   --sys-gray-2: #aeaeb2; --sys-gray-3: #c7c7cc;
+  --sys-gray-4: #d1d1d6; --sys-gray-5: #e5e5ea; --sys-gray-6: #f2f2f7;
+
+  /* 语义色（名字对齐 HIG，值对齐 Apple 官网式中性色） */
+  --label: #1d1d1f;              /* label */
+  --label-2: #6e6e73;            /* secondaryLabel */
+  --label-3: #86868b;            /* tertiaryLabel */
+  --label-4: #aeaeb2;            /* quaternaryLabel / placeholder */
+  --faint: #d2d2d7;              /* 数字、箭头等最弱的层级 */
+  --bg: #f5f5f7;                 /* 页面底色（冷灰，不用暖米色） */
+  --bg-grouped: #f2f2f7;         /* systemGroupedBackground */
+  --surface: #ffffff;            /* 面板/卡片 */
+  --surface-hover: #fbfbfd;
+  --hairline: rgba(0, 0, 0, .07);
+  --separator: rgba(60, 60, 67, .29);
+  --track: #e8e8ed;              /* 进度/开关轨道的安静灰 */
+  --accent: var(--sys-blue);     /* 应用内强调色 = systemBlue（Apple 官网营销页用 #0071e3） */
+
+  /* ---------- 4. 间距 · 圆角 · 阴影（layout.json：8pt 网格；圆角只在阶梯上取值） ---------- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px;
+  --r-chip: 6px;     /* 小标记 / 品牌字标 */
+  --r-thumb: 12px;   /* 缩略图 */
+  --r-sheet: 16px;   /* 卡片 / 弹层按钮 */
+  --r-card: 16px;    /* HIG 常见控件圆角：medium 12 / card 16 */
+  --r-panel: 22px;   /* 面板 / 弹窗 */
+  --r-hero: 26px;    /* 大块视觉 */
+  --r-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .05);
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, .05), 0 14px 40px rgba(0, 0, 0, .05);
+  --shadow-lift: 0 12px 32px rgba(0, 0, 0, .10);
+  --shadow-overlay: 0 2px 8px rgba(0, 0, 0, .10), 0 30px 80px rgba(0, 0, 0, .24);
+
+  /* ---------- 5. 命中区与动效 ---------- */
+  --hit: 44px;                    /* HIG：最小舒适点击区 44×44pt */
+  --ease-out-quart: cubic-bezier(.25, 1, .5, 1);
+  --ease-spring: cubic-bezier(.2, .9, .25, 1.06);
+  --dur-fast: 180ms; --dur-base: 250ms; --dur-slow: 400ms;
+
+  /* ---------- 6. 材质（materials.json：系统材质分级 + Liquid Glass 护栏） ----------
+     玻璃只用在**导航层**（栏/浮层/弹窗），内容区不用；模糊上限 iPhone 40px；
+     单屏玻璃层数 ≤4；文字对比度按模糊后的实际背景测，需 ≥4.5:1；
+     开启「降低透明度」时必须换成不透明降级。 */
+  --mat-chrome-bg: rgba(245, 245, 247, .72);
+  --mat-blur: 20px;
+  --mat-sat: 180%;
+  --glass-fallback: rgba(242, 242, 247, .96);
+}
+
+html.mdui-theme-dark {
+  /* HIG 深色外观：底色纯黑、面板 #1c1c1e、梯度整体更暗一档（color.json 的 dark 列） */
+  --sys-blue: #0091ff;   --sys-green: #30d158;  --sys-indigo: #6d7cff;
+  --sys-orange: #ff9230; --sys-pink: #ff375f;   --sys-purple: #db34f2;
+  --sys-red: #ff4245;    --sys-teal: #00d2e0;   --sys-yellow: #ffd600;
+  --sys-gray-2: #636366; --sys-gray-3: #48484a; --sys-gray-4: #3a3a3c;
+  --sys-gray-5: #2c2c2e; --sys-gray-6: #1c1c1e;
+  --label: #ffffff; --label-2: rgba(235, 235, 245, .6); --label-3: rgba(235, 235, 245, .3);
+  --label-4: rgba(235, 235, 245, .18); --faint: rgba(235, 235, 245, .24);
+  --bg: #000000; --bg-grouped: #000000;
+  --surface: #1c1c1e; --surface-hover: #2c2c2e;
+  --hairline: rgba(255, 255, 255, .10); --separator: rgba(84, 84, 88, .65);
+  --track: #39393d;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .5), 0 8px 24px rgba(0, 0, 0, .45);
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, .5), 0 14px 40px rgba(0, 0, 0, .5);
+  --shadow-overlay: 0 2px 8px rgba(0, 0, 0, .6), 0 30px 80px rgba(0, 0, 0, .7);
+  --mat-chrome-bg: rgba(28, 28, 30, .72);
+  --glass-fallback: rgba(28, 28, 30, .96);
+}
+
+/* Apple 的排版细节：SF 自带光学尺寸表；抗锯齿走灰度；数字用等宽数字对齐 */
+body {
+  font-family: var(--sf-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  background: var(--bg);
+  color: var(--label);
+}
+
+/* 等宽数字：统计、时长、计数、进度等一切「要对齐的数」 */
+.cm-sq-stats b, .pl-stats b, .cm-stat-n, .cm-mini-prog, .pl-time, .cm-queue-item .q-idx,
+.upd-size, .cm-up-stats b, .cm-hist b, .cm-decor-count, .cm-dl-prog {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 大字号/标题类文本用负字距（HIG：字号越大字距越负） */
+.cm-sec-head h2, .cm-more-t, .pl-title, .cm-sq-stats b, .cm-ucard-name, .upd-title {
+  letter-spacing: var(--track-tight);
+}
+
+/* 「降低透明度 / 增强对比度」：玻璃一律换成不透明材质（materials.json 的 fallback 规则：
+   绝不能让可读性依赖半透明）。自定义属性要用 !important 才压得过 app.css 里的皮肤默认值。 */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-ui-preset] {
+    --frs-alpha: 1 !important;
+    --frs-glass: var(--glass-fallback) !important;
+    --frs-capsule: var(--glass-fallback) !important;
+    --frs-panel: var(--glass-fallback) !important;
+    --gls-card: var(--glass-fallback) !important;
+    --gls-filter: none !important;
+    --frs-lens: none !important;
+    --mat-blur: 0px;
+  }
+  html[data-ui-preset="frost"] #topbar,
+  html[data-ui-preset="frost"] #bottomNav,
+  html[data-ui-preset="frost"] .cm-mini-inner,
+  html[data-ui-preset="frost"] mdui-dialog::part(panel),
+  html[data-ui-preset="frost"] mdui-menu::part(panel),
+  html[data-ui-preset="frost"] .cmt-composer,
+  html[data-ui-preset="frost"] .pl-lyric-mode,
+  html[data-ui-preset="frost"] .cm-plmenu {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: var(--glass-fallback) !important;
+  }
+}
+
+/* 动效预算：静态内容只保留悬停/指示类微动效；尊重系统「减弱动态效果」 */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 1ms; --dur-base: 1ms; --dur-slow: 1ms; }
+}

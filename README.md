@@ -3,7 +3,7 @@
 > 基于网易云音乐 SVIP 音源、自建账号体系的 Android 音乐应用。界面走 MDUI 2 / Material Design 3，
 > 前端是一份原生 JavaScript 单页应用（无框架），由 Java WebView 壳承载；本仓库同时包含后端服务与运维脚本。
 
-![version](https://img.shields.io/badge/version-1.28.19-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
+![version](https://img.shields.io/badge/version-1.28.20-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
 **目录**：[界面](#界面) · [功能清单](#功能清单) · [通行证](#currentstation-通行证) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
 
@@ -26,6 +26,8 @@ Apple 的 Liquid Glass 同样只用于 chrome。每块浮层按自己的真实�
 <p align="center"><img src="docs/screenshots/frost-desktop.png" width="92%" alt="简约玻璃·宽屏" /></p>
 
 > 截图来自 Chromium 131 headless（402×874 @2x 与 1280×860）；真机观感以实机为准。
+> 设计令牌与依据见下文「设计语言（Apple HIG）」；玻璃折射实现参照 [hyalite](https://github.com/VII-Cae/hyalite--liquid-glass)，
+> 其余同类参考（[liquid-dom](https://github.com/AndrewPrifer/liquid-dom)、[AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)、[callstack/liquid-glass](https://github.com/callstack/liquid-glass)、[rdev/liquid-glass-react](https://github.com/rdev/liquid-glass-react)）作为交叉验证。
 
 ## 架构
 
@@ -85,6 +87,25 @@ Apple 的 Liquid Glass 同样只用于 chrome。每块浮层按自己的真实�
 | 下拉刷新 | 全页面顶部下拉重取数据（MD3 圆形指示器，触摸手势） |
 | 宽屏适配 | ≥600px（Pad/横屏/折叠屏）播放页双栏：左封面控制台、右歌词；歌单网格自适应列数 |
 | 主题 | 跟随系统/浅色/深色（MD3 配色 + 动态状态栏） |
+
+## 设计语言（Apple HIG）
+
+界面默认皮肤走 **Apple Human Interface Guidelines**，并且把「对标」落成**有出处的设计令牌**，而不是各处手调数值。
+令牌层在 [`web/src/apple-hig.css`](web/src/apple-hig.css)：所有组件从这里取值（字体、字号、系统色、圆角、阴影、命中区、材质）。
+
+| 类别 | 采用的值 | 依据（GitHub 调研） |
+|---|---|---|
+| 字体 | SF Pro 优先（Display ≥20pt / Text <20pt）+ CJK 回退；`font-optical-sizing`、灰度抗锯齿 | [hig-mcp](https://github.com/aka-kika/hig-mcp) typography.json |
+| 字号 | iOS Dynamic Type 默认（Large）全套：largeTitle 34 / title1 28 / title2 22 / title3 20 / headline·body 17 / callout 16 / subheadline 15 / footnote 13 / caption 12·11；标题负字距（越大越负） | 同上 |
+| 颜色 | systemBlue `#0088FF`（暗 `#0091FF`）等 WWDC25 刷新后的系统色 + systemGray2–6 梯度；语义角色 label/secondaryLabel/分离线/分组底色 `#F2F2F7` | hig-mcp color.json |
+| 布局 | **44×44pt 命中区**；8pt 网格与 4/8/12/16/20/24/32/40/48 阶梯；连续圆角（squircle）与同心圆角规则 | hig-mcp layout.json |
+| 材质 | 玻璃只用在**导航层**（栏/浮层/弹窗），内容卡片用实色面板 + 阴影；模糊上限 40px、单屏玻璃层 ≤4；文字对比度按模糊后背景测需 ≥4.5:1；**开启「降低透明度」必须给不透明降级** | hig-mcp materials.json |
+| 排版/圆角/阴影/动效 | Apple 官网式中性色（`#1d1d1f`/`#6e6e73`/`#86868b`/`#d2d2d7`）、圆角阶梯 chip6/thumb12/sheet16/card18/panel22/pill、**双层阴影**（card/panel/lift/overlay）、滚动边缘才出现的分隔线、等宽数字、动效预算 | [apple-design-skill](https://github.com/naplesblue/apple-design-skill) design-system.md |
+
+落地位置：应用主样式 `web/src/app.css`（默认皮肤「简约玻璃」的令牌改为引用 HIG，字号/圆角/阴影/命中区统一切到令牌）、
+独立页 `backend/developer.html` 与 `backend/passport/docs`（同一套令牌，网页产品页用 apple.com 蓝 `#0071e3`）。
+顺带修掉一个真 bug：`color-mix(in srgb, var(--mdui-color-outline-variant) …)` —— mdui 的颜色令牌是**原始 RGB 三元组**，
+喂给 `color-mix` 会让整条声明非法，导致 17 处边框/背景静默回落到 `currentColor`（分隔线变成深色实线），现已全部改用令牌层的发丝线。
 
 ## CurrentStation 通行证
 
@@ -221,6 +242,7 @@ cd /opt/currentmusic/web && npm install   # 首次
 
 | 版本 | 内容 |
 |---|---|
+| v1.28.20 | 全面对标 Apple HIG：新增设计令牌层（字体/系统色/字号/圆角/阴影/命中区/材质）+ 降低透明度降级；修 17 处失效分隔线 |
 | v1.28.19 | 开发者平台独立于 CurrentMusic：拆成独立页面 `/developer`（自带登录/注册与独立会话），客户端只留外链 |
 | v1.28.18 | 新增 CurrentDeveloper 开发者平台：任何人可自助登记应用、填主页与回调、获取/轮换凭据、一键取应用令牌 |
 | v1.28.17 | CurrentMusic 账号升级为「CurrentStation 通行证」统一登录平台（OAuth 2.0 + PKCE + 授权管理 + 文档页） |

@@ -5,6 +5,14 @@ CurrentMusic 的完整版本历史（最新在上）。每个版本都对应一�
 
 ---
 
+> **v1.28.20**：**全面对标 Apple HIG —— 把「像 Apple」落成一套有出处的设计令牌**。
+> · **调研（GitHub，可复核）**：[aka-kika/hig-mcp](https://github.com/aka-kika/hig-mcp) 把 HIG 结构化成了 `color.json` / `typography.json` / `layout.json` / `materials.json`（系统色为 **WWDC25（2025-06-09）刷新后**的默认外观值、iOS Dynamic Type 字号表、44pt 命中区、8pt 网格与连续圆角、材质与 Liquid Glass 护栏）；[naplesblue/apple-design-skill](https://github.com/naplesblue/apple-design-skill) 的 `design-system.md` 给出 Apple 官网式的排版/圆角/双层阴影/玻璃配方/动效预算。玻璃折射仍用 [hyalite](https://github.com/VII-Cae/hyalite--liquid-glass)，并与 [liquid-dom](https://github.com/AndrewPrifer/liquid-dom)、[AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)、[callstack/liquid-glass](https://github.com/callstack/liquid-glass) 交叉验证。
+> · **令牌层（新 `web/src/apple-hig.css`）**：SF 优先字体栈 + 光学尺寸 + 灰度抗锯齿；iOS 全套字号（34/28/22/20/17/16/15/13/12/11）× 用户字号倍率，标题负字距；WWDC25 系统色与灰度梯度；44×44pt 命中区；8pt 网格与圆角阶梯（chip6/thumb12/sheet16/card18/panel22/pill）；**双层阴影**（card/panel/lift/overlay）；动效时长与曲线令牌；材质分级与 Liquid Glass 护栏（模糊上限、单屏层数、对比度、降级）。
+> · **落地**：默认皮肤「简约玻璃」的令牌改为引用 HIG（分组底色 `#F2F2F7`、文字 `#1d1d1f`/`#6e6e73`、发丝线 `rgba(0,0,0,.07)`、卡片圆角 16 / 面板 22、双层阴影、强调色改为 **systemBlue `#0088FF`**（暗 `#0091FF`））；设置行/列表行 17px 且 **≥44px 命中区**；首页标题用 title1（28/700 负字距）；顶栏改为 **HIG「滚动边缘」**——静止不留分隔线，内容滚到其下才出现发丝线与柔和阴影；统计/时长/计数启用**等宽数字**。独立页（开发者平台、通行证文档）用同一套令牌，网页产品页强调色用 apple.com 蓝 `#0071e3`。
+> · **可访问性**：新增 `prefers-reduced-transparency: reduce` 降级——玻璃浮层的填充改为近实心系统色、`backdrop-filter: none`（实测顶栏/底栏 `rgba(242,242,247,.96)` + 无模糊，`--frs-alpha` 归 1）；`prefers-reduced-motion` 把动效时长压到 1ms。
+> · **顺带修一个真 bug**：`color-mix(in srgb, var(--mdui-color-outline-variant) …)` 里 mdui 的颜色令牌是**原始 RGB 三元组**（如 `224,226,233`），喂给 `color-mix` 会让整条声明非法 → 17 处边框/背景静默回落到 `currentColor`（设置页分隔线变成深色实线、部分面板底色丢失）。已全部改用令牌层的发丝线/表面色；实测设置行分隔线现为 `rgba(0,0,0,0.07)`。
+> · 验证（Chromium 131 headless + CDP）：令牌实测 `--ios-body=17px`、`--hit=44px`、`--r-card=16px`、`--r-panel=22px`、`--sys-blue=#0088ff`、`--bg-grouped=#f2f2f7`；`body` 背景 `rgb(242,242,247)`、字体栈以 `-apple-system, BlinkMacSystemFont, "SF Pro Text"` 开头；设置行 17px/44px 命中区、次要文字 13px `#6e6e73`、图标 `rgb(0,136,255)`；顶栏静止时 `border-bottom` 透明，滚动后 `rgba(0,0,0,0.07)` + `0 1px 12px`；开「降低透明度」后顶栏/底栏 `backdrop-filter: none`、底色近实心。截图：主页浅/深、设置页、开发者平台、文档页。
+
 > **v1.28.19**：**CurrentDeveloper 开发者平台从 CurrentMusic 里独立出来**。
 > · **为什么**：通行证是 Current 系产品的**统一登录平台**，开发者平台属于它，不该长在音乐客户端里（不在 `/app` 里、不依赖音乐客户端的路由与登录态）。
 > · **现在是什么**：后端直接渲染的**单文件页面** `GET /developer`（= `https://music.20110208.xyz/developer`，也支持 `/cm/developer`）——自带登录/注册表单、自己的会话键 `csdev.token` / `csdev.user`，**不读写**音乐客户端的 `cm.token`（实测全新会话登录后 localStorage 里只有 `csdev.*`）。能力不变且更完整：新建/编辑应用（名称、主页、回调、scope、公开或机密）、复制 `client_id`、创建或轮换后显示一次 `client_secret`、**一键试取应用令牌**（`client_credentials`，当场显示 `cs_at_…` 与有效期）、接入代码片段、停用/启用；管理员在页面里勾「显示全部」即可管理所有人登记的应用。

@@ -2,6 +2,7 @@ import './polyfill.js';   // 旧版 WebView 兼容垫片（必须在 mdui 之前
 // CurrentMusic 入口：mdui 注册、主题、路由、播放器 UI 挂载。
 import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
+import './apple-hig.css';   // Apple HIG 设计令牌层（字体/系统色/圆角/阴影/命中区/材质）
 import './app.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
