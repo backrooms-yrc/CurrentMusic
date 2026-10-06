@@ -3,6 +3,12 @@
 > 基于网易云音乐 SVIP 音源、自建账号体系的 Android 音乐应用。界面走 MDUI 2 / Material Design 3，
 > 前端是一份原生 JavaScript 单页应用（无框架），由 Java WebView 壳承载；本仓库同时包含后端服务与运维脚本。
 
+## 相关仓库
+
+- [CurrentMusic 公共仓库](https://github.com/backrooms-yrc/CurrentMusic)：Web 客户端与公开代码。
+- [CurrentMusic 私有仓库](https://github.com/backrooms-yrc/CurrentMusic-Private)：完整项目与私有部署内容。
+- [CurrentMusicX 原生 Android 客户端](https://github.com/bileizhen/CurrentMusicX)：第三方开发的 Kotlin 原生客户端。
+
 ![version](https://img.shields.io/badge/version-1.28.21-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
 **目录**：[界面](#界面) · [功能清单](#功能清单) · [通行证](#currentstation-通行证) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
