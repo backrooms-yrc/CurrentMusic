@@ -113,7 +113,8 @@ function renderAuth(el) {
   el.innerHTML = `
     <div class="cm-auth">
       <div class="cm-auth-logo"><span class="material-icons-outlined">graphic_eq</span></div>
-      <div class="cm-auth-title">CurrentMusic</div>
+      <div class="cm-auth-title">使用 CurrentStation 通行证以继续</div>
+      <div class="cm-auth-sub">CurrentMusic · 账号与 Current 系产品通用</div>
       <mdui-segmented-button-group value="login" selects="single" id="mode">
         <mdui-segmented-button value="login">登录</mdui-segmented-button>
         <mdui-segmented-button value="register">注册</mdui-segmented-button>

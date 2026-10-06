@@ -41,7 +41,7 @@ export async function render(el, params = {}) {
     try { sessionStorage.setItem('cm.ppBack', location.hash); } catch { /* 隐私模式 */ }
     el.innerHTML = card(`
       <div style="display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:6px">
-        <span class="material-icons-outlined" style="color:var(--cm-primary)">passport</span>需要先登录 CurrentStation 通行证
+        <span class="material-icons-outlined" style="color:var(--cm-primary)">passport</span>使用 CurrentStation 通行证以继续
       </div>
       <div style="font-size:calc(13px * var(--cm-fs, 1));opacity:.75;line-height:1.7">
         登录后会自动回到这个授权确认页。通行证是所有 Current 系产品共用的账号——一次登录，处处可用。

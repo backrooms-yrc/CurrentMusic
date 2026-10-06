@@ -85,7 +85,7 @@ export async function render(el, params = {}) {
       <section class="cm-sec">
         <div class="cm-sec-head"><h2>心动模式（智能续播）</h2><span class="cm-sec-sub">/playmode/intelligence/list</span></div>
         <div class="cm-pe-hint">心动模式 = 以「我喜欢的音乐」为池、以种子曲目起播，持续智能续播：
-          点下面任一首即以此开播，队列快见底会自动续上；播放页的 ✨ 开关可随时关闭。</div>
+          点下面任一首即以此开播，队列快见底会自动续上；播放页的随机开关可随时关闭。</div>
         <div id="fmIntel"><div class="cm-empty small">${songs.length
           ? '按第一首私人 FM 曲目取续播推荐…'
           : '绑定网易云账号后可用（心动模式走账号态推荐）'}</div></div>

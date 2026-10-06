@@ -5,6 +5,12 @@ CurrentMusic 的完整版本历史（最新在上）。每个版本都对应一�
 
 ---
 
+> **v1.28.21**：**界面细节三件事 —— 去 emoji 改图标、登录页改口、新建应用流程重做**。
+> · **去掉 UI 里的 emoji，改用图标**：开发者平台内置一套**内联 SVG 图标**（关闭/勾选/警示/插件/加号/折叠/复制/代码/编辑/密钥/电源/文档），弹窗关闭、复制反馈、密钥风险提示、空状态、卡片操作按钮全部换成图标；App 侧把设置页选中标记换成 Material 图标、去掉评论 toast 与播客文案里的 emoji。**功能型 emoji（评论的 `[微笑]` → 😊 映射）保留**——那是用户内容，不是界面装饰。
+> · **登录页改口**：App 与授权确认页统一为「**使用 CurrentStation 通行证以继续**」（20px title3 居中 + 副标题「CurrentMusic · 账号与 Current 系产品通用」）。
+> · **新建应用流程重做**（开发者平台）：**权限 scope 从手写输入框改为下拉多选**（5 项，每项带中文说明；`openid` 锁定为「必需」；按钮上实时显示已选摘要），**客户端类型改为分段控件**（机密/公开，切换即时更新说明），**回调地址实时校验**（非 https / 带通配符 / 格式错误在输入框下方红字提示并把边框标红），提交按钮带「提交中…」状态、失败直接显示在弹窗内。
+> · 验证：`/developer` 实测 —— 下拉展开 5 行、openid 已勾选且 disabled、摘要随勾选更新（`openid · profile · offline_access`）、类型切换文案更新、非法回调 `http://evil.com/cb` → 「除本机调试外必须用 https」且输入框标红；页面内 emoji 检测为 0；App 登录页实测标题「使用 CurrentStation 通行证以继续」/20px/无 emoji。
+
 > **v1.28.20**：**全面对标 Apple HIG —— 把「像 Apple」落成一套有出处的设计令牌**。
 > · **调研（GitHub，可复核）**：[aka-kika/hig-mcp](https://github.com/aka-kika/hig-mcp) 把 HIG 结构化成了 `color.json` / `typography.json` / `layout.json` / `materials.json`（系统色为 **WWDC25（2025-06-09）刷新后**的默认外观值、iOS Dynamic Type 字号表、44pt 命中区、8pt 网格与连续圆角、材质与 Liquid Glass 护栏）；[naplesblue/apple-design-skill](https://github.com/naplesblue/apple-design-skill) 的 `design-system.md` 给出 Apple 官网式的排版/圆角/双层阴影/玻璃配方/动效预算。玻璃折射仍用 [hyalite](https://github.com/VII-Cae/hyalite--liquid-glass)，并与 [liquid-dom](https://github.com/AndrewPrifer/liquid-dom)、[AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)、[callstack/liquid-glass](https://github.com/callstack/liquid-glass) 交叉验证。
 > · **令牌层（新 `web/src/apple-hig.css`）**：SF 优先字体栈 + 光学尺寸 + 灰度抗锯齿；iOS 全套字号（34/28/22/20/17/16/15/13/12/11）× 用户字号倍率，标题负字距；WWDC25 系统色与灰度梯度；44×44pt 命中区；8pt 网格与圆角阶梯（chip6/thumb12/sheet16/card18/panel22/pill）；**双层阴影**（card/panel/lift/overlay）；动效时长与曲线令牌；材质分级与 Liquid Glass 护栏（模糊上限、单屏层数、对比度、降级）。

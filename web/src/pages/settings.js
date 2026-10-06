@@ -426,7 +426,7 @@ export async function render(el) {
       headline: '波形样式',
       body: `<div class="cm-more">
         ${WAVE_STYLES.map(x => `<div class="cm-more-row" data-k="${x.key}">
-          <div><div class="cm-more-t">${x.name}${x.key === cur ? ' ✓' : ''}</div>
+          <div><div class="cm-more-t">${x.name}${x.key === cur ? '<span class="material-icons-outlined" style="font-size:calc(16px * var(--cm-fs, 1));vertical-align:-3px;margin-left:2px">check</span>' : ''}</div>
             <div class="cm-more-s">${x.desc}</div></div>
           <span class="material-icons-outlined">${x.key === cur ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
         </div>`).join('')}

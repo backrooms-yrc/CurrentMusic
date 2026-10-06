@@ -217,7 +217,7 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
         try {
           // 上游 /hug/comment 需要 sid（歌曲 id）+ uid（被抱的用户），故仅歌曲维度可用
           await api.ncm('/hug/comment', { sid: id, cid, uid, type, confirm: 1 });
-          toast('已抱一抱 🤗');
+          toast('已抱一抱');
           showHuggers(cid, uid);
         } catch (e) { toast(e.message.includes('绑定') ? '需先绑定网易云账号' : e.message); }
       };

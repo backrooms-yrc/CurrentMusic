@@ -586,7 +586,11 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 /* ---------- 登录 ---------- */
 .cm-auth { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 36px 22px 20px; }
 .cm-auth-logo .material-icons-outlined { font-size: calc(60px * var(--cm-fs, 1)); color: var(--cm-primary); }
-.cm-auth-title { font-size: calc(24px * var(--cm-fs, 1)); font-weight: 800; letter-spacing: .5px; }
+.cm-auth-title {
+  font-size: var(--ios-title-3, calc(20px * var(--cm-fs, 1))); font-weight: 700;
+  letter-spacing: var(--track-snug, -.012em); text-align: center; max-width: 15em;   /* 让标题在两行内平衡折行，避免最后一个字落单 */
+}
+.cm-auth-sub { font-size: var(--ios-footnote, calc(13px * var(--cm-fs, 1))); color: var(--frs-fg2, var(--mdui-color-on-surface-variant, #49454f)); margin-top: -8px; text-align: center; }
 .cm-auth-form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .cm-auth-note { font-size: calc(11px * var(--cm-fs, 1)); opacity: .55; text-align: center; line-height: 1.6; }
 /* 网页版登录页「下载安卓版 APP」入口（仅浏览器渲染） */

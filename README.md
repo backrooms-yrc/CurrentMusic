@@ -3,7 +3,7 @@
 > 基于网易云音乐 SVIP 音源、自建账号体系的 Android 音乐应用。界面走 MDUI 2 / Material Design 3，
 > 前端是一份原生 JavaScript 单页应用（无框架），由 Java WebView 壳承载；本仓库同时包含后端服务与运维脚本。
 
-![version](https://img.shields.io/badge/version-1.28.20-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
+![version](https://img.shields.io/badge/version-1.28.21-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
 **目录**：[界面](#界面) · [功能清单](#功能清单) · [通行证](#currentstation-通行证) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
 
@@ -242,6 +242,7 @@ cd /opt/currentmusic/web && npm install   # 首次
 
 | 版本 | 内容 |
 |---|---|
+| v1.28.21 | 去 emoji 改 SVG 图标 / 登录页改「使用 CurrentStation 通行证以继续」/ 新建应用权限改下拉多选 |
 | v1.28.20 | 全面对标 Apple HIG：新增设计令牌层（字体/系统色/字号/圆角/阴影/命中区/材质）+ 降低透明度降级；修 17 处失效分隔线 |
 | v1.28.19 | 开发者平台独立于 CurrentMusic：拆成独立页面 `/developer`（自带登录/注册与独立会话），客户端只留外链 |
 | v1.28.18 | 新增 CurrentDeveloper 开发者平台：任何人可自助登记应用、填主页与回调、获取/轮换凭据、一键取应用令牌 |
