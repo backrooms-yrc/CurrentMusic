@@ -188,6 +188,15 @@ export const api = {
   revokeSession: (id) => call('DELETE', `/auth/sessions/${id}`, { body: {}, auth: true }),
   revokeOtherSessions: () => call('DELETE', '/auth/sessions/others', { body: {}, auth: true }),
 
+  // 弹窗公告（客户端每次启动拉取；写操作仅管理员）
+  announcements: (limit = 20) => call('GET', `/announcements?limit=${limit}`, {}),
+  adminAnnouncements: () => call('GET', '/admin/announcements', { auth: true }),
+  createAnnouncement: (payload) => call('POST', '/announcements', { body: payload, auth: true }),
+  updateAnnouncement: (id, payload) => call('PUT', `/announcements/${id}`, { body: payload, auth: true }),
+  removeAnnouncement: (id) => call('DELETE', `/announcements/${id}`, { body: {}, auth: true }),
+  pinAnnouncement: (id, pinned) => call('POST', `/announcements/${id}/pin`, { body: pinned == null ? {} : { pinned }, auth: true }),
+  restoreAnnouncement: (id) => call('POST', `/announcements/${id}/restore`, { body: {}, auth: true }),
+
   // CurrentStation 通行证：授权确认页与我授权的应用（应用登记/开发者平台是**独立页面** /developer）
   passportAuthorizeInfo: (params) => call('GET', '/passport/authorize?' + new URLSearchParams(params).toString(), { auth: true }),
   passportApprove: (payload) => call('POST', '/passport/authorize', { body: payload, auth: true }),

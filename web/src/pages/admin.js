@@ -46,6 +46,10 @@ export async function render(el) {
       ${card('当前版本', ov.release ? 'v' + ov.release.version : '—', ov.release ? '发布于 ' + fmtTime(ov.release.publishedAt) : '')}
     </div>
 
+    <div class="cm-sec-head"><h2>弹窗公告<span id="annCount" class="cm-usub" style="font-weight:400"></span></h2>
+      <span class="cm-sec-more" id="annNew"><span class="material-icons-outlined">campaign</span> 发布公告</span></div>
+    <div class="cm-annrow-wrap" id="annList"><div class="cm-loading small"><mdui-circular-progress></mdui-circular-progress></div></div>
+
     <div class="cm-sec-head"><h2>用户管理（${users.total}）</h2>
       <span class="cm-sec-more" id="cacheClear"><span class="material-icons-outlined">cleaning_services</span> 清理缓存</span></div>
     <div class="cm-adminbar">
@@ -135,6 +139,102 @@ export async function render(el) {
       }, 0);
     };
   });
+  // ---------- 弹窗公告 ----------
+  const renderAnn = async () => {
+    const box = el.querySelector('#annList');
+    if (!box) return;
+    let d;
+    try {
+      d = await api.adminAnnouncements();
+    } catch (e) {
+      box.innerHTML = `<div class="cm-empty small">公告加载失败：${esc(e.message)}</div>`;
+      return;
+    }
+    const items = d.items || [];
+    const live = items.filter(a => !a.removed).length;
+    const c = el.querySelector('#annCount');
+    if (c) c.textContent = `　${live} 条生效${items.length > live ? ` · ${items.length - live} 条已移除` : ''}${d.isSuper ? ' · 你是超管，可编辑全部' : ''}`;
+    box.innerHTML = items.length ? items.map(a => `
+      <div class="cm-annrow${a.removed ? ' gone' : ''}" data-id="${a.id}">
+        <div class="cm-annrow-main">
+          <div class="cm-annrow-title">
+            ${a.pinned && !a.removed ? '<span class="cm-tag admin">置顶</span>' : ''}
+            ${a.removed ? '<span class="cm-tag banned">已移除</span>' : ''}
+            ${esc(a.title)}
+          </div>
+          <div class="cm-annrow-sub">${esc(a.author || '—')} · 发布于 ${fmtTime(a.createdAt)}${a.updatedAt > a.createdAt ? ` · 修改于 ${fmtTime(a.updatedAt)}` : ''}${a.link ? ' · <span class="material-icons-outlined">link</span>带链接' : ''}</div>
+          <div class="cm-annrow-body">${esc((a.body || '').replace(/\s+/g, ' ').slice(0, 160))}</div>
+        </div>
+        <div class="cm-annacts">
+          ${a.canEdit ? `
+            ${a.removed
+              ? '<span class="material-icons-outlined" data-act="restore" title="恢复">restore_from_trash</span>'
+              : `<span class="material-icons-outlined${a.pinned ? ' on' : ''}" data-act="pin" title="${a.pinned ? '取消置顶' : '置顶'}">push_pin</span>`}
+            <span class="material-icons-outlined" data-act="edit" title="编辑">edit</span>
+            ${a.removed ? '' : '<span class="material-icons-outlined" data-act="remove" title="移除">delete</span>'}
+          ` : '<span class="cm-tag">他人发布</span>'}
+        </div>
+      </div>`).join('') : '<div class="cm-empty small">还没有公告。发布一条，客户端下次打开就会弹窗。</div>';
+
+    box.querySelectorAll('.cm-annrow').forEach(row => {
+      const a = items.find(x => String(x.id) === row.dataset.id);
+      row.querySelectorAll('[data-act]').forEach(btn => {
+        btn.onclick = async () => {
+          const act = btn.dataset.act;
+          try {
+            if (act === 'pin') { await api.pinAnnouncement(a.id, !a.pinned); toast(a.pinned ? '已取消置顶' : '已置顶'); renderAnn(); }
+            else if (act === 'restore') { await api.restoreAnnouncement(a.id); toast('已恢复，客户端将重新看到'); renderAnn(); }
+            else if (act === 'remove') { await api.removeAnnouncement(a.id); toast('已移除'); renderAnn(); }
+            else if (act === 'edit') annDialog(a);
+          } catch (e) { toast(e.message); }
+        };
+      });
+    });
+  };
+
+  const annDialog = a => {
+    const isNew = !a;
+    const d = a || { title: '', body: '', link: '', pinned: false };
+    const diag = mdui.dialog({
+      headline: isNew ? '发布公告' : '编辑公告',
+      body: `<div class="cm-form" style="display:flex;flex-direction:column;gap:12px">
+        <mdui-text-field id="annTitle" label="标题" variant="outlined" value="${esc(d.title)}" maxlength="60" style="width:100%"></mdui-text-field>
+        <mdui-text-field id="annBody" label="正文（支持 Markdown）" variant="outlined" type="textarea" rows="6" value="${esc(d.body)}" style="width:100%"></mdui-text-field>
+        <mdui-text-field id="annLink" label="详情链接（可选，http/https）" variant="outlined" value="${esc(d.link)}" style="width:100%"></mdui-text-field>
+        <div class="cm-more-s" style="opacity:.7">客户端每次打开网页 / App 都会弹窗展示生效中的公告，置顶排最前。</div>
+      </div>`,
+      actions: [
+        { text: '取消' },
+        {
+          text: isNew ? '发布' : '保存',
+          onClick: () => {
+            (async () => {
+              const payload = {
+                title: (diag.querySelector('#annTitle').value || '').trim(),
+                body: (diag.querySelector('#annBody').value || '').trim(),
+                link: (diag.querySelector('#annLink').value || '').trim(),
+                pinned: !!d.pinned,
+              };
+              if (!payload.title) { toast('请填写标题'); return; }
+              try {
+                if (isNew) await api.createAnnouncement(payload);
+                else await api.updateAnnouncement(d.id, payload);
+                toast(isNew ? '已发布，客户端下次打开即可看到' : '已保存');
+                diag.open = false;
+                renderAnn();
+              } catch (e) { toast(e.message); }
+            })();
+            return false;   // 同步返回 false：mdui 不会因为 Promise 自动关窗
+          },
+        },
+      ],
+    });
+    setTimeout(() => diag.querySelector('#annTitle')?.focus?.(), 200);
+  };
+
+  el.querySelector('#annNew').onclick = () => annDialog(null);
+  renderAnn();
+
   // 在线设备
   api.adminSessions().then(d => {
     const box = el.querySelector('#devAll');

@@ -9,7 +9,7 @@
 - [CurrentMusic 私有仓库](https://github.com/backrooms-yrc/CurrentMusic-Private)：完整项目与私有部署内容。
 - [CurrentMusicX 原生 Android 客户端](https://github.com/bileizhen/CurrentMusicX)：第三方开发的 Kotlin 原生客户端。
 
-![version](https://img.shields.io/badge/version-1.28.21-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
+![version](https://img.shields.io/badge/version-1.28.22-6750A4) ![android](https://img.shields.io/badge/Android-7.0%2B-34A853) ![size](https://img.shields.io/badge/APK-~485KB-4285F4) ![license](https://img.shields.io/badge/license-仅供学习交流-9E9E9E)
 
 **目录**：[界面](#界面) · [功能清单](#功能清单) · [通行证](#currentstation-通行证) · [音质档位](#音质档位) · [架构](#架构) · [构建](#构建) · [安装](#安装) · [API 概览](#api-概览) · [部署布局](#部署布局本机已部署) · [已知限制](#已知限制) · [更新日志](#更新日志)
 
@@ -73,6 +73,7 @@ Apple 的 Liquid Glass 同样只用于 chrome。每块浮层按自己的真实�
 | 播放 | 队列/上一首下一首/列表循环/单曲循环/随机/拖动进度/MediaSession |
 | 音质 | 自动最高（默认）+ 7 档手动：超清母带/臻音全景声/沉浸环绕声/高清臻音/无损/极高/标准 |
 | 音效与均衡器 | 音效开关（杜比全景声/臻音全景声/沉浸环绕声/高清臻音）；五段均衡器（八种预设+自定义） |
+| **弹窗公告** | 打开网页/App 即弹窗展示站内公告（不记忆「不再提示」，每次打开都弹）；管理员面板可发布 / 编辑 / 置顶 / 移除，**普通管理员只能管理自己发布的，超管可管理全部**；正文支持 Markdown；公开接口 `GET /cm/announcements` 供其它 Current 系产品读取 |
 | **CurrentStation 通行证** | 账号体系即 Current 系产品的**统一登录平台**；**CurrentDeveloper 开发者平台**（独立页面 `/developer`，不依赖音乐客户端）可自助登记应用：新建、填主页与回调、获取/轮换凭据、一键试取应用令牌：OAuth 2.0 授权码 + PKCE，第三方拿不到密码；`openid/profile/email/phone/offline_access` 五种 scope；刷新令牌轮换、自省、撤销、**单点登出**；应用登记 + 授权管理 + 审计流水；在线文档页 `/cm/passport/docs` |
 | MV / 百科 | 歌曲条「播放 MV」按钮（仅该曲有 MV 时显示，全屏播放，播放时自动暂停音乐）；播放页「更多 → 歌曲百科」查看创作信息/基本信息/百科正文 |
 | 搜索 | 回车触发（逐字输入不发请求）、封面/专辑/热度/点赞数展示、历史记录 |
@@ -93,6 +94,11 @@ Apple 的 Liquid Glass 同样只用于 chrome。每块浮层按自己的真实�
 | 下拉刷新 | 全页面顶部下拉重取数据（MD3 圆形指示器，触摸手势） |
 | 宽屏适配 | ≥600px（Pad/横屏/折叠屏）播放页双栏：左封面控制台、右歌词；歌单网格自适应列数 |
 | 主题 | 跟随系统/浅色/深色（MD3 配色 + 动态状态栏） |
+
+## CurrentStation 控制台
+
+统一入口：**https://music.20110208.xyz/station**（也支持 `/console`）——账户中心 + 开发者入口 + **完整接口目录**
+（自有后端与网易云侧，来自 `/station/api-catalog`）。控制台内可直接查看**站内公告**现状与公告 API 说明。
 
 ## 设计语言（Apple HIG）
 
@@ -228,6 +234,8 @@ cd /opt/currentmusic/web && npm install   # 首次
 - `POST /plays/{ncmId}`、`GET /plays/recent`
 - `GET /ncm/search|song/url|song/detail|lyric|comment-count|playlist`、`GET /daily`
 
+**弹窗公告**：`GET /announcements`（公开，置顶在前）；`GET /admin/announcements`、`POST /announcements`、`PUT|DELETE /announcements/{id}`、`POST /announcements/{id}/pin|restore`（管理员；普通管理员仅限本人发布的公告，超管不限）。
+
 **CurrentStation 通行证**（统一登录，OAuth 2.0 + PKCE，详见 [docs/passport-api.md](docs/passport-api.md) 与在线文档 `/cm/passport/docs`）：
 
 - `GET /passport/meta|docs`（公开）、`GET /passport/authorize`、`POST /passport/authorize`（用户会话）
@@ -248,6 +256,7 @@ cd /opt/currentmusic/web && npm install   # 首次
 
 | 版本 | 内容 |
 |---|---|
+| v1.28.22 | 弹窗公告（每次打开都弹 + 管理面板增删改置顶移除 + 权限分级 + 公开 API + 控制台文档） |
 | v1.28.21 | 去 emoji 改 SVG 图标 / 登录页改「使用 CurrentStation 通行证以继续」/ 新建应用权限改下拉多选 |
 | v1.28.20 | 全面对标 Apple HIG：新增设计令牌层（字体/系统色/字号/圆角/阴影/命中区/材质）+ 降低透明度降级；修 17 处失效分隔线 |
 | v1.28.19 | 开发者平台独立于 CurrentMusic：拆成独立页面 `/developer`（自带登录/注册与独立会话），客户端只留外链 |

@@ -17,6 +17,7 @@ import { initCast } from './cast.js';
 import { bootUiPreset } from './uipreset.js';
 import { applyCustomize } from './customize.js';
 import { initGlass } from './glass.js';
+import { initAnnouncements } from './announce.js';
 import { initNavDrop } from './navdrop.js';
 
 // 手表小屏兜底：watch.css 用 mdui-dialog::part(panel) 压掉面板自带 min-width:280px，
@@ -236,6 +237,9 @@ function boot() {
   initCast();   // DLNA 投屏：还原投屏状态并接管传输指令
 
   setAuthExpiredHandler(() => toast('登录已失效，请重新登录'));
+
+  // 弹窗公告：每次打开网页 / App 都拉一次（需求如此，不做「不再提示」）
+  initAnnouncements();
 
   // 旧版渲染引擎一次性提示（引导更新 WebView，更新后可恢复最佳效果）
   if (engineOutdated() && !sessionStorage.getItem('cm.engineHint')) {
