@@ -1,5 +1,7 @@
 # CurrentMusic 专用更新镜像
 
+> 历史实现：从 Android 1.1.11 起，客户端改用 `https://music.20110208.xyz/cm/x/download/latest`，不再读取下文的 `update-proxy.properties` 或发送 HMAC 请求头。本目录保留旧 Worker 的源码与部署记录，当前 Android 构建无需其密钥配置。
+
 部署地址：`https://updates.bileizhen.top`；Worker：`currentmusic-updates`。
 基于 [hubporg/CF-GitHub-Proxy](https://github.com/hubporg/CF-GitHub-Proxy) 的流式转发实现改造，保留上游 MIT 许可及署名（见 LICENSE）。
 
