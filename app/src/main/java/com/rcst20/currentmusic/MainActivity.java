@@ -115,6 +115,11 @@ public class MainActivity extends Activity {
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // 字体大小由 App 自己决定：显式固定 textZoom=100，**不跟随系统字体大小**。
+        // WebView 默认值虽为 100，但部分 ROM 的辅助功能/字体设置会把它抬高，
+        // 那样同一份设置在别人手机上大小就不一样了。用户在设置页选的档位由页面
+        // CSS 变量 --cm-fs 负责（见 web/src/ui.js 的 FONT_SCALES）。
+        applyFixedTextZoom();
 
         // 平板/大屏：启动即沉浸式隐藏系统导航栏（滑动临时呼出），迷你条贴物理底边
         hideSystemNav();
@@ -150,10 +155,18 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** 固定文字缩放为 100（不跟随系统字号）；config 变化后重新压一遍，防止被系统改回。 */
+    private void applyFixedTextZoom() {
+        if (web == null) return;
+        WebSettings s = web.getSettings();
+        if (s.getTextZoom() != 100) s.setTextZoom(100);
+    }
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         applySystemBars();
+        applyFixedTextZoom();   // 系统字号变化会触发 config change：这里再压回 100
         // 主题变化时通知页面（auto 模式跟随）
         main.post(() -> {
             if (web != null) web.evaluateJavascript(
@@ -643,12 +656,12 @@ public class MainActivity extends Activity {
                     if (b64.startsWith("data:") && comma > 0) b64 = b64.substring(comma + 1);
                     byte[] data = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
                     String name = (fileName == null || fileName.isEmpty())
-                            ? "CurrentMusic-share.png"
+                            ? "CurrentMusic-share.jpg"
                             : fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
                     if (Build.VERSION.SDK_INT >= 29) {
                         android.content.ContentValues v = new android.content.ContentValues();
                         v.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name);
-                        v.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+                        v.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
                         v.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
                                 android.os.Environment.DIRECTORY_PICTURES + "/CurrentMusic");
                         Uri uri = getContentResolver().insert(

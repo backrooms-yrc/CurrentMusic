@@ -1,6 +1,6 @@
 // 歌曲页（v1.28.46）：分享链接的落地页。
 // 打开分享链接后展示歌曲信息并可播放/再次分享；不自动播放（浏览器会拦截自动播放）。
-import { api, ncmSongs } from '../api.js';
+import { api } from '../api.js';
 import { esc, toast } from '../ui.js';
 import { player } from '../player.js';
 import { openShare } from '../share.js';
@@ -12,7 +12,10 @@ export async function render(el, params) {
   let s = null;
   try {
     const d = await api.songDetail([id]);
-    s = (ncmSongs(d.songs || []) || [])[0] || null;
+    // /ncm/song/detail 已是归一化结构（ncm_id / artists 字符串 / album / pic），
+    // 不要再套 ncmSongs（它要求 s.id，会把整条过滤成空——分享链接会显示"不存在"）。
+    const hit = (d.songs || [])[0];
+    s = hit && hit.ncm_id ? hit : null;
   } catch (e) { /* 下面统一显示错误态 */ }
   if (!s) {
     el.innerHTML = `<div class="cm-page"><div class="cm-empty" style="padding:64px 0">

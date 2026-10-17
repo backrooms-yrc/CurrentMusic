@@ -160,16 +160,16 @@ async function drawCard(meta, withCover) {
 export async function makeShareImage(meta) {
   try {
     const cv = await drawCard(meta, true);
-    return cv.toDataURL('image/png');            // 污染画布会在这里抛 SecurityError
+    return cv.toDataURL('image/jpeg', 0.92);     // 污染画布会在这里抛 SecurityError
   } catch (e) {
     const cv = await drawCard(meta, false);
-    return cv.toDataURL('image/png');
+    return cv.toDataURL('image/jpeg', 0.92);
   }
 }
 
 function safeName(meta) {
   const n = String(meta.name || 'song').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
-  return `CurrentMusic-${n}-${meta.ncm_id || 0}.png`;
+  return `CurrentMusic-${n}-${meta.ncm_id || 0}.jpg`;
 }
 
 async function copyText(text) {
