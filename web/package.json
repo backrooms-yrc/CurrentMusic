@@ -6,8 +6,9 @@
     "build": "node build.mjs"
   },
   "dependencies": {
+    "@material-design-icons/font": "^0.14.13",
     "mdui": "^2.1.5",
-    "@material-design-icons/font": "^0.14.13"
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
     "esbuild": "^0.24.0"

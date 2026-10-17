@@ -6,6 +6,7 @@
 import { mdui } from './md.js';
 import { settings } from './api.js';
 import { esc, toast } from './ui.js';
+import qrcode from 'qrcode-generator';
 
 const W = 1080, H = 1440;
 const FONT = '"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif';
@@ -75,83 +76,167 @@ function wrapLines(ctx, text, maxWidth, maxLines) {
   return out.length ? out : [''];
 }
 
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  const d = max - min;
+  let h = 0, s = 0;
+  if (d > 1e-6) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, l];
+}
+
+/** 从封面提取主色（按饱和度/中间亮度加权，忽略近黑近白与灰）。失败返回 null。 */
+function extractPalette(img) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 40;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, 40, 40);
+    const d = x.getImageData(0, 0, 40, 40).data;      // 画布被污染会在这里抛出
+    const bins = new Map();
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 200) continue;
+      const [h, s, l] = rgb2hsl(d[i], d[i + 1], d[i + 2]);
+      if (l < 0.12 || l > 0.9 || s < 0.12) continue;
+      const key = Math.floor(h / 15) % 24;
+      const w = s * (0.35 + Math.min(1, l * 1.6)) * (1 - Math.abs(l - 0.52));
+      const cur = bins.get(key) || { w: 0, h: 0 };
+      cur.w += w; cur.h += h * w;
+      bins.set(key, cur);
+    }
+    let best = null;
+    for (const v of bins.values()) if (!best || v.w > best.w) best = v;
+    if (!best || best.w <= 0) return null;
+    return { h: best.h / best.w };
+  } catch { return null; }
+}
+
+/** 背景：主色 → 深色渐变 + 同色系柔光；无封面时退回品牌紫。 */
+function paintBackground(ctx, pal) {
+  const h = pal ? pal.h : 268;
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, `hsl(${h.toFixed(1)}, 52%, 8%)`);
+  bg.addColorStop(0.55, `hsl(${((h + 18) % 360).toFixed(1)}, 46%, 13%)`);
+  bg.addColorStop(1, `hsl(${((h + 42) % 360).toFixed(1)}, 42%, 17%)`);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const g1 = ctx.createRadialGradient(880, 160, 0, 880, 160, 540);
+  g1.addColorStop(0, `hsla(${h.toFixed(1)}, 90%, 62%, .26)`);
+  g1.addColorStop(1, `hsla(${h.toFixed(1)}, 90%, 62%, 0)`);
+  ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
+
+  const g2 = ctx.createRadialGradient(140, 1320, 0, 140, 1320, 560);
+  g2.addColorStop(0, `hsla(${((h + 50) % 360).toFixed(1)}, 80%, 58%, .20)`);
+  g2.addColorStop(1, `hsla(${((h + 50) % 360).toFixed(1)}, 80%, 58%, 0)`);
+  ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+}
+
+/** 画二维码（白底 + 4 模块静区），居中于 (cx, cy)，maxSide 为含静区的最大边长。 */
+function drawQRCode(ctx, text, cx, cy, maxSide) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  const n = qr.getModuleCount();
+  const cell = Math.max(2, Math.floor(maxSide / (n + 8)));   // 4 模块静区 ×2
+  const side = cell * (n + 8);
+  const x = Math.round(cx - side / 2), y = Math.round(cy - side / 2);
+
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  roundRect(ctx, x, y, side, side, 18);
+  ctx.fill();
+  ctx.restore();
+
+  const ox = x + cell * 4, oy = y + cell * 4;
+  ctx.fillStyle = '#111111';
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (qr.isDark(r, c)) ctx.fillRect(ox + c * cell, oy + r * cell, cell, cell);
+    }
+  }
+}
+
 async function drawCard(meta, withCover) {
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
 
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#1a0f2e');
-  bg.addColorStop(0.55, '#2a1646');
-  bg.addColorStop(1, '#3d1d4b');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // 背景装饰：两个大柔光圆
-  const g1 = ctx.createRadialGradient(880, 180, 0, 880, 180, 520);
-  g1.addColorStop(0, 'rgba(143,90,255,.30)'); g1.addColorStop(1, 'rgba(143,90,255,0)');
-  ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
-  const g2 = ctx.createRadialGradient(160, 1300, 0, 160, 1300, 560);
-  g2.addColorStop(0, 'rgba(255,96,180,.22)'); g2.addColorStop(1, 'rgba(255,96,180,0)');
-  ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+  // 封面先加载：既用于绘制，也用于取色
+  const cover = withCover && meta.pic ? await loadCover(`${meta.pic}?param=800y800`) : null;
+  const pal = cover ? extractPalette(cover) : null;
+  paintBackground(ctx, pal);
 
   // 品牌
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(255,255,255,.94)';
   ctx.font = `700 42px ${FONT}`;
-  ctx.fillText('CurrentMusic', 90, 118);
+  ctx.fillText('CurrentMusic', 90, 112);
   ctx.fillStyle = 'rgba(255,255,255,.42)';
   ctx.font = `600 22px ${FONT}`;
-  ctx.fillText('MUSIC SHARE', 90, 160);
+  ctx.fillText('MUSIC SHARE', 90, 152);
 
   // 封面
-  const size = 760, x = (W - size) / 2, y = 230;
-  const cover = withCover && meta.pic ? await loadCover(`${meta.pic}?param=760y760`) : null;
+  const size = 620, x = (W - size) / 2, y = 180;
   ctx.save();
-  roundRect(ctx, x, y, size, size, 34);
+  roundRect(ctx, x, y, size, size, 32);
   ctx.clip();
   if (cover) {
     ctx.drawImage(cover, x, y, size, size);
   } else {
     const cg = ctx.createLinearGradient(x, y, x + size, y + size);
-    cg.addColorStop(0, '#7a52c9');
-    cg.addColorStop(1, '#3a2456');
+    cg.addColorStop(0, pal ? `hsl(${pal.h}, 60%, 48%)` : '#7a52c9');
+    cg.addColorStop(1, pal ? `hsl(${(pal.h + 40) % 360}, 50%, 26%)` : '#3a2456');
     ctx.fillStyle = cg;
     ctx.fillRect(x, y, size, size);
-    ctx.fillStyle = 'rgba(255,255,255,.28)';
-    ctx.font = `260px serif`;
+    ctx.fillStyle = 'rgba(255,255,255,.26)';
+    ctx.font = '220px serif';
     ctx.textAlign = 'center';
-    ctx.fillText('♪', W / 2, y + size / 2 + 92);
+    ctx.fillText('♪', W / 2, y + size / 2 + 78);
     ctx.textAlign = 'left';
   }
   ctx.restore();
 
   // 歌名 / 歌手 / 专辑
   ctx.fillStyle = '#ffffff';
-  ctx.font = `700 58px ${FONT}`;
+  ctx.font = `700 54px ${FONT}`;
   const lines = wrapLines(ctx, meta.name || '', 900, 2);
-  let ty = 1100;
-  lines.forEach(l => { ctx.fillText(l, 90, ty); ty += 72; });
+  let ty = 880;
+  lines.forEach(l => { ctx.fillText(l, 90, ty); ty += 70; });
 
-  ctx.fillStyle = 'rgba(255,255,255,.72)';
-  ctx.font = `500 34px ${FONT}`;
-  ctx.fillText(fitText(ctx, meta.artists, 900), 90, ty + 8);
+  ctx.fillStyle = 'rgba(255,255,255,.74)';
+  ctx.font = `500 32px ${FONT}`;
+  ctx.fillText(fitText(ctx, meta.artists, 900), 90, ty + 6);
   if (meta.album) {
     ctx.fillStyle = 'rgba(255,255,255,.46)';
-    ctx.font = `400 28px ${FONT}`;
-    ctx.fillText(fitText(ctx, meta.album, 900), 90, ty + 56);
+    ctx.font = `400 26px ${FONT}`;
+    ctx.fillText(fitText(ctx, meta.album, 900), 90, ty + 48);
   }
 
-  // 底部分隔与链接
+  // 分隔线
   ctx.strokeStyle = 'rgba(255,255,255,.16)';
   ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(90, 1300); ctx.lineTo(W - 90, 1300); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(90, 1090); ctx.lineTo(W - 90, 1090); ctx.stroke();
+
+  // 左侧：文案与链接
   ctx.fillStyle = 'rgba(255,255,255,.5)';
   ctx.font = `400 24px ${FONT}`;
-  ctx.fillText('在 CurrentMusic 收听', 90, 1352);
-  ctx.fillStyle = 'rgba(255,255,255,.82)';
-  ctx.font = `500 24px ui-monospace,Menlo,monospace`;
-  ctx.fillText(fitText(ctx, songUrl(meta).replace(/^https?:\/\//, ''), 900), 90, 1392);
+  ctx.fillText('在 CurrentMusic 收听', 90, 1170);
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.font = '500 22px ui-monospace,Menlo,monospace';
+  ctx.fillText(fitText(ctx, songUrl(meta).replace(/^https?:\/\//, ''), 610), 90, 1216);
+  ctx.fillStyle = 'rgba(255,255,255,.42)';
+  ctx.font = `400 20px ${FONT}`;
+  ctx.fillText('扫码或访问链接', 90, 1262);
+
+  // 右侧：二维码（含 4 模块静区，扫码可用）
+  drawQRCode(ctx, songUrl(meta), 860, 1250, 258);
 
   return cv;
 }
