@@ -230,7 +230,7 @@ export const api = {
   chatSend: (body) => call('POST', '/chat/messages', { body, auth: true }),
   chatDelete: (id) => call('DELETE', `/chat/messages/${id}`, { auth: true }),
   chatUpload: (body) => call('POST', '/chat/image', { body, auth: true }),
-  chatMembers: () => call('GET', '/chat/members'),
+  chatMembers: (q) => call('GET', `/chat/members${q ? `?q=${encodeURIComponent(q)}&limit=8` : ''}`),
   profileOf: (uid) => call('GET', `/profile/${uid}`),
   updateProfile: (fields) => call('PUT', '/profile', { body: fields, auth: true }),
   changePassword: (oldPassword, newPassword) => call('PUT', '/profile/password', { body: { oldPassword, newPassword }, auth: true }),

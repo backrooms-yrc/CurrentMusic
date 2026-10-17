@@ -3208,3 +3208,15 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 .cm-songpage-sub { font-size: calc(13px * var(--cm-fs, 1)); opacity: .65; }
 .cm-songpage-acts { display: flex; gap: 10px; margin-top: 20px; }
 .cm-songpage-tip { margin-top: 18px; font-size: calc(11.5px * var(--cm-fs, 1)); opacity: .45; }
+
+/* @ 提及选择器（v1.28.50）：头像 + 昵称/用户名两行，键盘高亮，实时搜索 */
+.cm-chatp-picker { width: min(280px, calc(100vw - 80px)); max-height: 260px; overflow-y: auto; }
+.cm-chatp-pk.on { background: color-mix(in srgb, var(--cm-primary) 14%, transparent); }
+.cm-chatp-pk-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cm-chatp-pk-n { display: flex; align-items: center; gap: 4px; min-width: 0;
+  font-size: calc(13px * var(--cm-fs, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-chatp-pk-u { font-size: calc(11px * var(--cm-fs, 1)); opacity: .5;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-chatp-pk-empty { padding: 10px 12px; font-size: calc(12px * var(--cm-fs, 1)); opacity: .55; }
+.cm-chatp-hl { background: color-mix(in srgb, var(--cm-primary) 24%, transparent);
+  color: inherit; border-radius: 3px; padding: 0 1px; }

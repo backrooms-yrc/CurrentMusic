@@ -21,11 +21,13 @@ let myId = 0;               // 自己的 user id（标记「我」的消息、�
 
 /** 关闭聊天 SSE（切到其它 TAB / 离开发现页时调用，避免连接悬挂）。 */
 let navWatcher = null;
+let pickerDocHandler = null;
 export function closeChat() {
   if (es) { try { es.close(); } catch (e) { /* 忽略 */ } es = null; }
   if (pollTimer) { clearInterval(pollTimer); pollTimer = 0; }
   if (navWatcher) { window.removeEventListener('hashchange', navWatcher); navWatcher = null; }
   if (fitChat) { fitChat(); fitChat = null; }
+  if (pickerDocHandler) { document.removeEventListener('click', pickerDocHandler); pickerDocHandler = null; }
 }
 
 const fmtTime = ts => {
@@ -70,13 +72,28 @@ function msgHTML(m) {
   </div>`;
 }
 
-let membersCache = [];       // @ 选择器成员（也用于渲染高亮）
+let membersCache = [];               // @ 选择器本地缓存（也用于渲染高亮）
+const pickedMentions = new Map();    // id -> user：从选择器选中的（服务端搜索结果也能计入 mentions）
 
-/** 从内容反推提及 id：@昵称 确实出现在文本里才带上。 */
+/** 合并到本地成员缓存（去重、限量），供 @ 本地即时过滤。 */
+function mergeMembers(list) {
+  for (const u of list || []) {
+    if (!u || !u.id) continue;
+    const i = membersCache.findIndex(x => x.id === u.id);
+    if (i >= 0) membersCache[i] = u;
+    else membersCache.push(u);
+  }
+  if (membersCache.length > 200) membersCache = membersCache.slice(-200);
+}
+
+/** 从内容反推提及 id：@昵称 确实出现在文本里才带上（含选择器选中的服务端搜索结果）。 */
 function mentionsFromContent(text) {
   const t = ' ' + (text || '') + ' ';
   const ids = [];
-  for (const u of membersCache) {
+  const pool = new Map();
+  membersCache.forEach(u => pool.set(u.id, u));
+  pickedMentions.forEach((u, id) => pool.set(id, u));
+  for (const u of pool.values()) {
     if (u.nickname && t.includes('@' + u.nickname) && !ids.includes(u.id)) ids.push(u.id);
   }
   return ids.slice(0, 10);
@@ -104,6 +121,7 @@ function compressImage(file, maxSide = 1280, quality = 0.85) {
 
 export async function mountChat(box) {
   closeChat();
+  pickedMentions.clear();
   // 离开发现页（如点进用户主页）时关闭后台连接；TAB 内切换由 closeChat 负责
   navWatcher = () => { if (!/^#\/square/.test(location.hash || '')) closeChat(); };
   window.addEventListener('hashchange', navWatcher);
@@ -172,6 +190,91 @@ export async function mountChat(box) {
   const picker = box.querySelector('#chatPicker');
   const preview = box.querySelector('#chatPreview');
 
+  // ---- @ 提及选择器：本地即时过滤 + 服务端实时搜索（QQ 式） ----
+  let mentionTimer = 0, mentionSeq = 0, pickerIndex = -1, pickerItems = [], pickerOpen = false;
+  const mentionCache = new Map();   // q -> users
+
+  const hidePicker = () => {
+    pickerOpen = false;
+    picker.style.display = 'none';
+    pickerItems = [];
+    pickerIndex = -1;
+  };
+  const markActive = () => {
+    picker.querySelectorAll('.cm-chatp-pk').forEach((b, i) => b.classList.toggle('on', i === pickerIndex));
+  };
+  const hl = (text, q) => {
+    const s = esc(text || '');
+    if (!q) return s;
+    const needle = esc(q);
+    const i = s.toLowerCase().indexOf(needle.toLowerCase());
+    if (i < 0) return s;
+    return s.slice(0, i) + '<mark class="cm-chatp-hl">' + s.slice(i, i + needle.length) + '</mark>' + s.slice(i + needle.length);
+  };
+  const pickUser = (u) => {
+    if (!u) return;
+    const pos = input.selectionStart || 0;
+    const before = input.value.slice(0, pos).replace(/@([^\s@]*)$/, () => '@' + u.nickname + ' ');
+    input.value = before + input.value.slice(pos);
+    pickedMentions.set(u.id, u);
+    mergeMembers([u]);
+    hidePicker();
+    input.focus();
+    try { input.setSelectionRange(before.length, before.length); } catch { /* 忽略 */ }
+    input.style.height = 'auto';
+    input.style.height = Math.min(120, input.scrollHeight) + 'px';
+  };
+  const drawPicker = (list, q) => {
+    pickerItems = (list || []).slice(0, 8);
+    pickerIndex = pickerItems.length ? 0 : -1;
+    if (!pickerItems.length) {
+      picker.innerHTML = '<div class="cm-chatp-pk-empty">没有匹配的用户</div>';
+      pickerOpen = true;
+      picker.style.display = 'block';
+      return;
+    }
+    picker.innerHTML = pickerItems.map((u, i) => `
+      <button type="button" class="cm-chatp-pk${i === 0 ? ' on' : ''}" data-i="${i}">
+        ${avatarHTML(u, 28)}
+        <span class="cm-chatp-pk-t">
+          <span class="cm-chatp-pk-n">${hl(u.nickname, q)}${userTags(u)}</span>
+          <span class="cm-chatp-pk-u">@${esc(u.username || '')}</span>
+        </span>
+      </button>`).join('');
+    pickerOpen = true;
+    picker.style.display = 'block';
+    picker.querySelectorAll('.cm-chatp-pk').forEach(b => {
+      const take = e => { e.preventDefault(); pickUser(pickerItems[+b.dataset.i]); };
+      b.addEventListener('mousedown', take);
+      b.addEventListener('touchstart', take, { passive: false });
+    });
+  };
+  const searchMentions = (q) => {
+    clearTimeout(mentionTimer);
+    const my = ++mentionSeq;
+    if (!q) { drawPicker(membersCache.slice(0, 8), ''); return; }   // 刚输入 @：先给近期成员
+    mentionTimer = setTimeout(async () => {
+      let list = mentionCache.get(q);
+      if (!list) {
+        try {
+          const d = await api.chatMembers(q);
+          list = (d && d.members) || [];
+          mentionCache.set(q, list);
+          mergeMembers(list);
+          if (mentionCache.size > 100) mentionCache.clear();
+        } catch { return; }              // 网络失败：保留本地即时结果
+      }
+      if (my !== mentionSeq) return;     // 过期响应
+      const m = /@([^\s@]{0,20})$/.exec(input.value.slice(0, input.selectionStart || 0));
+      if (!m || m[1] !== q) return;      // 用户已继续输入
+      drawPicker(list, q);
+    }, 180);
+  };
+  pickerDocHandler = (e) => {
+    if (pickerOpen && !picker.contains(e.target) && e.target !== input) hidePicker();
+  };
+  document.addEventListener('click', pickerDocHandler);
+
   if (auth.token) {
     api.me().then(u => {
       myId = (u && u.id) || 0;
@@ -183,7 +286,7 @@ export async function mountChat(box) {
   }
 
   // ---- 成员（@ 选择器 + 高亮）----
-  api.chatMembers().then(d => { membersCache = (d && d.members) || []; }).catch(() => {});
+  api.chatMembers().then(d => mergeMembers((d && d.members) || [])).catch(() => {});
 
   // ---- 消息渲染 ----
   let oldest = 0, count = 0;
@@ -316,13 +419,26 @@ export async function mountChat(box) {
       const m = await api.chatSend({ content, image: pendingImage, mentions: mentionsFromContent(content), atts: pendingAtts });
       appendMsg(m); bindMsgs(); scrollBottom();
       input.value = ''; input.style.height = 'auto';
-      pendingImage = ''; pendingAtts = []; setPreview();
+      pendingImage = ''; pendingAtts = []; pickedMentions.clear(); setPreview();
     } catch (e) {
       toast(e.message || '发送失败');
     } finally { sendBtn.removeAttribute('loading'); }
   }
   sendBtn.onclick = doSend;
   input.addEventListener('keydown', e => {
+    const pickerVisible = pickerOpen;
+    if (pickerVisible && e.key === 'Escape') { e.preventDefault(); hidePicker(); return; }
+    if (pickerVisible && pickerItems.length) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault(); pickerIndex = (pickerIndex + 1) % pickerItems.length; markActive(); return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault(); pickerIndex = (pickerIndex - 1 + pickerItems.length) % pickerItems.length; markActive(); return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault(); pickUser(pickerItems[pickerIndex] || pickerItems[0]); return;
+      }
+    }
     // 中文输入法组字中的回车是「选词」，不能当成发送
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
       e.preventDefault(); doSend();
@@ -331,27 +447,23 @@ export async function mountChat(box) {
   input.addEventListener('input', () => {
     input.style.height = 'auto';
     input.style.height = Math.min(120, input.scrollHeight) + 'px';
-    // 输入到 @xxx 时弹成员选择器
-    const m = /@([^\s@]{0,12})$/.exec(input.value.slice(0, input.selectionStart || 0));
-    if (m && auth.token && membersCache.length) {
-      const kw = m[1].toLowerCase();
-      const hits = membersCache.filter(u => u.nickname.toLowerCase().includes(kw)).slice(0, 6);
-      if (hits.length) {
-        picker.innerHTML = hits.map(u =>
-          `<button class="cm-chatp-pk" data-nick="${esc(u.nickname)}" data-id="${u.id}">${avatarHTML(u, 24)}<span>${esc(u.nickname)}</span></button>`).join('');
-        picker.style.display = '';
-        picker.querySelectorAll('.cm-chatp-pk').forEach(b => {
-          b.onclick = () => {
-            const v = input.value.slice(0, input.selectionStart || 0).replace(/@([^\s@]*)$/, '@' + b.dataset.nick + ' ');
-            input.value = v + input.value.slice(input.selectionStart || 0);
-            picker.style.display = 'none';
-            input.focus();
-          };
-        });
-        return;
-      }
+    const before = input.value.slice(0, input.selectionStart || 0);
+    const m = /@([^\s@]{0,20})$/.exec(before);
+    if (!auth.token || !m) { if (!m) hidePicker(); return; }
+    const q = m[1];
+    // 先给本地候选（不等网络）；随后服务端在 180ms 防抖后补全搜索结果
+    const kw = q.toLowerCase();
+    const local = membersCache.filter(u => (u.nickname || '').toLowerCase().includes(kw)).slice(0, 8);
+    if (local.length) drawPicker(local, q);
+    else if (q) {
+      // 本地没有命中：先显示搜索中，避免"没有匹配"闪一下
+      picker.innerHTML = '<div class="cm-chatp-pk-empty">搜索中…</div>';
+      pickerOpen = true;
+      pickerItems = [];
+      pickerIndex = -1;
+      picker.style.display = 'block';
     }
-    picker.style.display = 'none';
+    searchMentions(q);
   });
 
   box.querySelector('#chatAttBtn').onclick = () => {
