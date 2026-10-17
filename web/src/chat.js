@@ -20,6 +20,7 @@ const SUGGEST = {
   album: ['这张专辑的创作背景是什么？', '这张专辑里有哪些代表作？', '这位歌手的生平事迹有哪些？'],
   artist: ['这位歌手的生平事迹有哪些？', '这位歌手的代表作有哪些？', '这位歌手的音乐风格是怎样的？'],
   playlist: ['这个歌单的主题是什么？', '这个歌单里有哪些值得一听的歌？', '这个歌单适合什么场景听？'],
+  generic: ['最近有什么好听的歌？', '推荐几首适合通勤的歌', '介绍一下 CurrentMusic 这个站'],
 };
 let es = null;              // 当前 SSE 连接（重进 TAB / 切走时关闭）
 let pollTimer = 0;          // SSE 不可用时的轮询兜底
@@ -246,12 +247,7 @@ export async function mountChat(box) {
   function updateSuggest() {
     if (!aiMentioned()) { suggest.hidden = true; suggest.innerHTML = ''; return; }
     const card = pendingAtts[0];
-    if (!card) {
-      suggest.innerHTML = '<span class="cm-chatp-suggest-h">先引用一张单曲 / 专辑 / 歌手 / 歌单卡片，再问我吧</span>';
-      suggest.hidden = false;
-      return;
-    }
-    const qs = SUGGEST[card.type] || SUGGEST.song;
+    const qs = card ? (SUGGEST[card.type] || SUGGEST.song) : SUGGEST.generic;
     suggest.innerHTML = '<span class="cm-chatp-suggest-t">猜你想问</span>' +
       qs.map(q => `<button type="button" class="cm-chatp-sug">${esc(q)}</button>`).join('');
     suggest.hidden = false;
