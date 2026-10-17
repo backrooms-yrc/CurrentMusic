@@ -233,7 +233,10 @@ async function drawCard(meta, withCover) {
   ctx.fillText(fitText(ctx, songUrl(meta).replace(/^https?:\/\//, ''), 610), 90, 1216);
   ctx.fillStyle = 'rgba(255,255,255,.42)';
   ctx.font = `400 20px ${FONT}`;
-  ctx.fillText('扫码或访问链接', 90, 1262);
+  ctx.fillText('扫码或访问链接', 90, 1256);
+  ctx.fillStyle = 'rgba(255,255,255,.52)';
+  ctx.font = `400 19px ${FONT}`;
+  ctx.fillText(fitText(ctx, `也可打开 CurrentMusicX 搜索「${meta.name}」收听`, 610), 90, 1296);
 
   // 右侧：二维码（含 4 模块静区，扫码可用）
   drawQRCode(ctx, songUrl(meta), 860, 1250, 258);
