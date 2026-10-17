@@ -3161,3 +3161,18 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 @media (min-width: 1200px) {
   .cm-page { max-width: 1080px; }
 }
+
+/* Chat 引用卡片（v1.28.45）：复用帖子附件样式，紧凑版用于消息下方 */
+.cm-chatp-atts { max-width: min(78%, 560px); margin-top: 4px; }
+.cm-chatp-msg.mine .cm-chatp-atts { align-self: flex-end; }
+.cm-post-atts.compact { gap: 4px; margin: 4px 0 0; }
+.cm-post-atts.compact .cm-post-att { padding: 5px 8px; gap: 8px; border-radius: 10px; }
+.cm-post-atts.compact .cm-post-att-pic { width: 30px; height: 30px; border-radius: 7px; }
+.cm-post-atts.compact .cm-post-att-name { font-size: calc(12.5px * var(--cm-fs, 1)); }
+.cm-post-atts.compact .cm-post-att-sub { font-size: calc(10.5px * var(--cm-fs, 1)); }
+.cm-chatp-preview { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.cm-chatp-pend-img { position: relative; display: inline-flex; }
+
+/* 独立发帖/公告页（v1.28.45） */
+.cm-peditor-page { max-width: 760px; margin-left: auto; margin-right: auto; }
+.cm-peditor-actions { margin-top: 14px; }

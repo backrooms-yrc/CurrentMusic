@@ -11,6 +11,7 @@
 //     魔法字节校验），直链由后端 /chat/image/<file> 分发。
 import { api, auth, call, settings } from './api.js';
 import { esc, avatarHTML, userTags, toast } from './ui.js';
+import { MAX_ATTACH, TYPE_LABEL, attachHTML, bindAttach, openAttachPicker } from './attach.js';
 
 const PAGE = 30;
 let es = null;              // 当前 SSE 连接（重进 TAB / 切走时关闭）
@@ -64,6 +65,7 @@ function msgHTML(m) {
         ${m.content ? `<div class="cm-chatp-text">${contentHTML(m, membersCache)}</div>` : ''}
         ${m.image ? `<img class="cm-chatp-img" src="${esc(settings.base)}/chat/image/${esc(m.image)}" loading="lazy" onclick="window.open(this.src,'_blank')">` : ''}
       </div>
+      ${m.atts && m.atts.length ? `<div class="cm-chatp-atts">${attachHTML(m.atts, { compact: true })}</div>` : ''}
     </div>
   </div>`;
 }
@@ -115,6 +117,7 @@ export async function mountChat(box) {
       <div class="cm-chatp-picker" id="chatPicker"></div>
       <div class="cm-chatp-composer">
         <button class="cm-chatp-tool material-icons-outlined" id="chatImgBtn" title="发图片">image</button>
+        <button class="cm-chatp-tool material-icons-outlined" id="chatAttBtn" title="引用单曲/专辑/歌手/歌单">library_add</button>
         <input type="file" id="chatImgFile" accept="image/*" style="display:none">
         <div class="cm-chatp-inputwrap">
           <textarea id="chatInput" rows="1" placeholder="${auth.token ? '说点什么…（@ 可以提及成员）' : '登录后即可聊天'}" ${auth.token ? '' : 'disabled'}></textarea>
@@ -190,6 +193,8 @@ export async function mountChat(box) {
   function appendMsg(m) {
     if (msgsEl.querySelector(`[data-id="${m.id}"]`)) return;      // SSE 与发送响应去重
     msgsEl.insertAdjacentHTML('beforeend', msgHTML(m));
+    const node = msgsEl.lastElementChild;
+    if (node && m.atts && m.atts.length) bindAttach(node, m.atts);
     count++; emptyEl.style.display = 'none';
   }
   function bindMsgs() {
@@ -274,6 +279,10 @@ export async function mountChat(box) {
       if (!list2.length) { moreEl.style.display = 'none'; return; }
       const keep = list.scrollHeight - list.scrollTop;
       msgsEl.insertAdjacentHTML('afterbegin', list2.map(msgHTML).join(''));
+      list2.forEach(m => {
+        const node = msgsEl.querySelector(`.cm-chatp-msg[data-id="${m.id}"]`);
+        if (node && m.atts && m.atts.length) bindAttach(node, m.atts);
+      });
       oldest = list2[0].id;
       if (list2.length < PAGE) moreEl.style.display = 'none';
       bindMsgs();
@@ -283,23 +292,31 @@ export async function mountChat(box) {
 
   // ---- 发送（文本 / 图片 / @） ----
   let pendingImage = '';
+  let pendingAtts = [];
   const setPreview = () => {
-    preview.style.display = pendingImage ? '' : 'none';
-    preview.innerHTML = pendingImage
-      ? `<img src="${esc(settings.base)}/chat/image/${esc(pendingImage)}"><span class="cm-chatp-rm material-icons-outlined" id="chatRmImg">close</span>` : '';
-    if (pendingImage) preview.querySelector('#chatRmImg').onclick = () => { pendingImage = ''; setPreview(); };
+    const has = !!pendingImage || pendingAtts.length > 0;
+    preview.style.display = has ? '' : 'none';
+    if (!has) { preview.innerHTML = ''; return; }
+    preview.innerHTML = `
+      ${pendingImage ? `<span class="cm-chatp-pend-img"><img src="${esc(settings.base)}/chat/image/${esc(pendingImage)}"><span class="cm-chatp-rm material-icons-outlined" data-rmimg>close</span></span>` : ''}
+      ${pendingAtts.map((a, i) => `<span class="cm-peditor-att">${esc(TYPE_LABEL[a.type] || '')}·${esc(a.name)}<span class="material-icons-outlined" data-rmatt="${i}">close</span></span>`).join('')}`;
+    const rmImg = preview.querySelector('[data-rmimg]');
+    if (rmImg) rmImg.onclick = () => { pendingImage = ''; setPreview(); };
+    preview.querySelectorAll('[data-rmatt]').forEach(x => {
+      x.onclick = () => { pendingAtts.splice(+x.dataset.rmatt, 1); setPreview(); };
+    });
   };
 
   async function doSend() {
     const content = input.value.trim();
-    if (!content && !pendingImage) return;
+    if (!content && !pendingImage && !pendingAtts.length) return;
     if (!auth.token) return toast('登录后即可聊天');
     sendBtn.setAttribute('loading', '');
     try {
-      const m = await api.chatSend({ content, image: pendingImage, mentions: mentionsFromContent(content) });
+      const m = await api.chatSend({ content, image: pendingImage, mentions: mentionsFromContent(content), atts: pendingAtts });
       appendMsg(m); bindMsgs(); scrollBottom();
       input.value = ''; input.style.height = 'auto';
-      pendingImage = ''; setPreview();
+      pendingImage = ''; pendingAtts = []; setPreview();
     } catch (e) {
       toast(e.message || '发送失败');
     } finally { sendBtn.removeAttribute('loading'); }
@@ -336,6 +353,18 @@ export async function mountChat(box) {
     }
     picker.style.display = 'none';
   });
+
+  box.querySelector('#chatAttBtn').onclick = () => {
+    if (!auth.token) return toast('登录后可引用内容');
+    if (pendingAtts.length >= MAX_ATTACH) return toast(`最多引用 ${MAX_ATTACH} 项`);
+    openAttachPicker(picked => {
+      const room = MAX_ATTACH - pendingAtts.length;
+      picked.slice(0, room).forEach(x => {
+        if (!pendingAtts.some(p => p.type === x.type && p.id === x.id)) pendingAtts.push(x);
+      });
+      setPreview();
+    });
+  };
 
   box.querySelector('#chatImgBtn').onclick = () => {
     if (!auth.token) return toast('登录后可发图片');

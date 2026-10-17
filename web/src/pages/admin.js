@@ -229,44 +229,9 @@ export async function render(el) {
     });
   };
 
+  // 公告编辑改为独立页面（v1.28.45），列表页只负责跳转
   const annDialog = a => {
-    const isNew = !a;
-    const d = a || { title: '', body: '', link: '', pinned: false };
-    const diag = mdui.dialog({
-      headline: isNew ? '发布公告' : '编辑公告',
-      body: `<div class="cm-form" style="display:flex;flex-direction:column;gap:12px">
-        <mdui-text-field id="annTitle" label="标题" variant="outlined" value="${esc(d.title)}" maxlength="60" style="width:100%"></mdui-text-field>
-        <mdui-text-field id="annBody" label="正文（支持 Markdown）" variant="outlined" type="textarea" rows="6" value="${esc(d.body)}" style="width:100%"></mdui-text-field>
-        <mdui-text-field id="annLink" label="详情链接（可选，http/https）" variant="outlined" value="${esc(d.link)}" style="width:100%"></mdui-text-field>
-        <div class="cm-more-s" style="opacity:.7">客户端每次打开网页 / App 都会弹窗展示生效中的公告，置顶排最前。</div>
-      </div>`,
-      actions: [
-        { text: '取消' },
-        {
-          text: isNew ? '发布' : '保存',
-          onClick: () => {
-            (async () => {
-              const payload = {
-                title: (diag.querySelector('#annTitle').value || '').trim(),
-                body: (diag.querySelector('#annBody').value || '').trim(),
-                link: (diag.querySelector('#annLink').value || '').trim(),
-                pinned: !!d.pinned,
-              };
-              if (!payload.title) { toast('请填写标题'); return; }
-              try {
-                if (isNew) await api.createAnnouncement(payload);
-                else await api.updateAnnouncement(d.id, payload);
-                toast(isNew ? '已发布，客户端下次打开即可看到' : '已保存');
-                diag.open = false;
-                renderAnn();
-              } catch (e) { toast(e.message); }
-            })();
-            return false;   // 同步返回 false：mdui 不会因为 Promise 自动关窗
-          },
-        },
-      ],
-    });
-    setTimeout(() => diag.querySelector('#annTitle')?.focus?.(), 200);
+    location.hash = a ? `#/announce/${a.id}` : '#/announce/new';
   };
 
   el.querySelector('#annNew').onclick = () => annDialog(null);

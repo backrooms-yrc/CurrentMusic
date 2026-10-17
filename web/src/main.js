@@ -72,6 +72,8 @@ import * as podcastPage from './pages/podcast.js';
 import * as memberPage from './pages/member.js';
 import * as servicesPage from './pages/services.js';
 import * as repPage from './pages/rep.js';
+import * as postNewPage from './pages/post-new.js';
+import * as announceEditPage from './pages/announce-edit.js';
 
 const ROUTES = [
   { re: /^#\/home$/, page: home, title: 'CurrentMusic' },
@@ -108,6 +110,9 @@ const ROUTES = [
   { re: /^#\/user$/, page: user, title: '我的' },
   { re: /^#\/settings$/, page: settingsPage, title: '设置' },
   { re: /^#\/admin$/, page: adminPage, title: '管理员' },
+  { re: /^#\/post\/new$/, page: postNewPage, title: '发帖' },
+  { re: /^#\/announce\/new$/, page: announceEditPage, title: '发布公告' },
+  { re: /^#\/announce\/(\d+)$/, page: announceEditPage, title: '编辑公告', fixed: m => [m[1]] },
   { re: /^#\/rooms$/, page: roomsPage, title: '一起听' },
   { re: /^#\/room\/(\d+)$/, page: roomPage, title: '听歌房', fixed: m => [m[1]] },
   { re: /^#\/pl\/(.+)$/, page: playlist, title: '歌单', fixed: m => ['pl', m[1]] },
