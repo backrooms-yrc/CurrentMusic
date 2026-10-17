@@ -74,6 +74,7 @@ import * as servicesPage from './pages/services.js';
 import * as repPage from './pages/rep.js';
 import * as postNewPage from './pages/post-new.js';
 import * as announceEditPage from './pages/announce-edit.js';
+import * as songPage from './pages/song.js';
 
 const ROUTES = [
   { re: /^#\/home$/, page: home, title: 'CurrentMusic' },
@@ -111,6 +112,7 @@ const ROUTES = [
   { re: /^#\/settings$/, page: settingsPage, title: '设置' },
   { re: /^#\/admin$/, page: adminPage, title: '管理员' },
   { re: /^#\/post\/new$/, page: postNewPage, title: '发帖' },
+  { re: /^#\/song\/(\d+)$/, page: songPage, title: '歌曲', fixed: m => [m[1]] },
   { re: /^#\/announce\/new$/, page: announceEditPage, title: '发布公告' },
   { re: /^#\/announce\/(\d+)$/, page: announceEditPage, title: '编辑公告', fixed: m => [m[1]] },
   { re: /^#\/rooms$/, page: roomsPage, title: '一起听' },

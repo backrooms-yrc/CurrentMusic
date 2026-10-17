@@ -632,6 +632,48 @@ public class MainActivity extends Activity {
         public void download(final String url, final String fileName, final String subDir) {
             main.post(() -> startDownload(url, fileName, subDir));
         }
+
+        /** 保存分享图（base64 dataURL 或裸 base64）到系统相册/图片目录。 */
+        @JavascriptInterface
+        public void saveImage(final String dataUrl, final String fileName) {
+            main.post(() -> {
+                try {
+                    String b64 = dataUrl == null ? "" : dataUrl;
+                    int comma = b64.indexOf(',');
+                    if (b64.startsWith("data:") && comma > 0) b64 = b64.substring(comma + 1);
+                    byte[] data = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                    String name = (fileName == null || fileName.isEmpty())
+                            ? "CurrentMusic-share.png"
+                            : fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        android.content.ContentValues v = new android.content.ContentValues();
+                        v.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, name);
+                        v.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+                        v.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                                android.os.Environment.DIRECTORY_PICTURES + "/CurrentMusic");
+                        Uri uri = getContentResolver().insert(
+                                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+                        if (uri == null) throw new IOException("无法创建图片");
+                        try (java.io.OutputStream os = getContentResolver().openOutputStream(uri)) {
+                            if (os == null) throw new IOException("无法写入图片");
+                            os.write(data);
+                        }
+                    } else {
+                        java.io.File base = getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES);
+                        java.io.File dir = new java.io.File(base, "CurrentMusic");
+                        if (!dir.exists() && !dir.mkdirs()) throw new IOException("无法创建目录");
+                        java.io.File f = new java.io.File(dir, name);
+                        try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) { out.write(data); }
+                        android.media.MediaScannerConnection.scanFile(MainActivity.this,
+                                new String[]{f.getAbsolutePath()}, null, null);
+                    }
+                    Toast.makeText(MainActivity.this, "分享图已保存", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Log.w(TAG, "saveImage failed: " + e);
+                    Toast.makeText(MainActivity.this, "保存失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            });
+        }
     }
 
     @SuppressLint("InlinedApi")

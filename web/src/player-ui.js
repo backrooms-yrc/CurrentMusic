@@ -5,6 +5,7 @@ import { waveStyle, waveTilt } from './customize.js';
 import { api, auth, settings } from './api.js';
 import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, ensureStatus, openLikeMenu, isNcmLiked, ensureNcmLiked, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
 import { player, wave, on } from './player.js';
+import { openShare } from './share.js';
 import { castIconHTML, openCastDialog } from './cast.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
@@ -682,7 +683,11 @@ function openMoreDrawer() {
         <div><div class="cm-more-t">均衡器</div><div class="cm-more-s">五段 EQ · 预设与自定义</div></div>
         <span class="material-icons-outlined">graphic_eq</span>
       </div>
-<div class="cm-more-sec">歌曲信息</div>
+<div class="cm-more-row" id="mShare" style="cursor:pointer">
+        <div><div class="cm-more-t">分享歌曲</div><div class="cm-more-s">分享图 / 链接 / 歌曲信息</div></div>
+        <span class="material-icons-outlined">share</span>
+      </div>
+      <div class="cm-more-sec">歌曲信息</div>
       <div class="cm-more-row" id="mWiki" style="cursor:pointer">
         <div><div class="cm-more-t">歌曲百科</div><div class="cm-more-s">创作信息 / 基本信息 / 百科正文</div></div>
         <span class="material-icons-outlined">chevron_right</span>
@@ -699,6 +704,12 @@ function openMoreDrawer() {
     actions: [{ text: '关闭' }],
   });
   setTimeout(() => {
+    const msh = diag.querySelector('#mShare');
+    if (msh) msh.onclick = () => {
+      if (!player.meta) return toast('当前没有播放中的歌曲');
+      diag.open = false;
+      openShare(player.meta);
+    };
     const meq = diag.querySelector('#mEq');
     if (meq) meq.onclick = () => { diag.open = false; openEqDialog(); };
     const wk = diag.querySelector('#mWiki');
