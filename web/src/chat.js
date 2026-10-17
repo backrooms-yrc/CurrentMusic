@@ -14,6 +14,13 @@ import { esc, avatarHTML, userTags, toast } from './ui.js';
 import { MAX_ATTACH, TYPE_LABEL, attachHTML, bindAttach, openAttachPicker } from './attach.js';
 
 const PAGE = 30;
+const AI_USERNAME = 'CurrentMusicAI';
+const SUGGEST = {
+  song: ['这首歌的创作背景是什么？', '这首歌出自哪部影视作品？', '这名歌手的生平事迹有哪些？'],
+  album: ['这张专辑的创作背景是什么？', '这张专辑里有哪些代表作？', '这位歌手的生平事迹有哪些？'],
+  artist: ['这位歌手的生平事迹有哪些？', '这位歌手的代表作有哪些？', '这位歌手的音乐风格是怎样的？'],
+  playlist: ['这个歌单的主题是什么？', '这个歌单里有哪些值得一听的歌？', '这个歌单适合什么场景听？'],
+};
 let es = null;              // 当前 SSE 连接（重进 TAB / 切走时关闭）
 let pollTimer = 0;          // SSE 不可用时的轮询兜底
 let fitChat = null;         // 聊天区高度自适应解绑函数
@@ -133,6 +140,7 @@ export async function mountChat(box) {
         <div class="cm-chatp-empty" id="chatEmpty">还没有人说话，来打个招呼吧</div>
       </div>
       <div class="cm-chatp-picker" id="chatPicker"></div>
+      <div class="cm-chatp-suggest" id="chatSuggest" hidden></div>
       <div class="cm-chatp-composer">
         <button class="cm-chatp-tool material-icons-outlined" id="chatImgBtn" title="发图片">image</button>
         <button class="cm-chatp-tool material-icons-outlined" id="chatAttBtn" title="引用单曲/专辑/歌手/歌单">library_add</button>
@@ -188,6 +196,7 @@ export async function mountChat(box) {
   const input = box.querySelector('#chatInput');
   const sendBtn = box.querySelector('#chatSend');
   const picker = box.querySelector('#chatPicker');
+  const suggest = box.querySelector('#chatSuggest');
   const preview = box.querySelector('#chatPreview');
 
   // ---- @ 提及选择器：本地即时过滤 + 服务端实时搜索（QQ 式） ----
@@ -223,7 +232,41 @@ export async function mountChat(box) {
     try { input.setSelectionRange(before.length, before.length); } catch { /* 忽略 */ }
     input.style.height = 'auto';
     input.style.height = Math.min(120, input.scrollHeight) + 'px';
+    updateSuggest();
   };
+
+  const aiMentioned = () => {
+    for (const u of pickedMentions.values()) {
+      if (u.isBot || u.username === AI_USERNAME) return true;
+    }
+    return new RegExp('@\\s*' + AI_USERNAME + '\\b').test(input.value);
+  };
+
+  /** 引用卡片并 @AI 时，在输入框上方给出「猜你想问」。 */
+  function updateSuggest() {
+    if (!aiMentioned()) { suggest.hidden = true; suggest.innerHTML = ''; return; }
+    const card = pendingAtts[0];
+    if (!card) {
+      suggest.innerHTML = '<span class="cm-chatp-suggest-h">先引用一张单曲 / 专辑 / 歌手 / 歌单卡片，再问我吧</span>';
+      suggest.hidden = false;
+      return;
+    }
+    const qs = SUGGEST[card.type] || SUGGEST.song;
+    suggest.innerHTML = '<span class="cm-chatp-suggest-t">猜你想问</span>' +
+      qs.map(q => `<button type="button" class="cm-chatp-sug">${esc(q)}</button>`).join('');
+    suggest.hidden = false;
+    suggest.querySelectorAll('.cm-chatp-sug').forEach(b => {
+      b.onclick = () => {
+        const q = b.textContent;
+        const base = input.value.trim();
+        if (!base.includes(q)) input.value = base ? base + ' ' + q : q;
+        input.focus();
+        try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* 忽略 */ }
+        input.style.height = 'auto';
+        input.style.height = Math.min(120, input.scrollHeight) + 'px';
+      };
+    });
+  }
   const drawPicker = (list, q) => {
     pickerItems = (list || []).slice(0, 8);
     pickerIndex = pickerItems.length ? 0 : -1;
@@ -408,6 +451,7 @@ export async function mountChat(box) {
     preview.querySelectorAll('[data-rmatt]').forEach(x => {
       x.onclick = () => { pendingAtts.splice(+x.dataset.rmatt, 1); setPreview(); };
     });
+    updateSuggest();
   };
 
   async function doSend() {
@@ -449,7 +493,7 @@ export async function mountChat(box) {
     input.style.height = Math.min(120, input.scrollHeight) + 'px';
     const before = input.value.slice(0, input.selectionStart || 0);
     const m = /@([^\s@]{0,20})$/.exec(before);
-    if (!auth.token || !m) { if (!m) hidePicker(); return; }
+    if (!auth.token || !m) { if (!m) hidePicker(); updateSuggest(); return; }
     const q = m[1];
     // 先给本地候选（不等网络）；随后服务端在 180ms 防抖后补全搜索结果
     const kw = q.toLowerCase();
@@ -464,6 +508,7 @@ export async function mountChat(box) {
       picker.style.display = 'block';
     }
     searchMentions(q);
+    updateSuggest();
   });
 
   box.querySelector('#chatAttBtn').onclick = () => {

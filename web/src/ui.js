@@ -625,6 +625,7 @@ export function userTags(u, { role = true } = {}) {
   if (!u) return '';
   const out = [];
   const title = String(u.title || '').trim();
+  if (u.isBot || u.is_bot) out.push('<span class="cm-tag ai">AI</span>');
   if (title) out.push(`<span class="cm-tag title">${esc(title)}</span>`);
   if (role) {
     if (u.isOwner || u.is_owner) out.push('<span class="cm-tag owner">站长</span>');

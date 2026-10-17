@@ -3220,3 +3220,16 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 .cm-chatp-pk-empty { padding: 10px 12px; font-size: calc(12px * var(--cm-fs, 1)); opacity: .55; }
 .cm-chatp-hl { background: color-mix(in srgb, var(--cm-primary) 24%, transparent);
   color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* CurrentMusicAI「猜你想问」（v1.28.51） */
+.cm-chatp-suggest { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 6px 2px 2px; }
+.cm-chatp-suggest[hidden] { display: none; }
+.cm-chatp-suggest-t { font-size: calc(11px * var(--cm-fs, 1)); opacity: .5; margin-right: 2px; }
+.cm-chatp-suggest-h { font-size: calc(12px * var(--cm-fs, 1)); opacity: .55; padding: 2px; }
+.cm-chatp-sug { border: 1px solid color-mix(in srgb, var(--cm-primary) 28%, transparent);
+  background: color-mix(in srgb, var(--cm-primary) 6%, transparent); color: inherit;
+  font: inherit; font-size: calc(12px * var(--cm-fs, 1)); padding: 5px 10px; border-radius: 999px;
+  cursor: pointer; }
+.cm-chatp-sug:active { background: color-mix(in srgb, var(--cm-primary) 16%, transparent); }
+.cm-tag.ai { background: linear-gradient(135deg, #5b8cff, #8a5cf6); color: #fff; }
