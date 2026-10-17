@@ -127,7 +127,7 @@ export async function render(el, params = []) {
       }
       hotBox.innerHTML = chips ? `<div class="cm-sec-head"><h2>热门搜索</h2></div>
         <div class="cm-chips">${chips}</div>` : '';
-      hotBox.querySelectorAll('.cm-hot').forEach(c => { c.onclick = () => { input.value = c.dataset.k; doSearch(c.dataset.k); }; });
+      hotBox.querySelectorAll('.cm-hot').forEach(c => { c.onclick = () => { input.value = c.dataset.k; input.blur(); doSearch(c.dataset.k); }; });
     } catch { hotBox.innerHTML = ''; }
   }
 
@@ -138,7 +138,7 @@ export async function render(el, params = []) {
       <div class="cm-chips">${h.map(k =>
         `<span class="cm-hist"><span class="cm-hist-k" data-k="${esc(k)}">${esc(k)}</span><i class="cm-hist-x" data-x="${esc(k)}"><span class="material-icons-outlined">close</span></i></span>`).join('')}</div>`;
     histBox.querySelector('#clearHist').onclick = () => { localStorage.removeItem(HIST_KEY); renderHist(); renderHot(); };
-    histBox.querySelectorAll('.cm-hist-k').forEach(c => { c.onclick = () => { input.value = c.dataset.k; doSearch(c.dataset.k); }; });
+    histBox.querySelectorAll('.cm-hist-k').forEach(c => { c.onclick = () => { input.value = c.dataset.k; input.blur(); doSearch(c.dataset.k); }; });
     histBox.querySelectorAll('.cm-hist-x').forEach(x => {
       x.onclick = e => {
         e.stopPropagation();
@@ -444,13 +444,16 @@ export async function render(el, params = []) {
     }
   }
 
-  // 输入不触发搜索：只有回车（或点击热搜/历史词条这类明确动作）才发起请求
+  // 输入不触发搜索：只有回车（或点击候选/热搜/历史词条这类明确动作）才发起请求
   input.addEventListener('input', () => {
     if (!(input.value || '').trim()) { seq++; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; renderHist(); renderHot(); return; }
+    // 输入中：候选词独占视野，历史/热搜让位（清空后由上面分支恢复）
+    histBox.innerHTML = ''; hotBox.innerHTML = '';
     queueSuggest(input.value.trim());
   });
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { const kw = (input.value || '').trim(); if (kw) { sugBox.innerHTML = ''; doSearch(kw); } }
+    // 回车即搜并收起键盘——iOS 上键盘不收会盖住刚出的搜索结果
+    if (e.key === 'Enter') { const kw = (input.value || '').trim(); if (kw) { sugBox.innerHTML = ''; input.blur(); doSearch(kw); } }
   });
 
   /* ---------- 搜索建议：输入防抖 300ms，逐字不发请求 ---------- */
@@ -476,10 +479,11 @@ export async function render(el, params = []) {
         if (my !== sugSeq) return;                       // 过期响应丢弃
         words = words.slice(0, 10);
         if (!words.length || (input.value || '').trim() !== kw) { sugBox.innerHTML = ''; return; }
-        sugBox.innerHTML = `<div class="cm-chips">${words.map(w =>
-          `<span class="cm-hist-k" data-k="${esc(w)}">${esc(w)}</span>`).join('')}</div>`;
+        sugBox.innerHTML = `<div class="cm-sug" role="listbox" aria-label="搜索候选">${words.map(w =>
+          `<button type="button" class="cm-sug-item" role="option" data-k="${esc(w)}" aria-label="搜索 ${esc(w)}">` +
+          `<span class="material-icons-outlined">search</span><span class="k">${esc(w)}</span></button>`).join('')}</div>`;
         sugBox.querySelectorAll('[data-k]').forEach(c => {
-          c.onclick = () => { input.value = c.dataset.k; sugBox.innerHTML = ''; doSearch(c.dataset.k); };
+          c.onclick = () => { input.value = c.dataset.k; sugBox.innerHTML = ''; input.blur(); doSearch(c.dataset.k); };
         });
       } catch { if (my === sugSeq) sugBox.innerHTML = ''; }
     }, 300);
@@ -489,5 +493,7 @@ export async function render(el, params = []) {
   const preset = ((params && params.query) || {}).q || '';
   if (preset.trim()) { input.value = preset.trim(); doSearch(preset.trim()); }
 
-  setTimeout(() => input.focus(), 100);
+  // 桌面端自动聚焦。触屏设备上程序化聚焦既弹不出键盘（iOS 需要用户手势），
+  // 还会把页面滚到输入框、顶穿固定顶栏——反而添乱，只在有鼠标的设备上聚焦。
+  if (matchMedia('(hover: hover) and (pointer: fine)').matches) setTimeout(() => input.focus(), 100);
 }

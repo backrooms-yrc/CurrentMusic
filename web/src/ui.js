@@ -562,17 +562,18 @@ export async function renderSongList(el, songs, opts = {}) {
 // 注意：mdui 2 的 dialog 不支持 onAction 选项，确认逻辑必须挂在
 // action 的 onClick 上（返回 promise 自动在完成后关闭，返回 false 不关闭）。
 
-export function promptDialog({ title, label, value = '', placeholder = '', type = 'text', onOk }) {
+export function promptDialog({ title, label, value = '', placeholder = '', type = 'text', allowEmpty = false, maxlength = 0, onOk }) {
+  const maxAttr = maxlength > 0 ? ` maxlength="${maxlength}"` : '';
   const diag = mdui.dialog({
     headline: title,
-    body: `<mdui-text-field label="${esc(label)}" variant="outlined" value="${esc(value)}" placeholder="${esc(placeholder)}" ${type === 'password' ? 'type="password"' : ''} style="width:100%"></mdui-text-field>`,
+    body: `<mdui-text-field label="${esc(label)}" variant="outlined" value="${esc(value)}" placeholder="${esc(placeholder)}"${maxAttr} ${type === 'password' ? 'type="password"' : ''} style="width:100%"></mdui-text-field>`,
     actions: [
       { text: '取消' },
       {
         text: '确定',
         onClick: () => {
           const v = diag.querySelector('mdui-text-field').value.trim();
-          if (!v) { toast('内容不能为空'); return false; }
+          if (!v && !allowEmpty) { toast('内容不能为空'); return false; }
           return Promise.resolve(onOk(v)).catch(e => { toast(e.message); return false; });
         },
       },
@@ -612,4 +613,35 @@ export function avatarHTML(user, size = 72) {
   if (!decor) return inner;
   // 有挂件时外层补一个定位盒（原先直接返回 img，调用方的 flex 布局不受影响）
   return `<span class="cm-ava-box" style="width:${size}px;height:${size}px">${inner}${decor}</span>`;
+}
+
+/**
+ * 用户身份徽章：站内头衔 + 站长 / 超级管理员 / 管理员。
+ * 兼容两种字段命名：广场接口是 snake_case（is_owner/is_super/is_admin），其余接口是 camelCase（isOwner/…）。
+ * 头衔在后端已做长度与空白规整，这里仍过一遍 esc()，正文里写 <script> 也不会执行。
+ * 返回串自带前导空格（有徽章时），调用处直接 ${userTags(u)} 即可，不用自己补间距。
+ */
+export function userTags(u, { role = true } = {}) {
+  if (!u) return '';
+  const out = [];
+  const title = String(u.title || '').trim();
+  if (title) out.push(`<span class="cm-tag title">${esc(title)}</span>`);
+  if (role) {
+    if (u.isOwner || u.is_owner) out.push('<span class="cm-tag owner">站长</span>');
+    else if (u.isSuper || u.is_super) out.push('<span class="cm-tag super">超级管理员</span>');
+    else if (u.isAdmin || u.is_admin) out.push('<span class="cm-tag admin">管理员</span>');
+  }
+  return out.length ? ' ' + out.join(' ') : '';
+}
+
+/** 徽章的纯文本版（设置页那种「一行文字 + 右侧说明」的布局用）。 */
+export function userTagsText(u) {
+  if (!u) return '';
+  const parts = [];
+  const title = String(u.title || '').trim();
+  if (title) parts.push(title);
+  if (u.isOwner || u.is_owner) parts.push('站长');
+  else if (u.isSuper || u.is_super) parts.push('超级管理员');
+  else if (u.isAdmin || u.is_admin) parts.push('管理员');
+  return parts.join(' · ');
 }

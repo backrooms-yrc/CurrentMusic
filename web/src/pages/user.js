@@ -1,7 +1,7 @@
 // 用户页：未登录=登录/注册；已登录=我的主页（资料/统计/歌单/多账号/设置）
 import { mdui } from '../md.js';
 import { api, auth, settings, adoptDecorScales } from '../api.js';
-import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile, fmtListen } from '../ui.js';
+import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile, fmtListen, userTags } from '../ui.js';
 
 /** 登录/注册成功后的落点：如果是从通行证授权页跳来的，处理完自动回去。 */
 function afterLogin() {
@@ -117,6 +117,7 @@ function renderAuth(el) {
       <div class="cm-auth-sub">CurrentMusic · 账号与 Current 系产品通用</div>
       <mdui-segmented-button-group value="login" selects="single" id="mode">
         <mdui-segmented-button value="login">登录</mdui-segmented-button>
+        <mdui-segmented-button value="code">验证码登录</mdui-segmented-button>
         <mdui-segmented-button value="register">注册</mdui-segmented-button>
       </mdui-segmented-button-group>
       <div class="cm-auth-form">
@@ -191,15 +192,22 @@ function renderAuth(el) {
   };
   vfy.addEventListener('change', () => setVerify(vfy.value));
 
-  // 按模式只显示必填项：登录=用户名+密码；注册=用户名+昵称+密码+验证方式对应字段
+  // 按模式只显示必填项：登录=用户名+密码；验证码登录=邮箱+验证码；注册=用户名+昵称+密码+验证方式对应字段
   const setMode = m => {
     const reg = m === 'register';
+    const byCode = m === 'code';
     nick.hidden = !reg;
     vfyTabs.hidden = !reg;
+    el.querySelector('#fUser').hidden = byCode;
+    el.querySelector('#fPass').hidden = byCode;
     el.querySelector('#fUser').setAttribute('label', reg ? '用户名' : '用户名 / 手机号');
     go.textContent = reg ? '注册并登录' : '登录';
     if (reg) setVerify(vfy.value);
-    else { rowPhone.hidden = rowPhoneCode.hidden = rowEmail.hidden = rowEmailCode.hidden = vfyHint.hidden = true; }
+    else {
+      rowPhone.hidden = rowPhoneCode.hidden = vfyHint.hidden = true;
+      // 验证码登录：邮箱两行只在 code 模式显示；普通登录全部收起
+      rowEmail.hidden = rowEmailCode.hidden = !byCode;
+    }
   };
   mode.addEventListener('change', () => setMode(mode.value));
   setMode('login');
@@ -256,7 +264,9 @@ function renderAuth(el) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('请先填写正确的邮箱地址');
     try {
       sendBtn.loading = true;
-      await api.sendEmailCode(email);
+      // 注册模式发注册码；验证码登录模式发登录码（服务端要求邮箱已注册）
+      if (mode.value === 'code') await api.loginEmailCode(email);
+      else await api.sendEmailCode(email);
       toast('验证码已发送，请查收邮箱（注意垃圾箱）');
       countdown(sendBtn, cdEmail);
     } catch (e) {
@@ -285,6 +295,24 @@ function renderAuth(el) {
   go.onclick = async () => {
     const username = el.querySelector('#fUser').value.trim();
     const password = el.querySelector('#fPass').value;
+    if (mode.value === 'code') {
+      // 邮箱验证码登录：邮箱 + 验证码两步
+      const email = el.querySelector('#fEmail').value.trim();
+      const code = el.querySelector('#fEmailCode').value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('请填写正确的邮箱');
+      if (!code) return toast('请填写邮箱验证码');
+      try {
+        go.loading = true;
+        const r = await api.loginByEmail(email, code);
+        auth.saveLogin(r.token, r.user);
+        toast(`欢迎，${r.user.nickname}！`);
+        afterLogin();
+      } catch (e) {
+        toast(e.message);
+      } finally {
+        go.loading = false; }
+      return;
+    }
     if (!username || !password) return toast('请填写用户名和密码');
     if (mode.value === 'register') {
       const nickname = nick.value.trim() || username;
@@ -359,7 +387,7 @@ async function renderProfile(el, autoDecor) {
         <div id="avaWrap" class="cm-ava-wrap" role="button" tabindex="0" title="点击更换头像"
              aria-label="更换头像">${avatarHTML(u, 84)}<span class="cm-ava-cam"><span class="material-icons-outlined">photo_camera</span></span></div>
         <div class="cm-profile-info">
-          <div class="cm-profile-name">${esc(u.nickname || u.username)}${u.isSuper ? ' <span class="cm-tag super">超级管理员</span>' : u.isAdmin ? ' <span class="cm-tag admin">管理员</span>' : ''} <span class="cm-edit" id="editNick"><span class="material-icons-outlined">edit</span></span></div>
+          <div class="cm-profile-name">${esc(u.nickname || u.username)}${userTags(u)} <span class="cm-edit" id="editNick"><span class="material-icons-outlined">edit</span></span></div>
           <div class="cm-profile-bio">${esc(u.bio || '这个人很懒，什么都没写')} <span class="cm-edit" id="editBio"><span class="material-icons-outlined">edit</span></span></div>
           ${u.phone ? `<div class="cm-profile-phone"><span class="material-icons-outlined">smartphone</span>${esc(u.phone)}</div>` : ''}
           <div class="cm-profile-stat">

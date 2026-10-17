@@ -183,6 +183,139 @@ function makeAudio() {
   return a;
 }
 
+// ---------- 自适应缓冲（v1.28.26 重写） ----------
+// v1.28.25 的教训：固定「起播缓冲 20%」对快线是无谓等待、对慢线是攒不够的
+// 死等；「缓冲完整才预取」让中等线路的下一首永远冷启动。本版改为一切由
+// **实测速率**驱动：
+//
+//   dlRate = 缓冲增长速度（媒体秒 / 墙秒），每秒采样、EMA 平滑、跨曲记忆。
+//   dlRate ≥ 1 线路养得起当前码率，< 1 迟早追尾——攒缓冲救不了它，降档才能。
+//
+// 由此推导的四条行为：
+//   1. 起播只等 6~20s 余量（按 dlRate 取值，硬上限 8s 墙钟）——快线近乎秒开；
+//   2. 播放中 dlRate 持续 < 0.95 → **断流之前**主动无缝降档（不再等两次卡顿）；
+//   3. dlRate 长期 > 2.2 → 自动回升一档（此前降过的）；
+//   4. 预取下一首的触发与配额按 dlRate 定：快线歌中段就绪、慢线自动让路。
+const bufMon = {
+  ema: 0, warm: false, samples: 0,     // warm=样本够多，ema 可信
+  _ahead: -1, _t: 0,
+  /** 每秒喂一次「播放头前方余量（秒）」；仅在余量增长时取样（=纯下载进度）。 */
+  note(ahead) {
+    const now = Date.now();
+    if (this._ahead >= 0 && ahead > this._ahead) {
+      const dt = (now - this._t) / 1000;
+      if (dt > 0.3 && dt < 5) {
+        const r = (ahead - this._ahead) / dt;      // 媒体秒/墙秒
+        this.ema = this.warm ? this.ema * 0.7 + r * 0.3 : r;
+        if (++this.samples >= 3) this.warm = true;
+      }
+    }
+    this._ahead = ahead; this._t = now;
+  },
+  /** 换线/换档/换歌后重置**本曲**状态；ema 与 warm 保留（跨曲记忆线路质量）。 */
+  reset() { this._ahead = -1; },
+  rate() { return this.warm ? this.ema : 0; },     // 0 = 还没把握，按乐观处理
+};
+
+/** 等到播放头前方攒够 targetS 秒（或超过 maxWaitS 墙钟，带着已有余量开播）。 */
+function waitAhead(targetS, maxWaitS) {
+  return new Promise(resolve => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      let ahead = 0;
+      try {
+        const b = audio.buffered;
+        if (b && b.length) ahead = Math.max(0, b.end(b.length - 1) - (audio.currentTime || 0));
+      } catch (e) { /* 忽略 */ }
+      if (ahead >= targetS || Date.now() - t0 >= maxWaitS * 1000) { clearInterval(iv); resolve(); }
+    }, 200);
+  });
+}
+
+/** 起播目标余量：没历史 6s（快速出声优先）；快线 6s；中速 12s；慢线 20s。 */
+function startTarget() {
+  const r = bufMon.rate();
+  if (!bufMon.warm || r >= 2) return 6;
+  if (r >= 1.2) return 12;
+  return 20;
+}
+
+// 每秒一次：喂速率监测器。dlRate 只用于**起播余量与预取配额**的 sizing
+// （v1.28.28 起自动降级机制已移除：音质档位完全由用户设置决定，线路养
+// 不起时依靠换线自愈 + 预缓冲兜底，不再悄悄改档）。
+setInterval(() => {
+  if (clock() || !audio.currentSrc) return;
+  try {
+    const b = audio.buffered;
+    if (b && b.length) bufMon.note(Math.max(0, b.end(b.length - 1) - (audio.currentTime || 0)));
+  } catch (e) { /* 忽略 */ }
+}, 1000);
+
+// ---------- 线路优选（v1.28.29）：进站即测、整会话锁定 ----------
+// 设计：不再「卡了才换线」。本会话第一次播放（以及第一次遇到另一个边缘族）时，
+// 从**用户侧**并行实测各条已验证 CDN 边缘的速度（各拉 256KB，总计约 1MB 出头，
+// 每族每会话只测一次），锁定最快的一条；此后会话内所有取流（正播/预取/换档/
+// 卡顿重连）都走这条线，刷新页面/重开 App 才重测。
+// 为什么在客户端测：服务端只做「哪些入口可换」的字节级验证（alts），**快不快只有
+// 用户自己测得准**——服务器在洛杉矶，它的体感与用户无关。
+// 为什么按族记忆：两族边缘（m7/m8/m9 与 m701~m804）互不相通，锁定的最优线只对
+// 同族对象有效；swapLine 会在「不在已验证候选里」时放弃换线，绝不硬换。
+const PROBE_BYTES = 262144;                   // 每条线拉 256KB：够分高下，不偷太多流量
+function famOf(h) { return /^m\d\./.test(h) ? 'f2' : /^m\d{3}\./.test(h) ? 'f3' : ''; }
+function withHost(url, host) { return url.replace(/^https?:\/\/[^/]+/, 'https://' + host); }
+const lineBest = { byFam: {}, probing: {} };  // fam → 最优 host；probing 防同族并发探测
+async function probeLines(info) {
+  const fam = famOf(info.host || '');
+  const cands = [...new Set([info.host, ...(info.hosts || [])])].filter(Boolean);
+  if (!fam || cands.length < 2 || lineBest.byFam[fam] || lineBest.probing[fam]) return;
+  lineBest.probing[fam] = true;
+  try {
+    const ranked = await Promise.all(cands.map(async h => {
+      const t0 = performance.now();
+      try {
+        const ctl = new AbortController();
+        const to = setTimeout(() => ctl.abort(), 6000);
+        const r = await fetch(withHost(info.url, h),
+          { headers: { Range: `bytes=0-${PROBE_BYTES - 1}` }, signal: ctl.signal, cache: 'no-store' });
+        const buf = await r.arrayBuffer();
+        clearTimeout(to);
+        return { h, ms: buf.byteLength > 0 ? performance.now() - t0 : Infinity };
+      } catch (e) { return { h, ms: Infinity }; }
+    }));
+    ranked.sort((a, b) => a.ms - b.ms);
+    if (ranked[0].ms < Infinity) lineBest.byFam[fam] = ranked[0].h;
+  } finally { delete lineBest.probing[fam]; }
+}
+/** 本会话已锁定且对该对象有效的更优线路：返回换线后的 URL，否则 null。 */
+function swapLine(info) {
+  if (!info || !info.host) return null;
+  const best = lineBest.byFam[famOf(info.host)];
+  if (!best || best === info.host || !(info.hosts || []).includes(best)) return null;
+  return withHost(info.url, best);
+}
+
+// ---------- 未登录播放拦截（v1.28.34） ----------
+// 音源自 v1.28.33 起仅对注册用户开放。游客点播放时**不能**再走「解析失败 → toast →
+// 自动跳下一首」那条烂路径（会连续报错并跳歌），改为弹一次登录提示、原地停住。
+// 同一时间只允许一个弹窗（用户可能会连点多个歌曲）。
+let loginPromptOpen = false;
+export function promptLogin(reason) {
+  if (loginPromptOpen) return null;
+  loginPromptOpen = true;
+  return mdui.dialog({
+    headline: '需要登录才能播放',
+    body: `<div class="cm-login-req">
+        <span class="material-icons-outlined">lock_person</span>
+        <div>${reason || '音源仅对注册用户开放。登录后即可播放歌曲，歌单与听歌记录也会自动同步。'}</div>
+      </div>`,
+    actions: [
+      { text: '以后再说' },
+      { text: '去登录', onClick: () => { location.hash = '#/user'; } },
+    ],
+    onClose: () => { loginPromptOpen = false; },
+  });
+}
+
 // 调试/测试入口（未挂 DOM 的 audio 实例经此可达）
 const listeners = {};
 export function on(evt, fn) { (listeners[evt] = listeners[evt] || []).push(fn); }
@@ -254,9 +387,15 @@ export const player = {
   get stalling() { return stallNotified; },
 
   /**
-   * 提前解析下一首的播放地址，并按网络情况用隐藏 audio 预拉一段。
+   * 提前解析下一首的播放地址，并按网络情况用隐藏 audio 预拉**有限的一段**。
    * 省流模式与 2G/3G 下直接跳过——宁可慢一点，也不偷跑用户流量。
    * 无论是否预拉成功，"地址已解析"本身就省掉了切歌时的一次往返。
+   *
+   * 两条硬约束（v1.28.24 起，"节点选对了还卡"的教训）：
+   * 1) 预取限量按实测速率定（v1.28.26）：快线约 90s 音频/45s 墙钟，其余 45s/25s
+   *    ——即便不抢带宽也绝不允许无上限下载（母带近 200MB）；
+   * 2) 取消即停：换目标 / 切歌消费时必须显式 dispose 旧元素——丢引用
+   *    **不会**停止后台下载，孤儿下载与正播抢带宽正是卡顿元凶之一。
    */
   async _prefetchNext() {
     if (!this.queue.length || this._prefetchBusy) return;
@@ -270,7 +409,7 @@ export const player = {
     } catch { /* 忽略 */ }
     this._prefetchBusy = true;
     try {
-      const _pl = playLevel();
+      const _pl = effectiveLevel();
       let info;
       try {
         info = await resolveSongUrl(nx, _pl.level, _pl.immerse);
@@ -283,13 +422,39 @@ export const player = {
       // 期间可能已切歌或又预取了别的：过期结果直接丢弃
       const still = this.queue[this.index + 1] || this.queue[0];
       if (!still || String(still.ncm_id) !== String(nx.ncm_id)) return;
+      this._discardPrefetch();               // 换目标：旧元素的下载立即停
       const el = new Audio();
       el.preload = 'auto';
       el.muted = true;                       // 不发声（也不接 Web Audio 图）
       try { el.src = info.url; el.load(); } catch { /* 忽略 */ }
-      this._prefetch = { id: nx.ncm_id, url: info.url, type: info.type, level: info.level, el };
+      // 限量按实测速率：快线（dlRate≥2.5）给 90s/45s，其余 45s/25s。
+      // 已缓冲的字节留在浏览器媒体缓存里，主元素播同一 URL 仍可复用。
+      const fast = bufMon.warm && bufMon.rate() >= 2.5;
+      const capAudio = fast ? 90 : 45, capWall = fast ? 45 : 25;
+      const stop = () => {
+        clearInterval(iv); clearTimeout(hardStop);
+        disposeAudio(el);
+        if (player._prefetch && player._prefetch.el === el) player._prefetch.el = null;
+      };
+      const iv = setInterval(() => {
+        try {
+          if (el.buffered && el.buffered.length && el.buffered.end(el.buffered.length - 1) >= capAudio) stop();
+        } catch (e) { /* 忽略 */ }
+      }, 2000);
+      const hardStop = setTimeout(stop, capWall * 1000);
+      // 线路优选：预取也走锁定的最优线（warm 的字节要能被正播复用，必须同一条线）
+      const swapPf = swapLine(info);
+      if (swapPf) info.url = swapPf;
+      this._prefetch = { id: nx.ncm_id, url: info.url, type: info.type, level: info.level,
+                         host: info.host, hosts: info.hosts, el };
     } catch { /* 预取失败不影响正常播放 */ }
     finally { this._prefetchBusy = false; }
+  },
+
+  /** 终止预取元素的后台下载（保留已解析的地址与已缓冲字节，只停网络抓取）。 */
+  _discardPrefetch() {
+    const pf = this._prefetch;
+    if (pf && pf.el) { disposeAudio(pf.el); pf.el = null; }
   },
 
   heartMode: localStorage.getItem('cm.heart') === '1',
@@ -398,11 +563,20 @@ export const player = {
 
   async playAt(i) {
     if (i < 0 || i >= this.queue.length) return;
+    if (!auth.token) {                     // 游客：弹登录提示，不解析音源
+      this.loading = false;
+      this.wantPlaying = false;
+      emit('state');
+      promptLogin();
+      return;
+    }
     flushListen();                 // 上一首结账（此刻 meta 还是旧的那首）
     lastTickT = -1;                // 新歌重置基准，避免把两首之间的间隔算进去
     this.index = i;
     this.meta = this.queue[i];
     this.urlInfo = null;
+    // 切到别的歌：预取元素的下载立即停（若预取目标恰好是本首，留着给消费处复用）
+    if (this._prefetch && String(this._prefetch.id) !== String(this.meta.ncm_id)) this._discardPrefetch();
     this.loading = true;
     emit('song');
     emit('state');
@@ -420,10 +594,13 @@ export const player = {
     try {
       const pf = this._prefetch;
       if (pf && String(pf.id) === String(this.meta.ncm_id) && pf.url) {
-        info = { url: pf.url, type: pf.type || 'mp3', level: pf.level || 'auto' };
-        this._prefetch = null;             // 用完即弃（元素随之可回收）
+        info = { url: pf.url, type: pf.type || 'mp3', level: pf.level || 'auto',
+                 host: pf.host, hosts: pf.hosts };
+        // 用完即弃：已缓冲字节留在媒体缓存供主元素复用，下载立即终止
+        this._discardPrefetch();
+        this._prefetch = null;
       } else {
-        const _pl2 = playLevel();
+        const _pl2 = effectiveLevel();
         try {
           info = await resolveSongUrl(this.meta, _pl2.level, _pl2.immerse);
         } catch (e) {
@@ -435,6 +612,13 @@ export const player = {
       }
     } catch (e) {
       this.loading = false;
+      if (e && e.status === 401) {         // 登录失效/未登录：提示登录，不当作播放失败跳歌
+        this.wantPlaying = false;
+        emit('song');
+        emit('state');
+        promptLogin('登录已失效，请重新登录后再播放。');
+        return;
+      }
       toast(`「${this.meta.name}」${e.message || '播放失败'}`);
       emit('song');
       // 解析失败与 audio error 是两条失败路径，都要计入熔断
@@ -454,9 +638,28 @@ export const player = {
     this.urlInfo = info;
     this.loading = false;
     warnHiRes(info);               // 192kHz/多声道档位：提示设备兼容性
+    // 线路优选：本会话首次遇到该族 → 后台实测（与起播缓冲并行，不添延迟）；
+    // 已锁定（第 2 首起）→ 直接装载到最优线
+    if (info.host) probeLines(info);
+    const better = swapLine(info);
+    if (better) info.url = better;
     loadUrl(info.url, 0);          // 优先 CORS 干净加载（可视化前提），失败自动回退
     this.wantPlaying = true;
-    audio.play().catch(() => toast('点击播放键开始播放'));
+    // 起播前攒少量余量（按实测速率 6~20s，硬上限 8s）——快速出声优先
+    emit('stalling', true);
+    const cur = info;
+    waitAhead(startTarget(), 8).then(async () => {
+      if (this.urlInfo !== cur) return;      // 已切歌：别动新歌的缓冲中状态
+      const swap2 = swapLine(cur);           // 预缓冲期间探测完成：起播前就换到最优线
+      if (swap2) {
+        cur.url = swap2;
+        loadUrl(swap2, 0);
+        await waitAhead(startTarget(), 8);
+        if (this.urlInfo !== cur) return;
+      }
+      emit('stalling', false);
+      if (this.wantPlaying) audio.play().catch(() => toast('点击播放键开始播放'));
+    });
     emit('song');
     emit('state');
     this._scrobbled = null;
@@ -513,6 +716,7 @@ export const player = {
   wantPlaying: false,
 
   play() {
+    if (!auth.token && !this.urlInfo) { promptLogin(); return; }
     if (!this.urlInfo) {
       // urlInfo 不持久化：重启后 restore() 只恢复了队列与元数据。
       // 此时按播放应当对**当前曲目**重新解析——原先只在 index === -1 时
@@ -594,9 +798,19 @@ export const player = {
     const wasPlaying = !audio.paused;
     try {
       const info = await resolveSongUrl(this.meta, level);
+      const betterQ = swapLine(info);        // 换档也落在锁定的最优线上
+      if (betterQ) info.url = betterQ;
       this.urlInfo = info;
       loadUrl(info.url, at);       // 换档保留播放位置
-      if (wasPlaying) audio.play();
+      if (wasPlaying) {            // 换档同样先攒少量余量再续播
+        emit('stalling', true);
+        const cur = info;
+        waitAhead(8, 6).then(() => {
+          if (this.urlInfo !== cur) return;
+          emit('stalling', false);
+          audio.play().catch(() => {});
+        });
+      }
       emit('song');
       toast(`音质：${tierLabel(info.level)}`);
     } catch (e) { toast(e.message); }
@@ -718,6 +932,15 @@ let lastPos = 0;
 let recovering = false;
 let stallNotified = false;
 
+// ---------- 实际请求档位 ----------
+// v1.28.28：自动降级机制已按站长要求移除（旧设计见 git 历史：同一首歌第二次
+// 卡顿起逐级降档 + 断流前主动降档 + 好转回升）。现在档位完全由用户设置决定，
+// 弱线时依靠换线自愈 + 预缓冲兜底，绝不悄悄改用户的音质。
+/** 实际请求档位 = 用户设置的档位（自动/手动皆原样）。 */
+function effectiveLevel() {
+  return playLevel();
+}
+
 function updateBufPct() {
   try {
     const d = audio.duration;
@@ -753,13 +976,38 @@ async function recoverStalled() {
   if (recovering || !player.meta) return;
   recovering = true;
   if (!stallNotified) { stallNotified = true; emit('stalling', true); }
+  // 先把「这条 CDN 线卡了」报给服务端：它据此在换线时避开这条线
+  // （fire-and-forget，失败也绝不影响自愈本身）。
+  const stalledHost = (player.urlInfo && player.urlInfo.host) || '';
+  if (stalledHost) {
+    try {
+      api.songFeedback({
+        id: player.meta.ncm_id, host: stalledHost, event: 'stall',
+        level: (player.urlInfo && player.urlInfo.level) || '', playedMs: Math.round((audio.currentTime || 0) * 1000),
+      }).catch(() => {});
+    } catch { /* 忽略 */ }
+  }
   try {
     const at = audio.currentTime || 0;
-    const _pl3 = playLevel(); const info = await resolveSongUrl(player.meta, _pl3.level, _pl3.immerse);
+    const _pl3 = playLevel();
+    // refresh:1 = 让服务端**换一条 CDN 线**（毫秒级；旧行为是返回缓存里同一条坏地址，
+    // 于是每 6 秒重试一次同一条线，用户看到的就是"一直卡"）。档位保持用户所选不变。
+    // refresh 重拿地址：已锁定线路时带 host 在**同一条最优线**上重连（新签名/新连接，
+    // 不让服务端轮换到别的线）；未锁定（刚进站还没测完）时由服务端换线兜底
+    const pin = lineBest.byFam[famOf(((player.urlInfo || {}).host) || '')] || '';
+    const info = await resolveSongUrl(player.meta, _pl3.level, _pl3.immerse,
+                                      pin ? { refresh: true, host: pin } : { refresh: true });
+    const betterR = swapLine(info);
+    if (betterR) info.url = betterR;
     player.urlInfo = info;
     loadUrl(info.url, at);
-    if (player.wantPlaying) audio.play().catch(() => {});
-    toast('网络波动，已在原位置续播');
+    if (player.wantPlaying) {
+      // 续播前攒少量余量（刚追尾卡过，但别再让用户等半分钟）
+      // （recover 持有 stallNotified，等待期间 UI 一直显示「缓冲中」）
+      await waitAhead(8, 6);
+      if (player.wantPlaying && player.urlInfo === info) audio.play().catch(() => {});
+    }
+    toast('网络波动，已切换线路并在原位置续播');
   } catch { /* 自愈失败：交给上层失败计数与跳曲逻辑 */ }
   finally {
     recovering = false;
@@ -786,9 +1034,13 @@ function bindAudio(el) {
     updateBufPct();
     if (stallNotified) { stallNotified = false; emit('stalling', false); }   // 位置前进了 = 卡顿结束
     if (stallTimer) clearStallWatch();
-    // 缓冲过半后悄悄预取下一首（省流/弱网下跳过，见 _prefetchNext）
-    if (el.buffered && el.buffered.length && el.duration && isFinite(el.duration)
-        && el.buffered.end(el.buffered.length - 1) / el.duration > .5) player._prefetchNext();
+    // 余量充足才预取下一首（v1.28.26）：要求前方余量 ≥ min(45s, 剩余时长 30%)。
+    // 快线歌中段就绪、慢线（余量攒不起来）自动让路——不抢带宽从阈值自然导出。
+    if (el.buffered && el.buffered.length && el.duration && isFinite(el.duration)) {
+      const ahead = el.buffered.end(el.buffered.length - 1) - el.currentTime;
+      const remain = el.duration - el.currentTime;
+      if (el.currentTime > 10 && ahead >= Math.min(45, remain * 0.3)) player._prefetchNext();
+    }
     // 蓝牙/通知进度：每 5s 同步一次（AVRCP 由系统按 playbackState 自推进度，无需逐帧）
     const sec = Math.floor(el.currentTime);
     if (!el.seeking && sec !== lastMediaPushSec && sec % 5 === 0) {

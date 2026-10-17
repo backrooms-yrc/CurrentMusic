@@ -342,7 +342,7 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 /* MV 播放浮层 */
 .cm-mv-overlay {
   position: fixed; inset: 0; z-index: 4000; display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, .82); backdrop-filter: blur(6px); padding: 16px;
+  background: rgba(0, 0, 0, .82); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); padding: 16px;
   animation: cmMvIn .18s ease-out;
 }
 @keyframes cmMvIn { from { opacity: 0 } to { opacity: 1 } }
@@ -1057,9 +1057,33 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 
 /* 搜索（MD3 search bar：stadium 形态） */
 .cm-search-bar { margin-bottom: 6px; }
-.cm-search-bar mdui-text-field { --mdui-comp-text-field-container-shape: 28px; }
+/* 输入框字号锁 16px：iOS16+ Safari 聚焦字号 <16px 的输入框会强制整页放大
+   （user-scalable=no 从 iOS 10 起被 Safari 忽略，拦不住）。MDUI 默认即 16，
+   这里显式锁死，防全局字号缩放把输入框拖到 16px 以下 */
+.cm-search-bar mdui-text-field { --mdui-comp-text-field-container-shape: 28px; --mdui-typescale-body-large-size: 16px; }
+/* 同理，触屏设备上给原生输入框兜底 16px 下限（评论 14px / 匹配参数 13.5px）；
+   只在 pointer: coarse 生效，桌面视觉不变 */
+@media (pointer: coarse) {
+  .cmt-composer input { font-size: max(16px, calc(14px * var(--cm-fs, 1))); }
+  .cm-chat-composer textarea { font-size: max(16px, calc(14px * var(--cm-fs, 1))); }
+  .cm-pe-field input, .cm-pe-field textarea { font-size: max(16px, calc(13.5px * var(--cm-fs, 1))); }
+}
 .cm-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .cm-chips mdui-chip { --mdui-comp-chip-height: 30px; font-size: calc(12px * var(--cm-fs, 1)); }
+
+/* 搜索候选（v1.28.27）：竖排整行列表替代 chips——键盘弹出时一屏可见条目更多、
+   40px 行高满足触控最小目标、:active 给按压反馈（iOS 无 hover，触摸也不粘滞） */
+.cm-sug { display: flex; flex-direction: column; margin-bottom: 10px; }
+.cm-sug-item {
+  appearance: none; -webkit-appearance: none;
+  display: flex; align-items: center; gap: 10px; min-height: 40px; width: 100%;
+  padding: 0 6px; border: none; background: none; text-align: left;
+  font: inherit; font-size: calc(14px * var(--cm-fs, 1)); color: inherit; cursor: pointer;
+  border-radius: 10px;
+}
+.cm-sug-item .material-icons-outlined { font-size: calc(18px * var(--cm-fs, 1)); opacity: .45; flex: none; }
+.cm-sug-item .k { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cm-sug-item:active { background: var(--mdui-color-surface-container-high, rgba(0, 0, 0, .06)); }
 
 /* ---------- 深色适配 ---------- */
 .mdui-theme-dark body { background: #141218; }
@@ -1243,25 +1267,26 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 #cmtReplyBar i .material-icons-outlined { font-size: calc(14px * var(--cm-fs, 1)); }
 .cmt-composer { position: relative; }
 
-/* 搜索历史项（带单项删除） */
+/* 搜索历史项（带单项删除）。32px 高 + 32px 删除热区：触屏最小可点目标（v1.28.27） */
 .cm-hist {
-  display: inline-flex; align-items: center; gap: 2px; height: 30px;
-  padding: 0 4px 0 12px; border-radius: 8px; font-size: calc(12px * var(--cm-fs, 1));
+  display: inline-flex; align-items: center; gap: 2px; height: 32px;
+  padding: 0 2px 0 12px; border-radius: 8px; font-size: calc(12px * var(--cm-fs, 1));
   background: var(--mdui-color-surface-container-high, #ece6f0);
 }
 .cm-hist-k { cursor: pointer; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cm-hist-x { cursor: pointer; display: flex; align-items: center; }
+.cm-hist-x { cursor: pointer; display: flex; align-items: center; justify-content: center; min-width: 32px; min-height: 32px; }
 .cm-hist-x .material-icons-outlined { font-size: calc(14px * var(--cm-fs, 1)); opacity: .55; padding: 3px; }
 .cm-hist-x:active .material-icons-outlined { opacity: 1; }
 
 /* 热搜榜 */
 .cm-hot {
-  display: inline-flex; align-items: center; gap: 6px; height: 30px;
+  display: inline-flex; align-items: center; gap: 6px; height: 32px;
   padding: 0 12px; border-radius: 8px; font-size: calc(12px * var(--cm-fs, 1)); cursor: pointer;
   background: var(--mdui-color-surface-container-high, #ece6f0);
   position: relative; overflow: hidden; z-index: 0; max-width: 200px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.cm-hot:active { filter: brightness(.96); }
 .cm-hot b { color: var(--cm-primary); font-size: calc(11px * var(--cm-fs, 1)); }
 
 /* 实心图标（评论点赞等：同字形切到 Filled 字族，无需额外字形名） */
@@ -1511,6 +1536,19 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-tag.super {
   font-size: calc(10px * var(--cm-fs, 1)); padding: 2px 7px; border-radius: 6px; font-weight: 650; color: #fff;
   background: linear-gradient(135deg, #e8a33d, #d3452f);
+}
+/* 站长：最高角色。深红→紫的渐变 + 细金边，比「超级管理员」更重（明暗配色下都清晰） */
+.cm-tag.owner {
+  font-size: calc(10px * var(--cm-fs, 1)); padding: 2px 7px; border-radius: 6px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, #b81d24, #7b1fa2);
+  border: 1px solid rgba(255, 214, 120, .55);
+  box-shadow: 0 1px 4px rgba(123, 31, 162, .35);
+}
+/* 站内头衔：管理员授予的荣誉徽章。固定金色系（明暗两套配色下都能读），与「管理员/超管」区分开 */
+.cm-tag.title {
+  font-size: calc(10px * var(--cm-fs, 1)); padding: 2px 7px; border-radius: 6px; font-weight: 600;
+  color: #7a4b00; background: linear-gradient(135deg, #ffe6a8, #ffcf6b);
+  border: 1px solid rgba(122, 75, 0, .18);
 }
 .cm-sq-more { display: flex; justify-content: center; padding: 14px 0 4px; }
 @media (min-width: 900px) { .cm-sq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } }
@@ -1858,6 +1896,16 @@ html[data-ui-preset="glass"] .cm-tag.super {
   background: linear-gradient(135deg, var(--cm-primary), #5e5ce6) !important;
   color: #fff !important;
   border-color: transparent;
+}
+html[data-ui-preset="glass"] .cm-tag.title {
+  background: linear-gradient(135deg, #ffe6a8, #ffcf6b) !important;
+  color: #7a4b00 !important;
+  border-color: rgba(122, 75, 0, .18);
+}
+html[data-ui-preset="glass"] .cm-tag.owner {
+  background: linear-gradient(135deg, #b81d24, #7b1fa2) !important;
+  color: #fff !important;
+  border-color: rgba(255, 214, 120, .55);
 }
 
 /* 占位图 / 骨架：玻璃态浅底，避免 MD3 粉彩与玻璃冲突 */
@@ -2240,6 +2288,16 @@ html[data-ui-preset="frost"] .cm-tag.super {
   background: var(--cm-primary) !important;
   color: #fff !important;
   border-color: transparent;
+}
+html[data-ui-preset="frost"] .cm-tag.title {
+  background: linear-gradient(135deg, #ffe6a8, #ffcf6b) !important;
+  color: #7a4b00 !important;
+  border-color: rgba(122, 75, 0, .18);
+}
+html[data-ui-preset="frost"] .cm-tag.owner {
+  background: linear-gradient(135deg, #b81d24, #7b1fa2) !important;
+  color: #fff !important;
+  border-color: rgba(255, 214, 120, .55);
 }
 
 /* 占位图 / 骨架：中性灰，去掉 MD3 粉彩 */
@@ -2985,3 +3043,101 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
   color: var(--frs-fg2, inherit); cursor: pointer; }
 .cm-annacts .material-icons-outlined:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
 .cm-annacts .on { color: var(--cm-primary); }
+
+/* ---------- 公共聊天室（发现页 Chat tab，v1.28.30） ---------- */
+.cm-chatp { display: flex; flex-direction: column; height: 60vh; min-height: 240px; position: relative; }   /* JS 会按真实可用空间改写 height */
+.cm-chatp-list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: 4px 2px; display: flex; flex-direction: column; }
+.cm-chatp-more { text-align: center; padding: 2px 0 8px; opacity: .8; }
+.cm-chatp-empty { text-align: center; opacity: .5; padding: 32px 0; font-size: calc(13px * var(--cm-fs, 1)); }
+.cm-chatp-msg { display: flex; gap: 10px; padding: 6px 6px; border-radius: 12px; }
+.cm-chatp-ava { flex: none; cursor: pointer; align-self: flex-start; margin-top: 2px; }
+.cm-chatp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.cm-chatp-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 3px; align-self: stretch; }
+.cm-chatp-nick { font-weight: 600; font-size: calc(13px * var(--cm-fs, 1)); cursor: pointer; }
+.cm-chatp-nick:hover { color: var(--cm-primary); }
+.cm-chatp-un { font-size: calc(11px * var(--cm-fs, 1)); opacity: .5; }
+.cm-chatp-time { font-size: calc(11px * var(--cm-fs, 1)); opacity: .45; margin-left: auto; white-space: nowrap; }
+.cm-chatp-del { font-size: 14px; opacity: .4; cursor: pointer; padding: 2px; }
+.cm-chatp-del:active { opacity: 1; color: #e53935; }
+.cm-chatp-bubble { display: inline-block; max-width: min(78%, 560px); background: var(--mdui-color-surface-container-high, #ece6f0);
+  border-radius: 4px 14px 14px 14px; padding: 8px 12px; font-size: calc(14px * var(--cm-fs, 1));
+  word-break: break-word; overflow-wrap: anywhere; }
+.cm-chatp-msg.mine { flex-direction: row-reverse; }
+.cm-chatp-msg.mine .cm-chatp-main { align-items: flex-end; }
+.cm-chatp-msg.mine .cm-chatp-head { justify-content: flex-end; }
+.cm-chatp-msg.mine .cm-chatp-time { margin-left: 4px; margin-right: 0; }
+.mine .cm-chatp-bubble { border-radius: 14px 4px 14px 14px;
+  background: color-mix(in srgb, var(--cm-primary) 14%, var(--mdui-color-surface-container-high, #ece6f0)); }
+.cm-chatp-img { display: block; max-width: min(260px, 100%); max-height: 260px; border-radius: 10px; margin-top: 6px; cursor: zoom-in; }
+.cm-chatp-text .cm-chatp-at { color: var(--cm-primary); font-weight: 600; cursor: pointer; }
+.mdui-theme-dark .cm-chatp-bubble { background: #36343b; }
+
+.cm-chatp-picker { position: absolute; bottom: 74px; left: 46px; z-index: 30; display: none;
+  background: var(--mdui-color-surface-container-high, #ece6f0); border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 4px; max-width: 260px; }
+.cm-chatp-pk { appearance: none; -webkit-appearance: none; display: flex; align-items: center; gap: 8px; width: 100%;
+  border: none; background: none; text-align: left; font: inherit; font-size: calc(13px * var(--cm-fs, 1));
+  color: inherit; padding: 6px 10px; border-radius: 9px; cursor: pointer; }
+.cm-chatp-pk:active { background: color-mix(in srgb, var(--cm-primary) 14%, transparent); }
+
+.cm-chatp-composer { flex: none; display: flex; align-items: flex-end; gap: 8px; padding: 8px 2px 4px; }
+.cm-chatp-composer > mdui-button { flex: none; }
+.cm-chatp-tool { flex: none; border: none; background: none; font-size: 22px; color: inherit; opacity: .65;
+  cursor: pointer; padding: 8px; border-radius: 50%; -webkit-tap-highlight-color: transparent; }
+.cm-chatp-tool:active { opacity: 1; background: color-mix(in srgb, currentColor 10%, transparent); }
+.cm-chatp-inputwrap { flex: 1; min-width: 0; position: relative; }
+.cm-chatp-composer textarea { width: 100%; box-sizing: border-box; resize: none; border: none; outline: none;
+  font: inherit; font-size: calc(14px * var(--cm-fs, 1)); line-height: 1.45; max-height: 120px;
+  padding: 10px 14px; border-radius: 20px; background: var(--mdui-color-surface-container-highest, #e6e0e9);
+  color: inherit; }
+.mdui-theme-dark .cm-chatp-composer textarea { background: #36343b; }
+.cm-chatp-preview { display: flex; align-items: center; gap: 6px; margin-top: 6px; position: relative; width: fit-content; }
+.cm-chatp-preview img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+.cm-chatp-rm { position: absolute; top: -8px; right: -8px; background: rgba(0,0,0,.55); color: #fff;
+  border-radius: 50%; font-size: 14px; padding: 2px; cursor: pointer; }
+
+/* 未登录播放拦截弹窗（v1.28.34） */
+.cm-login-req { display: flex; gap: 12px; align-items: flex-start;
+  font-size: calc(14px * var(--cm-fs, 1)); line-height: 1.6; max-width: 360px; }
+.cm-login-req .material-icons-outlined { font-size: 28px; color: var(--cm-primary); flex: none; }
+
+/* CurrentMusicX 第三方客户端推广横幅（v1.28.35） */
+.cm-cmx-banner {
+  display: flex; align-items: center; gap: 12px; padding: 13px 14px; margin-bottom: 14px;
+  border-radius: var(--cm-radius); text-decoration: none; color: inherit;
+  background: linear-gradient(120deg,
+    color-mix(in srgb, #3f51b5 18%, var(--mdui-color-surface-container, #f3edf7)),
+    color-mix(in srgb, #3f51b5 5%, var(--mdui-color-surface-container, #f3edf7)));
+  border: 1px solid color-mix(in srgb, #3f51b5 24%, transparent);
+  transition: transform .12s ease;
+}
+.cm-cmx-banner:active { transform: scale(.985); }
+.cm-cmx-banner > .material-icons-outlined { font-size: calc(28px * var(--cm-fs, 1)); color: #3f51b5; flex: none; }
+.cm-cmx-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cm-cmx-t b { font-size: calc(13px * var(--cm-fs, 1)); line-height: 1.45; }
+.cm-cmx-sub { font-size: calc(11px * var(--cm-fs, 1)); opacity: .68; }
+.cm-cmx-go {
+  flex: none; display: flex; align-items: center; gap: 2px; font-size: calc(12px * var(--cm-fs, 1));
+  font-weight: 600; color: #3f51b5; white-space: nowrap;
+}
+.cm-cmx-go .material-icons-outlined { font-size: calc(16px * var(--cm-fs, 1)); }
+.mdui-theme-dark .cm-cmx-banner > .material-icons-outlined,
+.mdui-theme-dark .cm-cmx-go { color: #9fa8da; }
+
+/* 首页问候区细化（v1.28.37）：完整日期 + 星期 + 秒级时钟，等宽数字防抖动 */
+.cm-greet-date {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px;
+  font-size: var(--ios-footnote); color: var(--label-2); font-variant-numeric: tabular-nums;
+}
+.cm-greet-week { opacity: .9; }
+.cm-greet-sep { opacity: .45; }
+.cm-greet-clock { opacity: .72; letter-spacing: .02em; }
+
+/* IP 属地标注（v1.28.38）：列表与主页共用 */
+.cm-uregion { display: inline-flex; align-items: center; gap: 1px; margin-left: 6px; opacity: .9; white-space: nowrap; }
+.cm-uregion .material-icons-outlined { font-size: calc(13px * var(--cm-fs, 1)); vertical-align: -2px; opacity: .8; }
+
+/* 聊天消息头：用户名过长时省略，避免把时间/删除按钮挤到第二行（v1.28.40） */
+.cm-chatp-un { max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-chatp-head { row-gap: 2px; }

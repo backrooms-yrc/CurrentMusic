@@ -5,7 +5,7 @@ import { player, playLevel } from '../player.js';
 
 const FX_LABELS = { off: '关闭', jyeffect: '高清臻音', dolby: '杜比全景声', vivid: '臻音全景声', sky: '沉浸环绕声·5.1', 'sky-ste': '沉浸环绕声·环绕' };
 const fxLabel = () => FX_LABELS[settings.effect] || '关闭';
-import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel, FONT_SCALES, getFontScaleKey, setFontScaleKey } from '../ui.js';
+import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel, FONT_SCALES, getFontScaleKey, setFontScaleKey, userTagsText } from '../ui.js';
 import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
 import { UI_PRESETS, uiPresetKey, uiPresetName, setUiPreset } from '../uipreset.js';
@@ -42,6 +42,7 @@ export function themeName() {
 
 export async function render(el) {
   const u = auth.user || {};
+  const roleText = userTagsText(u);   // 头衔 / 超级管理员 / 管理员（纯文本版，用于「当前账号」这一行）
   const isApp = !!(window.NativeApi && window.NativeApi.versionCode);   // App 内不显示网页专属入口
   el.innerHTML = `
     <div class="cm-sec-head"><h2>外观</h2></div>
@@ -72,6 +73,7 @@ export async function render(el) {
     <div class="cm-sec-head"><h2>CurrentStation 通行证</h2></div>
     <div class="cm-setting-list">
       <div class="cm-setting" id="ppId"><span class="material-icons-outlined">badge</span>通行证 ID<i id="ppIdV">${u.passportUid ? esc(u.passportUid) : '—'}</i></div>
+      ${auth.token ? `<div class="cm-setting" id="bindEmail"><span class="material-icons-outlined">mail</span>绑定邮箱<i id="bindEmailV">${u.hasEmail ? '已绑定' : '未绑定'}</i></div>` : ''}
       <div class="cm-setting" id="ppGrants"><span class="material-icons-outlined">key</span>授权管理<i id="ppGrantV">—</i></div>
       <div class="cm-setting" id="ppDev"><span class="material-icons-outlined">developer_mode</span>开发者平台<i>独立页面 · 登记应用</i></div>
       <div class="cm-setting" id="ppDocs"><span class="material-icons-outlined">menu_book</span>接入文档<i>OAuth 2.0 · PKCE</i></div>
@@ -85,7 +87,7 @@ export async function render(el) {
     <div class="cm-setting-list">
       ${!isApp ? `<div class="cm-setting" id="dlApk"><span class="material-icons-outlined">android</span>下载安卓版 APP<i>APK · 支持后台播放</i></div>` : ''}
       <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:calc(15px * var(--cm-fs, 1));vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
-      <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i>${esc(u.nickname || u.username || '未登录')}${u.isSuper ? ' · 超级管理员' : u.isAdmin ? ' · 管理员' : ''}</i></div>
+      <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i id="acctRole">${esc(u.nickname || u.username || '未登录')}${roleText ? ' · ' + esc(roleText) : ''}</i></div>
       ${(auth.user && auth.user.isAdmin) ? `<div class="cm-setting" id="adminEntry"><span class="material-icons-outlined">admin_panel_settings</span>管理员面板<i>用户/设备/系统</i></div>` : ''}
       ${auth.token ? `<div class="cm-setting" id="devices"><span class="material-icons-outlined">devices</span>登录设备<i id="devCount">—</i></div>` : ''}
       <div class="cm-setting" id="engine"><span class="material-icons-outlined">public</span>系统 WebView<i>${engineChrome() ? 'Chromium ' + engineChrome() : (isApp ? '未知' : '浏览器')}${engineOutdated() ? ' · 建议更新' : ''}</i></div>
@@ -96,6 +98,13 @@ export async function render(el) {
   if (sqSw) {
     // 本地缓存的用户对象可能没有该字段（老会话）：进页面时用服务端值纠正显示
     if (auth.token) api.me().then(me => {
+      // 头衔/角色可能刚被管理员改过：用服务端最新资料纠正本地缓存 + 「当前账号」这一行
+      if (me && me.username) { try { auth.saveLogin(auth.token, me); } catch { /* 隐私模式 */ } }
+      const roleEl = el.querySelector('#acctRole');
+      if (roleEl) {
+        const rt = userTagsText(me);
+        roleEl.textContent = (me.nickname || me.username || '未登录') + (rt ? ' · ' + rt : '');
+      }
       const on = me.publicSquare !== false;
       sqSw.checked = on;
       const i = el.querySelector('#sqPublic i');
@@ -270,6 +279,58 @@ export async function render(el) {
     if (!w) location.href = url;
   };
   el.querySelector('#ppDev')?.addEventListener('click', openDeveloper);
+
+  // 绑定/换绑邮箱（v1.28.32）：验证码证明所有权；绑定后即可用「验证码登录」
+  el.querySelector('#bindEmail')?.addEventListener('click', () => {
+    const diag = mdui.dialog({
+      headline: '绑定 / 换绑邮箱',
+      body: `<div class="cm-form">
+        <mdui-text-field id="beMail" label="新邮箱地址" variant="outlined" type="email" style="width:100%"></mdui-text-field>
+        <div class="cm-email-row">
+          <mdui-text-field id="beCode" label="验证码" variant="outlined" style="flex:1"></mdui-text-field>
+          <mdui-button variant="tonal" id="beSend">获取验证码</mdui-button>
+        </div>
+        <div style="font-size:calc(12px * var(--cm-fs, 1));opacity:.6">绑定后即可用「邮箱验证码登录」；验证码 5 分钟内有效。</div>
+      </div>`,
+      actions: [
+        { text: '取消' },
+        {
+          text: '绑定',
+          onClick: async () => {
+            const email = diag.querySelector('#beMail').value.trim();
+            const code = diag.querySelector('#beCode').value.trim();
+            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('请填写正确的邮箱地址'); return false; }
+            if (!code) { toast('请填写验证码'); return false; }
+            try {
+              const me = await api.bindEmail(email, code);
+              toast('邮箱绑定成功，现在可以用验证码登录了');
+              try { auth.saveLogin(auth.token, me); } catch { /* 隐私模式 */ }
+              const v = el.querySelector('#bindEmailV'); if (v) v.textContent = '已绑定';
+              diag.open = false;
+            } catch (e) { toast(e.message); return false; }
+            return false;
+          },
+        },
+      ],
+    });
+    const sendBtn = diag.querySelector('#beSend');
+    sendBtn.onclick = async () => {
+      const email = diag.querySelector('#beMail').value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('请先填写正确的邮箱地址');
+      try {
+        sendBtn.loading = true;
+        await api.bindEmailCode(email);
+        toast('验证码已发送，请查收邮箱（注意垃圾箱）');
+        let left = 60; sendBtn.disabled = true;
+        const t = setInterval(() => {
+          sendBtn.textContent = `${left}s 后重发`;
+          if (left-- <= 0) { clearInterval(t); sendBtn.disabled = false; sendBtn.textContent = '获取验证码'; }
+        }, 1000);
+      } catch (e) { toast(e.message); }
+      finally { sendBtn.loading = false; }
+    };
+    setTimeout(() => diag.querySelector('#beMail')?.focus?.(), 200);
+  });
 
   el.querySelector('#ppId')?.addEventListener('click', async () => {
     let sub = (auth.user || {}).passportUid || '';

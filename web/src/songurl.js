@@ -21,19 +21,26 @@ function pickUrl(d) {
  * 解析可播放地址。
  * @param {object} meta 歌曲对象（需 ncm_id）
  * @param {string} level 音质档（auto 时由服务端择优）
- * @returns {Promise<{url:string,type:string,level:string}>}
+ * @param {string} [immerse] 仅 sky 生效：c51(5.1) / ste(环绕立体声)
+ * @param {object} [opts] 透传给后端的开关：{ refresh:true 重拿地址、host: 指定 CDN 边缘 }
+ *   常规请求固定带 alts（响应含 host/hosts 已验证可换边缘）——线路优选
+ *   （player.js lineBest）靠它判断「锁定的最优线」对当前对象是否适用。
+ * @returns {Promise<{url:string,type:string,level:string,host?:string,hosts?:string[]}>}
  */
-export async function resolveSongUrl(meta, level) {
+export async function resolveSongUrl(meta, level, immerse, opts) {
   if (!meta || !meta.ncm_id) throw new Error('缺少歌曲信息');
   const id = meta.ncm_id;
   let lastErr = null;
 
   // 1) 主路径：服务端 SVIP 档位择优
   try {
-    const info = await api.songUrl(id, level);
+    // immerse 必须一起传：音效「沉浸环绕声·环绕」就是 sky + immerseType=ste，
+    // 漏传会静默降级成默认的 c51(5.1) 流。
+    const info = await api.songUrl(id, level, immerse, Object.assign({ alts: true }, opts));
     const url = pickUrl(info);
     // 透传上游字段：sr/bits/ch（文件头解析出的真实规格，客户端据此提示高解析度档位）、
-    // br/size/md5（展示与缓存判断）—— 曾经只挑 url/type/level，导致规格信息丢失。
+    // br/size/md5（展示与缓存判断）、host（卡顿上报要指名是哪条 CDN 线）——
+    // 曾经只挑 url/type/level，导致规格信息丢失。
     if (url) return Object.assign({}, info, {
       url, type: (info && info.type) || 'mp3', level: (info && info.level) || level || 'auto',
     });

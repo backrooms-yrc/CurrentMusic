@@ -182,6 +182,10 @@ export const api = {
   sendPhoneCode: (phone) => call('POST', '/auth/phone/code', { body: { phone } }),
   smsInfo: () => call('GET', '/auth/sms'),
   login: (username, password) => call('POST', '/auth/login', { body: { username, password, ...deviceInfo() } }),
+  loginEmailCode: (email) => call('POST', '/auth/login/email/code', { body: { email } }),
+  loginByEmail: (email, code) => call('POST', '/auth/login/email', { body: { email, code, ...deviceInfo() } }),
+  bindEmailCode: (email) => call('POST', '/profile/email/code', { body: { email }, auth: true }),
+  bindEmail: (email, code) => call('PUT', '/profile/email', { body: { email, code }, auth: true }),
   internalLogin: (password) => call('POST', '/auth/internal', { body: { password, ...deviceInfo() } }),
   logout: () => call('POST', '/auth/logout', { body: {}, auth: true }),
   sessions: () => call('GET', '/auth/sessions', { auth: true }),
@@ -210,9 +214,18 @@ export const api = {
   adminResetPassword: (id, password) => call('POST', `/admin/users/${id}/password`, { body: { password }, auth: true }),
   adminKick: (id) => call('POST', `/admin/users/${id}/kick`, { body: {}, auth: true }),
   adminSetAdmin: (id, on) => call('POST', `/admin/users/${id}/admin`, { body: { on }, auth: true }),
+  // 头衔：管理员/超管/站长可授予（''=清空）；超级管理员仅超管/站长可设；站长仅站长可设
+  adminSetTitle: (id, title) => call('POST', `/admin/users/${id}/title`, { body: { title }, auth: true }),
+  adminSetSuper: (id, on) => call('POST', `/admin/users/${id}/super`, { body: { on }, auth: true }),
+  adminSetOwner: (id, on) => call('POST', `/admin/users/${id}/owner`, { body: { on }, auth: true }),
   adminSessions: () => call('GET', '/admin/sessions', { auth: true }),
   adminClearCache: (scope = 'aux') => call('POST', '/admin/cache/clear', { body: { scope }, auth: true }),
   me: () => call('GET', '/auth/me', { auth: true }),
+  chatMessages: (before = 0, limit = 30) => call('GET', `/chat/messages?limit=${limit}${before ? `&before=${before}` : ''}`),
+  chatSend: (body) => call('POST', '/chat/messages', { body, auth: true }),
+  chatDelete: (id) => call('DELETE', `/chat/messages/${id}`, { auth: true }),
+  chatUpload: (body) => call('POST', '/chat/image', { body, auth: true }),
+  chatMembers: () => call('GET', '/chat/members'),
   profileOf: (uid) => call('GET', `/profile/${uid}`),
   updateProfile: (fields) => call('PUT', '/profile', { body: fields, auth: true }),
   changePassword: (oldPassword, newPassword) => call('PUT', '/profile/password', { body: { oldPassword, newPassword }, auth: true }),
@@ -283,7 +296,29 @@ export const api = {
   artist: (id, offset = 0, limit = 100) => call('GET', `/ncm/artist?id=${id}&offset=${offset}&limit=${limit}`),
   followArtist: (id, on, name, pic) => call('POST', `/artists/${id}/follow`, { body: { on, name, pic }, auth: true }),
   followedArtists: (refresh = false) => call('GET', `/artists/followed${refresh ? '?refresh=1' : ''}`, { auth: true }),
-  songUrl: (ncmId, level, immerse) => call('GET', `/ncm/song/url?id=${ncmId}&level=${level}${immerse ? '&immerse=' + immerse : ''}`),
+  /**
+   * 播放地址解析。
+   * @param {number} ncmId
+   * @param {string} level  auto | 8 档任一
+   * @param {string} [immerse] 仅 sky 生效：c51(5.1) | ste(环绕立体声)
+   * @param {object} [opts] { refresh:true 卡顿自愈换 CDN 线 | maxBr: 码率上限 | alts:true 候选边缘 }
+   */
+  songUrl: (ncmId, level, immerse, opts) => {
+    const o = opts || {};
+    let qs = `/ncm/song/url?id=${ncmId}&level=${level}`;
+    if (immerse) qs += '&immerse=' + immerse;
+    if (o.maxBr) qs += '&maxBr=' + o.maxBr;
+    if (o.refresh) qs += '&refresh=1';
+    if (o.alts) qs += '&alts=1';
+    if (o.host) qs += '&host=' + encodeURIComponent(o.host);
+    // v1.28.33：音源仅限注册用户，必须带 Bearer（未登录会被 401 并引导登录）
+    return call('GET', qs, { auth: true });
+  },
+  /**
+   * 播放卡顿上报（fire-and-forget）：服务端据此在换线时避开问题 CDN 边缘。
+   * @param {object} p { id, host, event:'stall'|'ok', level?, playedMs?, bufferedMs? }
+   */
+  songFeedback: (p) => call('POST', '/ncm/song/url/feedback', { body: p, auth: false }),
 
   // ---- 帖子（发现页） ----
   posts: (offset = 0, limit = 20, author = null) => call('GET',

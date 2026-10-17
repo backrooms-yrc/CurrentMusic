@@ -8,7 +8,7 @@
 //   · 评论用底部弹层（mdui dialog）呈现，与「当前播放列表」等既有交互一致
 import { mdui } from './md.js';
 import { api, auth } from './api.js';
-import { esc, avatarHTML, toast, confirmDialog } from './ui.js';
+import { esc, avatarHTML, toast, confirmDialog, userTags } from './ui.js';
 import { renderMarkdown, applyToolbar } from './markdown.js';
 import { player } from './player.js';
 
@@ -64,8 +64,7 @@ function bindAttach(box, list) {
 function postHTML(p) {
   const a = p.author || {};
   const name = a.nickname || `用户${a.id}`;
-  const tag = a.isSuper ? '<span class="cm-tag super">超级管理员</span>'
-    : a.isAdmin ? '<span class="cm-tag admin">管理员</span>' : '';
+  const tag = userTags(a);
   return `
   <article class="cm-post" data-id="${p.id}">
     <header class="cm-post-head">
@@ -263,7 +262,7 @@ export function mountPosts(box) {
         <div class="cm-pcmt-item" data-id="${c.id}">
           <span class="cm-pcmt-ava" data-uid="${c.author.id}">${avatarHTML(c.author, 32)}</span>
           <div class="cm-pcmt-main">
-            <div class="cm-pcmt-who"><b data-uid="${c.author.id}">${esc(c.author.nickname || '用户' + c.author.id)}</b>
+            <div class="cm-pcmt-who"><b data-uid="${c.author.id}">${esc(c.author.nickname || '用户' + c.author.id)}</b>${userTags(c.author)}
               <span>${fmtAgo(c.createdAt)}</span></div>
             <div class="cm-pcmt-text">${esc(c.content)}</div>
           </div>

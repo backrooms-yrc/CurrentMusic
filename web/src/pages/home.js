@@ -1,7 +1,72 @@
 // 首页：每日推荐 + 排行榜 + 猜你喜欢（登录后） + 最近播放（登录后）
-import { api, auth, ncmSongs } from '../api.js';
+import { api, auth, ncmSongs, settings } from '../api.js';
 import { esc, renderSongList, skelCards, skelList } from '../ui.js';
 import { player } from '../player.js';
+
+// 首页顶部问候区（v1.28.37）：完整日期 + 星期 + 秒级时钟 + 按时段问候。
+// 时钟每秒只改两个 textContent；页面被路由替换后（isConnected=false）自动停表。
+const WEEKDAY = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+const pad2 = n => String(n).padStart(2, '0');
+
+/** 按时段给问候语（凌晨/早上/上午/中午/下午/晚上）。 */
+function periodOf(h) {
+  if (h >= 5 && h < 9) return '早上好';
+  if (h >= 9 && h < 12) return '上午好';
+  if (h >= 12 && h < 14) return '中午好';
+  if (h >= 14 && h < 18) return '下午好';
+  if (h >= 18 && h < 23) return '晚上好';
+  return '夜深了';
+}
+
+function greetWho() {
+  return auth.user ? auth.user.nickname : '今天想听点什么？';
+}
+
+function greetMarkup() {
+  const d = new Date();
+  const date = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  const clock = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  return `
+    <div class="cm-greet">
+      <div class="cm-greet-date">
+        <span>${date}</span>
+        <span class="cm-greet-week">${WEEKDAY[d.getDay()]}</span>
+        <span class="cm-greet-sep" aria-hidden="true">·</span>
+        <time class="cm-greet-clock" id="greetClock">${clock}</time>
+      </div>
+      <div class="cm-greet-title" id="greetTitle">${esc(periodOf(d.getHours()))}，${esc(greetWho())}</div>
+    </div>`;
+}
+
+/** 启动时钟：每秒更新时刻；跨时段时同步更新问候语（只在变化时写 DOM）。 */
+function startGreetClock(root) {
+  const clock = root.querySelector('#greetClock');
+  const title = root.querySelector('#greetTitle');
+  if (!clock || !title) return;
+  const tick = () => {
+    if (!clock.isConnected) { clearInterval(timer); return; }   // 已离开首页
+    const d = new Date();
+    clock.textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    const next = `${periodOf(d.getHours())}，${greetWho()}`;
+    if (title.textContent !== next) title.textContent = next;
+  };
+  const timer = setInterval(tick, 1000);
+  tick();
+}
+
+// CurrentMusicX 推广横幅：第三方 Android 客户端，由本站超级管理员 bileizhen 开发维护。
+// 下载走服务端镜像（/cm/x/download/latest，始终指向最新版），不依赖 GitHub 直连。
+function cmxBannerHTML() {
+  return `
+    <a class="cm-cmx-banner" href="${esc(settings.base)}/x/download/latest">
+      <span class="material-icons-outlined">smartphone</span>
+      <span class="cm-cmx-t">
+        <b>CurrentMusicX · 第三方 Android 客户端</b>
+        <span class="cm-cmx-sub">由本站超级管理员 bileizhen 开发维护</span>
+      </span>
+      <span class="cm-cmx-go">下载<span class="material-icons-outlined">download</span></span>
+    </a>`;
+}
 
 // 头像挂件更新横幅：仅在「已登录 + 听歌时长达标 + 尚未设置挂件」时出现，设好后自动消失
 // （永久占位会打扰已设置的用户；未达标者由「我的」页设置行引导，首页不做催促）
@@ -24,15 +89,13 @@ async function decorBannerHTML() {
 }
 
 export async function render(el) {
-  const today = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
   el.innerHTML = `
-    <div class="cm-greet">
-      <div class="cm-greet-date">${esc(today)}</div>
-      <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
-    </div>
+    ${cmxBannerHTML()}
+    ${greetMarkup()}
     <div id="decorBanner"></div>
     <section class="cm-sec"><div class="cm-sec-head"><h2>每日推荐</h2></div>${skelCards(8)}</section>
     <section class="cm-sec">${skelList(3)}</section>`;
+  startGreetClock(el);
   // 横幅不阻塞首屏：与每日推荐并行请求；结果先存起来，整页重渲染后再插入
   let bannerHTML = '';
   let daily = [], forYou = [], recent = [], artists = [];
@@ -70,10 +133,8 @@ export async function render(el) {
   }
 
   el.innerHTML = `
-    <div class="cm-greet">
-      <div class="cm-greet-date">${esc(today)}</div>
-      <div class="cm-greet-title">${auth.user ? `你好，${esc(auth.user.nickname)}` : '今天想听点什么？'}</div>
-    </div>
+    ${cmxBannerHTML()}
+    ${greetMarkup()}
     ${bannerHTML}
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>一键开听</h2><span class="cm-sec-sub">按听歌动线排</span></div>
@@ -141,6 +202,7 @@ export async function render(el) {
       </div>
     </section>` : ''}
   `;
+  startGreetClock(el);            // 正式内容渲染后重启时钟（骨架屏那份随节点替换自动停）
 
   const dailyRow = el.querySelector('#dailyRow');
   if (dailyRow) dailyRow.querySelectorAll('.cm-card').forEach(c => {

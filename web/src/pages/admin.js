@@ -1,7 +1,7 @@
 // 管理员面板：概览统计 / 用户管理 / 在线设备 / 系统维护（仅 is_admin 可用）
 import { mdui } from '../md.js';
 import { api, auth } from '../api.js';
-import { esc, toast, confirmDialog, promptDialog } from '../ui.js';
+import { esc, toast, confirmDialog, promptDialog, userTags } from '../ui.js';
 
 const fmtTime = ts => {
   if (!ts) return '—';
@@ -29,6 +29,8 @@ export async function render(el) {
     el.innerHTML = `<div class="cm-empty">${esc(e.message)}${e.status === 403 ? '（当前账号不是管理员）' : ''}</div>`;
     return;
   }
+  // 角色可能刚被更高角色改过：进面板时顺手刷新本地缓存的当前用户（决定菜单里出现哪些角色操作）
+  try { const me = await api.me(); if (me && me.username) auth.saveLogin(auth.token, me); } catch { /* 离线/限流忽略 */ }
 
   const card = (label, value, sub = '') => `
     <div class="cm-acard"><div class="cm-acard-v">${value}</div><div class="cm-acard-l">${label}</div>${sub ? `<div class="cm-acard-s">${sub}</div>` : ''}</div>`;
@@ -38,7 +40,7 @@ export async function render(el) {
     <div class="cm-agrid">
       ${card('注册用户', ov.users, `今日 +${ov.usersToday} · 7日 +${ov.usersWeek}`)}
       ${card('在线设备', ov.sessions, `1 小时内活跃用户 ${ov.onlineUsers}`)}
-      ${card('禁用账号', ov.disabled, `管理员 ${Math.max(0, (ov.admins || 0) - (ov.supers || 0))} 人 · 超级管理员 ${ov.supers || 0} 人`)}
+      ${card('禁用账号', ov.disabled, `站长 ${ov.owners || 0} 人 · 超管 ${Math.max(0, (ov.supers || 0) - (ov.owners || 0))} 人 · 管理员 ${Math.max(0, (ov.admins || 0) - (ov.supers || 0))} 人`)}
       ${card('站内点赞', ov.likes)}
       ${card('自建歌单', ov.playlists, `曲目 ${ov.tracks}`)}
       ${card('播放记录', ov.plays)}
@@ -59,8 +61,7 @@ export async function render(el) {
       ${users.users.map(u => `
         <div class="cm-urow" data-id="${u.id}">
           <div class="cm-umain">
-            <div class="cm-uname">${esc(u.nickname || u.username)}
-              ${u.is_super ? '<span class="cm-tag super">超级管理员</span>' : u.is_admin ? '<span class="cm-tag admin">管理员</span>' : ''}
+            <div class="cm-uname">${esc(u.nickname || u.username)}${userTags(u)}
               ${u.disabled ? '<span class="cm-tag banned">已禁用</span>' : ''}
               ${u.username === '__internal__' ? '<span class="cm-tag">内部账户</span>' : ''}
             </div>
@@ -101,13 +102,35 @@ export async function render(el) {
     m.onclick = () => {
       const id = +m.dataset.id;
       const u = users.users.find(x => x.id === id);
+      const meOwner = !!(auth.user && auth.user.isOwner);
+      const meSuper = meOwner || !!(auth.user && auth.user.isSuper);
+      const self = !!(auth.user && auth.user.id === id);
+      // 站长 > 超管 > 管理员：菜单里只给「当前身份管得动」的操作
+      let roleActs;
+      if (u.is_owner) {
+        roleActs = (meOwner && !self)
+          ? [{ k: 'unowner', label: '取消站长', icon: 'emoji_events' }]
+          : [{ k: 'noowner', label: `站长（${self ? '不能对自己操作' : '仅站长可变更'}）`, icon: 'emoji_events' }];
+      } else if (u.is_super) {
+        roleActs = [
+          ...(meSuper && !self
+            ? [{ k: 'unsuper', label: '取消超级管理员', icon: 'workspace_premium' }]
+            : [{ k: 'nosuper', label: `超级管理员（${self ? '不能对自己操作' : '仅超管可变更'}）`, icon: 'workspace_premium' }]),
+          ...(meOwner ? [{ k: 'owner', label: '设为站长', icon: 'emoji_events' }] : []),
+        ];
+      } else {
+        roleActs = [
+          { k: u.is_admin ? 'unadmin' : 'admin', label: u.is_admin ? '取消管理员' : '设为管理员', icon: 'verified_user' },
+          ...(meSuper ? [{ k: 'super', label: '设为超级管理员', icon: 'workspace_premium' }] : []),
+          ...(meOwner ? [{ k: 'owner', label: '设为站长', icon: 'emoji_events' }] : []),
+        ];
+      }
       const acts = [
         { k: 'kick', label: u.sessions ? `踢下线（${u.sessions} 台设备）` : '踢下线（无在线设备）', icon: 'logout' },
         { k: 'pw', label: '重置密码', icon: 'password' },
         { k: u.disabled ? 'enable' : 'disable', label: u.disabled ? '解除禁用' : '禁用账号', icon: u.disabled ? 'lock_open' : 'block' },
-        ...(u.is_super
-          ? [{ k: 'super', label: '超级管理员（不可降级）', icon: 'workspace_premium' }]
-          : [{ k: u.is_admin ? 'unadmin' : 'admin', label: u.is_admin ? '取消管理员' : '设为管理员', icon: 'verified_user' }]),
+        { k: 'title', label: u.title ? `修改头衔（当前：${u.title}）` : '设置头衔', icon: 'military_tech' },
+        ...roleActs,
       ];
       const diag = mdui.dialog({
         headline: `${u.nickname || u.username}`,
@@ -125,8 +148,22 @@ export async function render(el) {
               else if (k === 'disable') { await api.adminDisable(id, true); toast('已禁用，其所有会话已作废'); render(el); }
               else if (k === 'enable') { await api.adminDisable(id, false); toast('已解除禁用'); render(el); }
               else if (k === 'admin') { await api.adminSetAdmin(id, true); toast('已设为管理员'); render(el); }
-              else if (k === 'super') { toast('超级管理员由服务端设置，不可在面板中变更'); }
+              else if (k === 'nosuper') { toast('超级管理员只能由超管/站长变更，且不能对自己操作'); }
+              else if (k === 'super') { await api.adminSetSuper(id, true); toast('已设为超级管理员'); render(el); }
+              else if (k === 'unsuper') { await api.adminSetSuper(id, false); toast('已取消超级管理员'); render(el); }
+              else if (k === 'noowner') { toast('站长只能由站长变更，且不能对自己操作'); }
+              else if (k === 'owner') { await api.adminSetOwner(id, true); toast('已设为站长'); render(el); }
+              else if (k === 'unowner') { await api.adminSetOwner(id, false); toast('已取消站长，回落为超级管理员'); render(el); }
               else if (k === 'unadmin') { await api.adminSetAdmin(id, false); toast('已取消管理员'); render(el); }
+              else if (k === 'title') {
+                const max = ov.titleMax || 16;
+                promptDialog({
+                  title: `设置「${u.nickname || u.username}」的头衔`,
+                  label: `头衔（最多 ${max} 字，留空 = 取消）`, value: u.title || '',
+                  allowEmpty: true, maxlength: max,
+                  onOk: async t => { const r = await api.adminSetTitle(id, t); toast(r.title ? `头衔已设为「${r.title}」` : '已取消头衔'); render(el); },
+                });
+              }
               else if (k === 'pw') {
                 promptDialog({
                   title: `重置「${u.username}」的密码`, label: '新密码（6~64 位）', type: 'password',
@@ -153,7 +190,7 @@ export async function render(el) {
     const items = d.items || [];
     const live = items.filter(a => !a.removed).length;
     const c = el.querySelector('#annCount');
-    if (c) c.textContent = `　${live} 条生效${items.length > live ? ` · ${items.length - live} 条已移除` : ''}${d.isSuper ? ' · 你是超管，可编辑全部' : ''}`;
+    if (c) c.textContent = `　${live} 条生效${items.length > live ? ` · ${items.length - live} 条已移除` : ''}${d.isOwner ? ' · 你是站长，可编辑全部' : d.isSuper ? ' · 你是超管，可编辑全部' : ''}`;
     box.innerHTML = items.length ? items.map(a => `
       <div class="cm-annrow${a.removed ? ' gone' : ''}" data-id="${a.id}">
         <div class="cm-annrow-main">

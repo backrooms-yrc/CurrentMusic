@@ -11,7 +11,7 @@
 //     PKCE 形态）全在服务端做，前端伪造不了；
 //   · 跳转前再确认一次 redirect 是服务端下发的，不用 query 里的原始值。
 import { api, auth } from '../api.js';
-import { esc, toast } from '../ui.js';
+import { esc, toast, userTags } from '../ui.js';
 
 export const TITLE = '通行证授权';
 
@@ -81,7 +81,7 @@ export async function render(el, params = {}) {
         </div>
       </div>
       <div style="margin:14px 0 6px;font-size:calc(13px * var(--cm-fs, 1));opacity:.8">
-        以 <b>${esc(user.nickname || '当前账号')}</b>（${esc(user.sub || '')}）授权，将允许它：
+        以 <b>${esc(user.nickname || '当前账号')}</b>${userTags(user)}（${esc(user.sub || '')}）授权，将允许它：
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${scopes.map(s => `

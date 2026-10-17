@@ -9,7 +9,7 @@
 import { settings, call } from './api.js';
 import { esc, toast } from './ui.js';
 import { mdui } from './md.js';
-import { player, setClockSource, tick, notifyState } from './player.js';
+import { player, setClockSource, tick, notifyState, promptLogin } from './player.js';
 
 const S = {
   casting: false,
@@ -75,10 +75,17 @@ function castBase() {
   return settings.base.replace(/^https?:\/\//, scheme + '://');
 }
 
-/** 投屏时交给渲染器拉流的地址：走后端 /cast/<id> 中转（原 CDN 是 https+签名短链，设备放不了）。 */
-function castUrlFor(meta, level) {
-  const sep = castBase().indexOf('?') >= 0 ? '&' : '?';
-  return `${castBase()}/cast/${meta.ncm_id}${sep}level=${encodeURIComponent(level || castLevel())}`;
+/** 投屏地址（v1.28.33）：音源仅限注册用户 → 先向服务器**换签名短链**，设备凭签名拉流。
+ *  设备发不了 Bearer，所以签名就是设备侧的唯一凭证；未登录签不出来，投屏会提示登录。 */
+const castUrlCache = new Map();          // `${id}:${level}` -> { url, exp }
+async function ensureCastUrl(meta, level) {
+  const key = `${meta.ncm_id}:${level}`;
+  const hit = castUrlCache.get(key);
+  if (hit && hit.exp * 1000 > Date.now() + 60000) return hit.url;
+  const d = await call('GET', `/cast/${meta.ncm_id}?warm=1&level=${encodeURIComponent(level)}`, { auth: true });
+  if (!d || !d.url) throw new Error('投屏地址不可用');
+  castUrlCache.set(key, { url: d.url, exp: d.expiresAt || 0 });
+  return d.url;
 }
 
 /** 投屏歌词地址（LRC 纯文本）：随 DIDL 一起交给设备，部分电视会当字幕/歌词拉取显示。 */
@@ -180,8 +187,18 @@ function currentLevelName() {
 }
 
 /** 把指定曲目推给设备；startSec>0 时在其后定位到该位置（用于续播/恢复）。 */
-function castTrack(meta, startSec) {
+async function castTrack(meta, startSec) {
   if (!S.casting || !meta || !window.NativeApi.dlnaPlay) return;
+  let castUrl;
+  try {
+    castUrl = await ensureCastUrl(meta, castLevel());
+  } catch (e) {
+    if (e && e.status === 401) promptLogin('投屏需要先登录（音源仅限注册用户）。');
+    else toast('投屏地址获取失败：' + ((e && e.message) || '未知错误'));
+    S.casting = false;
+    return;
+  }
+  if (!S.casting || player.meta !== meta) return;      // 等待期间已停止投屏/切歌
   S.intended = true;
   S.posMs = Math.max(0, (startSec || 0) * 1000);
   S.syncedAt = Date.now();
@@ -193,10 +210,10 @@ function castTrack(meta, startSec) {
   S.everPlayed = false;
   if (window.NativeApi.dlnaPlay.length >= 8) {
     // 新版桥：带上歌词（LRC 资源 + 少量内联文本，见 Dlna.didl 注释）
-    window.NativeApi.dlnaPlay(S.key, castUrlFor(meta, castLevel()),
+    window.NativeApi.dlnaPlay(S.key, castUrl,
       meta.name || '', meta.artists || '', meta.album || '', meta.duration || 0, lrc, '');
   } else {
-    window.NativeApi.dlnaPlay(S.key, castUrlFor(meta, castLevel()),
+    window.NativeApi.dlnaPlay(S.key, castUrl,
       meta.name || '', meta.artists || '', meta.album || '', meta.duration || 0);
   }
   // 起播看门狗：投出后 12 秒仍未真正开始播，多半是该档位设备放不了（如不支持的 FLAC 规格）
@@ -411,11 +428,9 @@ export function openCastDialog() {
     window.NativeApi.dlnaDiscover(3000);
   };
 
-  // 预热当前歌曲的音源地址：等用户点设备时首字节几乎立即到达
-  if (player.meta) {
-    call('GET', `/cast/${player.meta.ncm_id}?warm=1&level=${encodeURIComponent(castLevel())}`)
-      .catch(() => { /* 预热失败不影响正常投屏 */ });
-  }
+  // 预热当前歌曲的**签名投屏地址**：等用户点设备时首字节几乎立即到达
+  // （v1.28.33 起地址需登录换取；未登录时静默失败，点设备时再提示登录）
+  if (player.meta) ensureCastUrl(player.meta, castLevel()).catch(() => { /* 预热失败不影响正常投屏 */ });
 
   const b0 = btn();
   if (b0) b0.onclick = scan;

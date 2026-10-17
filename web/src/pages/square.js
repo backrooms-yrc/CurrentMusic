@@ -1,7 +1,8 @@
 // 用户广场：所有用户（头像/昵称/个签）· 多排序（管理员置顶）· 搜索 · 分页
 import { api } from '../api.js';
-import { esc, toast, avatarHTML, fmtListen } from '../ui.js';
+import { esc, toast, avatarHTML, fmtListen, userTags } from '../ui.js';
 import { mountPosts } from '../posts.js';
+import { closeChat } from '../chat.js';
 
 const SORTS = [
   { key: 'reg', label: '注册最新' },
@@ -15,7 +16,7 @@ const PAGE = 30;
 
 const TAB_KEY = 'cm.sqTab';
 // 默认落在「音乐」（发现页的主体是找歌）；TAB 顺序用于判断切换方向 → 决定入场动画往哪边滑
-const TAB_ORDER = ['music', 'users', 'posts'];
+const TAB_ORDER = ['music', 'users', 'posts', 'chat'];
 const DEFAULT_TAB = 'music';
 
 /** TAB 切换：记住选择（会话级）。posts 走独立模块，users 用本文件原有逻辑。 */
@@ -37,7 +38,9 @@ export async function render(el, params, state = {}) {
   const users = state.users ?? null;
   const total = state.total ?? 0;
   // 优先级：显式 state → ?tab=xxx 深链 → 会话记忆 → 默认「音乐」
-  const fromQuery = ((params && params.query && params.query.get && params.query.get('tab')) || '');
+  // 注意：路由给的 params.query 是普通对象（见 main.js router），不是 URLSearchParams —— 这里兼容两种。
+  const q = (params && params.query) || {};
+  const fromQuery = (typeof q.get === 'function' ? q.get('tab') : q.tab) || '';
   let tab = state.tab || fromQuery || sessionStorage.getItem(TAB_KEY) || DEFAULT_TAB;
   if (!TAB_ORDER.includes(tab)) tab = DEFAULT_TAB;      // 非法值不再静默落到「用户」
   // 入场方向：0 = 首帧（只淡入），±1 = 左右滑入
@@ -49,10 +52,12 @@ export async function render(el, params, state = {}) {
         <button class="cm-sqtab${tab === 'music' ? ' on' : ''}" data-k="music">音乐</button>
         <button class="cm-sqtab${tab === 'users' ? ' on' : ''}" data-k="users">用户</button>
         <button class="cm-sqtab${tab === 'posts' ? ' on' : ''}" data-k="posts">帖子</button>
+        <button class="cm-sqtab${tab === 'chat' ? ' on' : ''}" data-k="chat">Chat</button>
       </div>`;
 
   if (tab === 'music') {
     // 音乐 TAB：Banner / 推荐歌单 / 推荐新歌 / 榜单 / 曲风 / 独家放送
+    closeChat();                                        // 切走聊天 TAB：关闭其 SSE 连接
     el.innerHTML = tabs + `<div class="${paneCls}" id="sqMusicBox"></div>`;
     el.querySelectorAll('#sqTabs .cm-sqtab').forEach(b => { b.onclick = () => switchTab(b.dataset.k); });
     const { mountDiscover } = await import('../discover.js');
@@ -62,12 +67,23 @@ export async function render(el, params, state = {}) {
 
   if (tab === 'posts') {
     // 帖子 TAB：只保留 TAB 栏 + 帖子容器（用户广场那套排序/筛选不显示）
+    closeChat();
     el.innerHTML = tabs + `<div class="${paneCls}" id="sqPostBox"></div>`;
     el.querySelectorAll('#sqTabs .cm-sqtab').forEach(b => { b.onclick = () => switchTab(b.dataset.k); });
     mountPosts(el.querySelector('#sqPostBox'));
     return;
   }
 
+  if (tab === 'chat') {
+    // Chat TAB：公共聊天室（SSE 实时 + 文本/图片/@ 提及，独立模块）
+    el.innerHTML = tabs + `<div class="${paneCls}" id="sqChatBox"></div>`;
+    el.querySelectorAll('#sqTabs .cm-sqtab').forEach(b => { b.onclick = () => switchTab(b.dataset.k); });
+    const { mountChat } = await import('../chat.js');
+    mountChat(el.querySelector('#sqChatBox'));
+    return;
+  }
+
+  closeChat();                                          // 用户 TAB 同样要断开聊天流
   el.innerHTML = tabs + `
     <div class="${paneCls} cm-sqpage">
     <div class="cm-sq-stats" id="sqStats"><span class="material-icons-outlined">groups</span>正在统计…</div>
@@ -93,9 +109,9 @@ export async function render(el, params, state = {}) {
     <div class="cm-ucard" data-id="${u.id}">
       <div class="cm-uava">${avatarHTML(u, 52)}</div>
       <div class="cm-umain">
-        <div class="cm-uname">${esc(u.nickname || `用户${u.id}`)}${u.is_super ? '<span class="cm-tag super">超级管理员</span>' : u.is_admin ? '<span class="cm-tag admin">管理员</span>' : ''}</div>
+        <div class="cm-uname">${esc(u.nickname || `用户${u.id}`)}${userTags(u)}</div>
         <div class="cm-ubio">${esc(u.bio || '这个人很懒，什么都没写')}</div>
-        <div class="cm-usub">点赞 ${u.likes} · 歌单 ${u.playlists} · ${sort === 'listen' ? '时长 ' + fmtListen(u.listenMs) : '听歌 ' + u.days + ' 天'}</div>
+        <div class="cm-usub">点赞 ${u.likes} · 歌单 ${u.playlists} · ${sort === 'listen' ? '时长 ' + fmtListen(u.listenMs) : '听歌 ' + u.days + ' 天'}${u.ipRegion ? `<span class="cm-uregion" title="IP 属地"><span class="material-icons-outlined">location_on</span>${esc(u.ipRegion)}</span>` : ''}</div>
       </div>
     </div>`;
 
