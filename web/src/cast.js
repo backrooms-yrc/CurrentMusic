@@ -6,7 +6,7 @@
 //
 // 为什么需要会话状态：投屏时本机音频是暂停的，audio.currentTime 不前进。
 // 若不做接管，进度条与歌词会永远停在原处、播放键也分不清设备当前是播是停。
-import { settings, call } from './api.js';
+import { settings, call, auth } from './api.js';
 import { esc, toast } from './ui.js';
 import { mdui } from './md.js';
 import { player, setClockSource, tick, notifyState, promptLogin } from './player.js';
@@ -193,7 +193,9 @@ async function castTrack(meta, startSec) {
   try {
     castUrl = await ensureCastUrl(meta, castLevel());
   } catch (e) {
-    if (e && e.status === 401) promptLogin('投屏需要先登录（音源仅限注册用户）。');
+    if (e && e.status === 401) {
+      if (auth.token) promptLogin('投屏需要先登录（音源仅限注册用户）。');
+    }
     else toast('投屏地址获取失败：' + ((e && e.message) || '未知错误'));
     S.casting = false;
     return;

@@ -6,6 +6,7 @@ import './apple-hig.css';   // Apple HIG 设计令牌层（字体/系统色/圆�
 import './app.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
+import { mdui } from './md.js';
 import { toast, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
 import { checkUpdate } from './update.js';
 import { initPullToRefresh } from './ptr.js';
@@ -236,7 +237,30 @@ function boot() {
   initMv();
   initCast();   // DLNA 投屏：还原投屏状态并接管传输指令
 
-  setAuthExpiredHandler(() => toast('登录已失效，请重新登录'));
+  // 登录失效（401）：**主动退出**而不是只弹 toast。
+  // 之前只提示不清理，token 一直留在本地，于是每个鉴权请求都再弹一次，账号看起来
+  // 还是登录状态，只能手动退出。现在：清 token/user（保留其他已登录账号）→
+  // 若正停在账号相关页面则重渲染 → 弹一次带「重新登录」的对话框；并发 401
+  // 因 token 已清空不会重复触发。
+  setAuthExpiredHandler(() => {
+    if (!auth.token) return;                 // 已处理过（并发请求）
+    auth.clear();                            // 主动退出，清掉失效会话
+    const h = location.hash || '#/home';
+    if (h.startsWith('#/user') || h.startsWith('#/settings')) {
+      try { router(); } catch { /* 忽略：重渲染失败不影响退出与提示 */ }
+    }
+    mdui.dialog({
+      headline: '登录已失效',
+      body: `<div class="cm-login-req">
+          <span class="material-icons-outlined">lock_person</span>
+          <div>登录状态已失效（可能在其他设备退出，或被管理员下线），已自动退出登录。请重新登录后继续使用。</div>
+        </div>`,
+      actions: [
+        { text: '稍后' },
+        { text: '重新登录', onClick: () => { location.hash = '#/user'; } },
+      ],
+    });
+  });
 
   // 弹窗公告：每次打开网页 / App 都拉一次（需求如此，不做「不再提示」）
   initAnnouncements();

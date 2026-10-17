@@ -3141,3 +3141,23 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 /* 聊天消息头：用户名过长时省略，避免把时间/删除按钮挤到第二行（v1.28.40） */
 .cm-chatp-un { max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-chatp-head { row-gap: 2px; }
+
+/* ---------- 平板适配（v1.28.44） ---------- */
+/* 竖屏平板（600–899px）：此前只有 ≥900px 的侧栏布局，600–899 仍按手机布局把
+   列表/设置行横向拉满。这里补上居中限宽 + 双栏，阅读宽度与手机一致、空间用足。 */
+@media (min-width: 600px) and (max-width: 899px) {
+  #out { padding: 16px 24px 40px; }
+  .cm-page { max-width: 820px; margin-left: auto; margin-right: auto; }
+  .cm-songs { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; align-content: start; }
+  .cm-sq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cm-setting-list, .cm-profile, .cm-quickrow {
+    max-width: 720px; margin-left: auto; margin-right: auto;
+  }
+  .cm-chatp { max-width: 760px; margin-left: auto; margin-right: auto; }
+  .cm-hscroll .cm-card { width: 150px; }
+  .cm-hscroll .cm-card img { width: 150px; height: 150px; }
+}
+/* 横屏平板 / 桌面（≥1200px）：内容列从 920 放宽到 1080，减少两侧空白 */
+@media (min-width: 1200px) {
+  .cm-page { max-width: 1080px; }
+}

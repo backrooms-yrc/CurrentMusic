@@ -103,14 +103,19 @@ export function setAuthExpiredHandler(fn) { onAuthExpired = fn; }
 
 export async function call(method, path, { body, auth: needAuth = false } = {}) {
   const headers = {};
-  if (needAuth && auth.token) headers.Authorization = 'Bearer ' + auth.token;
+  // 记录“请求发出时是否带过 token”：只有带过 token 的 401 才是会话失效；
+  // 游客（本来就没登录）的 401 交给播放等入口自行引导登录，不能报“登录已失效”。
+  const hadToken = !!(needAuth && auth.token);
+  if (hadToken) headers.Authorization = 'Bearer ' + auth.token;
   const bodyStr = body !== undefined ? JSON.stringify(body) : '';
   try {
     return await rawRequest(method, settings.base + path, headers, bodyStr);
   } catch (e) {
     // 401 有两种来源：项目会话失效（该提示重新登录）与「尚未绑定网易云」（该引导去绑定）。
     // 后者按状态码一律当成会话失效会误报「登录已失效」，所以按文案区分。
-    if (e.status === 401 && needAuth && onAuthExpired && !/绑定/.test(e.message || '')) onAuthExpired();
+    // auth.token 为空说明「失效」已被处理（并发 401），不再重复弹窗。
+    if (e.status === 401 && hadToken && auth.token && onAuthExpired
+        && !/绑定/.test(e.message || '')) onAuthExpired();
     throw e;
   }
 }

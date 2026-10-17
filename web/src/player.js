@@ -616,7 +616,8 @@ export const player = {
         this.wantPlaying = false;
         emit('song');
         emit('state');
-        promptLogin('登录已失效，请重新登录后再播放。');
+        // token 已被统一登出流程清掉时，失效弹窗由主入口负责，这里不重复弹
+        if (auth.token) promptLogin('登录已失效，请重新登录后再播放。');
         return;
       }
       toast(`「${this.meta.name}」${e.message || '播放失败'}`);
