@@ -72,3 +72,5 @@ CurrentMusic 的 Bit-perfect 后端使用 Android API 34 的首选混音器接�
 尚需在目标 DAC 上验证：全部 BIT_PERFECT 配置、192000/21/双声道是否暴露、设置与读回、实际路由、持续播放、切歌格式变化、拔插恢复，以及硬件实际采样率/逐位透明度。若 HAL 不暴露配置，当前后端应准确停止并报告系统限制。
 
 API 契约：[AudioManager](https://developer.android.com/reference/android/media/AudioManager)、[AudioFormat](https://developer.android.com/reference/android/media/AudioFormat)、[Android 首选混音器属性](https://source.android.com/docs/core/audio/preferred-mixer-attr)。
+
+后续新增的实验性 USB Host 后端独立于上述 Android HAL 修复；它内置经哈希校验的网易云原生驱动，详细来源、限制与验证状态见 [NETEASE_USB_OUTPUT.md](NETEASE_USB_OUTPUT.md)。
