@@ -12,3 +12,5 @@ app/src/main/assets/
 .env.*
 /data/
 /keystore.jks
+
+web/node_modules
