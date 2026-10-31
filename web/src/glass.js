@@ -175,10 +175,40 @@ const TARGETS = [
   { sel: 'mdui-dialog',       id: 'cmLensDialog', radius: 18,   bevel: 18, maxd: 14, panel: true },
   { sel: 'mdui-menu',         id: 'cmLensMenu',   radius: 14,   bevel: 14, maxd: 12, panel: true },
 ];
+
+// CurrentMusicX 只在「悬浮底栏 / 迷你播放器」上做液态玻璃（其设置项原文就是
+// 「为悬浮底栏应用液态玻璃效果」），内容卡片保持实体白。参数照 X 的
+// HighApiMusicGlass.kt：blur 4dp、lens refractionHeight/amount 24dp、surface 40%。
+// 位移量按本引擎的 feDisplacementMap 口径（最大位移 ≈ 2×maxd）折半，
+// 否则 24px 的位移作用在 66px 高的胶囊上会把文字边缘撕开。
+// radius: 'css' = 读元素自己的 border-radius（手机 33px 导航胶囊 / 24px 迷你条）。
+const CMX_TARGETS = [
+  { sel: '#bottomNav',     id: 'cmxLensNav',  radius: 'css', bevel: 24, maxd: 13, blur: 4,
+    media: '(max-width: 899px)' },
+  { sel: '.cm-mini-inner', id: 'cmxLensMini', radius: 'css', bevel: 20, maxd: 11, blur: 4,
+    media: '(max-width: 899px)' },
+];
+const TARGETS_BY_PRESET = { frost: TARGETS, cmx: CMX_TARGETS };
+
+function activeTargets() {
+  return TARGETS_BY_PRESET[document.documentElement.getAttribute('data-ui-preset')] || null;
+}
+
+function lensRadius(t, el, rect) {
+  if (t.radius === 'css') {
+    const raw = getComputedStyle(el).borderTopLeftRadius;
+    const n = parseFloat(raw);
+    if (isFinite(n) && raw.indexOf('%') < 0) return n;
+    return rect.height / 2;
+  }
+  return t.radius != null ? t.radius : rect.height / 2;
+}
 const MAX_PER_SEL = 4;      // 同选择器最多给几个实例挂滤镜（弹层可能同时开多个）
 
 /** 解析一个 target 当前实际要挂滤镜的元素（可能 0~4 个，每个一个滤镜 id）。 */
 function targetEls(t) {
+  // 仅在对应形态下生成透镜（CMX 的玻璃只属于手机悬浮底栏；宽屏侧栏保持实体）。
+  if (t.media && typeof matchMedia !== 'undefined' && !matchMedia(t.media).matches) return [];
   const hosts = document.querySelectorAll(t.sel);
   const out = [];
   for (let i = 0; i < hosts.length && out.length < MAX_PER_SEL; i++) {
@@ -191,29 +221,30 @@ function targetEls(t) {
   return out;
 }
 
-/** 按当前皮肤与尺寸重建所有折射图（非 frost 皮肤时直接跳过）。 */
+/** 按当前皮肤与尺寸重建所有折射图（非玻璃皮肤时直接跳过）。 */
 export function refreshGlass() {
   if (!glassRefractionSupported()) return;
-  if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') return;
-  TARGETS.forEach(t => {
+  const targets = activeTargets();
+  if (!targets) return;
+  targets.forEach(t => {
     targetEls(t).forEach(({ el, id }) => {
       const r = el.getBoundingClientRect();
       if (r.width < 8 || r.height < 8) return;
-      const radius = t.radius != null ? t.radius : r.height / 2;
-      attachLens(el, id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
+      attachLens(el, id, { radius: lensRadius(t, el, r), bevel: t.bevel, maxd: t.maxd,
+        blur: t.blur != null ? t.blur : lensBlurOf(el) });
     });
   });
-  observeTargets();
+  observeTargets(targets);
 }
 
 // 元素尺寸变化（安全区迟到、旋转、窗口缩放、键盘弹出）都必须重建位移图，
 // 否则位移图与实际尺寸不匹配，折射位置会整体错位。
 // ResizeObserver 比 window.resize 可靠：它盯的是**元素自己**的盒子变化。
 let ro = null;
-function observeTargets() {
+function observeTargets(targets) {
   if (typeof ResizeObserver === 'undefined') return;   // 旧内核自动跳过
   if (!ro) ro = new ResizeObserver(scheduleRefresh);
-  TARGETS.forEach(t => {
+  targets.forEach(t => {
     targetEls(t).forEach(({ el }) => {
       if (el.__cmLensObserved) return;
       el.__cmLensObserved = true;
@@ -228,6 +259,17 @@ function scheduleRefresh() {
   timer = setTimeout(refreshGlass, 180);
 }
 
+// ── 滚动期玻璃降级（仅 CMX；frost 维持原折射不变）─────────────────────
+// capture 监听 document：#out 这类容器的 scroll 不冒泡，捕获才能收到。
+let liteTimer = 0;
+function onAnyScroll() {
+  const root = document.documentElement;
+  if (root.getAttribute('data-ui-preset') !== 'cmx') return;
+  if (!root.classList.contains('cm-glass-lite')) root.classList.add('cm-glass-lite');
+  clearTimeout(liteTimer);
+  liteTimer = setTimeout(() => root.classList.remove('cm-glass-lite'), 200);
+}
+
 // 尺寸看门狗：每 600ms 只比较两个目标的尺寸，变化才重建。
 // 为什么还要它（已有 ResizeObserver + window.resize + 播放器事件）：
 // 位移图与实际尺寸一旦不匹配，折射位置会整体错位，而这类布局变化
@@ -236,9 +278,11 @@ function scheduleRefresh() {
 const lastSig = {};
 function watchSize() {
   if (!glassRefractionSupported()) return;
-  if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') return;
+  if (document.hidden) return;                 // 后台标签：暂停一切布局探测
+  const targets = activeTargets();
+  if (!targets) return;
   const seen = {};
-  TARGETS.forEach(t => {
+  targets.forEach(t => {
     targetEls(t).forEach(({ el, id }) => {
       seen[id] = 1;
       const r = el.getBoundingClientRect();
@@ -249,8 +293,8 @@ function watchSize() {
       const sameEl = built[id] && built[id].el === el;
       if (lastSig[id] === sig && sameEl) return;
       lastSig[id] = sig;
-      const radius = t.radius != null ? t.radius : r.height / 2;
-      attachLens(el, id, { radius, bevel: t.bevel, maxd: t.maxd, blur: lensBlurOf(el) });
+      attachLens(el, id, { radius: lensRadius(t, el, r), bevel: t.bevel, maxd: t.maxd,
+        blur: t.blur != null ? t.blur : lensBlurOf(el) });
     });
   });
   // 关掉的弹层要把签名清掉，否则下次打开时旧签名命中会导致不重建
@@ -265,6 +309,9 @@ export function initGlass() {
   // 切换皮肤 / 页面重建后重新生成（事件由 uipreset.js 派发）
   document.addEventListener('cm-uipreset', scheduleRefresh);
   document.addEventListener('cm-layout', scheduleRefresh);
+  // 滚动期间把 CMX 玻璃降到轻量模糊（见 app.css 的 .cm-glass-lite）：
+  // 透镜折射是每帧重采样，正是滚动掉帧的主要来源；停下 ~200ms 后恢复折射。
+  document.addEventListener('scroll', onAnyScroll, { capture: true, passive: true });
   // 迷你播放条是**播歌之后**才出现的：启动时它还不存在（或尺寸为 0），
   // 必须跟随播放器事件重建，否则它只会拿到 blur 兜底、没有折射。
   try {

@@ -4,38 +4,43 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>CurrentMusic</title>
+  <link rel="icon" href="brand-icon.png?v=sage1" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=sage1">
+  <script>
+    // 某些 CDN 将 /app 的重定向内部跟随，返回首页却保留无斜杠 URL。
+    // 固定网页资源基址，避免 app.js 被解析成站点根目录的 /app.js。
+    // Android 的 cm.local 虚拟源仍从 assets 根目录读取。
+    if (location.hostname !== 'cm.local' && /^\/app(?:\/|$)/.test(location.pathname)) {
+      var cmBase = document.createElement('base');
+      cmBase.href = '/app/';
+      document.head.appendChild(cmBase);
+    }
+  </script>
   <!-- UI 预设 + 一次性强制重置：都要在样式表之前落盘/生效，否则会先闪一帧旧皮肤。
        只读 localStorage，出错静默（默认即原样式）。 -->
   <script>
-    // ── 一次性强制重置（v1.28.16）────────────────────────────────────────────
-    // 把所有用户的「界面风格」与「玻璃效果」拉到推荐值：
-    //   · 风格 → 简约玻璃（默认皮肤）
-    //   · 玻璃 → 清掉自定义值，回落到皮肤默认，即上游 hyalite 的推荐值
-    //     （透镜霜化 1px、玻璃着色 13%）
+    // ── 一次性强制重置（v1.28.74：全员切换 CurrentMusicX 风格）──────────────
+    // 把所有用户的「界面风格」拉到新默认 cmx，并清掉玻璃自定义值（回落皮肤默认）。
     // **只强制一次**：写完 cm.recReset 标记后，用户之后自己改的设置不会再被覆盖；
     // 将来若需要再强制一遍，把 REC 的值改掉即可。
     // 放在这段行内脚本里而不是 bundle 里，是因为它必须早于首帧（否则会先闪一帧旧皮肤）；
     // bundle 侧只根据 window.__cmRecReset 决定是否提示用户。
-    var REC = 'rec-1.28.16';
+    var REC = 'rec-1.28.74';
     try {
       if (localStorage.getItem('cm.recReset') !== REC) {
-        var oldPreset = localStorage.getItem('cm.uiPreset');
-        var hadCustom = (oldPreset !== null && oldPreset !== 'frost')
-          || localStorage.getItem('cm.glassBlur') !== null
-          || localStorage.getItem('cm.glassTint') !== null;
-        localStorage.setItem('cm.uiPreset', 'frost');
+        localStorage.setItem('cm.uiPreset', 'cmx');
         localStorage.removeItem('cm.glassBlur');
         localStorage.removeItem('cm.glassTint');
         localStorage.setItem('cm.recReset', REC);
-        window.__cmRecReset = hadCustom;   // true = 确实覆盖了用户的旧设置，值得提示一句
+        window.__cmRecReset = true;   // 这次是全员可见的切换：人人都提示一句怎么改回
       }
     } catch (e) { /* 忽略 */ }
     try {
       var p = localStorage.getItem('cm.uiPreset');
-      // 默认皮肤 = 简约玻璃（v1.21.14 起）：未选择过 → frost；
+      // 默认皮肤 = CurrentMusicX 风格（v1.28.74 起）：未选择过 → cmx；
       // 显式选了 Material 3 → 不打属性（基础样式）；其余按所存值。
-      if (p === 'frost' || p === 'glass') document.documentElement.setAttribute('data-ui-preset', p);
-      else if (p !== 'md3') document.documentElement.setAttribute('data-ui-preset', 'frost');
+      if (p === 'frost' || p === 'glass' || p === 'cmx') document.documentElement.setAttribute('data-ui-preset', p);
+      else if (p !== 'md3') document.documentElement.setAttribute('data-ui-preset', 'cmx');
       // 个性化（背景图 / 玻璃效果值）也要在样式表之前打上，否则会先闪一帧默认底色
       var bg = localStorage.getItem('cm.bgImage');
       if (bg) document.documentElement.style.setProperty('--cm-bg-image', 'url("' + bg.replace(/["\\]/g, '\\$&') + '")');
@@ -56,7 +61,7 @@
   <div id="boot">CurrentMusic 加载中…</div>
 
   <header id="topbar">
-    <div id="brandLock"><span class="material-icons-outlined">graphic_eq</span><b>CurrentMusic</b></div>
+    <div id="brandLock"><img src="brand-icon.png?v=sage1" alt="" width="32" height="32"><b>CurrentMusic</b></div>
     <div id="pageTitle">CurrentMusic</div>
     <div id="topActs">
       <a id="topSearch" href="#/search" class="material-icons-outlined" title="搜索">search</a>
@@ -127,8 +132,12 @@
       window.__cmDiag = show;
       window.addEventListener('error', function (e) {
         if (window.__cmBooted) return;
+        if (e.target && e.target.tagName === 'SCRIPT' && e.target.src) {
+          show('脚本资源加载失败', '请检查网络或 CDN 资源响应：\n' + e.target.src);
+          return;
+        }
         if (e.message || e.filename) show('脚本执行错误', (e.message || '') + (e.filename ? '\n' + e.filename + ':' + e.lineno : ''));
-      });
+      }, true);
       window.addEventListener('unhandledrejection', function (e) {
         if (window.__cmBooted) return;
         var r = e.reason;
@@ -137,7 +146,7 @@
       // 超时兜底：脚本没跑到 boot 完成（解析失败/资源未加载）
       setTimeout(function () {
         if (!window.__cmBooted && !shown) {
-          show('加载超时', '应用脚本未能执行。常见原因：系统 WebView 版本过旧（不支持的 JS 语法）或资源加载被系统拦截。');
+          show('加载超时', '应用未能在 9 秒内启动。请检查网络、CDN 返回的脚本资源以及浏览器控制台中的具体错误。');
         }
       }, 9000);
     })();

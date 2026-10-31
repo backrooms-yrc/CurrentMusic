@@ -19,13 +19,60 @@ function appBase() {
   if (location.protocol === 'file:') return `${siteOrigin()}/app/`;
   return location.href.split('#')[0];
 }
-export function songUrl(meta) {
-  return `${appBase()}#/song/${meta.ncm_id}`;
+const KIND_UI = {
+  song: { headline: '分享歌曲', icon: 'music_note', textLabel: '分享歌曲信息',
+          brand: 'MUSIC SHARE', cta: '在 CurrentMusic 收听', verb: '收听' },
+  playlist: { headline: '分享歌单', icon: 'queue_music', textLabel: '分享歌单信息',
+              brand: 'PLAYLIST SHARE', cta: '在 CurrentMusic 打开歌单', verb: '打开' },
+  'local-playlist': { headline: '分享歌单', icon: 'queue_music', textLabel: '分享歌单信息',
+                      brand: 'PLAYLIST SHARE', cta: '在 CurrentMusic 打开歌单', verb: '打开' },
+  artist: { headline: '分享歌手', icon: 'person', textLabel: '分享歌手信息',
+            brand: 'ARTIST SHARE', cta: '在 CurrentMusic 查看歌手', verb: '查看' },
+  album: { headline: '分享专辑', icon: 'album', textLabel: '分享专辑信息',
+           brand: 'ALBUM SHARE', cta: '在 CurrentMusic 打开专辑', verb: '打开' },
+};
+function kindOf(meta) { return (meta && meta.type) || 'song'; }
+function entityId(meta) { return Number(meta && (meta.id || meta.ncm_id) || 0); }
+function uiOf(meta) { return KIND_UI[kindOf(meta)] || KIND_UI.song; }
+
+/** 分享落地页地址：歌曲 / 网易云歌单 / 站内歌单 / 歌手 / 专辑。 */
+export function entityUrl(meta) {
+  const kind = kindOf(meta), id = entityId(meta);
+  const path = kind === 'song' ? 'song'
+    : kind === 'playlist' ? 'ncmpl'
+      : kind === 'local-playlist' ? 'pl'
+        : kind === 'artist' ? 'artist' : 'album';
+  return `${appBase()}#/${path}/${id}`;
 }
-function songText(meta) {
-  const lines = [`🎵 ${meta.name}${meta.artists ? ' - ' + meta.artists : ''}`];
-  if (meta.album) lines.push(`专辑：${meta.album}`);
-  lines.push('', `在 CurrentMusic 收听：${songUrl(meta)}`);
+// 兼容旧的歌曲分享调用。
+export function songUrl(meta) { return `${appBase()}#/song/${meta.ncm_id}`; }
+
+function shareText(meta) {
+  const kind = kindOf(meta), ui = uiOf(meta), url = entityUrl(meta);
+  const name = meta.name || '';
+  if (kind === 'song') {
+    const lines = [`🎵 ${name}${meta.artists ? ' - ' + meta.artists : ''}`];
+    if (meta.album) lines.push(`专辑：${meta.album}`);
+    lines.push('', `${ui.cta}：${url}`);
+    return lines.join('\n');
+  }
+  if (kind === 'playlist' || kind === 'local-playlist') {
+    const lines = [`🎵 歌单：${name}`];
+    if (meta.sub) lines.push(kind === 'playlist' ? `创建者：${meta.sub}` : meta.sub);
+    if (meta.sub2) lines.push(meta.sub2);
+    lines.push('', `${ui.cta}：${url}`);
+    return lines.join('\n');
+  }
+  if (kind === 'artist') {
+    const lines = [`🎤 歌手：${name}`];
+    if (meta.sub && meta.sub !== '歌手') lines.push(meta.sub);
+    if (meta.sub2) lines.push(meta.sub2);
+    lines.push('', `${ui.cta}：${url}`);
+    return lines.join('\n');
+  }
+  const lines = [`💿 专辑：${name}${meta.sub ? ' - ' + meta.sub : ''}`];
+  if (meta.sub2) lines.push(meta.sub2);
+  lines.push('', `${ui.cta}：${url}`);
   return lines.join('\n');
 }
 
@@ -174,13 +221,14 @@ async function drawCard(meta, withCover) {
   paintBackground(ctx, pal);
 
   // 品牌
+  const kind = kindOf(meta), ui = uiOf(meta);
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(255,255,255,.94)';
   ctx.font = `700 42px ${FONT}`;
   ctx.fillText('CurrentMusic', 90, 112);
   ctx.fillStyle = 'rgba(255,255,255,.42)';
   ctx.font = `600 22px ${FONT}`;
-  ctx.fillText('MUSIC SHARE', 90, 152);
+  ctx.fillText(ui.brand, 90, 152);
 
   // 封面
   const size = 620, x = (W - size) / 2, y = 180;
@@ -203,20 +251,22 @@ async function drawCard(meta, withCover) {
   }
   ctx.restore();
 
-  // 歌名 / 歌手 / 专辑
+  // 主标题 / 副标题 / 补充信息
   ctx.fillStyle = '#ffffff';
   ctx.font = `700 54px ${FONT}`;
   const lines = wrapLines(ctx, meta.name || '', 900, 2);
   let ty = 880;
   lines.forEach(l => { ctx.fillText(l, 90, ty); ty += 70; });
 
+  const sub = meta.sub || meta.artists || '';
+  const sub2 = meta.sub2 || meta.album || '';
   ctx.fillStyle = 'rgba(255,255,255,.74)';
   ctx.font = `500 32px ${FONT}`;
-  ctx.fillText(fitText(ctx, meta.artists, 900), 90, ty + 6);
-  if (meta.album) {
+  if (sub) ctx.fillText(fitText(ctx, sub, 900), 90, ty + 6);
+  if (sub2) {
     ctx.fillStyle = 'rgba(255,255,255,.46)';
     ctx.font = `400 26px ${FONT}`;
-    ctx.fillText(fitText(ctx, meta.album, 900), 90, ty + 48);
+    ctx.fillText(fitText(ctx, sub2, 900), 90, ty + 48);
   }
 
   // 分隔线
@@ -225,21 +275,22 @@ async function drawCard(meta, withCover) {
   ctx.beginPath(); ctx.moveTo(90, 1090); ctx.lineTo(W - 90, 1090); ctx.stroke();
 
   // 左侧：文案与链接
+  const shareUrl = entityUrl(meta);
   ctx.fillStyle = 'rgba(255,255,255,.5)';
   ctx.font = `400 24px ${FONT}`;
-  ctx.fillText('在 CurrentMusic 收听', 90, 1170);
+  ctx.fillText(ui.cta, 90, 1170);
   ctx.fillStyle = 'rgba(255,255,255,.85)';
   ctx.font = '500 22px ui-monospace,Menlo,monospace';
-  ctx.fillText(fitText(ctx, songUrl(meta).replace(/^https?:\/\//, ''), 610), 90, 1216);
+  ctx.fillText(fitText(ctx, shareUrl.replace(/^https?:\/\//, ''), 610), 90, 1216);
   ctx.fillStyle = 'rgba(255,255,255,.42)';
   ctx.font = `400 20px ${FONT}`;
   ctx.fillText('扫码或访问链接', 90, 1256);
   ctx.fillStyle = 'rgba(255,255,255,.52)';
   ctx.font = `400 19px ${FONT}`;
-  ctx.fillText(fitText(ctx, `也可打开 CurrentMusicX 搜索「${meta.name}」收听`, 610), 90, 1296);
+  ctx.fillText(fitText(ctx, `也可打开 CurrentMusicX 搜索「${meta.name || ''}」${ui.verb}`, 610), 90, 1296);
 
   // 右侧：二维码（含 4 模块静区，扫码可用）
-  drawQRCode(ctx, songUrl(meta), 860, 1250, 258);
+  drawQRCode(ctx, shareUrl, 860, 1250, 258);
 
   return cv;
 }
@@ -256,8 +307,8 @@ export async function makeShareImage(meta) {
 }
 
 function safeName(meta) {
-  const n = String(meta.name || 'song').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
-  return `CurrentMusic-${n}-${meta.ncm_id || 0}.jpg`;
+  const n = String(meta.name || 'share').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
+  return `CurrentMusic-${n}-${kindOf(meta)}-${entityId(meta)}.jpg`;
 }
 
 async function copyText(text) {
@@ -291,29 +342,32 @@ function saveImage(dataUrl, meta) {
   a.remove();
 }
 
-/** 分享入口：分享图 / 链接 / 歌曲信息。 */
+/** 分享入口：分享图 / 链接 / 信息；歌曲、歌单、歌手、专辑共用。 */
 export function openShare(meta) {
-  if (!meta || !meta.ncm_id) return toast('这首歌暂时无法分享');
+  if (!meta || !entityId(meta)) return toast('暂时无法分享');
+  const kind = kindOf(meta), ui = uiOf(meta);
   const cover = meta.pic
     ? `<img class="cm-share-cover" src="${esc(meta.pic)}?param=120y120" alt="">`
-    : '<span class="cm-share-cover ph material-icons-outlined">music_note</span>';
+    : `<span class="cm-share-cover ph material-icons-outlined">${ui.icon}</span>`;
+  const sub = meta.sub || meta.artists || '';
+  const sub2 = meta.sub2 || meta.album || '';
 
   const diag = mdui.dialog({
-    headline: '分享歌曲',
+    headline: ui.headline,
     body: `<div class="cm-share">
       <div class="cm-share-song">${cover}
         <div class="cm-share-meta"><b>${esc(meta.name || '')}</b>
-          <span>${esc(meta.artists || '')}${meta.album ? ' · ' + esc(meta.album) : ''}</span></div>
+          <span>${esc(sub)}${sub2 ? ' · ' + esc(sub2) : ''}</span></div>
       </div>
       <div class="cm-share-opts">
         <button class="cm-share-opt" data-k="img">
           <span class="material-icons-outlined">image</span><b>分享图</b><i>实时生成卡片，可保存到相册</i>
         </button>
         <button class="cm-share-opt" data-k="link">
-          <span class="material-icons-outlined">link</span><b>分享链接</b><i>复制歌曲页面链接</i>
+          <span class="material-icons-outlined">link</span><b>分享链接</b><i>复制${ui.headline.replace('分享', '')}页面链接</i>
         </button>
         <button class="cm-share-opt" data-k="text">
-          <span class="material-icons-outlined">notes</span><b>分享歌曲信息</b><i>复制歌名 / 歌手 / 专辑与链接</i>
+          <span class="material-icons-outlined">notes</span><b>${ui.textLabel}</b><i>复制名称、补充信息与链接</i>
         </button>
       </div>
     </div>`,
@@ -324,13 +378,13 @@ export function openShare(meta) {
     btn.onclick = async () => {
       const k = btn.dataset.k;
       if (k === 'link') {
-        const ok = await copyText(songUrl(meta));
+        const ok = await copyText(entityUrl(meta));
         toast(ok ? '链接已复制' : '复制失败，请手动复制');
         return;
       }
       if (k === 'text') {
-        const ok = await copyText(songText(meta));
-        toast(ok ? '歌曲信息已复制' : '复制失败，请手动复制');
+        const ok = await copyText(shareText(meta));
+        toast(ok ? '分享信息已复制' : '复制失败，请手动复制');
         return;
       }
       // 分享图

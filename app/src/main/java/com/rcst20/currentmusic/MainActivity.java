@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.util.Log;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
@@ -49,6 +50,11 @@ public class MainActivity extends Activity {
     private final ExecutorService pool = Executors.newCachedThreadPool();
     private final Handler main = new Handler(Looper.getMainLooper());
     private static MainActivity sRef;   // 前台服务转发播放动作回 WebView 用
+    static final String EXTRA_DESKTOP_PERMISSION = "desktop_lyrics_permission";
+    /** 用户已请求桌面歌词，但还在等悬浮窗权限页返回。 */
+    private boolean pendingDesktopLyrics = false;
+    /** 已经拉起过系统悬浮窗权限页，下一次 onResume 负责验收结果。 */
+    private boolean desktopPermissionPrompt = false;
     /** 当前 DLNA 投屏目标（null=未投屏）；投屏期间声音由渲染器输出，本机保持暂停。 */
     private volatile Dlna.Device castDevice = null;
     /** SSDP 搜索期间持有的组播锁（Android Wi-Fi 默认丢弃组播，不拿锁搜不到设备）。 */
@@ -94,6 +100,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         sRef = this;
+        pendingDesktopLyrics = getIntent() != null
+                && getIntent().getBooleanExtra(EXTRA_DESKTOP_PERMISSION, false);
         // Edge-to-edge：内容延伸到状态栏/手势条之下，由前端 env(safe-area-inset-*) 收边
         // （否则底部进度条与系统手势条之间永远有一条系统预留空隙）
         if (Build.VERSION.SDK_INT >= 30) {
@@ -132,9 +140,107 @@ public class MainActivity extends Activity {
 
         web.setWebViewClient(new LocalClient());
         web.setWebChromeClient(new Chrome());
+        // WebView 默认不会下载 APK（例如首页 CurrentMusicX 横幅），点击会像“没反应”。
+        // 统一交给系统 DownloadManager：下载完成后拉起安装器。
+        web.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+            String low = url == null ? "" : url.toLowerCase(java.util.Locale.ROOT);
+            String cd = contentDisposition == null ? "" : contentDisposition.toLowerCase(java.util.Locale.ROOT);
+            boolean isApk = (mimetype != null && mimetype.contains("android.package-archive"))
+                    || low.contains(".apk") || cd.contains(".apk")
+                    || low.contains("/download/latest") || low.contains("/x/download/");
+            if (!isApk) return;
+            Toast.makeText(this, "开始下载安装包…", Toast.LENGTH_SHORT).show();
+            startApkDownload(url, apkFileName(url, contentDisposition));
+        });
         web.addJavascriptInterface(new Bridge(), "NativeApi");
         applySystemBars();
         web.loadUrl(START_URL);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && intent.getBooleanExtra(EXTRA_DESKTOP_PERMISSION, false)) {
+            pendingDesktopLyrics = true;
+            // singleTop 且页面已经在前台时只回调 onNewIntent，不一定再走 onResume。
+            main.post(this::continuePendingDesktopLyrics);
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (!Settings.canDrawOverlays(this) && DesktopLyricsOverlay.isEnabled(this)) {
+            // 用户在系统设置里撤销了悬浮窗权限：同步关掉开关，避免通知栏显示已开启。
+            disableDesktopLyrics();
+        }
+        if (desktopPermissionPrompt) {
+            desktopPermissionPrompt = false;
+            if (Settings.canDrawOverlays(this)) {
+                if (pendingDesktopLyrics) {
+                    pendingDesktopLyrics = false;
+                    enableDesktopLyrics();
+                }
+            } else {
+                pendingDesktopLyrics = false;
+                Toast.makeText(this, "未授予悬浮窗权限，桌面歌词未开启", Toast.LENGTH_LONG).show();
+            }
+        } else {
+            continuePendingDesktopLyrics();
+        }
+        pushDesktopLyricsState();
+    }
+
+    private void continuePendingDesktopLyrics() {
+        if (!pendingDesktopLyrics) return;
+        if (Settings.canDrawOverlays(this)) {
+            pendingDesktopLyrics = false;
+            enableDesktopLyrics();
+        } else {
+            requestDesktopLyricsPermission();
+        }
+    }
+
+    private void requestDesktopLyricsPermission() {
+        if (desktopPermissionPrompt) return;
+        desktopPermissionPrompt = true;
+        try {
+            Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (RuntimeException e) {
+            desktopPermissionPrompt = false;
+            pendingDesktopLyrics = false;
+            Toast.makeText(this, "无法打开悬浮窗权限设置，请在系统设置中授权", Toast.LENGTH_LONG).show();
+            pushDesktopLyricsState();
+        }
+    }
+
+    private void enableDesktopLyrics() {
+        DesktopLyricsOverlay.setEnabled(this, true);
+        PlaybackService.setDesktopLyrics(true);
+        DesktopLyricsOverlay.pushState(this);
+        DesktopLyricsOverlay.requestLyrics();
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQ_PERM);
+        }
+        Toast.makeText(this, "桌面歌词已开启", Toast.LENGTH_SHORT).show();
+    }
+
+    private void disableDesktopLyrics() {
+        pendingDesktopLyrics = false;
+        DesktopLyricsOverlay.setEnabled(this, false);
+        PlaybackService.setDesktopLyrics(false);
+        DesktopLyricsOverlay.pushState(this);
+    }
+
+    private void pushDesktopLyricsState() {
+        runJs("window.__cmDesktopLyricsState&&window.__cmDesktopLyricsState("
+                + DesktopLyricsOverlay.stateJson(this) + ")");
     }
 
     private boolean isSystemDark() {
@@ -274,6 +380,10 @@ public class MainActivity extends Activity {
             // 页面脚本此时必定就绪：强制重推 insets，兜住首帧注入丢失的情况
             refreshInsetsFromWindow(true);
             flushPendingJs();
+            pushDesktopLyricsState();
+            if (DesktopLyricsOverlay.isEnabled(MainActivity.this)) {
+                DesktopLyricsOverlay.requestLyrics();
+            }
         }
 
         @Override
@@ -492,6 +602,38 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void mediaState(final boolean playing, final long positionMs) {
             PlaybackService.setPlaybackState(playing, positionMs);
+        }
+
+        // ---------------- 桌面歌词 ----------------
+
+        /** 当前原生开关/权限状态（设置页初始化用）。 */
+        @JavascriptInterface
+        public String desktopLyricsState() {
+            return DesktopLyricsOverlay.stateJson(MainActivity.this);
+        }
+
+        /** 设置页开关：开启时若缺悬浮窗权限，先拉起系统授权页，返回后自动继续。 */
+        @JavascriptInterface
+        public void setDesktopLyricsEnabled(final boolean on) {
+            main.post(() -> {
+                if (!on) {
+                    disableDesktopLyrics();
+                    return;
+                }
+                if (!Settings.canDrawOverlays(MainActivity.this)) {
+                    pendingDesktopLyrics = true;
+                    requestDesktopLyricsPermission();
+                    return;
+                }
+                pendingDesktopLyrics = false;
+                enableDesktopLyrics();
+            });
+        }
+
+        /** WebView 行变化 → 原生悬浮窗；空串由原生显示「暂无歌词」。 */
+        @JavascriptInterface
+        public void desktopLyric(final String current, final String next) {
+            DesktopLyricsOverlay.updateLyric(current, next);
         }
 
         // ---------------- DLNA 投屏 ----------------
@@ -868,13 +1010,31 @@ public class MainActivity extends Activity {
         main.post(() -> { if (web != null) web.evaluateJavascript(js, null); });
     }
 
+    /** 从 Content-Disposition / URL 推断 APK 文件名，避免落到 download.apk。 */
+    private static String apkFileName(String url, String contentDisposition) {
+        String name = "";
+        if (contentDisposition != null) {
+            int i = contentDisposition.toLowerCase(java.util.Locale.ROOT).indexOf("filename=");
+            if (i >= 0) {
+                name = contentDisposition.substring(i + 9).replace("\"", "")
+                        .split(";")[0].trim();
+            }
+        }
+        if (name.isEmpty() && url != null) {
+            String seg = android.net.Uri.parse(url).getLastPathSegment();
+            name = seg == null ? "" : seg;
+        }
+        if (!name.toLowerCase(java.util.Locale.ROOT).endsWith(".apk")) name = "download.apk";
+        return name;
+    }
+
     private void startApkDownload(String url, String fileName) {
         try {
             String name = (fileName == null || fileName.isEmpty())
                     ? "CurrentMusic-update.apk" : fileName.replaceAll("[\\/:*?\"<>|]", "_");
             android.app.DownloadManager.Request req = new android.app.DownloadManager.Request(
                     android.net.Uri.parse(url));
-            req.setTitle("CurrentMusic 在线更新");
+            req.setTitle("下载安装包");
             req.setDescription(name);
             req.setMimeType("application/vnd.android.package-archive");
             req.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE);

@@ -6,12 +6,15 @@
 // 只负责两件事：
 //   1) 把 #navDrop 的位移与宽度对齐到「当前选中项的图标+文字」外框；
 //   2) 切换时给出方向感（拉伸方向朝行进方向，落位后复位）。
-// 外观（玻璃本体、高光边、圆角、过渡曲线）全部在 app.css 里，且限定在 frost 皮肤下。
-// 默认皮肤（MD3）不显示它，仍用原来的胶囊指示器。
+// 外观（玻璃本体、高光边、圆角、过渡曲线）全部在 app.css 里，分别限定在
+// frost / cmx 皮肤下；默认皮肤（MD3）不显示它，仍用原来的胶囊指示器。
 
 const DROP_ID = 'navDrop';
 const NAV_SEL = '#bottomNav';
 const ITEM_SEL = '.navItem';
+// 两种皮肤共用同一套水滴几何；外观分别写在 app.css 的 frost / cmx 块里。
+const DROP_PRESETS = ['frost', 'cmx'];
+const dropEnabled = () => DROP_PRESETS.indexOf(document.documentElement.getAttribute('data-ui-preset')) >= 0;
 // 尺寸与动效参数取自参考实现（github.com/mikonyaa/LiquidGlassTabBars，
 // 其 LiquidTabBar.swift / LiquidTabBarTheme.swift 把 iOS 26 浮动标签栏的参数写成了默认值）：
 //   · 动画：Animation.spring(response: 0.32, dampingFraction: 0.82)
@@ -22,6 +25,11 @@ const ITEM_SEL = '.navItem';
 //   · 选中态左右留白 16（我们按比例取 20，视觉上更像横向胶囊）
 const PAD_X = 20;          // 水滴比「图标 + 文字」外框左右各多出的留白
 const PAD_Y = 6;           // 上下留白（与参考实现一致）
+// CurrentMusicX 的选中指示器是盖住整个 tab 格的玻璃胶囊（宽度 ≈ 页签宽），
+// 不是只包住图标的小胶囊；左右多留 24px、上下多留 4px 更接近 X 的形态。
+const CMX_PAD_X = 24;
+const CMX_PAD_Y = 4;
+const isCmx = () => document.documentElement.getAttribute('data-ui-preset') === 'cmx';
 const MIN_W_RATIO = 1.35;  // 宽度下限 = 高度 × 1.35（参考实现是 ≥1.0，取 1.35 更耐看）
 const STRETCH = 1.05;      // 移动中的轻微拉伸（原来 1.16 太夸张，是"生硬"的来源之一）
 const MOVE_MS = 439;       // 对应 response 0.32 / dampingFraction 0.82 的稳定时间
@@ -54,9 +62,12 @@ function measure(target) {
   const right = Math.max.apply(null, parts.map(r => r.right));
   const top = Math.min.apply(null, parts.map(r => r.top));
   const bottom = Math.max.apply(null, parts.map(r => r.bottom));
-  // 高度取「条内高度」（参考实现：条高 - 2×6 的内边距），保证水滴与胶囊同心
-  const h = Math.max(24, nr.height - PAD_Y * 2);
-  let w = (right - left) + PAD_X * 2;
+  // 高度取「条内高度」（参考实现：条高 - 2×6 的内边距），保证水滴与胶囊同心。
+  // CMX 的指示器几乎占满 66px 页签，只留 4px 呼吸位。
+  const padX = isCmx() ? CMX_PAD_X : PAD_X;
+  const padY = isCmx() ? CMX_PAD_Y : PAD_Y;
+  const h = Math.max(24, nr.height - padY * 2);
+  let w = (right - left) + padX * 2;
   const minW = h * MIN_W_RATIO;          // 宽度下限：不得窄于自身高度（再乘 1.35）
   if (w < minW) w = minW;
   const y = (nr.height - h) / 2;
@@ -140,7 +151,7 @@ function resetStretch() {
 /* ── 拖动（scrub）：iOS 的标签栏支持按住横向滑动来选择 ──────────────────
    手指按住底栏左右滑动时，水滴跟着手指走、经过的项以强调色提示，
    松手才真正切换页面。实现要点：
-     · 只在 frost 皮肤下启用；
+     · 只在 frost / cmx 皮肤下启用；
      · 位移/抬起用 Pointer Events + setPointerCapture，手指移出底栏也能继续跟；
      · 拖动超过阈值才接管手势（否则保留原生点击，普通点击照常工作）；
      · 拖动后要拦掉浏览器补发的那次 click，否则会重复导航。 */
@@ -185,7 +196,7 @@ function previewAt(clientX) {
 }
 
 function onDown(e) {
-  if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') return;
+  if (!dropEnabled()) return;
   if (e.button != null && e.button !== 0) return;
   // ≥900px 是左侧**纵向**导航栏：水滴不显示（见 app.css），横向 scrub 也不适用
   if (window.matchMedia && window.matchMedia('(min-width: 900px)').matches) return;
@@ -246,7 +257,7 @@ function ensureRefs() {
 
 export function refreshNavDrop(noAnim) {
   if (!ensureRefs()) return;
-  if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') {
+  if (!dropEnabled()) {
     drop.classList.remove('moving');
     return;                                  // 非玻璃皮肤：不参与定位（CSS 里也不显示）
   }
@@ -292,7 +303,7 @@ export function initNavDrop() {
 
   // 兜底：字体图标加载完成、安全区迟到等会让外框变化，轻量比对即可
   setInterval(function () {
-    if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') return;
+    if (!dropEnabled()) return;
     const m = measure();
     if (!m) return;
     if (lastX === null || Math.abs(m.x - lastX) > 0.6 || Math.abs(m.w - lastW) > 0.6) move();

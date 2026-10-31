@@ -111,7 +111,7 @@ export async function render(el, params, state = {}) {
       <div class="cm-umain">
         <div class="cm-uname">${esc(u.nickname || `用户${u.id}`)}${userTags(u)}</div>
         <div class="cm-ubio">${esc(u.bio || '这个人很懒，什么都没写')}</div>
-        <div class="cm-usub">点赞 ${u.likes} · 歌单 ${u.playlists} · ${sort === 'listen' ? '时长 ' + fmtListen(u.listenMs) : '听歌 ' + u.days + ' 天'}${u.ipRegion ? `<span class="cm-uregion" title="IP 属地"><span class="material-icons-outlined">location_on</span>${esc(u.ipRegion)}</span>` : ''}</div>
+        <div class="cm-usub">听歌时长 ${fmtListen(u.listenMs)} · 听歌 ${u.days} 天${u.ipRegion ? `<span class="cm-uregion" title="IP 属地"><span class="material-icons-outlined">location_on</span>${esc(u.ipRegion)}</span>` : ''}</div>
       </div>
     </div>`;
 

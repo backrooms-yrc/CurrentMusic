@@ -3,6 +3,7 @@ import { api, auth } from '../api.js';
 import { esc, renderSongList, toast, confirmDialog, skelList } from '../ui.js';
 import { player } from '../player.js';
 import { addToPlaylist } from '../player-ui.js';
+import { openShare } from '../share.js';
 
 export async function render(el, params) {
   const kind = params[0]; // pl | ncmpl | special
@@ -10,6 +11,7 @@ export async function render(el, params) {
 
   el.innerHTML = skelList(8);
   let title = '', desc = '', songs = [], removable = false, owner = false, cover = '', badge = '';
+  let shareKind = '', shareSub = '';
 
   try {
     if (kind === 'pl' && id === 'likes') {
@@ -27,6 +29,8 @@ export async function render(el, params) {
       desc = (p.description ? p.description + ' · ' : '') + `共 ${p.tracks.length} 首`;
       songs = p.tracks || [];
       cover = p.cover || '';
+      shareKind = 'local-playlist';
+      shareSub = 'CurrentMusic 歌单';
       owner = !isNcm && p.user_id === (auth.user && auth.user.id);
       removable = owner;
     } else if (kind === 'daily') {
@@ -37,6 +41,9 @@ export async function render(el, params) {
       const p = await api.ncmPlaylist(id);
       title = p.name || '排行榜'; desc = `网易云 · 共 ${p.trackCount || (p.songs || []).length} 首`;
       songs = p.songs || [];
+      cover = p.cover || '';
+      shareKind = 'playlist';
+      shareSub = p.creator || '网易云歌单';
     } else {
       throw new Error('未知列表');
     }
@@ -74,6 +81,7 @@ export async function render(el, params) {
         <div class="cm-detail-sub">${esc(desc)}</div>
         <div class="cm-detail-actions">
           <mdui-button variant="filled" id="playAll"><span class="material-icons-outlined">play_arrow</span>播放全部</mdui-button>
+          ${shareKind ? `<mdui-button variant="tonal" id="sharePl"><span class="material-icons-outlined">share</span>分享</mdui-button>` : ''}
           ${kind !== 'pl' || !owner ? '' : `<mdui-button variant="tonal" id="addSongs"><span class="material-icons-outlined">add</span>添加歌曲</mdui-button>`}
           ${kind === 'pl' ? `<mdui-button variant="tonal" id="refreshPl"><span class="material-icons-outlined">refresh</span>刷新</mdui-button>` : ''}
           ${kind === 'ncmpl' ? `<mdui-button variant="tonal" id="plComments"><span class="material-icons-outlined">comment</span>评论</mdui-button>` : ''}
@@ -120,6 +128,7 @@ export async function render(el, params) {
   };
 
   await renderSongList(list, songs, {
+    likeSource: id === 'likes' ? 'local' : undefined,
     onPlay: i => player.playList(songs, i),
     onRemove: removable ? async i => {
       const s = songs[i];
@@ -133,6 +142,11 @@ export async function render(el, params) {
   });
 
   el.querySelector('#playAll').onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
+  const sharePl = el.querySelector('#sharePl');
+  if (sharePl) sharePl.onclick = () => openShare({
+    type: shareKind, id, name: title, pic: cover, sub: shareSub,
+    sub2: `共 ${songs.length} 首`,
+  });
 
   // 相似歌单（/simi/playlist；上游该维度常返回空，空则不显示区块）
   if (kind === 'ncmpl') {

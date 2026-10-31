@@ -1,11 +1,16 @@
 // UI 工具：转义、toast、时长格式、歌曲行渲染（含点赞/收藏状态）、对话框封装。
 import { mdui } from './md.js';
-import { api, auth, decorScale } from './api.js';
+import { api, auth, decorScale, settings } from './api.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function toast(message) {
   mdui.snackbar({ message, placement: 'bottom', closeable: false, timeout: 2200 });
+}
+
+/** 打开全屏浮层前清掉残留 snackbar，避免它压在弹窗/菜单上。 */
+export function dismissToasts() {
+  document.querySelectorAll('mdui-snackbar').forEach(el => { try { el.remove(); } catch { /* 忽略 */ } });
 }
 
 export const fmtDur = ms => {
@@ -270,6 +275,7 @@ export const getColorSchemeKey = () => localStorage.getItem('cm.colorScheme') ||
 export function setColorSchemeKey(key) {
   localStorage.setItem('cm.colorScheme', key);
   if (key !== 'dynamic') applyColorScheme((COLOR_SCHEMES.find(s => s.key === key) || {}).color || '#6750A4');
+  try { document.dispatchEvent(new CustomEvent('cm-colorscheme-mode', { detail: { key } })); } catch { /* 旧内核 */ }
 }
 
 export function applyColorScheme(hex, pal) {
@@ -284,7 +290,12 @@ export function applyColorScheme(hex, pal) {
     if (pal.dark) st.setProperty('--cm-primary-dark', pal.dark);
     if (pal.accent) st.setProperty('--cm-accent', pal.accent);
     if (pal.accentDeep) st.setProperty('--cm-accent-deep', pal.accentDeep);
+  } else {
+    // 从动态取色切到固定配色时不能沿用上一张封面的强调色。
+    st.setProperty('--cm-accent', hex);
+    st.setProperty('--cm-accent-deep', hex);
   }
+  try { document.dispatchEvent(new CustomEvent('cm-colorscheme', { detail: { primary: hex } })); } catch { /* 旧内核 */ }
 }
 
 export function bootColorScheme() {
@@ -363,7 +374,8 @@ async function fetchStatus(ids) {
       need.forEach(i => statusCache.set(i, {
         liked: (st.liked || []).includes(i),
         faved: (st.faved || []).includes(i),
-        count: (st.counts || {})[i] || 0,
+        // 展示口径统一为网易云红心数；旧服务端没有 ncmCounts 时回退本地计数
+        count: (st.ncmCounts || {})[i] ?? (st.counts || {})[i] ?? 0,
       }));
     } catch { /* 未登录等情况：保持默认 */ }
   }
@@ -383,7 +395,7 @@ export async function ensureStatus(ncmId) {
     const s = {
       liked: (st.liked || []).includes(ncmId),
       faved: (st.faved || []).includes(ncmId),
-      count: (st.counts || {})[ncmId] || 0,
+      count: (st.ncmCounts || {})[ncmId] ?? (st.counts || {})[ncmId] ?? 0,
     };
     statusCache.set(ncmId, s);
     return s;
@@ -406,6 +418,68 @@ export async function ensureNcmLiked() {
 export const isNcmLiked = id => !!(_ncmLikedSet && _ncmLikedSet.has(id));
 export function setNcmLiked(id, on) { if (_ncmLikedSet) { on ? _ncmLikedSet.add(id) : _ncmLikedSet.delete(id); } }
 export function resetNcmLiked() { _ncmLikedSet = null; }
+
+// ---------- 默认红心目标（绑定状态 + 设置） ----------
+
+let _ncmBound = null, _ncmBoundToken = '';
+export async function ensureNcmBound() {
+  if (!auth.token) return false;
+  if (_ncmBound !== null && _ncmBoundToken === auth.token) return _ncmBound;
+  _ncmBoundToken = auth.token;
+  try { _ncmBound = !!(await api.bindStatus()).bound; }
+  catch { _ncmBound = null; _ncmBoundToken = ''; return false; }   // 网络失败下次重试
+  return _ncmBound;
+}
+export function resetNcmBound() { _ncmBound = null; _ncmBoundToken = ''; }
+
+/** 当前默认红心目标：auto 跟随绑定；强制 ncm 但在未绑定时自动回退 local。 */
+export async function likeSource() {
+  if (settings.likeMode === 'local') return 'local';
+  const bound = await ensureNcmBound();
+  return bound ? 'ncm' : 'local';
+}
+
+/** 当前歌曲在默认目标下的红心状态（count 为网易云红心数口径）。 */
+export async function ensureLikeState(song) {
+  const bound = await ensureNcmBound();
+  const source = settings.likeMode === 'local' || !bound ? 'local' : 'ncm';
+  if (source === 'ncm') await ensureNcmLiked();
+  const st = getStatus(song.ncm_id);
+  return { source, bound, count: st.count,
+           liked: source === 'ncm' ? isNcmLiked(song.ncm_id) : st.liked };
+}
+
+/** 按当前设置执行一次红心；已绑定默认走网易云，未绑定走自建。 */
+export async function toggleLikeDefault(song, onChange, sourceOverride) {
+  if (!auth.token) return toast('登录后才能使用喜欢功能');
+  const source = sourceOverride || await likeSource();
+  if (source === 'ncm') {
+    await ensureNcmLiked();
+    const on = isNcmLiked(song.ncm_id);
+    try {
+      const r = await api.ncmLike(song, !on);
+      setNcmLiked(song.ncm_id, !on);
+      if (r && r.count != null && Number.isFinite(Number(r.count))) {
+        setStatus(song.ncm_id, { count: Math.max(0, Number(r.count)) });
+      } else {
+        const cur = getStatus(song.ncm_id).count || 0;
+        setStatus(song.ncm_id, { count: Math.max(0, cur + (!on ? 1 : -1)) });
+      }
+      toast(!on ? '已红心到网易云·我喜欢的音乐' : '已取消网易云红心');
+      onChange && onChange();
+    } catch (e) {
+      if (/未绑定/.test(e.message || '')) resetNcmBound();
+      toast(/未绑定/.test(e.message || '') ? '请先在「我的」页绑定网易云账号' : e.message);
+    }
+    return;
+  }
+  try {
+    const r = await api.toggleLike(song);
+    setStatus(song.ncm_id, { liked: r.on });     // 展示数量仍用网易云口径，不写本地数
+    toast(r.on ? '已加入 CurrentMusic 我喜欢' : '已移出 CurrentMusic 我喜欢');
+    onChange && onChange();
+  } catch (e) { toast(e.message); }
+}
 
 /**
  * 喜欢/红心二级菜单：选择收录到 CurrentMusic 我喜欢 还是 网易云·我喜欢的音乐。
@@ -442,7 +516,7 @@ export function openLikeMenu(song, onChange) {
   diag.querySelector('#lkCm').onclick = async () => {
     try {
       const r = await api.toggleLike(song);
-      setStatus(song.ncm_id, { liked: r.on, count: r.count });
+      setStatus(song.ncm_id, { liked: r.on });   // 数量展示保持网易云口径
       renderItems({ on: isNcmLiked(song.ncm_id), msg: '红心将同步到网易云 APP', tail: 'cloud_upload' });
       onChange && onChange();
     } catch (e) { toast(e.message); }
@@ -473,10 +547,15 @@ export function openLikeMenu(song, onChange) {
  * @param offset data-i 的起始下标——追加渲染时传已有条数，保证 data-i 始终是
  *               在**完整数组**里的绝对下标（点击行为依赖它）
  */
-export async function songListHTML(songs, { removable = false, offset = 0 } = {}) {
+export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride } = {}) {
   const st = await fetchStatus(songs.map(s => s.ncm_id));
-  if (auth.token) ensureNcmLiked().catch(() => {});
-  return `<div class="cm-songs">` + songs.map((s, i) => `
+  const bound = auth.token ? await ensureNcmBound() : false;
+  const source = sourceOverride || (settings.likeMode === 'local' || !bound ? 'local' : 'ncm');
+  if (auth.token && (source === 'ncm' || bound)) await ensureNcmLiked().catch(() => {});
+  return `<div class="cm-songs">` + songs.map((s, i) => {
+    const liked = source === 'ncm' ? isNcmLiked(s.ncm_id) : st[i].liked;
+    const dot = bound && source === 'local' && isNcmLiked(s.ncm_id);
+    return `
     <div class="cm-song" data-i="${offset + i}">
       ${s.pic ? `<img class="cm-song-pic" src="${esc(s.pic)}" loading="lazy">` : `<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>`}
       <div class="cm-song-main">
@@ -484,17 +563,18 @@ export async function songListHTML(songs, { removable = false, offset = 0 } = {}
         <div class="cm-song-sub">
           <span>${esc(s.artists || '未知歌手')}${s.album ? ' · ' + esc(s.album) : ''}</span>
           ${s.pop ? `<span class="cm-pop" title="网易云热度"><span class="mi">local_fire_department</span>${s.pop}</span>` : ''}
-          ${st[i].count ? `<span class="cm-like-n" title="CurrentMusic 点赞数"><span class="mi">favorite</span>${fmtCount(st[i].count)}</span>` : ''}
+          ${st[i].count ? `<span class="cm-like-n" title="网易云红心数"><span class="mi">favorite</span>${fmtCount(st[i].count)}</span>` : ''}
         </div>
       </div>
       ${s.mv ? `<span class="cm-song-mv" data-act="mv" data-i="${offset + i}" title="播放 MV"><span class="material-icons-outlined">smart_display</span></span>` : ''}
       <span class="cm-song-dur">${fmtDur(s.duration)}</span>
-      <span class="cm-song-like ${st[i].liked ? 'on' : ''}" data-act="like" data-i="${offset + i}" title="选择收录到哪个我喜欢">
-        <span class="material-icons-outlined">${st[i].liked ? 'favorite' : 'favorite_border'}</span>
-        ${isNcmLiked(s.ncm_id) ? '<i class="cm-ncmdot" title="已在网易云红心"></i>' : ''}
+      <span class="cm-song-like ${liked ? 'on' : ''}" data-act="like" data-i="${offset + i}" title="${source === 'ncm' ? '红心到网易云' : '加入 CurrentMusic 我喜欢'}">
+        <span class="material-icons-outlined">${liked ? 'favorite' : 'favorite_border'}</span>
+        ${dot ? '<i class="cm-ncmdot" title="已在网易云红心"></i>' : ''}
       </span>
       ${removable ? `<span class="cm-song-more" data-act="remove" data-i="${offset + i}"><span class="material-icons-outlined">remove_circle_outline</span></span>` : ''}
-    </div>`).join('') + `</div>`;
+    </div>`;
+  }).join('') + `</div>`;
 }
 
 /**
@@ -516,7 +596,7 @@ export async function renderSongList(el, songs, opts = {}) {
   }
   const slice = songs.slice(from);
   if (!slice.length) return [];
-  const html = await songListHTML(slice, { removable: !!opts.onRemove, offset: from });
+  const html = await songListHTML(slice, { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource });
 
   let rows;
   const wrap = el.querySelector('.cm-songs');
@@ -538,7 +618,7 @@ export async function renderSongList(el, songs, opts = {}) {
       const act = e.target.closest('[data-act]');
       if (act && act.dataset.act === 'like') {
         e.stopPropagation();
-        openLikeMenu(songs[i], () => renderSongList(el, songs, opts));
+        toggleLikeDefault(songs[i], () => renderSongList(el, songs, opts), opts.likeSource);
         return;
       }
       if (act && act.dataset.act === 'remove') {
@@ -607,8 +687,11 @@ export function decorHTML(user, size) {
 export function avatarHTML(user, size = 72) {
   const url = user && user.avatar && api.avatarUrl(user.avatar);
   const decor = decorHTML(user, size);
+  // 头像 URL 不带时间戳：后端文件名已带内容 hash（换头像=换 URL），配合
+  // immutable 长缓存即可。旧的 ?v=Date.now() 每次渲染都是新 URL，浏览器缓存
+  // 全部失效——这正是头像流量曾占全站约两成的根因。
   const inner = url
-    ? `<img class="cm-avatar" src="${esc(url)}?v=${Date.now() % 86400000}" style="width:${size}px;height:${size}px">`
+    ? `<img class="cm-avatar" src="${esc(url)}" style="width:${size}px;height:${size}px">`
     : `<div class="cm-avatar ph" style="width:${size}px;height:${size}px;font-size:${size / 2.6}px">${esc((user && user.nickname ? user.nickname[0] : '?').toUpperCase())}</div>`;
   if (!decor) return inner;
   // 有挂件时外层补一个定位盒（原先直接返回 img，调用方的 flex 布局不受影响）

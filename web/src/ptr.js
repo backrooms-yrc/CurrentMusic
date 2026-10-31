@@ -62,9 +62,21 @@ export function initPullToRefresh(runRefresh) {
   // 表单区域不接管：手指落在输入框（真实 target 是内层 input）或 mdui-text-field 宿主上时，手势留给原生
   const formish = t => t && t.closest && t.closest('input, textarea, [contenteditable="true"], mdui-text-field');
 
+  // 页面内自带纵向滚动区（如 Chat 的消息列表）不接管：它的滚动属于组件自己，
+  // 在列表顶部继续下拉也不应刷新整页。显式标记 data-ptr-ignore 用于没有溢出的
+  // 短列表/头部区域。
+  const ignored = t => t && t.closest && t.closest('[data-ptr-ignore]');
+  const innerScroller = t => {
+    for (let el = t; el && el !== out; el = el.parentElement) {
+      const oy = getComputedStyle(el).overflowY;
+      if (/^(auto|scroll|overlay)$/.test(oy) && el.scrollHeight > el.clientHeight + 1) return el;
+    }
+    return null;
+  };
+
   out.addEventListener('touchstart', e => {
     if (refreshing || e.touches.length !== 1) { reset(); return; }
-    if (out.scrollTop > 0 || formish(e.target)) { reset(); return; }
+    if (out.scrollTop > 0 || formish(e.target) || ignored(e.target) || innerScroller(e.target)) { reset(); return; }
     const t = e.touches[0];
     startId = t.identifier; startY = t.clientY; startX = t.clientX;
     pulling = true; engaged = false;

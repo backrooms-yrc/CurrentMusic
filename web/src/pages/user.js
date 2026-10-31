@@ -109,10 +109,84 @@ function decorDialog(d, onDone) {
 
 // ---------- 登录 / 注册 ----------
 
+// 验证码按钮倒计时：每个按钮独立计时，重复点击不会叠加多个 interval。
+function startCountdown(btn, label = '获取验证码') {
+  clearInterval(btn._cmCd);
+  let left = 60;
+  btn.disabled = true;
+  const tick = () => {
+    btn.textContent = `${left}s 后重发`;
+    if (left-- <= 0) {
+      clearInterval(btn._cmCd);
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  };
+  tick();
+  btn._cmCd = setInterval(tick, 1000);
+}
+
+// 忘记密码（未登录）：邮箱验证码 → 新密码。重置成功后服务端吊销全部会话，
+// 所以这里不自动登录，只把用户名回填到登录框。
+function passwordResetDialog(onDone) {
+  const diag = mdui.dialog({
+    headline: '找回密码',
+    body: `<div class="cm-form">
+      <div class="cm-form-hint">用注册或已绑定的邮箱接收验证码；重置成功后所有设备需重新登录。</div>
+      <mdui-text-field id="frMail" label="邮箱" variant="outlined" type="email" style="width:100%"></mdui-text-field>
+      <div class="cm-email-row">
+        <mdui-text-field id="frCode" label="邮箱验证码" variant="outlined" style="flex:1"></mdui-text-field>
+        <mdui-button variant="tonal" id="frSend">获取验证码</mdui-button>
+      </div>
+      <mdui-text-field id="frPass" label="新密码（6~64 位）" variant="outlined" type="password" password-icon style="width:100%"></mdui-text-field>
+      <mdui-text-field id="frPass2" label="确认新密码" variant="outlined" type="password" password-icon style="width:100%"></mdui-text-field>
+    </div>`,
+    actions: [
+      { text: '取消' },
+      {
+        text: '重置密码',
+        onClick: () => {
+          const email = diag.querySelector('#frMail').value.trim();
+          const code = diag.querySelector('#frCode').value.trim();
+          const nw = diag.querySelector('#frPass').value;
+          const nw2 = diag.querySelector('#frPass2').value;
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('请填写正确的邮箱'); return false; }
+          if (!code) { toast('请填写邮箱验证码'); return false; }
+          if (!nw || nw.length < 6 || nw.length > 64) { toast('新密码需 6~64 位'); return false; }
+          if (nw !== nw2) { toast('两次输入的新密码不一致'); return false; }
+          return api.resetPassword(email, code, nw)
+            .then(r => {
+              toast('密码已重置，请用新密码登录');
+              if (onDone) onDone(r);
+            })
+            .catch(e => { toast(e.message); return false; });
+        },
+      },
+    ],
+  });
+  const send = diag.querySelector('#frSend');
+  send.onclick = async () => {
+    const email = diag.querySelector('#frMail').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('请先填写正确的邮箱地址');
+    try {
+      send.loading = true;
+      await api.sendPasswordResetCode(email);
+      toast('验证码已发送，请查收邮箱（注意垃圾箱）');
+      startCountdown(send);
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      send.loading = false;
+    }
+  };
+  setTimeout(() => diag.querySelector('#frMail')?.focus?.(), 200);
+  return diag;
+}
+
 function renderAuth(el) {
   el.innerHTML = `
     <div class="cm-auth">
-      <div class="cm-auth-logo"><span class="material-icons-outlined">graphic_eq</span></div>
+      <div class="cm-auth-logo"><img src="brand-icon.png?v=sage1" alt="CurrentMusic" width="64" height="64"></div>
       <div class="cm-auth-title">使用 CurrentStation 通行证以继续</div>
       <div class="cm-auth-sub">CurrentMusic · 账号与 Current 系产品通用</div>
       <mdui-segmented-button-group value="login" selects="single" id="mode">
@@ -146,6 +220,9 @@ function renderAuth(el) {
           <mdui-button variant="tonal" id="sendCode">获取验证码</mdui-button>
         </div>
         <mdui-button variant="filled" id="go" full-width>${'登录'}</mdui-button>
+        <div class="cm-auth-forgot" id="forgotRow" hidden>
+          <button type="button" id="forgot">忘记密码？</button>
+        </div>
       </div>
       <div class="cm-auth-alt"><span>其他登录方式</span></div>
       <mdui-button variant="tonal" full-width id="altInternal">
@@ -168,6 +245,7 @@ function renderAuth(el) {
   const rowPhoneCode = el.querySelector('#rowPhoneCode');
   const rowEmail = el.querySelector('#rowEmail');
   const rowEmailCode = el.querySelector('#rowEmailCode');
+  const forgotRow = el.querySelector('#forgotRow');
 
   // 短信通道提示（服务端给：自建网关 / 网易云通道），只在注册-手机验证时展示
   let smsHint = '';
@@ -200,6 +278,7 @@ function renderAuth(el) {
     vfyTabs.hidden = !reg;
     el.querySelector('#fUser').hidden = byCode;
     el.querySelector('#fPass').hidden = byCode;
+    forgotRow.hidden = m !== 'login';
     el.querySelector('#fUser').setAttribute('label', reg ? '用户名' : '用户名 / 手机号');
     go.textContent = reg ? '注册并登录' : '登录';
     if (reg) setVerify(vfy.value);
@@ -211,6 +290,16 @@ function renderAuth(el) {
   };
   mode.addEventListener('change', () => setMode(mode.value));
   setMode('login');
+
+  // 忘记密码：仅登录模式显示；重置成功后回填用户名，回到密码登录
+  el.querySelector('#forgot').onclick = () => passwordResetDialog(r => {
+    mode.value = 'login';
+    setMode('login');
+    const userEl = el.querySelector('#fUser');
+    userEl.value = (r && r.username) || '';
+    el.querySelector('#fPass').value = '';
+    setTimeout(() => el.querySelector('#fPass')?.focus?.(), 200);
+  });
 
   // 倒计时（每个按钮各一份，重发按钮 60s 内禁用）
   const countdown = (btn, state) => {
@@ -578,19 +667,49 @@ async function renderProfile(el, autoDecor) {
   el.querySelector('#goServices').onclick = () => { location.hash = '#/services'; };
   el.querySelector('#goRep').onclick = () => { location.hash = '#/rep'; };
   el.querySelector('#chgPass').onclick = () => {
+    const hasEmail = !!u.hasEmail;
     const diag = mdui.dialog({
       headline: '修改密码',
       body: `<div class="cm-form">
-        <mdui-text-field id="pOld" label="原密码" variant="outlined" type="password" password-icon></mdui-text-field>
-        <mdui-text-field id="pNew" label="新密码（6~64 位）" variant="outlined" type="password" password-icon></mdui-text-field>
+        ${hasEmail ? `<div class="cm-vfy-tabs">
+          <mdui-segmented-button-group value="old" selects="single" id="pwdMode">
+            <mdui-segmented-button value="old">原密码</mdui-segmented-button>
+            <mdui-segmented-button value="email">邮箱验证码</mdui-segmented-button>
+          </mdui-segmented-button-group>
+        </div>` : ''}
+        <div id="pwdOldPane">
+          <mdui-text-field id="pOld" label="原密码" variant="outlined" type="password" password-icon style="width:100%"></mdui-text-field>
+        </div>
+        <div id="pwdEmailPane" hidden>
+          <div class="cm-email-row">
+            <mdui-text-field id="pEmailCode" label="邮箱验证码" variant="outlined" style="flex:1"></mdui-text-field>
+            <mdui-button variant="tonal" id="pSendCode">获取验证码</mdui-button>
+          </div>
+          <div class="cm-form-hint">验证码发送到当前账号绑定的邮箱；验证成功后其他设备会下线。</div>
+        </div>
+        <mdui-text-field id="pNew" label="新密码（6~64 位）" variant="outlined" type="password" password-icon style="width:100%"></mdui-text-field>
+        <mdui-text-field id="pNew2" label="确认新密码" variant="outlined" type="password" password-icon style="width:100%"></mdui-text-field>
+        ${hasEmail ? '' : '<div class="cm-form-hint">当前账号未绑定邮箱，只能用原密码修改；绑定邮箱后可在忘记密码时用验证码找回。</div>'}
       </div>`,
       actions: [
         { text: '取消' },
         {
           text: '确定',
           onClick: () => {
-            const old = diag.querySelector('#pOld').value, nw = diag.querySelector('#pNew').value;
-            if (!nw || nw.length < 6) { toast('新密码需 6~64 位'); return false; }
+            const nw = diag.querySelector('#pNew').value;
+            const nw2 = diag.querySelector('#pNew2').value;
+            if (!nw || nw.length < 6 || nw.length > 64) { toast('新密码需 6~64 位'); return false; }
+            if (nw !== nw2) { toast('两次输入的新密码不一致'); return false; }
+            const pwdMode = diag.querySelector('#pwdMode');
+            if (pwdMode && pwdMode.value === 'email') {
+              const code = diag.querySelector('#pEmailCode').value.trim();
+              if (!code) { toast('请填写邮箱验证码'); return false; }
+              return api.changePasswordByEmail(code, nw)
+                .then(r => { toast(r && r.revoked ? `密码已修改，已下线 ${r.revoked} 台其他设备` : '密码已修改'); })
+                .catch(e => { toast(e.message); return false; });
+            }
+            const old = diag.querySelector('#pOld').value;
+            if (!old) { toast('请填写原密码'); return false; }
             return api.changePassword(old, nw)
               .then(() => toast('密码已修改'))
               .catch(e => { toast(e.message); return false; });
@@ -598,6 +717,32 @@ async function renderProfile(el, autoDecor) {
         },
       ],
     });
+
+    // 切换「原密码 / 邮箱验证码」：只显示对应输入区（未绑定邮箱时没有切换条）
+    const pwdMode = diag.querySelector('#pwdMode');
+    if (pwdMode) {
+      const sync = () => {
+        const emailMode = pwdMode.value === 'email';
+        diag.querySelector('#pwdOldPane').hidden = emailMode;
+        diag.querySelector('#pwdEmailPane').hidden = !emailMode;
+      };
+      pwdMode.addEventListener('change', sync);
+      sync();
+    }
+    const send = diag.querySelector('#pSendCode');
+    if (send) send.onclick = async () => {
+      try {
+        send.loading = true;
+        const r = await api.sendProfilePasswordCode();
+        toast(`验证码已发送至 ${(r && r.email) || '绑定邮箱'}（注意垃圾箱）`);
+        startCountdown(send);
+      } catch (e) {
+        toast(e.message);
+      } finally {
+        send.loading = false;
+      }
+    };
+    setTimeout(() => diag.querySelector('#pOld')?.focus?.(), 200);
   };
   el.querySelectorAll('[data-sw]').forEach(x => {
     x.onclick = () => {

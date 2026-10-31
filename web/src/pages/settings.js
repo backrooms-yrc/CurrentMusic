@@ -4,13 +4,14 @@ import { api, settings, auth } from '../api.js';
 import { player, playLevel } from '../player.js';
 
 const FX_LABELS = { off: '关闭', jyeffect: '高清臻音', dolby: '杜比全景声', vivid: '臻音全景声', sky: '沉浸环绕声·5.1', 'sky-ste': '沉浸环绕声·环绕' };
+const LIKE_MODE_LABELS = { auto: '自动（已绑定走网易云）', ncm: '网易云红心', local: 'CurrentMusic 我喜欢' };
 const fxLabel = () => FX_LABELS[settings.effect] || '关闭';
 import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel, FONT_SCALES, getFontScaleKey, setFontScaleKey, userTagsText } from '../ui.js';
 import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
 import { UI_PRESETS, uiPresetKey, uiPresetName, setUiPreset } from '../uipreset.js';
 import { bgImage, glassBlur, glassTint, glassRange, setBgImage, setGlass, resetGlass, applyCustomize } from '../customize.js';
-import { waveStyle, setWaveStyle, waveTilt, setWaveTilt, TILT_DEFAULT } from '../customize.js';
+import { waveStyle, setWaveStyle, waveTilt, setWaveTilt, TILT_DEFAULT, coverShape, setCoverShape } from '../customize.js';
 import { WAVE_STYLES } from '../waveform.js';
 
 
@@ -20,6 +21,14 @@ function fmtTime(sec) {
   const d = new Date(sec * 1000);
   const p = n => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function desktopLyricsState() {
+  try {
+    return JSON.parse(window.NativeApi.desktopLyricsState()) || {};
+  } catch {
+    return {};
+  }
 }
 
 export function applyTheme() {
@@ -44,12 +53,16 @@ export async function render(el) {
   const u = auth.user || {};
   const roleText = userTagsText(u);   // 头衔 / 超级管理员 / 管理员（纯文本版，用于「当前账号」这一行）
   const isApp = !!(window.NativeApi && window.NativeApi.versionCode);   // App 内不显示网页专属入口
+  const hasDesktopLyrics = !!(isApp && window.NativeApi
+    && typeof window.NativeApi.desktopLyricsState === 'function');
+  const desktopState = hasDesktopLyrics ? desktopLyricsState() : {};
   el.innerHTML = `
     <div class="cm-sec-head"><h2>外观</h2></div>
     <div class="cm-setting-list">
       <div class="cm-setting" id="scheme"><span class="material-icons-outlined">palette</span>配色方案<i>${esc((COLOR_SCHEMES.find(s => s.key === getColorSchemeKey()) || {}).label || '动态取色')}</i></div>
       <div class="cm-setting" id="theme"><span class="material-icons-outlined">dark_mode</span>外观主题<i>${themeName()}</i></div>
       <div class="cm-setting" id="uiPreset"><span class="material-icons-outlined">auto_awesome</span>界面风格<i>${esc(uiPresetName())}</i></div>
+      <div class="cm-setting" id="coverShape"><span class="material-icons-outlined">album</span>播放页封面形状<i>${coverShape() === 'circle' ? '圆形' : '圆角方形（MD3）'}</i></div>
         <div class="cm-setting" id="bgImage"><span class="material-icons-outlined">wallpaper</span>背景图片<i>${bgImage() ? '已自定义' : '默认'}</i></div>
         <div class="cm-setting" id="glassFx"><span class="material-icons-outlined">blur_on</span>玻璃效果<i>${glassTint() == null ? '默认' : '已自定义'}</i></div>
         <div class="cm-setting" id="waveStyle"><span class="material-icons-outlined">graphic_eq</span>波形样式<i>${(WAVE_STYLES.find(x => x.key === waveStyle()) || WAVE_STYLES[0]).name}</i></div>
@@ -61,6 +74,14 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="quality"><span class="material-icons-outlined">high_quality</span>默认音质<i>${tierLabel(settings.quality)}</i></div>
       <div class="cm-setting" id="dlDir"><span class="material-icons-outlined">download</span>下载目录<i>Music/${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}</i></div>
+      ${hasDesktopLyrics ? `<div class="cm-setting" id="desktopLyrics"><span class="material-icons-outlined">subtitles</span>桌面歌词<i id="desktopLyricsV">${desktopState.enabled ? '已开启' : desktopState.permission ? '已关闭' : '未授权'}</i><mdui-switch id="desktopLyricsSw" ${desktopState.enabled ? 'checked' : ''} style="margin-left:8px"></mdui-switch></div>` : ''}
+    </div>
+    <div class="cm-sec-head"><h2>红心与点赞</h2></div>
+    <div class="cm-setting-list">
+      <div class="cm-setting" id="likeMode">
+        <span class="material-icons-outlined">favorite</span>默认红心位置
+        <i id="likeModeV">${LIKE_MODE_LABELS[settings.likeMode] || LIKE_MODE_LABELS.auto}</i>
+      </div>
     </div>
     <div class="cm-sec-head"><h2>隐私</h2></div>
     <div class="cm-setting-list">
@@ -125,9 +146,67 @@ export async function render(el) {
     });
   }
 
+  // 桌面歌词：原生悬浮窗开关。状态由 Android 桥回推（__cmDesktopLyricsState），
+  // 这样从通知栏开关、或从悬浮窗权限页返回时，设置页也会同步。
+  const dlSw = el.querySelector('#desktopLyricsSw');
+  if (dlSw) {
+    const label = el.querySelector('#desktopLyricsV');
+    const applyState = st => {
+      const s = st || {};
+      dlSw.checked = !!s.enabled;
+      if (label) label.textContent = s.enabled ? '已开启' : (s.permission ? '已关闭' : '未授权');
+    };
+    window.__cmDesktopLyricsState = applyState;
+    applyState(desktopState);
+    dlSw.addEventListener('change', () => {
+      const on = !!dlSw.checked;
+      if (label) label.textContent = on ? '正在开启…' : '已关闭';
+      try {
+        const b = window.NativeApi;
+        if (!b || typeof b.setDesktopLyricsEnabled !== 'function') throw new Error('当前版本不支持');
+        b.setDesktopLyricsEnabled(on);
+      } catch (e) {
+        dlSw.checked = !on;
+        applyState(desktopLyricsState());
+        toast('桌面歌词不可用：' + e.message);
+      }
+    });
+  }
+
   el.querySelector('#dlApk')?.addEventListener('click', () => {
     location.href = settings.base + '/download/latest';   // 后端 302 到最新版安装包
   });
+
+  el.querySelector('#likeMode').onclick = () => {
+    const cur = settings.likeMode;
+    const items = [
+      ['auto', '自动（推荐）', '已绑定网易云时红心同步到网易云；未绑定写入 CurrentMusic'],
+      ['ncm', '网易云 · 我喜欢的音乐', '未绑定网易云时会自动回退到 CurrentMusic'],
+      ['local', 'CurrentMusic · 我喜欢的音乐', '始终只写入本站，不影响网易云账号'],
+    ];
+    const diag = mdui.dialog({
+      headline: '默认红心保存到',
+      body: `<div class="cm-qm">${items.map(([k, t, sub]) => `
+        <div class="cm-qm-item" data-k="${k}">
+          <span class="material-icons-outlined ${k === cur ? 'red' : ''}">${k === cur ? 'favorite' : 'favorite_border'}</span>
+          <div><div>${t}</div><div class="sub">${sub}</div></div>
+          <span class="material-icons-outlined tail">${k === cur ? 'check' : ''}</span>
+        </div>`).join('')}</div>
+        <div class="cm-more-s" style="margin-top:10px">展示的歌曲红心数始终来自网易云。</div>`,
+      actions: [{ text: '关闭' }],
+    });
+    setTimeout(() => {
+      diag.querySelectorAll('.cm-qm-item').forEach(it => {
+        it.onclick = () => {
+          settings.likeMode = it.dataset.k;
+          const label = el.querySelector('#likeModeV');
+          if (label) label.textContent = LIKE_MODE_LABELS[settings.likeMode] || LIKE_MODE_LABELS.auto;
+          toast('默认红心位置：' + (LIKE_MODE_LABELS[settings.likeMode] || LIKE_MODE_LABELS.auto));
+          diag.open = false;
+        };
+      });
+    }, 0);
+  };
 
   el.querySelector('#scheme').onclick = () => {
     const cur = getColorSchemeKey();
@@ -164,7 +243,7 @@ export async function render(el) {
         <div class="cm-more-chips">${picks.map(p =>
           `<mdui-chip ${p.key === cur ? 'selected' : ''} data-k="${p.key}"><i class="cm-swatch ${p.swatch}"></i>${p.name}</mdui-chip>`).join('')}</div>
         <div class="cm-more-s" style="margin-top:10px">${esc((UI_PRESETS.find(p => p.key === cur) || {}).desc || '')}</div>
-        <div class="cm-more-s" style="margin-top:6px">「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影。旧版系统会自动降级为半透明纯色，不影响使用。Material 3 为无玻璃的原版样式。</div>
+        <div class="cm-more-s" style="margin-top:6px">「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影。Material 3 为无玻璃的原版样式。CurrentMusicX 风格采用浅灰底、白色大圆角卡片、蓝色强调和悬浮胶囊导航（默认风格不受影响）。</div>
       </div>`,
       actions: [{ text: '关闭' }],
     });
@@ -238,6 +317,15 @@ export async function render(el) {
     }, 0);
   };
 
+  // ---- CurrentStation 通行证：我的 ID / 授权管理 / 文档 / （管理员）应用登记 ----
+  // 与开发者平台共用统一文档站的通行证接入专题。
+  const openPassportDocs = () => {
+    const url = settings.base.replace(/\/cm\/?$/, '') + '/api-docs/reference/guide-passport-api/';
+    const w = window.open(url, '_blank');
+    if (!w) location.href = url;
+  };
+  el.querySelector('#ppDocs')?.addEventListener('click', openPassportDocs);
+
   // ---- 玻璃效果：模糊 + 浓度，拖动即时生效（关闭时才重建折射透镜）----
   el.querySelector('#glassFx').onclick = () => {
     let blur = glassBlur(), tint = glassTint();
@@ -264,14 +352,6 @@ export async function render(el) {
         { text: '关闭', onClick: () => { applyCustomize({ rebuild: true }); } },
       ],
     });
-  // ---- CurrentStation 通行证：我的 ID / 授权管理 / 文档 / （管理员）应用登记 ----
-  // 文档来自后端自包含页（/passport/docs），网页与 App 都能直接打开
-  const openPassportDocs = () => {
-    const url = settings.base + '/passport/docs';
-    const w = window.open(url, '_blank');
-    if (!w) location.href = url;
-  };
-  el.querySelector('#ppDocs')?.addEventListener('click', openPassportDocs);
   // 开发者平台是**独立页面**（不属于 CurrentMusic 客户端）：这里只做外链
   const openDeveloper = () => {
     const url = settings.base.replace(/\/cm\/?$/, '') + '/developer';
@@ -478,6 +558,26 @@ export async function render(el) {
         v.textContent = cur <= 0 ? '关闭' : cur.toFixed(1) + ' dB/oct';
         setWaveTilt(cur);            // 即时生效（播放页开着也会立刻重建波形）
       };
+    }, 0);
+  };
+
+  el.querySelector('#coverShape').onclick = () => {
+    const current = coverShape();
+    const diag = mdui.dialog({
+      headline: '播放页封面形状',
+      body: `<div class="cm-qm">${[['rounded', '圆角方形（MD3，默认）'], ['circle', '圆形']].map(([key, label]) =>
+        `<div class="cm-qm-item" data-shape="${key}">${label}${key === current ? '<span class="material-icons-outlined">check</span>' : ''}</div>`).join('')}
+        <div class="cm-more-s" style="margin-top:8px">适用于所有界面风格，切换后立即生效。</div></div>`,
+      actions: [{ text: '关闭' }],
+    });
+    setTimeout(() => {
+      diag.querySelectorAll('[data-shape]').forEach(row => {
+        row.onclick = () => {
+          setCoverShape(row.dataset.shape);
+          diag.open = false;
+          render(el);
+        };
+      });
     }, 0);
   };
 

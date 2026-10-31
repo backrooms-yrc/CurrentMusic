@@ -22,7 +22,11 @@ export async function render(el) {
   ];
   await Promise.allSettled(jobs);
 
-  const ncmPls = pls.filter(p => p.source === 'ncm');
+  // 网易云同步：按 /user/playlist 的上游顺序展示（我喜欢的音乐 → 自建 → 收藏），
+  // 与网易云 App「我的 → 音乐」一致；本地歌单仍按创建时间倒序。
+  const ncmPls = pls
+    .filter(p => p.source === 'ncm')
+    .sort((a, b) => (a.ncmOrder ?? 1e9) - (b.ncmOrder ?? 1e9));
   const localPls = pls.filter(p => p.source !== 'ncm');
   const coverHTML = p => p.cover
     ? `<img src="${esc(p.cover)}" loading="lazy" onerror="this.remove()"><span class="material-icons-outlined">queue_music</span>`

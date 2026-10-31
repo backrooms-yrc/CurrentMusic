@@ -25,7 +25,6 @@ export async function render(el, params = {}) {
   let bind = { bound: false };
   try { bind = await api.bindStatus(); } catch { /* 未绑定 */ }
   if (!bind.bound) { needBind(el); return; }
-  const uid = bind.profile && bind.profile.uid;
 
   const tab = params.tab || sessionStorage.getItem(KEY) || 'fm';
   const TABS = [
@@ -54,133 +53,112 @@ export async function render(el, params = {}) {
 
   if (tab === 'fm') {
     body.innerHTML = skelGrid(4);
-    // 私人 FM（/personal_fm）与「场景/心情」推荐（/aidj/content/rcmd）都是账号态读；
-    // 播放模式智能列表（/playmode/intelligence/list）按当前曲目给出续播推荐。
-    const [fmR, modeR, aidjR, sportR] = await Promise.allSettled([
-      api.ncm('/personal_fm'),
-      api.ncm('/personal/fm/mode', { mode: 'Standard', submode: 'NORMAL', limit: 1 }),
-      api.ncm('/aidj/content/rcmd', { latitude: 39.90, longitude: 116.40 }),
-      api.ncm('/radio/sport/get', { bpm: 120 }),
-    ]);
-    const songs = fmR.status === 'fulfilled' ? ncmSongs(fmR.value.data || []) : [];
-    const mode = modeR.status === 'fulfilled' ? (modeR.value.data || {}) : {};
-    const aidj = aidjR.status === 'fulfilled' ? (aidjR.value.data || []) : [];
-    const sport = sportR.status === 'fulfilled' ? (sportR.value.data || []) : [];
+    const fallback = {
+      modes: [
+        { code: 'DEFAULT', title: '默认模式', subtitle: '沿着目前喜好继续聆听' },
+        { code: 'FAMILIAR', title: '熟悉模式', subtitle: '喜欢过的歌曲与相似推荐' },
+        { code: 'EXPLORE', title: '探索模式', subtitle: '偏好曲风与潜力好歌' },
+        { code: 'PUZZLE_MODE_RCMD', title: '拼图模式', subtitle: '边听歌边拼歌曲封面' },
+      ],
+      scenes: [
+        { code: 'NIGHT_EMO', title: '伤感' }, { code: 'EXERCISE', title: '运动' },
+        { code: 'SLEEP_HELP', title: '助眠' }, { code: 'RELAX', title: '放松' },
+        { code: 'FOCUS', title: '专注' }, { code: 'COMMUTE', title: '出行' },
+      ],
+    };
+    let catalog = fallback;
+    try { catalog = await api.roamingCatalog(); } catch { /* 使用内置目录兜底 */ }
+    const modes = (catalog.modes && catalog.modes.length ? catalog.modes : fallback.modes)
+      .map(x => ({ ...x, key: `mode:${x.code}`, scene: false }));
+    const scenes = (catalog.scenes && catalog.scenes.length ? catalog.scenes : fallback.scenes)
+      .map(x => ({ ...x, key: `scene:${x.code}`, scene: true }));
+    const choices = modes.concat(scenes);
+    let choice = choices.find(x => x.key === sessionStorage.getItem('cm.roamChoice')) || choices[0];
+    let songs = [], seen = new Set(), loading = false;
 
     body.innerHTML = `
       <section class="cm-sec">
-        <div class="cm-sec-head"><h2>私人 FM</h2><span class="cm-sec-sub">/personal_fm</span></div>
-        ${songs.length ? `<div id="fmList"></div>
-          <div class="cm-pe-acts">
-            <mdui-button variant="filled" id="fmPlay">播放全部</mdui-button>
-            <mdui-button variant="tonal" id="fmReload">换一批</mdui-button>
-          </div>` : '<div class="cm-empty small">上游没有返回私人 FM 内容</div>'}
-      </section>
-      <section class="cm-sec">
-        <div class="cm-sec-head"><h2>FM 模式</h2><span class="cm-sec-sub">/personal/fm/mode</span></div>
-        <div class="cm-chips">${['Standard', 'FAMILIAR', 'EXPLORE', 'SCENE_RCMD'].map(m =>
-          `<span class="cm-hot" data-mode="${m}">${m}</span>`).join('')}</div>
-        <div class="cm-pe-hint" id="fmModeHint">${mode.mode ? `当前：${esc(mode.mode)} / ${esc(mode.submode || '')}` : '点上面的模式切换（上游返回为空表示该模式无内容）'}</div>
-      </section>
-      <section class="cm-sec">
-        <div class="cm-sec-head"><h2>心动模式（智能续播）</h2><span class="cm-sec-sub">/playmode/intelligence/list</span></div>
-        <div class="cm-pe-hint">心动模式 = 以「我喜欢的音乐」为池、以种子曲目起播，持续智能续播：
-          点下面任一首即以此开播，队列快见底会自动续上；播放页的随机开关可随时关闭。</div>
-        <div id="fmIntel"><div class="cm-empty small">${songs.length
-          ? '按第一首私人 FM 曲目取续播推荐…'
-          : '绑定网易云账号后可用（心动模式走账号态推荐）'}</div></div>
-        ${songs.length ? `<div class="cm-pe-acts">
-          <mdui-button variant="filled" id="fmHeart">以这首开启心动模式</mdui-button>
-        </div>` : ''}
-      </section>
-      ${aidj.length ? `<section class="cm-sec">
-        <div class="cm-sec-head"><h2>场景推荐</h2><span class="cm-sec-sub">/aidj/content/rcmd</span></div>
-        <div class="cm-plgrid">${aidj.slice(0, 9).map(x => `
-          <div class="cm-plcard" ${x.id ? `data-pid="${x.id}"` : ''}>
-            <div class="cm-plcover">${x.picUrl ? `<img src="${esc(x.picUrl)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''}<span class="material-icons-outlined">explore</span></div>
-            <div class="cm-plname">${esc(x.name || '')}</div>
-          </div>`).join('')}</div>
-      </section>` : ''}
-      ${sport.length ? `<section class="cm-sec">
-        <div class="cm-sec-head"><h2>运动电台（按 BPM 120）</h2><span class="cm-sec-sub">/radio/sport/get</span></div>
-        <div id="sportBox"></div>
-      </section>` : ''}`;
+        <div class="cm-sec-head"><h2>私人漫游</h2><span class="cm-sec-sub" id="roamNow">${esc(choice.title)}</span></div>
+        <div class="cm-pe-hint">按你的喜好连续推荐；切换模式会重新开始。</div>
+        <div class="cm-chips" id="roamModes">${modes.map(x =>
+          `<span class="cm-hot${x.key === choice.key ? ' on' : ''}" data-roam="${x.key}" title="${esc(x.subtitle || '')}">${esc(x.title)}</span>`).join('')}</div>
+        <div class="cm-detail-sub" style="margin-top:14px">场景模式</div>
+        <div class="cm-chips" id="roamScenes">${scenes.map(x =>
+          `<span class="cm-hot${x.key === choice.key ? ' on' : ''}" data-roam="${x.key}">${esc(x.title)}</span>`).join('')}</div>
+        <div id="roamList" style="margin-top:14px"></div>
+        <div class="cm-pe-acts">
+          <mdui-button variant="filled" id="roamPlay">播放全部</mdui-button>
+          <mdui-button variant="tonal" id="roamReload">换一批</mdui-button>
+        </div>
+        <div class="cm-pe-hint" id="roamHint"></div>
+      </section>`;
 
-    if (songs.length) {
-      const list = body.querySelector('#fmList');
-      list.innerHTML = songs.slice(0, 20).map((s, i) => `
+    const hint = body.querySelector('#roamHint');
+    const list = body.querySelector('#roamList');
+    const paint = () => {
+      body.querySelectorAll('[data-roam]').forEach(el => el.classList.toggle('on', el.dataset.roam === choice.key));
+      const now = body.querySelector('#roamNow');
+      if (now) now.textContent = choice.title;
+    };
+    const paintSongs = () => {
+      if (!songs.length) {
+        list.innerHTML = '<div class="cm-empty small">这个模式暂时没有推荐，换一批或切换模式试试</div>';
+        return;
+      }
+      list.innerHTML = songs.map((s, i) => `
         <div class="cm-lm-item" data-i="${i}">
           <div class="cm-lm-lyric">${esc(s.name)}</div>
-          <div class="cm-lm-meta"><span>${esc(s.artists)}</span>
+          <div class="cm-lm-meta"><span>${esc(s.artists || '')}${s.album ? ' · ' + esc(s.album) : ''}</span>
             <span><i class="cm-si-act" data-trash="${s.ncm_id}">不喜欢</i></span></div>
         </div>`).join('');
-      list.querySelectorAll('[data-i]').forEach(x => {
-        x.onclick = ev => { if (!ev.target.closest('[data-trash]')) player.playList(songs, +x.dataset.i); };
+      list.querySelectorAll('[data-i]').forEach(el => {
+        el.onclick = ev => { if (!ev.target.closest('[data-trash]')) player.playList(songs, +el.dataset.i); };
       });
-      list.querySelectorAll('[data-trash]').forEach(x => {
-        x.onclick = () => confirmDialog({
-          title: '把这首歌丢进垃圾桶？', body: '网易云会减少推荐同类歌曲。',
-          onOk: () => api.ncm('/fm_trash', { id: x.dataset.trash, time: Date.now(), confirm: 1 })
-            .then(() => { toast('已丢进垃圾桶'); render(el, { tab: 'fm' }); })
-            .catch(e => toast(/绑定|401/.test(e.message) ? '需先绑定网易云账号' : e.message)),
+      list.querySelectorAll('[data-trash]').forEach(el => {
+        el.onclick = () => confirmDialog({
+          title: '不喜欢这首歌？', body: '会从网易云私人漫游推荐中移除。',
+          onOk: async () => {
+            try {
+              await api.roamingTrash(el.dataset.trash);
+              songs = songs.filter(x => String(x.ncm_id) !== String(el.dataset.trash));
+              paintSongs();
+              toast('已从漫游推荐中移除');
+            } catch (e) { toast(/绑定|401/.test(e.message) ? '需先绑定网易云账号' : e.message); }
+          },
         });
       });
-      body.querySelector('#fmPlay').onclick = () => player.playList(songs, 0);
-      body.querySelector('#fmReload').onclick = () => render(el, { tab: 'fm' });
-    }
-    body.querySelectorAll('[data-mode]').forEach(c => {
-      c.onclick = async () => {
-        const hint = body.querySelector('#fmModeHint');
-        hint.textContent = '切换中…';
-        try {
-          const d = await api.ncm('/personal/fm/mode', { mode: c.dataset.mode, submode: 'NORMAL', limit: 20 });
-          const list = ncmSongs((d.data && (d.data.songs || d.data)) || []);
-          hint.textContent = list.length ? `已切到 ${c.dataset.mode}，${list.length} 首` : `${c.dataset.mode} 暂无内容`;
-          if (list.length) {
-            const box = body.querySelector('#fmList');
-            if (box) {
-              box.innerHTML = list.slice(0, 20).map((s, i) => `
-                <div class="cm-lm-item" data-i="${i}"><div class="cm-lm-lyric">${esc(s.name)}</div>
-                <div class="cm-lm-meta"><span>${esc(s.artists)}</span></div></div>`).join('');
-              box.querySelectorAll('[data-i]').forEach(x => { x.onclick = () => player.playList(list, +x.dataset.i); });
-            }
-          }
-        } catch (e) { hint.textContent = `切换失败：${e.message}`; }
+    };
+    const load = async (reset = true) => {
+      if (loading || !choice) return;
+      loading = true;
+      hint.textContent = '正在获取推荐…';
+      try {
+        const d = await api.roamingSongs(choice.scene ? 'SCENE_RCMD' : choice.code,
+          choice.scene ? choice.code : '', 20, reset ? [] : [...seen]);
+        const fresh = d.songs || [];
+        if (reset) { songs = fresh; seen = new Set(songs.map(x => x.ncm_id)); }
+        else { songs = songs.concat(fresh); fresh.forEach(x => seen.add(x.ncm_id)); }
+        sessionStorage.setItem('cm.roamChoice', choice.key);
+        paint();
+        paintSongs();
+        hint.textContent = fresh.length ? `已加载 ${fresh.length} 首` : '暂时没有新的推荐，可换一批或切换模式';
+      } catch (e) {
+        if (reset) { songs = []; paintSongs(); }
+        hint.textContent = /绑定|401/.test(e.message || '') ? '请先绑定网易云账号' : `获取推荐失败：${e.message}`;
+      } finally { loading = false; }
+    };
+
+    body.querySelectorAll('[data-roam]').forEach(el => {
+      el.onclick = () => {
+        if (loading) return;
+        choice = choices.find(x => x.key === el.dataset.roam) || choice;
+        paint();
+        load(true);
       };
     });
-    // 智能续播：以第一首私人 FM 曲目为种子（上游要 id + sid，pid 可空）
-    if (songs.length) {
-      // 复用播放器的心动模式取数：上游只认「我喜欢的音乐」歌单（pid 必填）且
-      // 歌曲包在 songInfo 里，这两点都由 player.heartList 统一处理。
-      player.heartList(songs[0].ncm_id, 8).then(list => {
-        const box = body.querySelector('#fmIntel');
-        if (!box) return;
-        box.innerHTML = list.length
-          ? `<div class="cm-chips">${list.map((x, i) => `<span class="cm-hot" data-intel="${i}">${esc(x.name)}</span>`).join('')}</div>`
-          : '<div class="cm-empty small">上游没有返回续播推荐</div>';
-        box.querySelectorAll('[data-intel]').forEach(c => {
-          c.onclick = () => player.startHeart(list[+c.dataset.intel]);
-        });
-        const hb = body.querySelector('#fmHeart');
-        if (hb) hb.onclick = () => player.startHeart(songs[0]);
-      }).catch(e => {
-        const box = body.querySelector('#fmIntel');
-        if (box) {
-          box.textContent = /绑定/.test(e.message || '')
-            ? '绑定网易云账号后可用（心动模式走账号态推荐）'
-            : `续播推荐加载失败：${e.message}`;
-        }
-      });
-    }
-    if (sport.length) {
-      const sportSongs = ncmSongs(sport);
-      const box = body.querySelector('#sportBox');
-      box.innerHTML = sportSongs.slice(0, 10).map((s, i) => `
-        <div class="cm-lm-item" data-i="${i}"><div class="cm-lm-lyric">${esc(s.name)}</div>
-        <div class="cm-lm-meta"><span>${esc(s.artists)}</span></div></div>`).join('');
-      box.querySelectorAll('[data-i]').forEach(x => { x.onclick = () => player.playList(sportSongs, +x.dataset.i); });
-    }
-    void uid;
+    body.querySelector('#roamPlay').onclick = () => songs.length ? player.playList(songs, 0) : toast('暂无推荐');
+    body.querySelector('#roamReload').onclick = () => load(false);
+    await load(true);
     return;
   }
 

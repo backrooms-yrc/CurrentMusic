@@ -232,13 +232,13 @@ function boot() {
   // 全局下拉刷新：重跑当前路由（页面 render 自带骨架屏与数据重取）
   initPullToRefresh(() => router());
 
-  bootUiPreset();            // UI 皮肤：把预设属性打到 <html>（默认不生效）
+  bootUiPreset();            // UI 皮肤：把预设属性打到 <html>
   applyCustomize();          // 个性化：自定义背景图 + 玻璃效果值（写到 <html> 内联）
-  initGlass();               // 液体玻璃折射（仅 frost 皮肤 + 支持的内核）
-  initNavDrop();             // 底栏液态玻璃「水滴」指示器（仅 frost 皮肤）
+  initGlass();               // 液体玻璃折射（frost/cmx 皮肤 + 支持的内核）
+  initNavDrop();             // 底栏液态玻璃「水滴」指示器（frost/cmx 皮肤）
   // 一次性强制重置（逻辑在 index.html 的行内脚本里，必须早于首帧）：
-  // 只有确实覆盖过用户旧设置时才提示，没自定义过的用户不打扰。
-  if (window.__cmRecReset) toast('界面风格与玻璃效果已按推荐值重置');
+  // 这次是全员切换到 CurrentMusicX 风格，人人都提示一句怎么改回。
+  if (window.__cmRecReset) toast('界面风格已切换为「CurrentMusicX 风格」，可在 设置 → 外观 改回');
   player.restore();          // 恢复上次队列（不自动播放）
   initPlayerUI();
   initMv();

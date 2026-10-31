@@ -4,6 +4,7 @@
 import { api, auth, ncmSongs } from '../api.js';
 import { esc, toast, renderSongList } from '../ui.js';
 import { player } from '../player.js';
+import { openShare } from '../share.js';
 
 const fmtDate = ms => {
   const n = Number(ms);
@@ -43,6 +44,7 @@ export async function render(el, params = []) {
         <div class="cm-detail-actions">
           <mdui-button variant="filled" id="alPlay"><span class="material-icons-outlined">play_arrow</span>播放全部</mdui-button>
           <mdui-button variant="tonal" id="alSub"><span class="material-icons-outlined">favorite_border</span>收藏专辑</mdui-button>
+          <mdui-button variant="tonal" id="alShare"><span class="material-icons-outlined">share</span>分享</mdui-button>
           <mdui-button variant="tonal" id="alCmt"><span class="material-icons-outlined">comment</span>评论</mdui-button>
         </div>
       </div>
@@ -62,6 +64,10 @@ export async function render(el, params = []) {
     import('../comments.js').then(m => m.openComments({ type: 3, id, title: al.name || '专辑' }))
       .catch(() => toast('评论加载失败'));
   };
+  el.querySelector('#alShare').onclick = () => openShare({
+    type: 'album', id, name: al.name || '专辑', pic: al.pic,
+    sub: al.artist || '', sub2: meta,
+  });
 
   // 简介折叠（过长时）
   const desc = el.querySelector('#alDesc');

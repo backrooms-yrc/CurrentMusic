@@ -41,14 +41,48 @@ export const wave = {
   get minDb() { return MIN_DB; },
   get maxDb() { return MAX_DB; },
   read(u8) {
-    if (!analyser) return false;
+    if (!analyser || !actx || actx.state !== 'running') return false;
     try { analyser.getByteFrequencyData(u8); return true; } catch (e) { return false; }
   },
   /** 用户手势后恢复上下文（自动播放策略可能让新建的上下文停在 suspended）。 */
   resume() {
-    try { if (actx && actx.state === 'suspended') actx.resume(); } catch (e) { /* 忽略 */ }
+    resumeContext();
   },
 };
+
+// 必须在真实手势的同步调用栈里解锁，不能等音源解析/loadedmetadata 后才创建。
+// Safari 从后台返回还可能处于 interrupted；保留同一个已解锁上下文供切歌复用。
+function resumeContext() {
+  try {
+    if (actx && (actx.state === 'suspended' || actx.state === 'interrupted')) {
+      const pending = actx.resume();
+      if (pending && pending.catch) pending.catch(() => {});
+    }
+  } catch (e) { /* 下次手势重试，播放看门狗负责直出兜底 */ }
+}
+
+function unlockAudio(event) {
+  if (!event.isTrusted) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    if (!actx || actx.state === 'closed') actx = new AC();
+    const ctx = actx;
+    // resume() 可能异步完成；此处不创建/替换媒体元素，也不改变播放状态。
+    Promise.resolve(ctx.resume()).then(() => {
+      if (actx !== ctx || ctx.state !== 'running') return;
+      vizDisabled = false;
+      if (!graphEl && audio.crossOrigin && audio.readyState >= 1) buildGraph(audio);
+      watchGraph();
+    }).catch(() => {});
+  } catch (e) { /* 不支持 Web Audio 时保留普通播放 */ }
+}
+['click', 'touchend', 'keydown'].forEach(type => {
+  document.addEventListener(type, unlockAudio, { capture: true, passive: true });
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) wave.resume();
+});
 
 // 音频图看门狗：**接了图之后声音只从图输出**——上下文一旦不在 running
 // （后台挂起、系统回收、自动播放策略），用户就会"歌在放但没声音"。
@@ -62,7 +96,7 @@ function watchGraph() {
     if (audio.paused) { watchStrikes = 0; return; }        // 暂停时上下文挂起属正常
     if (actx && actx.state === 'running') { watchStrikes = 0; return; }
     watchStrikes++;
-    try { if (actx && actx.state === 'suspended') actx.resume(); } catch (e) { /* 忽略 */ }
+    resumeContext();
     if (watchStrikes >= 2) {                                // 约 4s 仍未恢复 → 回退直出
       clearInterval(watchTimer); watchTimer = 0;
       fallbackNoViz();
@@ -76,13 +110,14 @@ function disposeAudio(old) {
   try { old.removeAttribute('src'); old.src = ''; old.load(); } catch (e) { /* 忽略 */ }
 }
 
-function teardownGraph() {
+function teardownGraph({ keepContext = false } = {}) {
   if (watchTimer) { clearInterval(watchTimer); watchTimer = 0; }
   try { if (srcNode) srcNode.disconnect(); } catch (e) { /* 忽略 */ }
   removeEqChain();                            // 均衡器链随图一起拆
   try { if (analyser) analyser.disconnect(); } catch (e) { /* 忽略 */ }
-  try { if (actx && actx.close) actx.close(); } catch (e) { /* 忽略 */ }
-  actx = analyser = srcNode = null;
+  try { if (!keepContext && actx && actx.close) actx.close().catch(() => {}); } catch (e) { /* 忽略 */ }
+  if (!keepContext) actx = null;
+  analyser = srcNode = null;
   graphEl = null;
 }
 
@@ -93,7 +128,7 @@ function buildGraph(el) {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) { vizDisabled = true; return false; }
   try {
-    actx = new AC();
+    if (!actx || actx.state === 'closed') actx = new AC();
     srcNode = actx.createMediaElementSource(el);
     analyser = actx.createAnalyser();
     //  · fftSize 2048 → 频率分辨率更高，柱与柱之间过渡自然
@@ -122,9 +157,10 @@ function buildGraph(el) {
   }
   // 上下文若因自动播放策略停在 suspended，图会静音 → 尝试恢复，失败则立刻拆图回退
   if (actx.state !== 'running') {
-    try { actx.resume(); } catch (e) { /* 忽略 */ }
+    resumeContext();
+    const ctx = actx;
     setTimeout(() => {
-      if (actx && actx.state !== 'running') fallbackNoViz();
+      if (actx === ctx && ctx.state !== 'running' && !el.paused) fallbackNoViz();
     }, 1200);
   }
   return true;
@@ -137,10 +173,12 @@ function fallbackNoViz() {
   const pos = audio.currentTime || 0;
   const wasPlaying = !audio.paused;
   const url = audio.src;
+  const cors = audio.crossOrigin;
   teardownGraph();
   disposeAudio(audio);
   const fresh = makeAudio();
   audio = fresh;
+  fresh.crossOrigin = cors;                 // 下次真实手势仍可恢复安全音源的频谱
   if (url) {
     fresh.src = url;                       // 新元素直出，不再经过图
     try { if (pos > 0) fresh.currentTime = pos; } catch (e) { /* 元数据未就绪时忽略 */ }
@@ -165,7 +203,7 @@ function loadUrl(url, pos) {
   // 再普通加载。否则跨域污染的音源会让音频图输出静音，且**不会触发 error 事件**
   // （context.state 仍是 running，看门狗也发现不了）→ 表现为"歌在放但没声音"，
   // 是最难排查的一类故障。
-  if (badHost && graphEl) { teardownGraph(); disposeAudio(audio); audio = makeAudio(); }
+  if (badHost && graphEl) { teardownGraph({ keepContext: true }); disposeAudio(audio); audio = makeAudio(); }
   if (!vizDisabled && !badHost) {
     audio.crossOrigin = 'anonymous';       // CDN 实测带 access-control-allow-origin: *
     corsPending = { url: url, pos: pos || 0, host: host };
@@ -1110,7 +1148,7 @@ function bindAudio(el) {
       // 只记这个**域名**（下次同域名直接普通播放），不做全会话降级——
       // 换到别的 CDN 域名仍可继续尝试可视化
       if (pend.host) corsFailHosts[pend.host] = 1;
-      teardownGraph();
+      teardownGraph({ keepContext: true });
       disposeAudio(el);
       const fresh = makeAudio();
       audio = fresh;

@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadata;
@@ -39,6 +40,7 @@ public class PlaybackService extends Service {
     static final String ACTION_PAUSE = "cm.action.PAUSE";
     static final String ACTION_NEXT = "cm.action.NEXT";
     static final String ACTION_PREV = "cm.action.PREV";
+    static final String ACTION_TOGGLE_DESKTOP = "cm.action.TOGGLE_DESKTOP";
 
     private PowerManager.WakeLock wl;
     private MediaSession ms;
@@ -75,6 +77,8 @@ public class PlaybackService extends Service {
             @Override public void onSkipToPrevious() { MainActivity.runJs("window.__cmPlayer&&window.__cmPlayer.player.prev()"); }
         });
         ms.setActive(true);
+        // 桌面歌词由播放服务托管：用户之前开启过就恢复，权限被撤销时 restore() 会关闭开关。
+        DesktopLyricsOverlay.restore(this);
         // 恢复暂存封面（异步取图；首次 startForeground 先出文字通知，图到后随状态刷新带上）
         artUrl = pPic;
         if (!pPic.isEmpty()) {
@@ -96,6 +100,7 @@ public class PlaybackService extends Service {
                 case ACTION_PAUSE: ms.getController().getTransportControls().pause(); break;
                 case ACTION_NEXT: ms.getController().getTransportControls().skipToNext(); break;
                 case ACTION_PREV: ms.getController().getTransportControls().skipToPrevious(); break;
+                case ACTION_TOGGLE_DESKTOP: toggleDesktopLyrics(); break;
             }
             return START_STICKY;
         }
@@ -152,6 +157,44 @@ public class PlaybackService extends Service {
         pPlaying = playing; pPos = posMs;
         PlaybackService s = inst;
         if (s != null) s.applyPlaybackState(playing, posMs);
+    }
+
+    /** WebView 设置页开/关桌面歌词；服务未运行时只落偏好，下次播放恢复。 */
+    static void setDesktopLyrics(boolean on) {
+        PlaybackService s = inst;
+        if (s != null) s.applyDesktopLyrics(on);
+    }
+
+    private void applyDesktopLyrics(boolean on) {
+        if (on && DesktopLyricsOverlay.hasPermission(this)) {
+            DesktopLyricsOverlay.setEnabled(this, true);
+            DesktopLyricsOverlay.attach(this);
+            DesktopLyricsOverlay.requestLyrics();
+        } else {
+            DesktopLyricsOverlay.setEnabled(this, false);
+            DesktopLyricsOverlay.detach();
+        }
+        notifyNotification();
+        DesktopLyricsOverlay.pushState(this);
+    }
+
+    /** 通知栏动作：有权限就直接开/关，没权限把用户带回 App 申请悬浮窗权限。 */
+    private void toggleDesktopLyrics() {
+        boolean want = !DesktopLyricsOverlay.isEnabled(this);
+        if (want && !DesktopLyricsOverlay.hasPermission(this)) {
+            try {
+                Intent i = new Intent(this, MainActivity.class)
+                        .putExtra(MainActivity.EXTRA_DESKTOP_PERMISSION, true)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(i);
+            } catch (RuntimeException ignored) {
+                // 后台启动被系统拦截时保持原状态，用户仍可从 App 内开启
+            }
+            return;
+        }
+        applyDesktopLyrics(want);
     }
 
     private void applyMediaInfo(String t, String a, String al, long dur, String pic) {
@@ -228,6 +271,9 @@ public class PlaybackService extends Service {
         b.addAction(playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
                 playing ? "暂停" : "播放", pi(playing ? ACTION_PAUSE : ACTION_PLAY));
         b.addAction(android.R.drawable.ic_media_next, "下一首", pi(ACTION_NEXT));
+        boolean desktop = DesktopLyricsOverlay.isEnabled(this);
+        b.addAction(desktop ? android.R.drawable.ic_menu_close_clear_cancel : android.R.drawable.ic_menu_view,
+                desktop ? "关闭桌面歌词" : "桌面歌词", desktopAction());
         return b.build();
     }
 
@@ -235,6 +281,23 @@ public class PlaybackService extends Service {
         Intent i = new Intent(this, PlaybackService.class).setAction(action);
         return PendingIntent.getService(this, action.hashCode(), i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    /**
+     * 未授权时动作直接进 App（后台服务拉起权限页容易被系统拦截）；
+     * 已授权/已开启时走服务内即时开关，不必把界面带到前台。
+     */
+    private PendingIntent desktopAction() {
+        if (!DesktopLyricsOverlay.isEnabled(this) && !DesktopLyricsOverlay.hasPermission(this)) {
+            Intent i = new Intent(this, MainActivity.class)
+                    .putExtra(MainActivity.EXTRA_DESKTOP_PERMISSION, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            return PendingIntent.getActivity(this, 815, i,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        }
+        return pi(ACTION_TOGGLE_DESKTOP);
     }
 
     private void notifyNotification() {
@@ -263,8 +326,15 @@ public class PlaybackService extends Service {
     }
 
     @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        DesktopLyricsOverlay.onConfigurationChanged();
+    }
+
+    @Override
     public void onDestroy() {
         main.removeCallbacks(renewLock);
+        DesktopLyricsOverlay.detach();
         if (ms != null) {
             ms.setActive(false);
             ms.release();

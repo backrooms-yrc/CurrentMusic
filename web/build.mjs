@@ -37,6 +37,8 @@ const SCALES_MOD = 'src/decor-scales.js';
 
 await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
+await cp('../assets/brand/currentmusic-icon.png', `${OUT}/brand-icon.png`);
+await cp('../assets/brand/apple-touch-icon.png', `${OUT}/apple-touch-icon.png`);
 
 await build({
   entryPoints: ['src/main.js'],

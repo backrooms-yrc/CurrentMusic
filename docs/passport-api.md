@@ -1,11 +1,11 @@
 # CurrentStation 通行证 · 接入文档
 
-> Current 系产品的**统一登录平台**。在线文档页：`GET /cm/passport/docs`（与本文同源，随版本发布）。
+> Current 系产品的**统一登录平台**。在线文档：[通行证接入专题](https://music.20110208.xyz/api-docs/reference/guide-passport-api/)（与本文同源，随版本发布）。
 > 本文件是仓库内的镜像，便于离线查阅与 code review。
 
 - 协议：**OAuth 2.0 授权码 + PKCE**（RFC 6749 / 7636 / 7009 / 7662）
-- Issuer：`https://music.20110208.xyz/cm`
-- 端点前缀：`/cm/passport/*`；账号本体（注册/登录/会话/设备）仍在 `/cm/auth/*`，两者共用同一批账号
+- Issuer：`https://music.example.com/cm`
+- 端点前缀：`/cm/passport/*`；账号本体（注册/登录/会话/设备/**密码找回与修改**）仍在 `/cm/auth/*`，两者共用同一批账号；密码接口见 [password-api.md](password-api.md)
 - 元信息（可编程读取）：`GET /cm/passport/meta`
 
 ## 1. 一次登录的完整流程
@@ -28,12 +28,12 @@
 ### 2.1 登记应用（管理员，一次性）
 
 ```bash
-curl -X POST https://music.20110208.xyz/cm/passport/apps \
+curl -X POST https://music.example.com/cm/passport/apps \
   -H "Authorization: Bearer <管理员会话令牌>" -H "Content-Type: application/json" \
   -d '{"name":"CurrentSpace",
-       "redirects":["https://currentspace.20110208.xyz/auth/callback"],
+       "redirects":["https://app.example.com/auth/callback"],
        "scopes":"openid profile email offline_access",
-       "homepage":"https://currentspace.20110208.xyz"}'
+       "homepage":"https://app.example.com"}'
 # 201 → { "clientId": "cs_app_…", "clientSecret": "cs_sk_…" }
 ```
 
@@ -48,7 +48,7 @@ const challenge = base64url(new Uint8Array(
   await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
 sessionStorage.setItem('pkce', verifier);
 
-location.href = 'https://music.20110208.xyz/cm/passport/authorize'
+location.href = 'https://music.example.com/cm/passport/authorize'
   + '?response_type=code'
   + '&client_id=' + CLIENT_ID
   + '&redirect_uri=' + encodeURIComponent(REDIRECT_URI)
@@ -60,7 +60,7 @@ location.href = 'https://music.20110208.xyz/cm/passport/authorize'
 ### 2.3 用 code 换令牌
 
 ```bash
-curl -X POST https://music.20110208.xyz/cm/passport/token \
+curl -X POST https://music.example.com/cm/passport/token \
   -H "Content-Type: application/json" \
   -d '{"grant_type":"authorization_code","client_id":"cs_app_…","client_secret":"cs_sk_…",
        "code":"cs_code_…","redirect_uri":"https://…/auth/callback","code_verifier":"…"}'
@@ -70,7 +70,7 @@ curl -X POST https://music.20110208.xyz/cm/passport/token \
 ### 2.4 取用户信息
 
 ```bash
-curl https://music.20110208.xyz/cm/passport/userinfo -H "Authorization: Bearer cs_at_…"
+curl https://music.example.com/cm/passport/userinfo -H "Authorization: Bearer cs_at_…"
 # 200 → { sub, nickname, avatar, email:"m***@qq.com", scope, client_id }
 ```
 
@@ -79,7 +79,7 @@ curl https://music.20110208.xyz/cm/passport/userinfo -H "Authorization: Bearer c
 | 方法 | 路径 | 鉴权 | 说明 |
 |---|---|---|---|
 | GET | `/passport/meta` | 公开 | 端点表、scope 目录、令牌有效期、已接入产品 |
-| GET | `/passport/docs` | 公开 | 在线文档页（自包含 HTML） |
+| GET | `/passport/docs` | 公开 | 兼容入口：302 跳转到 `/api-docs/reference/guide-passport-api/` |
 | POST | `/passport/apps` | 登录用户 | 自助登记应用（返回 clientId/clientSecret，密钥仅一次）；每账号上限 5 个 |
 | GET | `/passport/apps` | 登录用户 | 我登记的应用（含在用授权数与配额）；管理员加 `?all=1` 看全部 |
 | PUT | `/passport/apps/{client_id}` | 所有者 | 改名称/主页/回调/scope/公开↔机密/停用 |
@@ -141,11 +141,11 @@ curl https://music.20110208.xyz/cm/passport/userinfo -H "Authorization: Bearer c
 
 ## 8. CurrentDeveloper 开发者平台（自助接入）
 
-入口：**`https://music.20110208.xyz/developer`**（也支持 `/cm/developer`）。
+入口：**`https://music.example.com/developer`**（也支持 `/cm/developer`）。
 
 > **独立页面**：`GET /developer` 是自包含单文件页面（`backend/developer.html`），自带登录/注册，会话存 `csdev.token`，
 > **不读写 CurrentMusic 客户端的 `cm.token`**。所以它属于「通行证」而不是音乐客户端——CurrentMusic 里只留一个外链入口。
-> 将来把通行证迁到独立域名（如 `developer.20110208.xyz`）时，只需加 DNS + 复用这份 nginx 直通配置，页面本身不用改。
+> 将来把通行证迁到独立域名（如 `developer.example.com`）时，只需加 DNS + 复用这份 nginx 直通配置，页面本身不用改。
 
 | 能力 | 说明 |
 |---|---|
@@ -157,7 +157,7 @@ curl https://music.20110208.xyz/cm/passport/userinfo -H "Authorization: Bearer c
 
 ### 部署（nginx 直通）
 
-平台页由后端直接渲染，只要把 `/developer` 直通到后端即可（已在 `music.20110208.xyz` 上启用）：
+平台页由后端直接渲染，只要把 `/developer` 直通到后端即可（已在 `music.example.com` 上启用）：
 
 ```nginx
 location = /developer {
@@ -169,7 +169,7 @@ location = /developer {
 location ^~ /developer/ { proxy_pass http://127.0.0.1:3010/developer/; }
 ```
 
-迁到独立域名（如 `developer.20110208.xyz` / `passport.20110208.xyz`）时：加一条 DNS 解析指向本机 →
+迁到独立域名（如 `developer.example.com` / `passport.example.com`）时：加一条 DNS 解析指向本机 →
 复用上面这段 location（`proxy_pass` 不变）→ 页面里的 `{{BASE}}` 会按请求域名自动替换，前后端都不用改代码。
 
 ## 9. 自测

@@ -1,7 +1,7 @@
 // 网易云账号绑定：扫码 / 手机验证码 两种方式；绑定后自动同步歌单
 import { mdui } from './md.js';
 import { api, auth } from './api.js';
-import { esc, toast, confirmDialog } from './ui.js';
+import { esc, toast, confirmDialog, resetNcmBound, resetNcmLiked } from './ui.js';
 
 export function bindDialog(onBound) {
   if (!auth.token) return toast('请先登录 CurrentMusic 账号');
@@ -188,6 +188,7 @@ export async function runSync(container, onDone, statusSel) {
       (r.pending ? `（${r.pending} 个未完成，可再次同步续传）` : '') +
       (r.failed ? `，${r.failed} 个失败` : '');
     toast(msg);
+    resetNcmBound(); resetNcmLiked();     // 绑定/刷新后重新判断默认红心目标与红心集合
     if (onDone) onDone();
     else location.reload();
   } catch (e) {
@@ -201,7 +202,7 @@ export function unbindFlow(onDone) {
     title: '解绑网易云音乐？',
     body: '已导入的歌单会保留为本地快照（不再随网易云更新），也不会从网易云删除任何数据。',
     onOk: async () => {
-      try { await api.unbindNcm(); toast('已解绑'); onDone && onDone(); }
+      try { await api.unbindNcm(); resetNcmBound(); resetNcmLiked(); toast('已解绑'); onDone && onDone(); }
       catch (e) { toast(e.message); }
     },
   });

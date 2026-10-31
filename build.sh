@@ -1,21 +1,26 @@
 #!/usr/bin/env bash
-# 本文件来自公开镜像：签名口令通过环境变量 CM_KS_PASS 提供，仓库内不含任何凭据。
 # CurrentMusic APK 构建脚本（无 Gradle/AGP：aapt2 + javac + d8 + zipalign + apksigner）
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
+SDK="${ANDROID_HOME:-/opt/android-sdk}"
 BT="$SDK/build-tools/34.0.0"
 PLATFORM="$SDK/platforms/android-34/android.jar"
 APP="$ROOT/app"
 WEB="$ROOT/web"
 OUT="${1:-/tmp/cm-apk}"
-VER_NAME="${VER_NAME:-1.0.0}"
-VER_CODE="${VER_CODE:-1}"
+VER_NAME="${VER_NAME:-1.28.81}"
+VER_CODE="${VER_CODE:-173}"
 KS="$ROOT/keystore.jks"
 APK_FINAL="$ROOT/dist/CurrentMusic-v${VER_NAME}.apk"
 
 command -v java >/dev/null || { echo "缺少 JDK"; exit 1; }
+
+# 发版时同步前端兜底版本号（浏览器/无 NativeApi 时用它比较更新）。
+# 必须与 APK 的 versionName/versionCode 一致，否则网页端会把新版本判成旧版本。
+if [ "$VER_NAME" != "1.0.0" ]; then
+  sed -i "s/export const WEB_VERSION = .*/export const WEB_VERSION = { name: '$VER_NAME', code: $VER_CODE };/" "$WEB/src/version.js"
+fi
 
 echo "==> [1/6] 构建前端 (esbuild)"
 (cd "$WEB" && node build.mjs >/dev/null)
@@ -52,22 +57,15 @@ cp "$OUT/base.apk" "$OUT/unsigned.apk"
 
 echo "==> [6/6] 签名"
 if [ ! -f "$KS" ]; then
-  keytool -genkeypair -keystore "$KS" -storepass "${CM_KS_PASS:?请先设置 CM_KS_PASS 环境变量（你的签名库口令）}" -keypass "${CM_KS_PASS:?请先设置 CM_KS_PASS 环境变量（你的签名库口令）}" \
+  keytool -genkeypair -keystore "$KS" -storepass "${CM_KS_PASS:-currentmusic}" -keypass "${CM_KS_PASS:-currentmusic}" \
     -alias cm -keyalg RSA -keysize 2048 -validity 10000 \
     -dname "CN=CurrentMusic, OU=CurrentMusic, O=Rcst20, L=Internet, ST=Internet, C=CN"
   echo "已生成自签名 keystore: $KS"
 fi
 mkdir -p "$ROOT/dist"
-"$BT/apksigner" sign --ks "$KS" --ks-pass pass:"${CM_KS_PASS:?请先设置 CM_KS_PASS 环境变量（你的签名库口令）}" \
+"$BT/apksigner" sign --ks "$KS" --ks-pass pass:"${CM_KS_PASS:-currentmusic}" \
   --out "$APK_FINAL" "$OUT/aligned.apk"
 "$BT/apksigner" verify "$APK_FINAL" && echo "签名校验通过"
-
-echo "==> 同步网页版静态资源"
-WEB_DIR="$ROOT/data/app"
-mkdir -p "$WEB_DIR"
-rm -f "$WEB_DIR"/*
-cp "$APP/src/main/assets/www/"* "$WEB_DIR"/
-echo "    网页版已同步 → http://music.20110208.xyz/app/（$(du -sh "$WEB_DIR" | cut -f1)）"
 
 echo "==> 完成: $APK_FINAL ($(du -h "$APK_FINAL" | cut -f1))"
 "$BT/aapt" dump badging "$APK_FINAL" | head -6

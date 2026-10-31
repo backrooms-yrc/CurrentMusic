@@ -6,6 +6,7 @@ import { esc, toast, renderSongList, fmtCount } from '../ui.js';
 import { mdui } from '../md.js';
 import { player } from '../player.js';
 import { openMlog } from '../mlog.js';
+import { openShare } from '../share.js';
 
 // 专辑行：封面 + 名称 + 年份/类型；点封面整张入队播放，「查看全部」弹窗看完整专辑列表
 function albumCard(a) {
@@ -93,6 +94,7 @@ export async function render(el, params) {
         <div class="cm-detail-actions">
           <mdui-button variant="filled" id="playAll"><span class="material-icons-outlined">play_arrow</span>播放全部</mdui-button>
           <mdui-button variant="tonal" id="followBtn"><span class="material-icons-outlined">favorite_border</span>关注歌手</mdui-button>
+          <mdui-button variant="tonal" id="shareArtist"><span class="material-icons-outlined">share</span>分享</mdui-button>
         </div>
       </div>
     </div>
@@ -136,6 +138,12 @@ export async function render(el, params) {
   const list = el.querySelector('#artistList');
   await renderSongList(list, all, { onPlay: i => player.playList(all, i) });
   el.querySelector('#playAll').onclick = () => all.length ? player.playList(all, 0) : toast('暂无作品');
+  el.querySelector('#shareArtist').onclick = () => openShare({
+    type: 'artist', id, name: d.name, pic: d.pic,
+    sub: d.alias || '歌手',
+    sub2: [d.total ? `${d.total} 首作品` : '', d.albumTotal ? `${d.albumTotal} 张专辑` : '']
+      .filter(Boolean).join(' · '),
+  });
 
   // 关注歌手：与网易云账号同步（读 /artist/sublist、写 /artist/sub），需已绑定网易云
   const fBtn = el.querySelector('#followBtn');

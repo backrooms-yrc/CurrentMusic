@@ -7,13 +7,21 @@ const LS = {
   accounts: 'cm.accounts',
   quality: 'cm.quality',
   theme: 'cm.theme',
+  likeMode: 'cm.likeMode',
 };
 
 const DEFAULT_BASE = 'https://music.20110208.xyz/cm';
+// 已部署的同源入口：从备用域名访问时 API 跟随当前入口，避免绕回主域名。
+const SAME_ORIGIN_HOSTS = ['music.20110208.xyz', 'music.ctcehs.com', 'currentmusic.geekertao.com', 'cm.bileizhen.top'];
+function defaultBase() {
+  if (typeof window.NativeApi === 'undefined' && location.protocol === 'https:'
+      && SAME_ORIGIN_HOSTS.includes(location.hostname)) return location.origin + '/cm';
+  return DEFAULT_BASE;
+}
 
 export const settings = {
   get base() {
-    const raw = localStorage.getItem(LS.base) || DEFAULT_BASE;
+    const raw = localStorage.getItem(LS.base) || defaultBase();
     // 安全连接模式（默认开启）：强制 HTTPS。
     // 关闭后尊重用户填写的协议（http:// 或 https:// 均可）。
     if (this.secureMode) {
@@ -31,6 +39,12 @@ export const settings = {
   set secureMode(v) { localStorage.setItem(LS.secure, v ? '1' : '0'); },
   get quality() { return localStorage.getItem(LS.quality) || 'auto'; },
   set quality(v) { localStorage.setItem(LS.quality, v); },
+  // auto: 已绑定网易云走网易云，未绑定走 CurrentMusic；ncm/local 为强制选择。
+  get likeMode() {
+    const v = localStorage.getItem(LS.likeMode) || 'auto';
+    return ['auto', 'ncm', 'local'].includes(v) ? v : 'auto';
+  },
+  set likeMode(v) { localStorage.setItem(LS.likeMode, ['auto', 'ncm', 'local'].includes(v) ? v : 'auto'); },
   get theme() { return localStorage.getItem(LS.theme) || 'auto'; },
   set theme(v) { localStorage.setItem(LS.theme, v); },
 };
@@ -91,7 +105,8 @@ async function rawRequest(method, url, headers, bodyStr) {
       window.NativeApi.http(id, method, url, JSON.stringify(headers || {}), bodyStr || '');
     });
   }
-  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', ...(headers || {}) }, body: bodyStr || undefined });
+  const requestHeaders = { ...(bodyStr ? { 'Content-Type': 'application/json' } : {}), ...(headers || {}) };
+  const r = await fetch(url, { method, headers: requestHeaders, body: bodyStr || undefined });
   let data = null;
   try { data = await r.json(); } catch { /* 空体 */ }
   if (r.ok) return data;
@@ -189,6 +204,9 @@ export const api = {
   login: (username, password) => call('POST', '/auth/login', { body: { username, password, ...deviceInfo() } }),
   loginEmailCode: (email) => call('POST', '/auth/login/email/code', { body: { email } }),
   loginByEmail: (email, code) => call('POST', '/auth/login/email', { body: { email, code, ...deviceInfo() } }),
+  // 忘记密码（未登录）：邮箱验证码 → 重置；成功后后端吊销全部会话
+  sendPasswordResetCode: (email) => call('POST', '/auth/password/code', { body: { email } }),
+  resetPassword: (email, code, newPassword) => call('POST', '/auth/password/reset', { body: { email, code, newPassword } }),
   bindEmailCode: (email) => call('POST', '/profile/email/code', { body: { email }, auth: true }),
   bindEmail: (email, code) => call('PUT', '/profile/email', { body: { email, code }, auth: true }),
   internalLogin: (password) => call('POST', '/auth/internal', { body: { password, ...deviceInfo() } }),
@@ -214,7 +232,11 @@ export const api = {
 
   // 管理员
   adminOverview: () => call('GET', '/admin/overview', { auth: true }),
-  adminUsers: (query = '', offset = 0, limit = 20) => call('GET', `/admin/users?query=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}`, { auth: true }),
+  /** 客户端版本：CurrentMusic（本站 APK）与 CurrentMusicX（GitHub Releases 镜像）。 */
+  adminClients: () => call('GET', '/admin/clients', { auth: true }),
+  /** 站点出站流量统计（nginx 日志聚合，需部署方配置 CM_TRAFFIC_LOG）。 */
+  adminTraffic: () => call('GET', '/admin/traffic', { auth: true }),
+  adminUsers: (query = '', offset = 0, limit = 20, sort = 'reg') => call('GET', `/admin/users?query=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}&sort=${encodeURIComponent(sort)}`, { auth: true }),
   adminDisable: (id, on) => call('POST', `/admin/users/${id}/disable`, { body: { on }, auth: true }),
   adminResetPassword: (id, password) => call('POST', `/admin/users/${id}/password`, { body: { password }, auth: true }),
   adminKick: (id) => call('POST', `/admin/users/${id}/kick`, { body: {}, auth: true }),
@@ -234,6 +256,9 @@ export const api = {
   profileOf: (uid) => call('GET', `/profile/${uid}`),
   updateProfile: (fields) => call('PUT', '/profile', { body: fields, auth: true }),
   changePassword: (oldPassword, newPassword) => call('PUT', '/profile/password', { body: { oldPassword, newPassword }, auth: true }),
+  // 已登录但忘记原密码：验证码发到当前账号绑定邮箱，验证后保留当前设备、下线其他设备
+  sendProfilePasswordCode: () => call('POST', '/profile/password/code', { body: {}, auth: true }),
+  changePasswordByEmail: (emailCode, newPassword) => call('PUT', '/profile/password', { body: { emailCode, newPassword }, auth: true }),
   uploadAvatarBase64: (b64) => call('PUT', '/profile/avatar', { body: { data: b64 }, auth: true }),
   // 头像挂件：目录（带 token 时附本人解锁状态）；素材固定 .gif/.png 由后端按 id 寻址
   decorations: () => call('GET', '/decorations', { auth: true }),
@@ -339,6 +364,11 @@ export const api = {
   commentCount: (ncmId) => call('GET', `/ncm/comment-count?id=${ncmId}`),
   ncmPlaylist: (pid) => call('GET', `/ncm/playlist?id=${pid}`),
   daily: () => call('GET', '/daily', { auth: true }),
+  /** 私人漫游：模式/场景目录与账号态推荐（对齐 CurrentMusicX 的模式协议）。 */
+  roamingCatalog: () => call('GET', '/roaming/catalog', { auth: true }),
+  roamingSongs: (mode, subMode = '', limit = 20, excludeIds = []) =>
+    call('POST', '/roaming/songs', { body: { mode, subMode, limit, excludeIds }, auth: true }),
+  roamingTrash: (id) => call('POST', '/roaming/trash', { body: { id }, auth: true }),
   /** 歌曲百科（服务端已把上游页级结构归一化成「章节 + 字段 + 正文」）。 */
   songWiki: (ncmId) => call('GET', `/song/wiki?id=${ncmId}`),
 

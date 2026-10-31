@@ -3,10 +3,11 @@ import { mdui } from './md.js';
 import { createWaveform, WAVE_STYLE } from './waveform.js';
 import { waveStyle, waveTilt } from './customize.js';
 import { api, auth, settings } from './api.js';
-import { esc, toast, fmtDur, tierLabel, QUALITY_TIERS, getStatus, setStatus, ensureStatus, openLikeMenu, isNcmLiked, ensureNcmLiked, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
+import { esc, toast, fmtDur, fmtCount, tierLabel, QUALITY_TIERS, getStatus, ensureStatus, isNcmLiked, ensureLikeState, toggleLikeDefault, dismissToasts, avatarHTML, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
 import { player, wave, on } from './player.js';
 import { openShare } from './share.js';
 import { castIconHTML, openCastDialog } from './cast.js';
+import { openAskAI, ensureAiBot } from './ask-ai.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
 // 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
@@ -31,6 +32,7 @@ function amPlayIcon() {
 // 原始方括号。这里映射为语义等价的通用 emoji（选用 Chrome58 即可渲染的早期码位）。
 
 const overlay = () => document.getElementById('playerOverlay');
+let closeTimer = 0;
 
 // 播放页波形：由**真实音频频谱**驱动（见 waveform.js），占位只有一张 canvas。
 // 之前这里是一组固定高度的柱子 + CSS 呼吸动画 —— 那与音乐无关，只是看起来在动；
@@ -97,6 +99,7 @@ async function loadLyric() {
   // 新数据到达后才一次性替换并重置行号。
   const oldLines = lyricLines;
   lyricLoadedFor = m.ncm_id;
+  pushDesktopLyric(-1, true);
   try {
     const d = await api.lyric(m.ncm_id);
     if (!player.meta || player.meta.ncm_id !== m.ncm_id) return;
@@ -140,6 +143,56 @@ function lineParts(l) {
   else if (mode === 'orig-roma') sub = l.roma || '';
   return { main: main || l.txt, sub };
 }
+
+// ---------- 桌面悬浮歌词（Android 原生窗口） ----------
+// 原生窗口只负责显示，时间轴仍以播放器 currentTime 为唯一时钟；这里只在行变化时
+// 推「当前行 + 下一行/翻译」，避免每帧跨 JS 桥。App 外/浏览器里没有 NativeApi 时静默跳过。
+let lastDesktopLyric = '';
+function pushDesktopLyric(index, loading, force) {
+  const b = window.NativeApi;
+  if (!b || typeof b.desktopLyric !== 'function') return;
+  const m = player.meta;
+  if (!m) {
+    if (force || lastDesktopLyric) {
+      lastDesktopLyric = 'idle';
+      try { b.desktopLyric('桌面歌词已开启', '播放歌曲后显示歌词'); } catch { /* 忽略 */ }
+    }
+    return;
+  }
+  if (loading) {
+    const payload = 'loading\u0000' + (m.name || '');
+    if (!force && payload === lastDesktopLyric) return;
+    lastDesktopLyric = payload;
+    try { b.desktopLyric('歌词加载中…', m.name || ''); } catch { /* 忽略 */ }
+    return;
+  }
+  if (!lyricLines.length) {
+    const payload = 'empty\u0000' + (m.name || '');
+    if (!force && payload === lastDesktopLyric) return;
+    lastDesktopLyric = payload;
+    try { b.desktopLyric('暂无歌词', m.name || ''); } catch { /* 忽略 */ }
+    return;
+  }
+  let i = typeof index === 'number' ? index : curLyricIdx;
+  if (i < 0) {
+    const t = player.posMs();
+    i = 0;
+    for (let k = 0; k < lyricLines.length; k++) {
+      if (lyricLines[k].t <= t) i = k; else break;
+    }
+  }
+  i = Math.max(0, Math.min(i, lyricLines.length - 1));
+  const cur = lyricLines[i];
+  if (!cur) return;
+  const next = lyricLines.slice(i + 1).find(l => l && l.txt);
+  const second = (cur.trans || cur.roma || (next && next.txt) || m.name || '').trim();
+  const payload = cur.txt + '\u0000' + second;
+  if (!force && payload === lastDesktopLyric) return;
+  lastDesktopLyric = payload;
+  try { b.desktopLyric(cur.txt || '', second); } catch { /* 忽略 */ }
+}
+// 原生在开启桌面歌词/页面恢复时主动要一次当前行。
+window.__cmDesktopLyricsRequest = () => pushDesktopLyric(undefined, false, true);
 
 const LYRIC_SIZES = [
   { key: 's', label: 'Aa·小', fs: 13 },
@@ -261,6 +314,9 @@ let karaokeVals = [];
 
 function fireKaraoke() {
   if (!lyricKaraoke) return;
+  if (overlay().hidden) return;
+  // 手机封面视图里歌词区是 display:none：不必每帧给不可见的逐字 span 写样式。
+  if (window.innerWidth < 600 && playerView === 'cover') return;
   if (curLyricIdx < 0) return;
   const line = lyricLines[curLyricIdx];
   if (!line || !line.w) return;
@@ -382,16 +438,22 @@ function updateLyricDepth(box) {
 }
 
 function syncLyric() {
-  if (!lyricLines.length) return;
-  const box = document.getElementById('plLyric');
-  if (!box) return;
+  if (!lyricLines.length) {
+    pushDesktopLyric(-1);
+    return;
+  }
   const t = player.posMs();
   let i = 0;
   for (let k = 0; k < lyricLines.length; k++) {
     if (lyricLines[k].t <= t) i = k; else break;
   }
-  if (i === curLyricIdx) return;
-  curLyricIdx = i;
+  const changed = i !== curLyricIdx;
+  if (changed) {
+    curLyricIdx = i;
+    pushDesktopLyric(i);        // 播放页未打开时也要喂原生悬浮窗
+  }
+  const box = document.getElementById('plLyric');
+  if (!box || !changed) return;
   box.querySelectorAll('.pl-lyric-line').forEach(el => el.classList.toggle('cur', +el.dataset.i === i));
   karaokeSpans = null;
   const cur = box.querySelector(`.pl-lyric-line[data-i="${i}"]`);
@@ -407,7 +469,10 @@ async function openFull() {
   if (!m) return;
   if (!localStorage.getItem('cm.lyricSize')) lyricSizeKey = defaultLyricSizeKey();   // 未手动选择：按当前视口自适应（移动=大 / Pad=特大）
   const st = getStatus(m.ncm_id);
+  clearTimeout(closeTimer);
+  ov.classList.remove('closing');
   ov.hidden = false;
+  document.body.classList.add('player-open');
   ov.innerHTML = `
     <div class="pl-bg" id="plBg" style="${m.pic ? `background-image:linear-gradient(rgba(24,22,30,.45),rgba(24,22,30,.62)),url('${esc(m.pic)}')` : ''}"></div>
     <div class="pl-page">
@@ -415,6 +480,7 @@ async function openFull() {
         <span class="pl-btn" id="plClose"><span class="material-icons-outlined">keyboard_arrow_down</span></span>
         <div class="pl-quality" id="plQuality">${player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality)}</div>
         <span class="pl-topact">
+          <span class="pl-ai-btn" id="plAskAi" title="问 CurrentMusicAI"><span class="pl-ai-ava material-icons-outlined">auto_awesome</span><b>问AI</b></span>
           ${castIconHTML()}
           <span class="pl-btn" id="plMore" title="更多（歌词/背景/下载）"><span class="material-icons-outlined">more_vert</span></span>
         </span>
@@ -466,6 +532,14 @@ async function openFull() {
     </div>`;
 
   ov.querySelector('#plClose').onclick = closeFull;
+  const askAi = ov.querySelector('#plAskAi');
+  if (askAi) {
+    askAi.onclick = () => openAskAI(player.meta);
+    ensureAiBot().then(bot => {
+      const ava = askAi.querySelector('.pl-ai-ava');
+      if (bot && ava) ava.outerHTML = `<span class="pl-ai-ava">${avatarHTML(bot, 22)}</span>`;
+    });
+  }
   bindArtistLinks(ov);
 
   // 窄屏：点击封面/周围空白 ↔ 整屏歌词 双视图切换（≥600px 双栏不参与）
@@ -537,25 +611,15 @@ async function openFull() {
   applyPlayerBg();
   applyDynamicScheme();
   ov.querySelector('#plComments').onclick = () => openComments(player.meta);
-  ov.querySelector('#plLike').onclick = () => openLikeMenu(m, () => {
-    const st2 = getStatus(m.ncm_id);
-    const btn = document.getElementById('plLike');
-    if (btn) {
-      btn.classList.toggle('on', st2.liked);
-      btn.querySelector('.material-icons-outlined').textContent = st2.liked ? 'favorite' : 'favorite_border';
-    }
-    loadStats();
-  });
+  ov.querySelector('#plLike').onclick = async () => {
+    await toggleLikeDefault(m, () => syncPlayerLike(m));
+  };
   ov.querySelector('#plAdd').onclick = () => addToPlaylist([player.meta]);
 
   loadLyric();
   loadStats();
   startKaraoke();   // 逐字点亮（暂停时在 state 回调里停）
-  // 网易云红心小徽标（绑定账号已红心时显示；未登录不请求）
-  if (auth.token) ensureNcmLiked().then(() => {
-    const badge = document.getElementById('plNcmBadge');
-    if (badge) badge.hidden = !isNcmLiked(m.ncm_id);
-  });
+  syncPlayerLike(m);
 }
 
 async function loadStats() {
@@ -575,7 +639,7 @@ async function loadStats() {
   } catch { /* 忽略 */ }
   if (!player.meta || player.meta.ncm_id !== m.ncm_id) return;
   el.innerHTML = [
-    `<span><span class="mi">favorite</span> ${count || 0} 人点赞</span>`,
+    `<span id="plLikeStat"><span class="mi">favorite</span> ${fmtCount(count || 0)} 红心</span>`,
     pop ? `<span><span class="mi">local_fire_department</span> 热度 ${pop}</span>` : '',
     comments !== null ? `<span><span class="mi">forum</span> 评论 ${comments}</span>` : '',
     topLiked ? `<span><span class="mi">thumb_up</span> 网易云最热评论 ${topLiked} 赞</span>` : '',
@@ -591,7 +655,13 @@ function closeFull() {
   if (waveCtl) { waveCtl.destroy(); waveCtl = null; window.__cmWave = null; }
   if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }
   ov.classList.add('closing');
-  setTimeout(() => { ov.hidden = true; ov.innerHTML = ''; ov.classList.remove('closing'); }, 240);
+  clearTimeout(closeTimer);
+  closeTimer = setTimeout(() => {
+    ov.hidden = true;
+    ov.innerHTML = '';
+    ov.classList.remove('closing');
+    document.body.classList.remove('player-open');
+  }, 240);
 }
 
 // 设置页切换波形样式 / 频谱倾斜时，若播放页正开着就立刻换（不必重开播放页）
@@ -609,6 +679,9 @@ function closeFull() {
   waveCtl.setPlaying(player.isPlaying());
   window.__cmWave = waveCtl;
 }));
+document.addEventListener('cm-colorscheme', () => {
+  if (waveCtl) waveCtl.refreshColor();
+});
 
 // ---------- 均衡器 ----------
 function openEqDialog() {
@@ -664,45 +737,85 @@ function chipsHTML(list, curKey, group) {
 }
 
 function openMoreDrawer() {
+  dismissToasts();
+  const m = player.meta;
+  if (!m) return toast('当前没有播放中的歌曲');
+  const tier = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
   const diag = mdui.dialog({
     headline: '更多',
     body: `<div class="cm-more">
-      <div class="cm-more-sec">歌词语言</div>
-      <div class="cm-more-chips" id="chipsLang">${chipsHTML(LYRIC_MODES, lyricMode, 'lang')}</div>
-      <div class="cm-more-sec">歌词字号</div>
-      <div class="cm-more-chips" id="chipsSize">${chipsHTML(LYRIC_SIZES, lyricSizeKey, 'size')}</div>
-      <div class="cm-more-row">
-        <div><div class="cm-more-t">逐字歌词</div><div class="cm-more-s">有逐字数据的歌曲逐字点亮（卡拉OK）</div></div>
-        <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
+      <div class="cm-more-hero">
+        ${m.pic ? `<img src="${esc(m.pic)}?param=96y96" alt="">` : '<span class="cm-more-hero-ph material-icons-outlined">music_note</span>'}
+        <div class="cm-more-hero-t">
+          <div class="cm-more-hero-name">${esc(m.name)}</div>
+          <div class="cm-more-hero-sub">${esc(m.artists || '')}</div>
+        </div>
+        <span class="cm-more-hero-q">${esc(tier)}</span>
       </div>
-      <div class="cm-more-row">
-        <div><div class="cm-more-t">沉浸模式</div><div class="cm-more-s">封面主色流动渐变铺满播放页</div></div>
-        <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
+      <div class="cm-more-grid">
+        <div class="cm-more-col">
+          <section class="cm-more-card">
+            <div class="cm-more-h"><span class="material-icons-outlined">subtitles</span>歌词显示</div>
+            <div class="cm-more-field">
+              <span class="cm-more-fl">语言</span>
+              <div class="cm-more-chips" id="chipsLang">${chipsHTML(LYRIC_MODES, lyricMode, 'lang')}</div>
+            </div>
+            <div class="cm-more-field">
+              <span class="cm-more-fl">字号</span>
+              <div class="cm-more-chips" id="chipsSize">${chipsHTML(LYRIC_SIZES, lyricSizeKey, 'size')}</div>
+            </div>
+          </section>
+          <section class="cm-more-card">
+            <div class="cm-more-h"><span class="material-icons-outlined">auto_awesome</span>播放增强</div>
+            <div class="cm-more-row">
+              <div><div class="cm-more-t">逐字歌词</div><div class="cm-more-s">官方逐字精确同步；没有时按行时长自动估算点亮</div></div>
+              <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
+            </div>
+            <div class="cm-more-row">
+              <div><div class="cm-more-t">沉浸模式</div><div class="cm-more-s">封面主色流动渐变铺满播放页</div></div>
+              <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
+            </div>
+          </section>
+        </div>
+        <div class="cm-more-col">
+          <section class="cm-more-card">
+            <div class="cm-more-h"><span class="material-icons-outlined">tune</span>工具</div>
+            <button type="button" class="cm-more-nav" id="mEq">
+              <span class="cm-more-nav-ic material-icons-outlined">graphic_eq</span>
+              <span><span class="cm-more-t">均衡器</span><span class="cm-more-s">五段 EQ · 预设与自定义</span></span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>
+            <button type="button" class="cm-more-nav" id="mShare">
+              <span class="cm-more-nav-ic material-icons-outlined">share</span>
+              <span><span class="cm-more-t">分享歌曲</span><span class="cm-more-s">分享图 / 链接 / 歌曲信息</span></span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>
+          </section>
+          <section class="cm-more-card">
+            <div class="cm-more-h"><span class="material-icons-outlined">menu_book</span>歌曲资料</div>
+            <button type="button" class="cm-more-nav" id="mWiki">
+              <span class="cm-more-nav-ic material-icons-outlined">subject</span>
+              <span><span class="cm-more-t">歌曲百科</span><span class="cm-more-s">创作信息 / 基本信息 / 百科正文</span></span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>
+            <button type="button" class="cm-more-nav" id="mSongInfo">
+              <span class="cm-more-nav-ic material-icons-outlined">info</span>
+              <span><span class="cm-more-t">查看歌曲详情</span><span class="cm-more-s">音质档位 / 副歌时间 / 红心数 / 创作者 / 相似歌曲</span></span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>
+          </section>
+        </div>
       </div>
-            <div class="cm-more-row" id="mEq" style="cursor:pointer">
-        <div><div class="cm-more-t">均衡器</div><div class="cm-more-s">五段 EQ · 预设与自定义</div></div>
-        <span class="material-icons-outlined">graphic_eq</span>
-      </div>
-<div class="cm-more-row" id="mShare" style="cursor:pointer">
-        <div><div class="cm-more-t">分享歌曲</div><div class="cm-more-s">分享图 / 链接 / 歌曲信息</div></div>
-        <span class="material-icons-outlined">share</span>
-      </div>
-      <div class="cm-more-sec">歌曲信息</div>
-      <div class="cm-more-row" id="mWiki" style="cursor:pointer">
-        <div><div class="cm-more-t">歌曲百科</div><div class="cm-more-s">创作信息 / 基本信息 / 百科正文</div></div>
-        <span class="material-icons-outlined">chevron_right</span>
-      </div>
-      <div class="cm-more-row" id="mSongInfo" style="cursor:pointer">
-        <div><div class="cm-more-t">查看歌曲详情</div><div class="cm-more-s">音质档位 / 副歌时间 / 红心数 / 创作者 / 百科 / 相似歌曲 / 乐谱</div></div>
-        <span class="material-icons-outlined">chevron_right</span>
-      </div>
-      <div class="cm-more-sec">下载到本机</div>
-      <div class="cm-more-chips" id="chipsDl">${QUALITY_TIERS.map(t =>
-        `<mdui-chip data-g="dl" data-k="${t.key}" ${t.key === settings.quality ? 'selected' : ''}>${t.label}</mdui-chip>`).join('')}</div>
-      <div class="cm-more-s" style="margin-top:6px">目录：Music/${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}（可在「我的-快捷功能」修改）</div>
+      <section class="cm-more-card cm-more-dl">
+        <div class="cm-more-h"><span class="material-icons-outlined">download</span>下载到本机</div>
+        <div class="cm-more-chips" id="chipsDl">${QUALITY_TIERS.map(t =>
+          `<mdui-chip data-g="dl" data-k="${t.key}" ${t.key === settings.quality ? 'selected' : ''}>${t.label}</mdui-chip>`).join('')}</div>
+        <div class="cm-more-s" style="margin-top:8px">目录：Music/${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}（可在「我的-快捷功能」修改）</div>
+      </section>
     </div>`,
     actions: [{ text: '关闭' }],
   });
+  diag.classList.add('cm-more-dialog');
   setTimeout(() => {
     const msh = diag.querySelector('#mShare');
     if (msh) msh.onclick = () => {
@@ -715,12 +828,12 @@ function openMoreDrawer() {
     const wk = diag.querySelector('#mWiki');
     if (wk) wk.onclick = () => {
       diag.open = false;
-      import('./wiki.js').then(m => m.openWiki(player.meta)).catch(() => toast('百科加载失败'));
+      import('./wiki.js').then(x => x.openWiki(player.meta)).catch(() => toast('百科加载失败'));
     };
     const si = diag.querySelector('#mSongInfo');
     if (si) si.onclick = () => {
       diag.open = false;
-      import('./songinfo.js').then(m => m.openSongInfo(player.meta)).catch(() => {});
+      import('./songinfo.js').then(x => x.openSongInfo(player.meta)).catch(() => {});
     };
     diag.querySelectorAll('mdui-chip[data-g="lang"]').forEach(ch => {
       ch.onclick = () => {
@@ -825,10 +938,15 @@ async function applyPlayerBg() {
 // 动态取色：配色方案为 dynamic 时随封面切换全局主色（含深色档/强调色，见 applyColorScheme）
 async function applyDynamicScheme() {
   if (getColorSchemeKey() !== 'dynamic' || !player.meta) return;
-  const cs = await coverColors(player.meta.pic);
-  if (cs && player.meta) applyColorScheme(cs.primary, cs);
+  const meta = player.meta;
+  const cs = await coverColors(meta.pic);
+  // 快速切歌时，较慢的上一张封面不能反过来覆盖当前歌曲的配色。
+  if (cs && player.meta === meta && getColorSchemeKey() === 'dynamic') applyColorScheme(cs.primary, cs);
 }
 on('song', () => { applyDynamicScheme(); });
+document.addEventListener('cm-colorscheme-mode', e => {
+  if (e.detail && e.detail.key === 'dynamic') applyDynamicScheme();
+});
 // 缓冲进度：progress 事件与 tick 都会驱动，这里保证进度条上的缓冲区间实时更新
 on('buffer', () => {
   const pct = player.bufferPct() + '%';
@@ -867,6 +985,26 @@ function bindArtistLinks(scope) {
   });
 }
 
+/** 按「默认红心目标」同步播放页红心、网易云小圆点与红心数。 */
+async function syncPlayerLike(m) {
+  if (!m) return;
+  try {
+    await ensureStatus(m.ncm_id).catch(() => {});   // 同时刷新本地状态与网易云红心数
+    const s = await ensureLikeState(m);
+    if (!player.meta || player.meta.ncm_id !== m.ncm_id) return;
+    const btn = document.getElementById('plLike');
+    if (btn) {
+      btn.classList.toggle('on', s.liked);
+      btn.querySelector('.material-icons-outlined').textContent = s.liked ? 'favorite' : 'favorite_border';
+      btn.title = s.source === 'ncm' ? '红心到网易云' : '加入 CurrentMusic 我喜欢';
+    }
+    const badge = document.getElementById('plNcmBadge');
+    if (badge) badge.hidden = !(s.bound && s.source === 'local' && isNcmLiked(m.ncm_id));
+    const stat = document.getElementById('plLikeStat');
+    if (stat) stat.innerHTML = `<span class="mi">favorite</span> ${fmtCount(s.count || 0)} 红心`;
+  } catch { /* 未绑定/网络失败：保留当前 UI */ }
+}
+
 function updateSongInfo() {
   const ov = overlay();
   const m = player.meta;
@@ -879,20 +1017,7 @@ function updateSongInfo() {
   if (artist) { artist.innerHTML = artistLineHTML(m); bindArtistLinks(artist); }
   const q = document.getElementById('plQuality');
   if (q) q.textContent = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
-  const likeBtn = document.getElementById('plLike');
-  if (likeBtn) {
-    const st = getStatus(m.ncm_id);          // 先按缓存立即上屏（避免闪默认态）
-    likeBtn.classList.toggle('on', st.liked);
-    likeBtn.querySelector('.material-icons-outlined').textContent = st.liked ? 'favorite' : 'favorite_border';
-    // 缓存里可能没有新歌/已过期（切歌时红心停留在上一首的根因）：强制拉一次，
-    // 期间若又切歌则丢弃本次结果
-    const songAt = m;
-    ensureStatus(m.ncm_id).then(s => {
-      if (!player.meta || player.meta !== songAt || !document.getElementById('plLike')) return;
-      likeBtn.classList.toggle('on', s.liked);
-      likeBtn.querySelector('.material-icons-outlined').textContent = s.liked ? 'favorite' : 'favorite_border';
-    });
-  }
+  syncPlayerLike(m);
   // 更新背景
   applyPlayerBg();
 }

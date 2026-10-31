@@ -68,9 +68,28 @@ export function createWaveform(canvas, opts) {
   try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
   catch (e) { reduced = false; }
 
-  // 配色：低对比、无霓虹。淡紫只作点缀，与播放页主色一致。
-  const ACCENT = 'rgba(206,188,255,';
-  const WHITE = 'rgba(255,255,255,';
+  // Canvas 不能直接消费 CSS var()，每次配色变化时把当前强调色解析成 RGB。
+  // 动态取色优先用封面的 --cm-accent，固定配色则由 ui.js 把它同步为主色。
+  let accent = [206, 188, 255];
+
+  function readAccent() {
+    let raw = '';
+    try {
+      raw = (opts.color && opts.color()) ||
+        getComputedStyle(document.documentElement).getPropertyValue('--cm-accent').trim() ||
+        getComputedStyle(document.documentElement).getPropertyValue('--cm-primary').trim();
+    } catch (e) { /* 无 DOM 的测试环境回落默认淡紫 */ }
+    let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(raw);
+    if (m) {
+      const h = m[1].length === 3 ? m[1].replace(/./g, x => x + x) : m[1];
+      return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+    }
+    m = /^rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i.exec(raw);
+    return m ? [Math.min(255, +m[1]), Math.min(255, +m[2]), Math.min(255, +m[3])] : [206, 188, 255];
+  }
+
+  const accentColor = alpha => `rgba(${accent[0]},${accent[1]},${accent[2]},${alpha})`;
+  accent = readAccent();
 
   function resize() {
     const rect = canvas.getBoundingClientRect();
@@ -173,9 +192,9 @@ export function createWaveform(canvas, opts) {
     const key = cssH + ':' + cssW;
     if (grad && gradKey === key) return grad;
     const g = ctx.createLinearGradient(0, 0, 0, cssH);
-    g.addColorStop(0, ACCENT + '0.98)');
-    g.addColorStop(0.55, ACCENT + '0.72)');
-    g.addColorStop(1, ACCENT + '0.42)');
+    g.addColorStop(0, accentColor(0.98));
+    g.addColorStop(0.55, accentColor(0.72));
+    g.addColorStop(1, accentColor(0.42));
     grad = g; gradKey = key;
     return g;
   }
@@ -219,8 +238,8 @@ export function createWaveform(canvas, opts) {
       pts[i] = Math.max(1.2, v * maxH) / 2;
     }
     const g = ctx.createLinearGradient(0, 0, w, 0);
-    g.addColorStop(0, ACCENT + '0.55)');
-    g.addColorStop(1, ACCENT + '0.95)');
+    g.addColorStop(0, accentColor(0.55));
+    g.addColorStop(1, accentColor(0.95));
     wavePath(pts, step, mid);
     ctx.fillStyle = g;
     ctx.fill();
@@ -352,6 +371,8 @@ export function createWaveform(canvas, opts) {
     getTilt() { return spanDb; },
     /** 分析器档位（player 提供；变更后需重建分箱）。 */
     setDbRange(lo, hi) { minDb = +lo; maxDb = +hi; },
+    /** 封面动态取色或固定配色变化后，丢弃旧渐变并立即按新颜色重绘。 */
+    refreshColor() { accent = readAccent(); grad = null; gradKey = ''; draw(); },
     peaks() { return peak ? Array.prototype.slice.call(peak) : []; },
     start, stop,
     resize() { const w = cssW, h = cssH; cssW = 0; resize(); if (w !== cssW || h !== cssH) draw(); },

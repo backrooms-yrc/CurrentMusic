@@ -1,6 +1,6 @@
 // 首页：每日推荐 + 排行榜 + 猜你喜欢（登录后） + 最近播放（登录后）
 import { api, auth, ncmSongs, settings } from '../api.js';
-import { esc, renderSongList, skelCards, skelList } from '../ui.js';
+import { esc, renderSongList, skelCards, skelList, toast } from '../ui.js';
 import { player } from '../player.js';
 
 // 首页顶部问候区（v1.28.37）：完整日期 + 星期 + 秒级时钟 + 按时段问候。
@@ -203,6 +203,20 @@ export async function render(el) {
     </section>` : ''}
   `;
   startGreetClock(el);            // 正式内容渲染后重启时钟（骨架屏那份随节点替换自动停）
+  // 骨架屏那次渲染会被正式内容整体替换，所以必须在这里（最终 DOM）绑定；
+  // App 的 WebView 不会把 APK 链接当下载，直接走原生下载桥；浏览器保留普通 <a>。
+  const cmxBanner = el.querySelector('.cm-cmx-banner');
+  if (cmxBanner && window.NativeApi && typeof window.NativeApi.downloadApk === 'function') {
+    cmxBanner.addEventListener('click', e => {
+      e.preventDefault();
+      try {
+        window.NativeApi.downloadApk(cmxBanner.href, 'CurrentMusicX.apk');
+        toast('开始下载 CurrentMusicX…');
+      } catch (err) {
+        location.href = cmxBanner.href;
+      }
+    });
+  }
 
   const dailyRow = el.querySelector('#dailyRow');
   if (dailyRow) dailyRow.querySelectorAll('.cm-card').forEach(c => {

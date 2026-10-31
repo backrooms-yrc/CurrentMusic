@@ -6,3 +6,9 @@ web/node_modules/
 *.idsig
 .DS_Store
 app/src/main/assets/
+
+/AGENTS.md
+.env
+.env.*
+/data/
+/keystore.jks

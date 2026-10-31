@@ -21,6 +21,15 @@
 const WAVE_KEY = 'cm.waveStyle';
 const WAVE_KEYS = ['bars', 'wave', 'capsule'];
 
+const COVER_KEY = 'cm.coverShape';
+export function coverShape() {
+  return localStorage.getItem(COVER_KEY) === 'circle' ? 'circle' : 'rounded';
+}
+export function setCoverShape(shape) {
+  localStorage.setItem(COVER_KEY, shape === 'circle' ? 'circle' : 'rounded');
+  applyCustomize();
+}
+
 /** 当前波形样式（非法值/未设置 → 默认 bars）。 */
 // 频谱倾斜补偿（dB/倍频程）：0 = 关闭（原始频谱，左高右低），4.5 ≈ 标准补偿
 const TILT_KEY = 'cm.waveTilt';
@@ -100,6 +109,7 @@ function setOrRemove(el, prop, value) {
  */
 export function applyCustomize({ rebuild = false } = {}) {
   const el = document.documentElement;
+  el.style.setProperty('--pl-cover-radius', coverShape() === 'circle' ? '50%' : '20px');
   const bg = bgImage();
   // url("...") 里可能出现引号/括号，用 CSS 转义包一层，避免拼进 url() 后被截断
   setOrRemove(el, '--cm-bg-image', bg ? `url("${bg.replace(/["\\]/g, '\\$&')}")` : null);
