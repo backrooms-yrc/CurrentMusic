@@ -1,0 +1,28 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>线路测速 API · CurrentStation</title>
+<link rel="icon" href="/app/brand-icon.png?v=sage1" type="image/png"><link rel="apple-touch-icon" href="/app/apple-touch-icon.png?v=sage1"><style>body{max-width:900px;margin:40px auto;padding:0 22px;font:16px/1.8 system-ui;color:#192234;background:#f5f7fb}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#fff;padding:20px;border-radius:18px}a{color:#1764c0}h1{letter-spacing:-1px}code{font-size:14px}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:10px;border-bottom:1px solid #ddd}</style>
+<a href="/api-docs/">← 接口目录</a> · <a href="/app/auto">打开线路测速页</a><h1>线路目录与测速 API</h1>
+<p>公开接口，无需登录。所有地址固定在服务端，不接受用户指定目标 URL。</p>
+<h2>GET /cm/network/lines</h2><p>默认返回主站及三个 CDN 镜像，并发测量服务器到各线路探针的 HTTPS 请求。结果共用 60 秒缓存，首次请求最多等待约 5 秒；同时发起的其他请求返回已有缓存或 measuring=true 的目录。测量时不携带用户登录态。</p>
+<p><code>?measure=0</code> 仅取目录，不发起测速。<code>measure=1</code> 使用缓存或执行测速，不能强制绕过缓存。响应设置 Cache-Control: no-store；这是浏览器/CDN 缓存策略，与服务器内部 60 秒缓存不同。</p>
+<pre>{
+  "perspective": "server", "measuredAt": 1793450000,
+  "cacheTtlSeconds": 60, "cached": false, "measuring": false,
+  "lines": [{
+    "id": "main", "name": "主站", "origin": "https://music.20110208.xyz",
+    "appUrl": "https://music.20110208.xyz/app/",
+    "probeUrl": "https://music.20110208.xyz/cm/network/probe",
+    "result": {"status": "ok", "available": true, "httpStatus": 200, "latencyMs": 320.5}
+  }]
+}</pre><p>示例仅展示一条线路，实际返回全部四条。measuredAt 为 Unix 秒；未测速为 null。latencyMs 为毫秒，失败时可能为 null，不能当成零延迟。measure=0 的目录不含 result。</p>
+<table><tr><th>status</th><th>说明</th></tr><tr><td>ok</td><td>HTTP 200 且返回正确服务标识</td></tr><tr><td>http_error</td><td>非成功 HTTP 状态，见 httpStatus</td></tr><tr><td>invalid_response</td><td>不是预期的探针 JSON，或数据格式错误</td></tr><tr><td>unreachable</td><td>连接、DNS、TLS 或读取失败</td></tr><tr><td>timeout</td><td>未在本次总等待时限内完成</td></tr><tr><td>busy</td><td>探测槽位繁忙，本条未执行</td></tr></table>
+<h2>GET /cm/network/probe</h2><p>轻量探针，返回 <code>{"service":"CurrentMusic","ok":true,"now":1793450000}</code>，支持跨域读取并禁止缓存。浏览器可附随机 t 查询参数避免中间缓存。</p>
+<pre>const start = performance.now();
+const response = await fetch(origin + '/cm/network/probe?t=' + Date.now(), {
+  cache: 'no-store', credentials: 'omit', signal: controller.signal
+});
+const data = await response.json();
+if (response.ok &amp;&amp; data.ok &amp;&amp; data.service === 'CurrentMusic') {
+  const latencyMs = performance.now() - start;
+}</pre><p>controller 为调用方创建的 AbortController，请设置超时并在完成后清理计时器。公开接口仍受服务端 IP 限流约束。</p>
+<h2>测量口径</h2><p>perspective=server 的结果来自服务器网络；浏览器本地测速来自用户设备。两者不可混用，均不是 TCPing、带宽或全业务可用性保证。本地页面每条线路测两次，只在两次均成功的线路中标记耗时最低者，不自动跳转。</p>
+</html>

@@ -196,6 +196,15 @@ function shrinkImage(file, maxSide = 1024, quality = 0.86) {
 }
 
 export const api = {
+  securityQuestionStatus: () => call('GET', '/auth/security-question', { auth: true }),
+  enableSecurityQuestion: (password, question, answer) => call('POST', '/auth/security-question', { body: { password, question, answer }, auth: true }),
+  disableSecurityQuestion: (password, answer) => call('DELETE', '/auth/security-question', { body: { password, answer }, auth: true }),
+  verifySecurityQuestion: (challengeToken, answer) => call('POST', '/auth/security-question/login', { body: { challengeToken, answer } }),
+  twoFactorStatus: () => call('GET', '/auth/2fa/status', { auth: true }),
+  setup2FA: (password) => call('POST', '/auth/2fa/setup', { body: { password }, auth: true }),
+  enable2FA: (code) => call('POST', '/auth/2fa/enable', { body: { code }, auth: true }),
+  disable2FA: (password, code) => call('POST', '/auth/2fa/disable', { body: { password, code }, auth: true }),
+  verify2FA: (challengeToken, code) => call('POST', '/auth/2fa/login', { body: { challengeToken, code } }),
   // 认证/资料
   register: (payload) => call('POST', '/auth/register', { body: { ...payload, ...deviceInfo() } }),
   sendEmailCode: (email) => call('POST', '/auth/email/code', { body: { email } }),

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CurrentStation 通行证 · 开发者文档</title>
+<link rel="icon" href="/app/brand-icon.png?v=sage1" type="image/png"><link rel="apple-touch-icon" href="/app/apple-touch-icon.png?v=sage1">
+<style>
+  :root {
+    /* Apple HIG 令牌：底色 systemGroupedBackground、文字层级 #1d1d1f/#6e6e73/#86868b、
+       强调色 apple.com 蓝 #0071e3、发丝线 rgba(0,0,0,.07)、双层阴影 */
+    --bg: #f5f5f7; --panel: #fff; --fg: #1d1d1f; --fg2: #6e6e73; --line: rgba(0,0,0,.07);
+    --accent: #0071e3; --code-bg: #0f1218; --code-fg: #e6e9f2; --ok: #34c759; --warn: #ff8d28;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#000; --panel:#1c1c1e; --fg:#fff; --fg2:rgba(235,235,245,.6); --line:rgba(255,255,255,.10);
+      --accent:#0a84ff; --code-bg:#0a0a0c; --code-fg:#e6e9f2; --ok:#30d158; --warn:#ff9230; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+    font: 17px/1.7 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui,
+      'PingFang SC', 'HarmonyOS Sans', 'Microsoft YaHei', sans-serif;
+    -webkit-font-smoothing: antialiased; font-optical-sizing: auto; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom: 6px; }
+  .logo { width:38px; height:38px; border-radius:12px; display:grid; place-items:center; font-weight:800; color:#fff;
+    background: linear-gradient(135deg,#4c5bd4,#8a6cf0); letter-spacing:-.5px; }
+  h1 { font-size: 28px; margin: 0; letter-spacing: -.022em; }
+  .sub { color: var(--fg2); font-size: 13.5px; margin: 2px 0 22px; }
+  h2 { font-size: 22px; margin: 40px 0 10px; padding-top: 6px; letter-spacing:-.022em; }
+  h3 { font-size: 15.5px; margin: 20px 0 6px; }
+  p, li { color: var(--fg); }
+  .muted { color: var(--fg2); }
+  code { background: color-mix(in srgb, var(--fg) 8%, transparent); padding: .1em .38em; border-radius: 6px; font-variant-numeric: tabular-nums;
+    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre { background: var(--code-bg); color: var(--code-fg); padding: 14px 16px; border-radius: 12px; overflow:auto;
+    font: 12.7px/1.66 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  table { width:100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 15px; }
+  th, td { text-align:left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--fg2); font-weight: 600; background: color-mix(in srgb, var(--fg) 4%, transparent); }
+  .card { background: var(--panel); border: 1px solid transparent; border-radius: 22px; padding: 18px 20px;
+    margin: 14px 0; box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 14px 40px rgba(0,0,0,.05); }
+  .pill { display:inline-block; font-size:12px; padding:1px 8px; border-radius:999px; border:1px solid var(--line); color:var(--fg2); }
+  .pill.get { color:#157f3d; border-color:#157f3d55; } .pill.post { color:#1d5fd0; border-color:#1d5fd055; }
+  .pill.del { color:#b3261e; border-color:#b3261e55; } .pill.patch { color:#a86200; border-color:#a8620055; }
+  .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .ok { color: var(--ok); } .warn { color: var(--warn); }
+  a { color: var(--accent); }
+  ol.steps { counter-reset: step; list-style: none; padding-left: 0; }
+  ol.steps > li { counter-increment: step; margin: 14px 0; padding-left: 38px; position: relative; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 26px; height: 26px;
+    border-radius: 50%; background: var(--accent); color:#fff; display:grid; place-items:center; font-size: 13px; font-weight: 700; }
+  footer { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 14px; color: var(--fg2); font-size: 12.6px; }
+</style>
+</head>
+<body>
+<p style="padding:8px 20px;font-size:13px">通行密钥：<a href="/app/#/passkeys">在网页端绑定与管理</a>，设备验证成功后登录无需二步验证码或密保。<a href="/api-docs/reference/guide-passkeys-api/">接口说明</a></p>
+
+<div class="wrap">
+
+<header class="top">
+  <img class="logo" src="/app/brand-icon.png?v=sage1" alt="CurrentMusic" width="34" height="34" style="background:transparent;object-fit:contain">
+  <div>
+    <h1>CurrentStation 通行证</h1>
+    <div class="sub" style="margin:0">Current 系产品的统一登录平台 · OAuth 2.0 授权码 + PKCE</div>
+  </div>
+</header>
+<p class="sub">
+  一套账号，登录所有 Current 系产品。第三方应用全程<strong>拿不到用户密码</strong>：用户在我们的页面上授权，
+  应用只拿到一个只能读取被授权信息的令牌。
+  <span class="pill">Issuer <code id="issuer">{{BASE}}/cm</code></span>
+</p>
+
+<div class="card"><strong>CurrentStation 控制台</strong><p class="muted" style="margin:4px 0 0">账户中心与开发者入口：<a href="{{BASE}}/station">打开控制台</a>。控制台可查阅 CurrentMusic 自有后端与网易云侧完整接口目录，并管理应用登记。</p></div>
+
+<div class="card"><strong>账号两步验证（2FA）</strong><p>在 CurrentMusic 设置中可绑定主流 TOTP 验证器。密码或邮箱验证码校验后，如收到 <code>requires2FA</code>，需用 <code>challengeToken</code> 和验证码调用 <code>POST /cm/auth/2fa/login</code>，拿到会话后再授权。<a href="/api-docs/reference/guide-two-factor-api/">查看两步验证接口</a>。</p></div>
+<div class="card"><strong>登录密保问题</strong><p>账号可选择验证器 2FA 或自定义问题与答案，二选一开启。收到 <code>requiresSecurityQuestion</code> 后展示问题，通过 <code>POST /cm/auth/security-question/login</code> 校验答案后再保存会话。<a href="/api-docs/reference/guide-two-factor-api/">查看接口与互斥规则</a>。</p></div>
+<h2>1. 角色与流程</h2>
+<div class="card">
+<pre><code>用户          应用（你的产品）             CurrentStation 通行证
+ │                  │                              │
+ │  点击「用通行证登录」                            │
+ │─────────────────▶│  302 /passport/authorize     │
+ │                  │  ?client_id&redirect_uri     │
+ │                  │  &scope&state&code_challenge │
+ │                  │─────────────────────────────▶│  未登录？先在本站登录
+ │◀─────────────────────────────────────────────── │  展示同意页（应用名 + 申请的权限）
+ │  点「同意」       │                              │
+ │───────────────────────────────────────────────▶ │  生成一次性 code（60 秒）
+ │                  │◀── 302 redirect_uri?code=…&state=… ─┘
+ │                  │  POST /passport/token         │
+ │                  │  code + code_verifier         │
+ │                  │─────────────────────────────▶│  校验 PKCE → 发 access_token
+ │                  │◀── {access_token, refresh_token?, sub} ─┘
+ │                  │  GET /passport/userinfo       │
+ │                  │  Authorization: Bearer …      │
+ │                  │─────────────────────────────▶│  按 scope 返回昵称/头像/脱敏邮箱…
+</code></pre>
+</div>
+
+<h2>2. 快速开始（4 步）</h2>
+<ol class="steps">
+  <li>
+    <strong>登记应用（一次性，需要 CurrentStation 管理员账号）</strong>
+    <p class="muted" style="margin:2px 0 6px">用管理员登录后的会话令牌调用；返回的 <code>clientSecret</code> <strong>只显示这一次</strong>，请立刻存到服务端环境变量里。原生 App / 纯前端 SPA 请用 <code>"public": true</code>（不发密钥，强制 PKCE）。</p>
+<pre><code>curl -X POST {{BASE}}/cm/passport/apps \
+  -H "Authorization: Bearer &lt;管理员会话令牌&gt;" -H "Content-Type: application/json" \
+  -d '{"name":"CurrentSpace","redirects":["https://app.example.com/auth/callback"],
+       "scopes":"openid profile email offline_access","homepage":"https://app.example.com"}'
+
+# 201
+# { "clientId": "cs_app_1a2b3c4d5e6f", "clientSecret": "cs_sk_…", … }</code></pre>
+  </li>
+  <li>
+    <strong>把用户送到授权页</strong>
+    <p class="muted" style="margin:2px 0 6px">生成 PKCE：<code>verifier</code> 为 43~128 位随机串，<code>challenge = BASE64URL(SHA256(verifier))</code>（去掉 <code>=</code>）。<code>state</code> 用于防 CSRF，回调时要原样校验。</p>
+<pre><code># verifier / challenge 生成（浏览器 WebCrypto，Node 18+ 亦可）
+const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+const challenge = base64url(new Uint8Array(
+  await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
+
+location.href = '{{BASE}}/cm/passport/authorize'
+  + '?response_type=code'
+  + '&client_id=cs_app_1a2b3c4d5e6f'
+  + '&redirect_uri=' + encodeURIComponent('https://app.example.com/auth/callback')
+  + '&scope=' + encodeURIComponent('openid profile email offline_access')
+  + '&state=' + state
+  + '&code_challenge=' + challenge + '&code_challenge_method=S256';</code></pre>
+  </li>
+  <li>
+    <strong>用 code 换令牌</strong>
+    <p class="muted" style="margin:2px 0 6px">code 只能用一次、60 秒过期；换令牌时 <code>redirect_uri</code> 必须与授权时<strong>完全一致</strong>。有密钥的客户端用 Basic 认证，公开客户端只传 <code>code_verifier</code>。</p>
+<pre><code>curl -X POST {{BASE}}/cm/passport/token \
+  -H "Content-Type: application/json" \
+  -d '{"grant_type":"authorization_code","client_id":"cs_app_1a2b3c4d5e6f",
+       "client_secret":"cs_sk_…","code":"cs_code_…","redirect_uri":"https://app.example.com/auth/callback",
+       "code_verifier":"&lt;PKCE verifier&gt;"}'
+
+# 200
+# { "access_token":"cs_at_…", "token_type":"Bearer", "expires_in":7200,
+#   "scope":"openid profile email offline_access", "refresh_token":"cs_rt_…",
+#   "sub":"cs_1a2b3c4d5e6f" }</code></pre>
+  </li>
+  <li>
+    <strong>拿用户信息</strong>
+<pre><code>curl {{BASE}}/cm/passport/userinfo -H "Authorization: Bearer cs_at_…"
+
+# 200
+# { "sub":"cs_1a2b3c4d5e6f", "nickname":"小明", "avatar":"https://…",
+#   "email":"m***@qq.com", "scope":"openid profile email offline_access",
+#   "client_id":"cs_app_1a2b3c4d5e6f" }</code></pre>
+  </li>
+</ol>
+
+<h2>3. 端点</h2>
+<p class="muted">开发者平台页面：<code>GET /developer</code>（也支持 <code>/cm/developer</code>，独立于音乐客户端）。</p>
+<table>
+  <tr><th>方法</th><th>路径</th><th>鉴权</th><th>说明</th></tr>
+  <tr><td><span class="pill get">GET</span></td><td><code>/cm/passport/meta</code></td><td>公开</td><td>平台元信息：端点、scope 目录、令牌有效期、已接入产品</td></tr>
+  <tr><td><span class="pill get">GET</span></td><td><code>/cm/passport/docs</code></td><td>公开</td><td>本页</td></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/passport/apps</code></td><td>登录用户</td><td>登记应用 → <code>clientId</code> / <code>clientSecret</code>（仅此一次）；每账号上限 5 个</td></tr>
+  <tr><td><span class="pill get">GET</span></td><td><code>/cm/passport/apps</code></td><td>登录用户</td><td>我登记的应用（含在用授权数、配额）；管理员加 <code>?all=1</code> 看全部</td></tr>
+  <tr><td><span class="pill patch">PUT</span></td><td><code>/cm/passport/apps/&lt;client_id&gt;</code></td><td>所有者</td><td>改名称/主页/回调/scope/公开↔机密/停用（切机密时返回新密钥一次）</td></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/passport/apps/&lt;client_id&gt;/secret</code></td><td>所有者</td><td>轮换 <code>client_secret</code>（只返回一次）；可选 <code>revokeGrants</code> 同时撤销已发出的授权</td></tr>
+  <tr><td><span class="pill del">DELETE</span></td><td><code>/cm/passport/apps/&lt;client_id&gt;</code></td><td>所有者</td><td>停用应用并撤销其全部授权</td></tr>
+  <tr><td><span class="pill get">GET</span></td><td><code>/cm/passport/authorize</code></td><td>用户会话</td><td>同意页数据（应用名、申请的权限、当前用户；未登录返回 401）</td></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/passport/authorize</code></td><td>用户会话</td><td>批准/拒绝 → 返回带 <code>code</code> 或 <code>error</code> 的回调地址</td></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/passport/token</code></td><td>客户端</td><td><code>authorization_code</code> / <code>refresh_token</code> / <code>client_credentials</code></td></tr>
+  <tr><td><span class="pill get">GET</span></td><td><code>/cm/passport/userinfo</code></td><td>Bearer</td><td>按 scope 返回用户信息</td></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/passport/introspect</code></td><td>客户端</td><td>校验令牌是否有效（RFC 7662）</td></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/passport/revoke</code></td><td>客户端/用户</td><td>撤销令牌（RFC 7009，幂等）</td></tr>
+  <tr><td><span class="pill get">GET</span></td><td><code>/cm/passport/grants</code></td><td>用户会话</td><td>我授权过的应用</td></tr>
+  <tr><td><span class="pill del">DELETE</span></td><td><code>/cm/passport/grants/&lt;授权id&gt;</code></td><td>用户会话</td><td>解除某个应用的授权（其令牌立即失效）</td></tr>
+  <tr><td><span class="pill get">GET</span></td><td><code>/cm/passport/events</code></td><td>管理员</td><td>审计流水（授权/换令牌/撤销/异常）</td></tr>
+</table>
+<p class="muted">账号本体（注册、登录、退出、在线设备）仍在 <code>/cm/auth/*</code>，与通行证共用同一批账号；现有 App 与网页无需改动。</p>
+
+<h3>账号密码（找回 / 修改）</h3>
+<p class="muted">忘记密码无需登录：用注册/绑定邮箱收验证码即可重置。验证码 5 分钟有效、错 5 次作废、用后即焚；重置成功会<strong>吊销该账号全部会话与通行证授权</strong>，所有设备需重新登录。已登录用户也可用同一套邮箱验证码修改密码（保留当前设备、下线其他设备）。</p>
+<table>
+  <tr><th>方法</th><th>路径</th><th>鉴权</th><th>说明</th></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/auth/password/code</code></td><td>公开</td><td>发送找回密码验证码 <code>{email}</code>；要求邮箱已注册，60s 冷却</td></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/auth/password/reset</code></td><td>公开</td><td>重置密码 <code>{email, code, newPassword}</code>；成功后全部会话下线</td></tr>
+  <tr><td><span class="pill post">POST</span></td><td><code>/cm/profile/password/code</code></td><td>Bearer</td><td>向当前账号绑定邮箱发送修改密码验证码</td></tr>
+  <tr><td><span class="pill patch">PUT</span></td><td><code>/cm/profile/password</code></td><td>Bearer</td><td>改密码：<code>{oldPassword,newPassword}</code> 或 <code>{emailCode,newPassword}</code></td></tr>
+</table>
+
+<h2>4. scope</h2>
+<table>
+  <tr><th>scope</th><th>含义</th><th>返回字段</th></tr>
+  <tr><td><code>openid</code></td><td>登录身份（必需）</td><td><code>sub</code>（<code>cs_</code> 开头的稳定标识，不含邮箱/手机号）</td></tr>
+  <tr><td><code>profile</code></td><td>公开资料</td><td><code>nickname</code> <code>avatar</code> <code>bio</code> <code>created_at</code></td></tr>
+  <tr><td><code>email</code></td><td>邮箱（脱敏）</td><td><code>email</code>：<code>a***@qq.com</code></td></tr>
+  <tr><td><code>phone</code></td><td>手机号（脱敏）</td><td><code>phone</code>：<code>138****8000</code></td></tr>
+  <tr><td><code>offline_access</code></td><td>长期授权（30 天可刷新）</td><td>额外返回 <code>refresh_token</code></td></tr>
+</table>
+<p class="muted">申请未登记或超出应用上限的 scope 会得到 <code>invalid_scope</code>；用户看到的是每个 scope 的中文说明（同意页）。</p>
+
+<h2>5. 令牌与有效期</h2>
+<div class="grid">
+  <div class="card"><h3 style="margin-top:0">授权码 <code>cs_code_…</code></h3>60 秒、一次性；取用即失效，天然防重放。</div>
+  <div class="card"><h3 style="margin-top:0">访问令牌 <code>cs_at_…</code></h3>2 小时；放 <code>Authorization: Bearer</code> 头。只存哈希，撤销即时生效。</div>
+  <div class="card"><h3 style="margin-top:0">刷新令牌 <code>cs_rt_…</code></h3>30 天，<strong>每次刷新都轮换</strong>（旧的立刻失效）；泄漏后可被检测（旧令牌再用即失败）。</div>
+</div>
+
+<h3>刷新</h3>
+<pre><code>curl -X POST {{BASE}}/cm/passport/token -H "Content-Type: application/json" \
+  -d '{"grant_type":"refresh_token","client_id":"cs_app_…","client_secret":"cs_sk_…",
+       "refresh_token":"cs_rt_…"}'</code></pre>
+
+<h3>服务端到服务端（client_credentials）</h3>
+<p class="muted">只代表「应用自己」，没有用户信息；<code>/userinfo</code> 会对这类令牌返回 403。</p>
+<pre><code>curl -u "cs_app_…:cs_sk_…" -X POST {{BASE}}/cm/passport/token \
+  -H "Content-Type: application/json" -d '{"grant_type":"client_credentials","scope":"openid"}'</code></pre>
+
+<h2>6. 错误码</h2>
+<table>
+  <tr><th>error</th><th>HTTP</th><th>含义 / 处理</th></tr>
+  <tr><td><code>invalid_client</code></td><td>401</td><td>client_id / client_secret 不对：检查是否把密钥写进了前端代码</td></tr>
+  <tr><td><code>invalid_request</code></td><td>400</td><td>缺参数或格式不对（如公开客户端没带 PKCE）</td></tr>
+  <tr><td><code>invalid_grant</code></td><td>400</td><td>code/refresh 无效、过期、已用过，或 PKCE/redirect_uri 不匹配</td></tr>
+  <tr><td><code>invalid_scope</code></td><td>400</td><td>申请了未登记或超出应用上限的 scope</td></tr>
+  <tr><td><code>unsupported_grant_type</code></td><td>400</td><td>grant_type 拼错</td></tr>
+  <tr><td><code>access_denied</code></td><td>302</td><td>用户点了拒绝（回调地址上带 <code>error=access_denied</code>）</td></tr>
+  <tr><td><code>invalid_token</code></td><td>401</td><td><code>/userinfo</code> 令牌无效或过期（响应头带 <code>WWW-Authenticate</code>）</td></tr>
+  <tr><td>—</td><td>429</td><td>令牌端点限流（同一客户端+IP 60 秒内 30 次）</td></tr>
+</table>
+
+<h2>7. 安全约定</h2>
+<ul>
+  <li><strong>回调地址精确匹配</strong>：不做通配与子路径放行，非 https（本机调试除外）一律拒绝 —— 从根上堵住开放重定向。</li>
+  <li><strong>PKCE 必备</strong>：公开客户端（App、SPA）强制 <code>code_challenge</code>；机密客户端的密钥只放服务端。</li>
+  <li><strong>令牌只存哈希</strong>：数据库被读走也拿不到可用令牌；授权码取用即删。</li>
+  <li><strong>单点登出</strong>：用户在任意产品里退出，会连带撤销该会话发出的全部通行证授权。</li>
+  <li><strong>用户可随时收回</strong>：App 内「设置 → 通行证授权」列出已授权应用，一键解除；管理员审计流水保留每次授权/换令牌/撤销。</li>
+  <li><strong>限流与审计</strong>：令牌端点按「客户端 + IP」滑动窗口限流，异常（密钥错误、换令牌失败）全部留痕。</li>
+</ul>
+
+<h2>8. CurrentDeveloper 开发者平台（自助接入）</h2>
+<div class="card">
+  <p style="margin:0 0 8px">不用找管理员：<strong>任何通行证账号</strong>都能自助把自己的应用接进来。</p>
+  <p style="margin:0 0 8px">入口：<a href="{{BASE}}/developer">{{BASE}}/developer</a> —— <strong>独立页面</strong>，不依赖 CurrentMusic 客户端，
+  用自己的通行证会话（浏览器 localStorage 里的 <code>csdev.token</code>）登录，<strong>不读写</strong>音乐客户端的登录态。</p>
+  <table>
+    <tr><th>能力</th><th>说明</th></tr>
+    <tr><td>新建应用</td><td>填名称、<strong>应用主页</strong>、<strong>回调地址</strong>（每行一个，精确匹配）、需要的 scope，并选择「公开客户端（PKCE）」或「机密客户端（带密钥）」</td></tr>
+    <tr><td>获取凭据</td><td><code>client_id</code> 随时可见可复制；<code>client_secret</code> <strong>只在创建或轮换时显示一次</strong>（服务端只存哈希，我们自己也拿不回来）</td></tr>
+    <tr><td>获取令牌</td><td>平台内可一键用刚拿到的凭据试取<strong>应用令牌</strong>（<code>client_credentials</code>），并生成可直接粘贴的接入代码（授权码 + PKCE 三段）</td></tr>
+    <tr><td>轮换密钥</td><td>密钥泄漏或遗失时一键换新（旧密钥立即失效）；可勾选「同时撤销该应用已发出的授权」</td></tr>
+    <tr><td>配额与权限</td><td>每个账号最多 <strong>5 个</strong>应用；只能查看/修改/停用<strong>自己登记</strong>的应用（管理员可管理全部）</td></tr>
+  </table>
+  <p class="muted" style="margin:8px 0 0">第三方产品的用户数据只经 <code>/passport/userinfo</code> 按 scope 返回，应用侧拿不到密码，也不该把密钥写进前端代码。</p>
+</div>
+
+<h2>9. 已接入产品</h2>
+<div class="card" id="products"><span class="muted">正在读取…</span></div>
+
+<h2>10. 变更记录</h2>
+<table>
+  <tr><th>版本</th><th>内容</th></tr>
+  <tr><td>1.2（v1.28.19）</td><td>开发者平台从 CurrentMusic 客户端里<strong>独立出来</strong>：<code>GET /developer</code> 单文件页面（自带登录/注册、独立会话键 <code>csdev.token</code>），客户端不再内置该页，只保留一个外链入口</td></tr>
+  <tr><td>1.1（v1.28.18）</td><td>新增 <strong>CurrentDeveloper 开发者平台</strong>：任何账号可自助登记应用（每账号 5 个）、填主页与回调、获取/轮换凭据、一键试取应用令牌、停用/启用；<code>POST /passport/apps/{client_id}/secret</code></td></tr>
+  <tr><td>1.0（v1.28.17）</td><td>首个版本：授权码 + PKCE、刷新轮换、userinfo、introspect、revoke、应用登记、授权管理、审计、单点登出</td></tr>
+</table>
+
+<footer>
+  CurrentStation 通行证 · 由 CurrentMusic 后端提供 · 接口与文档同版本发布（<code>GET /cm/passport/meta</code> 可编程读取）。
+</footer>
+</div>
+<script>
+  // 活数据：从 meta 读端点与已接入产品（失败就保持静态文案，不影响阅读）
+  fetch('{{BASE}}/cm/passport/meta').then(r => r.json()).then(m => {
+    const el = document.getElementById('issuer');
+    if (el && m.issuer) el.textContent = m.issuer;
+    const box = document.getElementById('products');
+    const apps = (m.first_party_apps || []);
+    if (!box) return;
+    box.innerHTML = apps.length
+      ? apps.map(a => `<div style="margin:2px 0">· <strong>${a.name}</strong> <code>${a.client_id}</code></div>`).join('')
+      : '<span class="muted">暂无已登记的一等方应用（管理员可在 /cm/passport/apps 登记）。</span>';
+  }).catch(() => {
+    const box = document.getElementById('products');
+    if (box) box.innerHTML = '<span class="muted">读取失败（可在 <code>/cm/passport/apps</code> 查看）。</span>';
+  });
+</script>
+</body>
+</html>

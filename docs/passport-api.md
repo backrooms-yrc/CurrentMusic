@@ -187,3 +187,9 @@ CM_DB=/tmp/pp.db python3 tools/passport-smoke.py http://127.0.0.1:3099
 | 1.2（v1.28.19） | 开发者平台独立于 CurrentMusic 客户端：单文件页面 `GET /developer` + 独立会话 + nginx 直通；客户端移除内置页，仅保留外链 |
 | 1.1（v1.28.18） | 新增 CurrentDeveloper 开发者平台：自助登记（每账号 5 个）、主页/回调配置、凭据与轮换、一键试取应用令牌、停用启用 |
 | 1.0（v1.28.17） | 首个版本：授权码 + PKCE、刷新轮换、userinfo、introspect、revoke、应用登记、授权管理、审计、单点登出 |
+
+## 登录两步验证
+
+Current 账号可在设置启用 TOTP。密码或邮箱验证码验证成功后，如返回 `requires2FA: true`，需使用 `challengeToken` 调用 `/cm/auth/2fa/login` 完成第二步，拿到会话后再进入 OAuth 授权流程。详见 [两步验证接口](two-factor-api.md)。
+
+登录还可选择密保问题（与验证器 2FA 互斥）。收到 `requiresSecurityQuestion:true` 时，必须用 `challengeToken` 与答案完成 `/cm/auth/security-question/login`，再进入授权流程；不要将挑战当作会话。详见 [登录保护接口](two-factor-api.md)。

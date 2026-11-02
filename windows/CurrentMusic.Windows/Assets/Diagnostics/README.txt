@@ -1,0 +1,1 @@
+These diagnostic fixtures are synthetic 440 Hz sine waves, generated for CurrentMusic using FFmpeg. No third-party song content is included. They verify native MP3/FLAC decoding without an audio output device.

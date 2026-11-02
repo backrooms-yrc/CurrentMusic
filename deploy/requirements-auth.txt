@@ -1,0 +1,2 @@
+# Required for passkey signature and authenticator-data verification.
+webauthn==2.7.1

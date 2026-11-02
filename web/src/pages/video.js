@@ -4,7 +4,7 @@
 //      /video/group/list、/video/group
 // 评论走通用抽屉（CM 类型 5 = 视频）。
 import { api } from '../api.js';
-import { esc, toast, fmtCount } from '../ui.js';
+import { esc, toast, fmtCount, skelVideo, skelGrid } from '../ui.js';
 
 const fmtTime = ms => {
   const s = Math.round((Number(ms) || 0) / 1000);
@@ -53,7 +53,7 @@ function playVideo(box, vid, cover) {
 // ---------------- 视频详情 ----------------
 
 async function renderDetail(el, vid) {
-  el.innerHTML = '<div class="cm-loading" style="padding:40px 0"><mdui-circular-progress></mdui-circular-progress></div>';
+  el.innerHTML = skelVideo();
   // 注意参数名：/video/detail 上游读的是 `id`，而 /video/detail/info 读的是 `vid`
   // （两者不一致，曾把 id 传成 vid 导致上游 502 —— 已在 tools/ncm-smoke.py 钉住）。
   // 详情失败不阻塞整页：播放地址与计数都能独立取到，缺了详情也要能看能收藏。
@@ -213,7 +213,7 @@ async function renderHome(el, params = {}) {
       appendCards(datas, reset ? 0 : 1, '该分类在上游暂无返回（/video/group 实测恒为空，已记为上游降级项）');
       if (datas.length) loadMore(() => load(false));
     };
-    listBox.innerHTML = '<div class="cm-loading" style="grid-column:1/-1"><mdui-circular-progress></mdui-circular-progress></div>';
+    listBox.innerHTML = skelGrid(6, 'video');
     try {
       const d = await api.ncm('/video/group/list');
       groups = d.data || [];
@@ -246,7 +246,7 @@ async function renderHome(el, params = {}) {
     return;
   }
 
-  listBox.innerHTML = '<div class="cm-loading" style="grid-column:1/-1"><mdui-circular-progress></mdui-circular-progress></div>';
+  listBox.innerHTML = skelGrid(6, 'video');
   let offset = 0;
   const load = async (reset) => {
     const path = tab === 'rec' ? '/video/timeline/recommend' : '/video/timeline/all';

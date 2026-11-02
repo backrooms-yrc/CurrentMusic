@@ -69,6 +69,7 @@ await build({
   ]);
   const stamp = createHash('sha1').update(css).update(js).digest('hex').slice(0, 10);
   let html = await readFile('index.html', 'utf8');
+  html = html.replace('<!-- CM_LOADING_INDICATOR -->', await readFile('assets/loading-indicator.svg', 'utf8'));
   const before = html;
   html = html
     .replace(/(href="app\.css)(\?[^"]*)?(")/, `$1?v=${stamp}$3`)

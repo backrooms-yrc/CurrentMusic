@@ -1,7 +1,7 @@
 // 曲风详情页（#/style/:tagId）：歌曲 / 歌单 / 歌手 / 专辑 四分区
 // 数据来自阶段一登记的 /style/detail 与 /style/{song,playlist,artist,album}。
 import { api, ncmSongs } from '../api.js';
-import { esc, toast, renderSongList } from '../ui.js';
+import { esc, toast, renderSongList, skelList, skelGrid } from '../ui.js';
 import { player } from '../player.js';
 
 const TABS = [
@@ -11,7 +11,7 @@ const TABS = [
   { key: 'album', label: '专辑' },
 ];
 const SIZE = 30;
-const LOADING = '<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>';
+const LOADING = skelList(4);
 
 /** 各分区的取数函数与「原始项 → 展示项」映射。 */
 const FETCHERS = {
@@ -88,7 +88,7 @@ export async function render(el, params = []) {
     if (state.loading) return;
     state.loading = true;
     const cursor = append ? (state.cursor[cur] || 0) : 0;
-    if (!append) body.innerHTML = LOADING;
+    if (!append) body.innerHTML = cur === 'song' ? skelList(6) : skelGrid(6);
     let shown = 0;
     try {
       if (cur === 'song') {

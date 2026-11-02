@@ -1,7 +1,7 @@
 // 房间页：房主控播 + 全员同步跟随 + 点歌审批 + 成员/权限管理
 import { mdui } from '../md.js';
 import { auth, settings } from '../api.js';
-import { esc, toast, fmtDur, getStatus, renderSongList, avatarHTML, userTags } from '../ui.js';
+import { esc, toast, fmtDur, getStatus, renderSongList, avatarHTML, userTags, skelRoom } from '../ui.js';
 import { roomApi, openEventStream, estimateClockOffset, RoomSync } from '../room.js';
 import { player } from '../player.js';
 
@@ -14,7 +14,7 @@ export async function render(el) {
   const roomId = +location.hash.split('/')[2];
   if (!roomId) { el.innerHTML = '<div class="cm-empty">房间不存在</div>'; return; }
 
-  el.innerHTML = `<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>`;
+  el.innerHTML = skelRoom();
   let detail;
   try {
     detail = await roomApi.detail(roomId);

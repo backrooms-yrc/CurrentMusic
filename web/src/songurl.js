@@ -4,6 +4,7 @@
 //   2) /song/url/match        —— 解灰：从其它音源取直链（周杰伦等地区受限曲目的关键）
 //   3) /song/url              —— 老接口，兜底
 //   4) /check/music           —— 都失败时判断「是版权不可播还是网络问题」，给出准确文案
+import { network, sourceIdentity } from './network.js';
 import { api } from './api.js';
 
 /** 把上游三种不同的响应形状统一成 { url, type, level }。 */
@@ -28,6 +29,39 @@ function pickUrl(d) {
  * @returns {Promise<{url:string,type:string,level:string,host?:string,hosts?:string[]}>}
  */
 export async function resolveSongUrl(meta, level, immerse, opts) {
+  const identity = sourceIdentity();
+  let info;
+  try { info = await resolveProviderUrl(meta, level, immerse, opts); }
+  catch (e) {
+    if (/Key/.test(e.message || '') || identity !== sourceIdentity()) e.noAutoNext = true;
+    throw e;
+  }
+  if (identity !== sourceIdentity()) throw Object.assign(new Error('音源设置已改变，请重新播放'), { noAutoNext: true });
+  return info;
+}
+
+async function resolveProviderUrl(meta, level, immerse, opts, provider = network.provider) {
+  if (!meta || !meta.ncm_id) throw new Error('缺少歌曲信息');
+  if (provider === 'leiz') {
+    const key = network.key;
+    if (!key) throw new Error('请先填写 LeiZ API Key');
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 15000);
+    try {
+      const q = new URLSearchParams({ id: meta.ncm_id, level: level === 'auto' ? 'jymaster' : (level || 'exhigh') });
+      const r = await fetch('https://api.bileizhen.top/api/netease?' + q,
+        { headers: { 'x-api-key': key, Accept: 'application/json' }, credentials: 'omit', redirect: 'error', signal: ctl.signal });
+      if (!r.ok) throw Error(r.status === 401 || r.status === 403 ? 'LeiZ API Key 无效或无权限' : 'LeiZ 请求失败（HTTP ' + r.status + '）');
+      const d = await r.json();
+      if (d.success !== true || !d.data || !d.data.url) throw Error('LeiZ 未提供可用音源');
+      const url = new URL(d.data.url);
+      if (url.protocol !== 'https:' || url.username || url.password) throw Error('音源未提供安全 HTTPS 地址');
+      return { ...d.data, url: url.href, provider };
+    } finally { clearTimeout(timer); }
+  }
+  return resolveCurrentMusicUrl(meta, level, immerse, opts);
+}
+
+async function resolveCurrentMusicUrl(meta, level, immerse, opts) {
   if (!meta || !meta.ncm_id) throw new Error('缺少歌曲信息');
   const id = meta.ncm_id;
   let lastErr = null;

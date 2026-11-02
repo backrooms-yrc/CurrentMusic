@@ -3,7 +3,7 @@
 // 列表：/mv/all、/mv/first、/mv/exclusive/rcmd、/mv/sublist（T1 账号读）
 // 评论走通用抽屉（CM 类型 1 = MV），与歌曲/专辑/歌单同一套实现。
 import { api, auth } from '../api.js';
-import { esc, toast, fmtCount } from '../ui.js';
+import { esc, toast, fmtCount, skelVideo, skelGrid } from '../ui.js';
 import { openMlog } from '../mlog.js';
 
 const AREAS = ['全部', '内地', '港台', '欧美', '日本', '韩国'];
@@ -48,7 +48,7 @@ function playMedia(box, { load, cover }) {
 // ---------------- MV 详情 ----------------
 
 async function renderDetail(el, id) {
-  el.innerHTML = '<div class="cm-loading" style="padding:40px 0"><mdui-circular-progress></mdui-circular-progress></div>';
+  el.innerHTML = skelVideo();
   let d;
   try {
     d = await api.ncm('/mv/detail', { mvid: id });
@@ -228,7 +228,7 @@ async function renderList(el, params = {}) {
     });
   }
 
-  listBox.innerHTML = '<div class="cm-loading" style="grid-column:1/-1"><mdui-circular-progress></mdui-circular-progress></div>';
+  listBox.innerHTML = skelGrid(6, 'video');
 
   const load = async (offset, append) => {
     let d;

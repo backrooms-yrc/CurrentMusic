@@ -1,0 +1,1215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CurrentStation · 统一账户与开发者控制台</title>
+<link rel="icon" href="/app/brand-icon.png?v=sage1" type="image/png"><link rel="apple-touch-icon" href="/app/apple-touch-icon.png?v=sage1">
+<meta name="description" content="CurrentStation：一个账户连接 Current。统一管理账户资料、产品数据、应用授权与开放接口。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%230071e3'/><text x='16' y='22' font-size='15' font-family='system-ui' font-weight='700' fill='white' text-anchor='middle'>CS</text></svg>">
+<style>
+  :root{
+    /* Apple HIG 令牌（与 web/src/apple-hig.css、developer.html 同源） */
+    --bg:#f5f5f7; --panel:#fff; --panel-2:#fbfbfd; --elev:#fff;
+    --fg:#1d1d1f; --fg2:#6e6e73; --fg3:#86868b; --fg4:#aeaeb2;
+    --line:rgba(0,0,0,.08); --line-soft:rgba(0,0,0,.05);
+    --accent:#0071e3; --accent-hover:#0077ed; --accent-soft:rgba(0,113,227,.10);
+    --ok:#34c759; --ok-fg:#1c7c37; --warn:#ff8d28; --danger:#ff383c; --danger-soft:rgba(255,56,60,.10);
+    --chip:rgba(0,0,0,.05);
+    --r-chip:8px; --r-thumb:12px; --r-sheet:16px; --r-card:18px; --r-panel:22px; --hit:44px;
+    --shadow-card:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    --shadow-lift:0 2px 6px rgba(0,0,0,.05),0 16px 40px rgba(0,0,0,.08);
+    --ease:cubic-bezier(.25,1,.5,1);
+    --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display',system-ui,'PingFang SC','HarmonyOS Sans','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+    --mono:'SF Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+    /* ---- 液态玻璃（Liquid Glass）----
+       与 App 内 web/src/app.css 的 --frs-* 同源：填充很淡、边缘一圈折射 +
+       高光边，靠 backdrop-filter: url(#镜头) 把背后画面**掰弯**而不是糊掉。
+       --lens 由 JS 按元素真实尺寸生成位移图后写入；不支持该特性的浏览器
+       回落到下面的 blur+saturate 兜底（iOS Safari / Firefox 走这条）。 */
+    --glass:rgba(255,255,255,.62);
+    --glass-line:rgba(0,0,0,.06);
+    --lens:blur(6px) saturate(180%);
+    --frs-edge:inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 .5px rgba(255,255,255,.55);
+    --dock-float:0 12px 34px rgba(16,24,40,.18);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#000; --panel:#1c1c1e; --panel-2:#2c2c2e; --elev:#0a0a0b;
+      --fg:#f5f5f7; --fg2:rgba(235,235,245,.62); --fg3:rgba(235,235,245,.45); --fg4:rgba(235,235,245,.3);
+      --line:rgba(255,255,255,.12); --line-soft:rgba(255,255,255,.07);
+      --accent:#0a84ff; --accent-hover:#3d9bff; --accent-soft:rgba(10,132,255,.16);
+      --ok:#30d158; --ok-fg:#30d158; --warn:#ff9230; --danger:#ff4245; --danger-soft:rgba(255,66,69,.16);
+      --chip:rgba(255,255,255,.08);
+      --shadow-card:0 1px 2px rgba(0,0,0,.6),0 8px 24px rgba(0,0,0,.5);
+      --shadow-lift:0 16px 40px rgba(0,0,0,.6);
+      --glass:rgba(28,29,35,.5);
+      --glass-line:rgba(255,255,255,.08);
+      --frs-edge:inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 .5px rgba(255,255,255,.10);
+      --dock-float:0 12px 34px rgba(0,0,0,.55);
+    }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 var(--font);
+    -webkit-font-smoothing:antialiased;font-optical-sizing:auto;min-height:100vh}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code,pre,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  b,strong{font-weight:600}
+  button{font:inherit;cursor:pointer}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  .muted{color:var(--fg2)}.small{font-size:13px}.hide{display:none!important}
+  .i{width:1.05em;height:1.05em;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.13em}
+  .i.lg{width:38px;height:38px;stroke-width:1.5}
+  .i.xl{width:26px;height:26px;stroke-width:1.6}
+
+  /* ---------- 背景装饰：玻璃要有东西可折射 ----------
+     底部一层柔和彩色光晕（固定），内容滚动时从玻璃下方穿过。 */
+  .bg-deco{position:fixed;left:0;right:0;bottom:0;height:420px;z-index:0;pointer-events:none;
+    background:
+      radial-gradient(58% 100% at 50% 108%,rgba(0,113,227,.30),transparent 72%),
+      radial-gradient(42% 82% at 12% 104%,rgba(94,92,230,.22),transparent 70%),
+      radial-gradient(46% 86% at 88% 102%,rgba(255,45,85,.14),transparent 70%)}
+  @media (prefers-color-scheme:dark){
+    .bg-deco{background:
+      radial-gradient(58% 100% at 50% 108%,rgba(10,132,255,.34),transparent 72%),
+      radial-gradient(42% 82% at 12% 104%,rgba(94,92,230,.28),transparent 70%),
+      radial-gradient(46% 86% at 88% 102%,rgba(255,66,105,.20),transparent 70%)}
+  }
+
+  /* ---------- 顶栏（同款折射玻璃） ---------- */
+  header.site{position:fixed;top:0;left:0;right:0;z-index:30;
+    background:var(--glass);border-bottom:1px solid transparent;
+    -webkit-backdrop-filter:var(--lens);backdrop-filter:var(--lens);
+    transition:border-color .25s var(--ease)}
+  header.site.scrolled{border-bottom-color:var(--glass-line)}
+  .bar{display:flex;align-items:center;gap:10px;min-height:60px;flex-wrap:nowrap;max-width:1080px;margin:0 auto;padding:0 22px}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto;overflow:hidden;color:inherit}
+  .brand .txt{min-width:0}
+  .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;font-weight:700;
+    font-size:13px;letter-spacing:-.02em;flex:none;background:linear-gradient(135deg,#0071e3,#5e5ce6)}
+  .brand h1{font-size:17px;margin:0;letter-spacing:-.012em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand .sub{font-size:12px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand .short{display:none}
+  /* 窄屏：品牌区不能被顶栏按钮挤没 —— 短品牌名 + 收起点睛链接 + 只留头像 */
+  @media(max-width:640px){
+    .brand .full{display:none}
+    .brand .short{display:inline}
+    .brand .sub{display:none}
+    .bar>a.btn.ghost{display:none}
+    .userchip span{display:none}
+    .userchip{padding:3px}
+  }
+  .bar .spacer{flex:1 1 8px}
+  .bar>.btn,.bar>.userchip{flex:0 0 auto}
+  .userchip{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 5px;border-radius:999px;
+    border:1px solid var(--line);background:var(--panel);max-width:46vw}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
+    display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;overflow:hidden}
+  .avatar img{width:100%;height:100%;object-fit:cover}
+  .userchip span{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ---------- 按钮 ---------- */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:var(--hit);padding:0 18px;
+    border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);font-size:15px;
+    font-weight:500;transition:transform .12s var(--ease),background .18s var(--ease),border-color .18s var(--ease);white-space:nowrap}
+  .btn:hover{background:var(--panel-2);border-color:color-mix(in srgb,var(--fg) 18%,transparent)}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--accent);border-color:transparent;color:#fff}
+  .btn.primary:hover{background:var(--accent-hover)}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--accent)}
+  .btn.ghost:hover{background:var(--accent-soft)}
+  .btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+  .btn.danger:hover{background:var(--danger-soft)}
+  .btn.sm{min-height:36px;padding:0 14px;font-size:13.5px}
+  .btn.block{width:100%}
+  .btn[disabled]{opacity:.5;cursor:default;transform:none}
+  .icobtn{width:38px;min-height:38px;padding:0;border-radius:50%;flex:none}
+  .icobtn .i{width:19px;height:19px}
+
+  /* ---------- 卡与栅格 ---------- */
+  .card{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-panel);box-shadow:var(--shadow-card)}
+  .pad{padding:22px}
+  .sechead{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .sechead h2{font-size:21px;letter-spacing:-.018em;margin:0}
+  .sechead p{margin:3px 0 0;color:var(--fg2);font-size:13.5px}
+  .sechead .spacer{flex:1;min-width:8px}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g5{grid-template-columns:repeat(5,1fr)}
+  @media(max-width:1000px){.g5{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:900px){.g3,.g4{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.g2,.g3,.g4,.g5{grid-template-columns:repeat(2,1fr)}}
+
+  /* ---------- 路由页面 ---------- */
+  main#view{padding-top:78px;padding-bottom:120px;position:relative;z-index:1;min-height:70vh}
+  .page{display:none}
+  .page.on{display:block;animation:pageIn .28s var(--ease)}
+  @keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .page-head{margin:0 0 18px}
+  .page-head h2{font-size:28px;letter-spacing:-.024em;margin:0 0 4px}
+  .page-head p{margin:0;color:var(--fg2);font-size:14px}
+
+  /* ---------- 首屏（未登录） ---------- */
+  .hero{display:grid;grid-template-columns:1.06fr .94fr;gap:44px;align-items:start;padding:14px 0 20px}
+  @media(max-width:900px){.hero{grid-template-columns:1fr;gap:26px}}
+  .eyebrow{font-size:12.5px;font-weight:600;color:var(--accent);letter-spacing:.06em;text-transform:uppercase}
+  .hero h2.big{font-size:clamp(30px,5.2vw,46px);line-height:1.08;letter-spacing:-.03em;margin:10px 0 14px;font-weight:700}
+  .hero p.lede{font-size:19px;line-height:1.55;color:var(--fg2);margin:0 0 24px}
+  .points{list-style:none;padding:0;margin:0 0 24px;display:grid;gap:15px}
+  .points li{display:flex;gap:12px;align-items:flex-start}
+  .points .ic{width:28px;height:28px;border-radius:9px;background:var(--accent-soft);color:var(--accent);
+    display:grid;place-items:center;flex:none}
+  .points .ic .i{width:16px;height:16px}
+  .points b{display:block;font-size:15.5px}
+  .points span.d{color:var(--fg2);font-size:14px}
+
+  /* 产品矩阵 */
+  .prod{display:flex;flex-direction:column;gap:12px;text-align:left;width:100%;padding:18px;
+    border-radius:var(--r-card);border:1px solid var(--line-soft);background:var(--panel);
+    box-shadow:var(--shadow-card);color:var(--fg);transition:transform .16s var(--ease),box-shadow .16s var(--ease),border-color .16s var(--ease)}
+  button.prod:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift);border-color:color-mix(in srgb,var(--accent) 30%,transparent);text-decoration:none}
+  .prod .pic{width:40px;height:40px;border-radius:var(--r-thumb);display:grid;place-items:center;flex:none;
+    background:linear-gradient(135deg,var(--accent),#5e5ce6);color:#fff}
+  .prod.soon .pic{background:var(--chip);color:var(--fg3)}
+  .prod.soon{cursor:default}
+  .prod b{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:17px;letter-spacing:-.012em}
+  .prod span.d{display:block;color:var(--fg2);font-size:13.5px;margin-top:2px}
+  .pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;
+    background:var(--chip);color:var(--fg2);white-space:nowrap}
+  .pill.blue{background:var(--accent-soft);color:var(--accent)}
+  .pill.warn{background:color-mix(in srgb,var(--warn) 16%,transparent);color:#8a4b00}
+  @media(prefers-color-scheme:dark){.pill.warn{color:var(--warn)}}
+
+  /* ---------- 表单 ---------- */
+  .auth{padding:26px}
+  .tabs{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--chip);margin-bottom:20px}
+  .tabs button{flex:1;min-height:38px;border:0;border-radius:999px;background:transparent;color:var(--fg2);font-size:14.5px;font-weight:500;
+    transition:background .18s var(--ease),color .18s var(--ease)}
+  .tabs button.on{background:var(--panel);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:13px;color:var(--fg2);margin-bottom:6px}
+  .field input{width:100%;min-height:var(--hit);padding:0 14px;border-radius:var(--r-thumb);border:1px solid var(--line);
+    background:var(--elev);color:inherit;font:inherit;font-size:16px;transition:border-color .16s var(--ease),box-shadow .16s var(--ease)}
+  .field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .field .row{display:flex;gap:8px}
+  .field .row input{flex:1}
+  .err{color:var(--danger);font-size:13.5px;min-height:20px;margin-top:4px}
+  .hint{font-size:12.5px;color:var(--fg3);margin-top:6px;line-height:1.6}
+  .auth-links{text-align:right;margin-top:2px}
+  .linkbtn{border:0;background:none;color:var(--accent);font:inherit;font-size:13.5px;cursor:pointer;
+    padding:4px 0;min-height:32px}
+  .linkbtn:hover{text-decoration:underline}
+
+  /* ---------- 账户卡 / 统计 / 行 ---------- */
+  .acct{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+  .acct .big{width:64px;height:64px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:24px;
+    font-weight:700;color:var(--accent);background:var(--accent-soft);overflow:hidden}
+  .acct .big img{width:100%;height:100%;object-fit:cover}
+  .acct h2{font-size:26px;letter-spacing:-.022em;margin:0 0 2px}
+  .acct .meta{color:var(--fg2);font-size:13.5px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .acct .acts{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  @media(max-width:700px){.acct .acts{margin-left:0;width:100%}}
+  .stat{padding:16px 18px;text-align:left}
+  .stat b{display:block;font-size:26px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat span{color:var(--fg2);font-size:13px}
+  .kv{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line-soft);align-items:flex-start}
+  .kv:last-child{border-bottom:0}
+  .kv .k{width:96px;flex:none;color:var(--fg3);font-size:13.5px;padding-top:2px}
+  .kv .v{flex:1;min-width:0;word-break:break-all}
+  .row{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line-soft)}
+  .row:last-child{border-bottom:0}
+  .row .cover{width:44px;height:44px;border-radius:var(--r-thumb);object-fit:cover;flex:none;background:var(--chip)}
+  .rowmain{flex:1;min-width:0}
+  /* 只作用于直接子元素：否则嵌套的 .tag 会被 display:block 撑满整行 */
+  .rowmain > b{display:block;font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rowmain > span{display:block;color:var(--fg2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rowmain .tag{margin:0 0 0 2px;vertical-align:1px}
+  .tag{display:inline-block;font-size:12px;font-weight:500;padding:2px 9px;border-radius:999px;background:var(--chip);color:var(--fg2);white-space:nowrap}
+  .tag.on{background:var(--accent-soft);color:var(--accent)}
+  .empty{text-align:center;padding:34px 18px;color:var(--fg2);font-size:14px}
+  .empty .i{display:block;margin:0 auto 10px;color:var(--fg4)}
+  .skeleton{height:52px;border-radius:var(--r-thumb);background:var(--chip);margin:8px 0;animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.55}50%{opacity:.95}}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}
+  .toolbar input{flex:1;min-width:180px;min-height:var(--hit);padding:0 14px;border-radius:var(--r-thumb);
+    border:1px solid var(--line);background:var(--elev);color:inherit;font:inherit;font-size:15px}
+  .toolbar input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  /* 快捷入口（概览页） */
+  .quick{display:flex;align-items:center;gap:12px;padding:16px 18px;border-radius:var(--r-card);
+    border:1px solid var(--line-soft);background:var(--panel);box-shadow:var(--shadow-card);color:var(--fg);
+    transition:transform .16s var(--ease),box-shadow .16s var(--ease)}
+  .quick:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift);text-decoration:none}
+  .quick .ic{width:38px;height:38px;border-radius:var(--r-thumb);display:grid;place-items:center;flex:none;
+    background:var(--accent-soft);color:var(--accent)}
+  .quick b{display:block;font-size:15.5px}
+  .quick span.d{display:block;color:var(--fg2);font-size:13px}
+  .quick .arrow{margin-left:auto;color:var(--fg4)}
+
+  /* ---------- 接口目录 ---------- */
+  .doc{padding:14px 16px;border-radius:var(--r-sheet);border:1px solid var(--line-soft);background:var(--panel-2);margin-bottom:10px}
+  .doc .doctop{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .method{font-family:var(--mono);font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:3px 8px;border-radius:6px;
+    background:var(--chip);color:var(--fg2);flex:none}
+  .method.get{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+  .method.post{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok-fg)}
+  .method.put,.method.patch{background:color-mix(in srgb,var(--warn) 18%,transparent);color:#8a4b00}
+  @media(prefers-color-scheme:dark){.method.put,.method.patch{color:var(--warn)}}
+  .method.delete{background:var(--danger-soft);color:var(--danger)}
+  .doc .path{font-size:13.5px;word-break:break-all;flex:1;min-width:0}
+  .doc p{margin:8px 0 0;color:var(--fg2);font-size:13.5px}
+  .doc .copy{margin-left:auto}
+
+  /* ---------- 公告 ---------- */
+  .ann{padding:16px 18px;border-radius:var(--r-card);border:1px solid var(--line-soft);background:var(--panel-2);margin-bottom:12px}
+  .ann.pinned{border-color:color-mix(in srgb,var(--accent) 36%,transparent)}
+  .ann h3{margin:6px 0 0;font-size:17px;letter-spacing:-.012em}
+  .ann .meta{color:var(--fg3);font-size:12.5px;margin-top:4px}
+  .ann .body{margin-top:8px;font-size:14.5px;line-height:1.7;color:var(--fg2);word-break:break-word}
+  .ann .body p{margin:6px 0}
+  .ann .body ul{margin:6px 0;padding-left:20px}
+  .ann .body li{margin:2px 0}
+  .ann .body code{font-size:12.5px;background:var(--chip);padding:1px 5px;border-radius:5px}
+  .ann .body strong{color:var(--fg)}
+
+  /* ---------- 液态玻璃导航栏（Dock） ----------
+     形态取自 App 内 #bottomNav 的「悬浮折射胶囊」：不贴边、四角大圆角（= 高度一半）、
+     填充极淡，靠 backdrop-filter: url(#镜头) 把从下方穿过的内容掰弯。 */
+  #dock{position:fixed;z-index:40;left:14px;right:14px;margin:0 auto;max-width:640px;
+    bottom:calc(14px + max(env(safe-area-inset-bottom),0px));
+    height:64px;border-radius:32px;display:flex;align-items:center;padding:0 6px;
+    background:var(--glass);
+    box-shadow:var(--frs-edge),var(--dock-float);
+    -webkit-backdrop-filter:var(--lens);backdrop-filter:var(--lens)}
+  #dockItemWrap{display:flex;align-items:center;width:100%;height:100%;position:relative;z-index:1}
+  #navDrop{position:absolute;left:0;top:6px;height:calc(100% - 12px);width:0;
+    border-radius:999px;pointer-events:none;z-index:0;
+    background:rgba(255,255,255,.28);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),0 2px 8px rgba(16,24,40,.14);
+    -webkit-backdrop-filter:blur(2px) saturate(170%);backdrop-filter:blur(2px) saturate(170%);
+    transform:translateX(var(--nd-x,0px)) scaleX(var(--nd-sx,1));
+    /* 与 App 内水滴同一组弹簧参数（response .32 / damping .82 → 0.439s 稳定、过冲 1.1%） */
+    transition:transform .439s cubic-bezier(.25,1,.3,1),width .439s cubic-bezier(.25,1,.3,1)}
+  @media (prefers-color-scheme:dark){#navDrop{background:rgba(255,255,255,.18)}}
+  #navDrop.noanim{transition:none}
+  #navDrop.moving{background:rgba(255,255,255,.36)}
+  .dockItem{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    height:100%;color:var(--fg2);font-size:10.5px;font-weight:500;text-decoration:none;position:relative;z-index:1;
+    border-radius:999px;transition:color .2s var(--ease)}
+  .dockItem:hover{text-decoration:none;color:var(--fg)}
+  .dockItem .i{width:22px;height:22px;stroke-width:1.7;transition:transform .24s var(--ease)}
+  .dockItem.cur{color:var(--accent)}
+  .dockItem.cur .i{transform:translateY(-1px) scale(1.06)}
+  .dockItem span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  @media (max-width:360px){.dockItem{font-size:10px}.dockItem .i{width:20px;height:20px}}
+
+  footer.site{position:relative;z-index:1;padding:22px 0 40px;color:var(--fg3);font-size:13px}
+  footer.site .wrap{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+  #toast .t{background:rgba(29,29,31,.94);color:#fff;padding:10px 18px;border-radius:999px;font-size:14px;max-width:86vw}
+  @media(prefers-color-scheme:dark){#toast .t{background:rgba(245,245,247,.96);color:#1d1d1f}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  /* 系统开启「降低透明度」：玻璃一律换成近实色，可读性优先 */
+  @media (prefers-reduced-transparency:reduce){
+    :root{--glass:rgba(245,245,247,.96);--lens:none}
+  }
+  @media (prefers-reduced-transparency:reduce) and (prefers-color-scheme:dark){
+    :root{--glass:rgba(28,28,30,.96)}
+  }
+</style>
+</head>
+<body>
+<p style="padding:8px 20px;font-size:13px">通行密钥：<a href="/app/#/passkeys">在网页端绑定与管理</a>，设备验证成功后登录无需二步验证码或密保。<a href="/api-docs/reference/guide-passkeys-api/">接口说明</a></p>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M9.5 20v-5.5h5V20"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6.5l10-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.3-2.9 8.1-7 9.5-4.1-1.4-7-5.2-7-9.5V6l7-3z"/><path d="M9 12l2 2 4-4"/></symbol>
+  <symbol id="i-mega" viewBox="0 0 24 24"><path d="M4 10v4h3l6 4V6L7 10H4z"/><path d="M17 9.5a3.5 3.5 0 010 5"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M7 3.5h7l4.5 4.5v12.5h-11z"/><path d="M14 3.5V8h4.5M9.5 12.5h6M9.5 16h4"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M8 21h8"/></symbol>
+  <symbol id="i-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5"/><path d="M7.5 7.5a6.4 6.4 0 000 9M16.5 7.5a6.4 6.4 0 010 9M4.6 4.6a10.5 10.5 0 000 14.8M19.4 4.6a10.5 10.5 0 010 14.8"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0114.4 0"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><path d="M11 11l9 9M17 17l2-2M14.5 14.5l2-2"/></symbol>
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M8 16v-5M12.5 16V8M17 16v-3"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4H7a2 2 0 00-2 2v12a2 2 0 002 2h7"/><path d="M17 8.5l3.5 3.5L17 15.5M20 12h-8"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5.5A2.5 2.5 0 0012.5 3H6.5A2.5 2.5 0 004 5.5v6A2.5 2.5 0 006.5 14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-11"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13.5a3.5 3.5 0 005 0l2.5-2.5a3.5 3.5 0 00-5-5L11 7.5"/><path d="M14 10.5a3.5 3.5 0 00-5 0L6.5 13a3.5 3.5 0 005 5L13 16.5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 5.5V11h-5.5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M9 5.5l6.5 6.5L9 18.5"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21v-5.5M8 3.5h8l-1 5 2.5 2.5H6.5L9 8.5z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.4v.2"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/></symbol>
+</defs></svg>
+
+<div class="bg-deco" aria-hidden="true"></div>
+
+<header class="site" id="top">
+  <div class="bar">
+    <a class="brand" href="#/overview">
+      <img class="logo" src="/app/brand-icon.png?v=sage1" alt="CurrentMusic" width="34" height="34" style="background:transparent;object-fit:contain">
+      <div class="txt">
+        <h1><span class="full">CurrentStation</span><span class="short">Station</span></h1>
+        <div class="sub" id="brandSub">一个账户，连接 Current</div>
+      </div>
+    </a>
+    <div class="spacer"></div>
+    <a class="btn sm ghost" href="{{BASE}}/api-docs/reference/guide-passport-api/" target="_blank" rel="noopener">协议文档</a>
+    <a class="btn sm ghost hide" id="devLink" href="{{BASE}}/developer" target="_blank" rel="noopener">开发者平台</a>
+    <div class="userchip hide" id="userChip">
+      <div class="avatar" id="userAva">C</div>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn sm icobtn hide" id="logout" title="退出登录" aria-label="退出登录"><svg class="i"><use href="#i-logout"/></svg></button>
+  </div>
+</header>
+
+<main class="wrap" id="view">
+
+  <!-- ==================== 概览 ==================== -->
+  <section class="page" data-page="overview" id="pageOverview">
+    <div id="guest">
+      <div class="hero">
+        <div>
+          <div class="eyebrow">CurrentStation Passport</div>
+          <h2 class="big">一个账户，<br>连接 Current。</h2>
+          <p class="lede">用同一套账号登录 Current 系全部产品，在一处管理你的资料、数据与第三方应用授权。</p>
+          <ul class="points">
+            <li><div class="ic"><svg class="i"><use href="#i-shield"/></svg></div>
+              <div><b>一次登录，处处可用</b><span class="d">CurrentMusic 等产品共用同一身份；应用拿不到你的密码。</span></div></li>
+            <li><div class="ic"><svg class="i"><use href="#i-key"/></svg></div>
+              <div><b>授权看得见、收得回</b><span class="d">每个接入的应用列出被授予的权限，随时一键解除。</span></div></li>
+            <li><div class="ic"><svg class="i"><use href="#i-lock"/></svg></div>
+              <div><b>设备与安全自管</b><span class="d">在线设备一目了然，陌生设备可直接踢下线。</span></div></li>
+          </ul>
+          <div class="grid g3">
+            <button class="prod" data-open="music" type="button">
+              <div class="pic"><svg class="i xl"><use href="#i-music"/></svg></div>
+              <div><b>Music</b><span class="d">听歌数据与发现</span></div></button>
+            <div class="prod soon"><div class="pic"><svg class="i xl"><use href="#i-tv"/></svg></div>
+              <div><b>TV <span class="pill">即将开放</span></b><span class="d">大屏观影</span></div></div>
+            <div class="prod soon"><div class="pic"><svg class="i xl"><use href="#i-live"/></svg></div>
+              <div><b>Live <span class="pill">即将开放</span></b><span class="d">直播与现场</span></div></div>
+          </div>
+        </div>
+        <div class="card auth">
+          <div class="tabs" id="tabs">
+            <button class="on" type="button" data-tab="login">登录</button>
+            <button type="button" data-tab="reg">注册</button>
+          </div>
+          <form id="login">
+            <div class="field"><label for="lu">用户名 / 邮箱 / 手机号</label>
+              <input id="lu" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
+            <div class="field"><label for="lp">密码</label>
+              <input id="lp" type="password" autocomplete="current-password"></div>
+            <div class="err" id="le"></div>
+            <button class="btn primary block" type="submit" id="loginBtn">登录</button>
+            <div class="auth-links"><button type="button" class="linkbtn" id="forgotLink">忘记密码？</button></div>
+            <div class="hint">登录即代表你同意 <a href="{{BASE}}/app/#/legal/terms" target="_blank">用户协议</a> 与 <a href="{{BASE}}/app/#/legal/privacy" target="_blank">隐私政策</a>。账号与 CurrentMusic 客户端通用。</div>
+          </form>
+          <form id="reg" class="hide">
+            <div class="field"><label for="ru">用户名</label><input id="ru" autocapitalize="off" spellcheck="false"></div>
+            <div class="field"><label for="rn">昵称</label><input id="rn"></div>
+            <div class="field"><label for="re">邮箱</label><input id="re" type="email" autocapitalize="off" spellcheck="false"></div>
+            <div class="field"><label for="rc">邮箱验证码</label>
+              <div class="row"><input id="rc" inputmode="numeric" autocomplete="one-time-code">
+                <button class="btn" type="button" id="send" style="flex:0 0 auto">获取验证码</button></div></div>
+            <div class="field"><label for="rp">密码（至少 6 位）</label>
+              <input id="rp" type="password" autocomplete="new-password"></div>
+            <div class="err" id="ee"></div>
+            <button class="btn primary block" type="submit" id="regBtn">注册并登录</button>
+            <label class="hint"><input type="checkbox" id="legalConsent" required> 我已阅读并同意 <a href="{{BASE}}/app/#/legal/terms" target="_blank" rel="noopener">《用户协议》</a> 与 <a href="{{BASE}}/app/#/legal/privacy" target="_blank" rel="noopener">《隐私政策》</a></label>
+          </form>
+          <form id="forgot" class="hide">
+            <div class="field"><label for="fe">邮箱</label>
+              <input id="fe" type="email" autocomplete="email" autocapitalize="off" spellcheck="false"></div>
+            <div class="field"><label for="fc">邮箱验证码</label>
+              <div class="row"><input id="fc" inputmode="numeric" autocomplete="one-time-code">
+                <button class="btn" type="button" id="fsend" style="flex:0 0 auto">获取验证码</button></div></div>
+            <div class="field"><label for="fp">新密码（至少 6 位）</label>
+              <input id="fp" type="password" autocomplete="new-password"></div>
+            <div class="err" id="feErr"></div>
+            <button class="btn primary block" type="submit" id="fbtn">重置密码</button>
+            <div class="hint">重置成功后所有设备需重新登录。
+              <button type="button" class="linkbtn" id="backLogin">返回登录</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div id="overviewBody" class="hide">
+      <div class="page-head"><h2 id="acctHello">你好</h2><p>这里是你在 Current 的账户总览。</p></div>
+      <div class="card pad">
+        <div class="acct">
+          <div class="big" id="acctAva">C</div>
+          <div style="min-width:0">
+            <h2 id="acctName">—</h2>
+            <div class="meta" id="acctMeta"></div>
+          </div>
+          <div class="acts">
+            <a class="btn" href="{{BASE}}/app/" target="_blank" rel="noopener"><svg class="i"><use href="#i-music"/></svg>打开 Music</a>
+            <a class="btn ghost" href="{{BASE}}/developer" target="_blank" rel="noopener"><svg class="i"><use href="#i-key"/></svg>开发者平台</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="sechead" style="margin-top:26px"><div><h2>我的数据</h2><p>来自 CurrentMusic 的账户统计。</p></div>
+        <div class="spacer"></div>
+        <button class="btn sm icobtn" id="accountRefresh" title="刷新"><svg class="i"><use href="#i-refresh"/></svg></button></div>
+      <div class="grid g5" id="stats"></div>
+
+      <div class="sechead" style="margin-top:26px"><div><h2>快捷入口</h2></div></div>
+      <div class="grid g3">
+        <a class="quick" href="#/music"><div class="ic"><svg class="i"><use href="#i-chart"/></svg></div>
+          <div><b>听歌数据</b><span class="d">最近播放与发现用户</span></div><svg class="i arrow"><use href="#i-arrow"/></svg></a>
+        <a class="quick" href="#/security"><div class="ic"><svg class="i"><use href="#i-lock"/></svg></div>
+          <div><b>账户与安全</b><span class="d">资料、设备与应用授权</span></div><svg class="i arrow"><use href="#i-arrow"/></svg></a>
+        <a class="quick" href="{{BASE}}/api-docs/"><div class="ic"><svg class="i"><use href="#i-code"/></svg></div>
+          <div><b>接口目录</b><span class="d">自有后端与网易云侧</span></div><svg class="i arrow"><use href="#i-arrow"/></svg></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 音乐 ==================== -->
+  <section class="page" data-page="music">
+    <div class="page-head"><h2>音乐</h2><p>最近在 CurrentMusic 里听过的歌，以及站内用户。</p></div>
+    <div class="grid g2">
+      <div class="card pad">
+        <div class="sechead" style="margin-bottom:6px"><div><h2 style="font-size:16px">最近播放</h2></div>
+          <div class="spacer"></div><button class="btn sm icobtn" id="refresh" title="刷新"><svg class="i"><use href="#i-refresh"/></svg></button></div>
+        <div class="list" id="recent"></div>
+      </div>
+      <div class="card pad">
+        <div class="sechead" style="margin-bottom:6px"><div><h2 style="font-size:16px">发现用户</h2></div></div>
+        <div class="toolbar">
+          <input id="userQuery" placeholder="搜索昵称">
+          <button class="btn sm" id="userSearch">搜索</button>
+        </div>
+        <div class="list" id="users"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 账户与安全 ==================== -->
+  <section class="page" data-page="security">
+    <div class="page-head"><h2>账户与安全</h2><p>资料、通行证标识、在线设备与第三方应用授权。</p></div>
+    <div class="card pad">
+      <div id="accountInfo"></div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line-soft)">
+        <div class="sechead" style="margin-bottom:6px">
+          <div><h2 style="font-size:16px">在线设备 <span class="pill" id="sessCount"></span></h2>
+            <p>同一账号最多 5 台设备同时在线，App 与网页共用额度。</p></div>
+          <div class="spacer"></div>
+          <button class="btn sm danger hide" id="kickOthers">下线其他设备</button>
+        </div>
+        <div class="list" id="sessions"></div>
+      </div>
+    </div>
+
+    <div class="sechead" style="margin-top:26px">
+      <div><h2>已授权应用</h2><p>这些应用正在使用你的 CurrentStation 通行证。</p></div>
+      <div class="spacer"></div>
+      <a class="btn sm ghost" href="{{BASE}}/developer" target="_blank" rel="noopener">管理我的应用</a>
+    </div>
+    <div class="card pad"><div class="list" id="grants"></div></div>
+  </section>
+
+  <!-- ==================== 公告 ==================== -->
+  <section class="page" data-page="announcements">
+    <div class="page-head"><h2>站内公告</h2><p>与 CurrentMusic 客户端同一份公告，置顶优先，所有人可见。</p></div>
+    <div id="annList"></div>
+  </section>
+
+  <!-- ==================== 接口目录 ==================== -->
+  <section class="page" data-page="docs">
+    <div class="page-head"><h2>接口目录</h2><p>CurrentMusic 自有后端与网易云侧代理接口，可搜索、可复制。</p></div>
+    <div class="toolbar">
+      <input id="docSearch" placeholder="搜索路径、名称或鉴权方式…">
+      <button class="btn sm" data-group="all">全部</button>
+      <button class="btn sm" data-group="backend">自有后端</button>
+      <button class="btn sm" data-group="netease">网易云侧</button>
+    </div>
+    <div style="margin-bottom:10px"><span class="pill" id="docCount"></span></div>
+    <p><a href="{{BASE}}/api-docs/" target="_blank" rel="noopener">打开完整 API 手册 →</a> · 按分类阅读参数、认证、返回结构和接入专题</p>
+    <div id="docs"></div>
+    <p><a href="{{BASE}}/api-docs/reference/guide-network-lines-api/" target="_blank" rel="noopener">线路测速 API 文档</a> · <a href="{{BASE}}/app/auto" target="_blank" rel="noopener">主站与 CDN 镜像测速</a></p>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <span>CurrentStation · Current 系统一账户与开放接口</span>
+    <span style="flex:1"></span>
+    <a href="{{BASE}}/api-docs/reference/guide-passport-api/" target="_blank" rel="noopener">通行证协议</a>
+    <a href="{{BASE}}/developer" target="_blank" rel="noopener">开发者平台</a>
+    <a href="{{BASE}}/app/#/legal/privacy" target="_blank" rel="noopener">隐私政策</a>
+    <a href="{{BASE}}/app/#/legal/terms" target="_blank" rel="noopener">用户协议</a>
+    <a href="{{BASE}}/app/" target="_blank" rel="noopener">CurrentMusic</a>
+  </div>
+</footer>
+
+<nav id="dock" aria-label="控制台导航">
+  <div id="dockItemWrap">
+    <span id="navDrop" aria-hidden="true"></span>
+    <a class="dockItem" href="#/overview" data-tab="overview"><svg class="i"><use href="#i-home"/></svg><span>概览</span></a>
+    <a class="dockItem" href="#/music" data-tab="music" data-auth="1"><svg class="i"><use href="#i-music"/></svg><span>音乐</span></a>
+    <a class="dockItem" href="#/security" data-tab="security" data-auth="1"><svg class="i"><use href="#i-shield"/></svg><span>安全</span></a>
+    <a class="dockItem" href="#/announcements" data-tab="announcements"><svg class="i"><use href="#i-mega"/></svg><span>公告</span></a>
+    <a class="dockItem" href="{{BASE}}/api-docs/" data-tab="docs"><svg class="i"><use href="#i-code"/></svg><span>接口</span></a>
+  </div>
+</nav>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var BASE = '{{BASE}}', API = BASE + '/cm';
+  var TK = 'csstation.token', UK = 'csstation.user';   // 控制台独立会话，与客户端 cm.* 无关
+  var catalog = [], group = 'all';
+  var AUTHLESS = ['overview', 'announcements', 'docs'];   // 未登录也能看的页
+
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  function icon(name, cls) { return '<svg class="i ' + (cls || '') + '"><use href="#' + name + '"/></svg>'; }
+  function toast(msg) {
+    var box = $('toast'), d = document.createElement('div');
+    d.className = 't'; d.textContent = msg; box.appendChild(d);
+    setTimeout(function () { d.remove(); }, 2600);
+  }
+  function copy(text) {
+    var done = function () { toast('已复制'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fb);
+    else fb();
+    function fb() {
+      var t = document.createElement('textarea');
+      t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); done(); } catch (e) { toast('复制失败'); }
+      t.remove();
+    }
+  }
+  function fmt(ts) {
+    if (!ts) return '—';
+    var d = new Date(ts * 1000), p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function rel(ts) {
+    if (!ts) return '—';
+    var diff = (Date.now() / 1000) - ts;
+    if (diff < 120) return '刚刚';
+    if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+    if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
+    if (diff < 86400 * 30) return Math.floor(diff / 86400) + ' 天前';
+    return fmt(ts).slice(0, 10);
+  }
+  function tok() { try { return localStorage.getItem(TK) || ''; } catch (e) { return ''; } }
+  function usr() { try { return JSON.parse(localStorage.getItem(UK) || 'null'); } catch (e) { return null; } }
+  function sess(t, u) {
+    try {
+      if (t) localStorage.setItem(TK, t); else localStorage.removeItem(TK);
+      if (u) localStorage.setItem(UK, JSON.stringify(u)); else localStorage.removeItem(UK);
+    } catch (e) { /* 隐私模式 */ }
+  }
+  function api(m, p, b, auth) {
+    var h = { 'Content-Type': 'application/json' };
+    if (auth !== false && tok()) h.Authorization = 'Bearer ' + tok();
+    return fetch(API + p, { method: m, headers: h, body: b === undefined ? undefined : JSON.stringify(b) })
+      .then(function (r) {
+        return r.text().then(function (t) {
+          var d = {}; try { d = t ? JSON.parse(t) : {}; } catch (e) { /* 非 JSON */ }
+          if (!r.ok) {
+            if (r.status === 401 && auth !== false) { sess('', null); route(); }
+            throw new Error(d.error_description || d.error || ('HTTP ' + r.status));
+          }
+          return d;
+        });
+      });
+  }
+  function skeleton(n) {
+    var out = '';
+    for (var i = 0; i < (n || 3); i++) out += '<div class="skeleton"></div>';
+    return out;
+  }
+  function emptyBox(text, ico) {
+    return '<div class="empty">' + icon(ico || 'i-alert', 'lg') + esc(text) + '</div>';
+  }
+  /** 公告正文的轻量 markdown：先整体转义再替换 —— 不引完整渲染器也不会被注入。 */
+  function miniMarkdown(src) {
+    var lines = esc(String(src || '')).split('\n'), out = [], buf = [];
+    function inline(t) {
+      return t.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    }
+    function flush() {
+      if (!buf.length) return;
+      out.push('<ul>' + buf.map(function (t) { return '<li>' + inline(t) + '</li>'; }).join('') + '</ul>');
+      buf = [];
+    }
+    lines.forEach(function (raw) {
+      var line = raw.trim();
+      var m = line.match(/^[-*]\s+(.*)$/);
+      if (m) { buf.push(m[1]); return; }
+      flush();
+      if (line) out.push('<p>' + inline(line) + '</p>');
+    });
+    flush();
+    return out.join('');
+  }
+
+  /* ==================================================================
+     液体玻璃：按元素真实尺寸生成「透镜位移图」，交给 feDisplacementMap，
+     由 backdrop-filter: url(#id) 把背后画面掰弯（而不是糊掉）。
+     —— 与 App 内 web/src/glass.js 同一套算法（iq 圆角矩形 SDF，内部为负；
+        位移只在斜边带内、中心保持清晰）。两个会静默失效的坑一并避开：
+        元素未布局（量到 0×0）时拒绝生成；圆角夹在短边一半以内。
+     ================================================================== */
+  function sdOut(px, py, w, h, r) {
+    var qx = Math.abs(px - w / 2) - (w / 2 - r), qy = Math.abs(py - h / 2) - (h / 2 - r);
+    var ax = Math.max(qx, 0), ay = Math.max(qy, 0);
+    return Math.sqrt(ax * ax + ay * ay) + Math.min(Math.max(qx, qy), 0) - r;
+  }
+  function sdDepth(px, py, w, h, r) { return -sdOut(px, py, w, h, r); }
+  function glassSupported() {
+    try { return CSS.supports('backdrop-filter', 'url(#x)') || CSS.supports('-webkit-backdrop-filter', 'url(#x)'); }
+    catch (e) { return false; }
+  }
+  var MAX_MAP_PX = 640 * 640;
+  function ensureDefs() {
+    var d = document.getElementById('csGlassDefs');
+    if (!d) {
+      d = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      d.setAttribute('id', 'csGlassDefs');
+      d.setAttribute('width', '0'); d.setAttribute('height', '0');
+      d.style.position = 'absolute'; d.style.pointerEvents = 'none';
+      document.body.appendChild(d);
+    }
+    return d;
+  }
+  function attachLens(el, id, o) {
+    if (!el) return null;
+    var rect = el.getBoundingClientRect();
+    if (rect.width < 8 || rect.height < 8) return null;          // 隐藏时量到 0×0 → 不生成废图
+    var maxR = Math.min(rect.width, rect.height) / 2 - 0.5;
+    var radius = Math.max(0, Math.min(o.radius != null ? o.radius : rect.height / 2, maxR));
+    var bevel = Math.max(0, o.bevel), maxd = Math.max(0.01, o.maxd), blur = o.blur != null ? o.blur : 1;
+    var w = Math.round(rect.width), h = Math.round(rect.height);
+    var k = Math.min(1, Math.sqrt(MAX_MAP_PX / (w * h)));
+    var mw = Math.max(2, Math.round(w * k)), mh = Math.max(2, Math.round(h * k));
+    var cv = document.createElement('canvas');
+    cv.width = mw; cv.height = mh;
+    var ctx = cv.getContext('2d'), img = ctx.createImageData(mw, mh), d = img.data;
+    var rad = radius * k, bev = bevel * k, scale = 2 * maxd;
+    for (var y = 0; y < mh; y++) {
+      for (var x = 0; x < mw; x++) {
+        var px = x + 0.5, py = y + 0.5;
+        var depth = sdDepth(px, py, mw, mh, rad);
+        var t = bev > 0 ? 1 - depth / bev : 0;        // 边缘 = 1，斜边带内沿 = 0，再往里为负
+        var dx = 0, dy = 0, edge = 0;
+        if (t > 0) {                                   // 只在斜边带内位移：中心保持清晰
+          if (t > 1) t = 1;
+          var m = t * t * maxd, e = 0.75;
+          var gx = sdDepth(px + e, py, mw, mh, rad) - sdDepth(px - e, py, mw, mh, rad);
+          var gy = sdDepth(px, py + e, mw, mh, rad) - sdDepth(px, py - e, mw, mh, rad);
+          var gl = Math.sqrt(gx * gx + gy * gy) || 1;
+          dx = -gx / gl * m; dy = -gy / gl * m;        // 向外采样 ⇒ 视觉上把世界向内拉
+          edge = Math.round(255 * t);
+        }
+        var i = (y * mw + x) * 4;
+        var rx = Math.round(127.5 + 127.5 * dx / maxd), ry = Math.round(127.5 + 127.5 * dy / maxd);
+        d[i] = Math.max(0, Math.min(255, isFinite(rx) ? rx : 128));
+        d[i + 1] = Math.max(0, Math.min(255, isFinite(ry) ? ry : 128));
+        d[i + 2] = edge; d[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    var url = cv.toDataURL('image/png');
+    var node = document.getElementById(id);
+    if (!node) { ensureDefs().insertAdjacentHTML('beforeend', '<filter id="' + id + '"></filter>'); node = document.getElementById(id); }
+    node.setAttribute('filterUnits', 'userSpaceOnUse');
+    node.setAttribute('primitiveUnits', 'userSpaceOnUse');
+    node.setAttribute('x', '0'); node.setAttribute('y', '0');
+    node.setAttribute('width', String(w)); node.setAttribute('height', String(h));
+    node.setAttribute('color-interpolation-filters', 'sRGB');
+    node.innerHTML = '<feImage x="0" y="0" width="' + w + '" height="' + h + '" preserveAspectRatio="none" result="map" '
+      + 'href="' + url + '" xlink:href="' + url + '"/>'
+      + '<feDisplacementMap in="SourceGraphic" in2="map" scale="' + scale.toFixed(2) + '" xChannelSelector="R" yChannelSelector="G"/>';
+    el.style.setProperty('--lens', 'url(#' + id + ') blur(' + blur + 'px) saturate(180%)');
+    return { w: w, h: h, mapPx: mw * mh, radius: radius };
+  }
+  // 参数与 App 内一致：底栏胶囊 22/18、顶栏 18/12
+  function refreshGlass() {
+    if (!glassSupported()) return;                    // 不支持的环境用 CSS 里的 blur 兜底
+    attachLens($('dock'), 'csLensDock', { radius: null, bevel: 22, maxd: 18, blur: 1 });
+    attachLens($('top'), 'csLensTop', { radius: 0, bevel: 18, maxd: 12, blur: 1 });
+  }
+  var glassTimer = 0;
+  addEventListener('resize', function () {
+    clearTimeout(glassTimer);
+    glassTimer = setTimeout(refreshGlass, 180);
+  });
+
+  /* ---------------- 液态玻璃「水滴」指示器 ---------------- */
+  var drop = $('navDrop'), wrap = $('dockItemWrap');
+  function moveDrop(animate) {
+    var cur = wrap.querySelector('.dockItem.cur');
+    if (!cur || !wrap.offsetWidth) return;
+    var a = cur.getBoundingClientRect(), b = wrap.getBoundingClientRect();
+    var x = a.left - b.left, w = a.width;
+    drop.classList.toggle('noanim', !animate);
+    drop.style.setProperty('--nd-x', x + 'px');
+    drop.style.width = w + 'px';
+    if (animate) {
+      // 切换瞬间横向拉伸（液滴被「拉过去」的手感），落位后收回
+      var from = parseFloat(drop.dataset.x || x);
+      var stretch = Math.min(1.32, 1 + Math.abs(x - from) / Math.max(w, 1) * 0.18);
+      drop.style.setProperty('--nd-sx', String(stretch));
+      drop.classList.add('moving');
+      setTimeout(function () {
+        drop.style.setProperty('--nd-sx', '1');
+        drop.classList.remove('moving');
+      }, 230);
+    } else {
+      requestAnimationFrame(function () { drop.classList.remove('noanim'); });
+    }
+    drop.dataset.x = x;
+  }
+
+  /* ---------------- 路由（每个栏目独立成页，不再挤在一屏里） ---------------- */
+  var PAGES = ['overview', 'music', 'security', 'announcements', 'docs'];
+  var loaded = {};
+  function currentTab() {
+    var t = (location.hash || '').replace(/^#\/?/, '').split('?')[0] || 'overview';
+    return PAGES.indexOf(t) >= 0 ? t : 'overview';
+  }
+  function route() {
+    var logged = !!tok();
+    var tab = currentTab();
+    if (tab === 'docs') { location.replace(BASE + '/api-docs/'); return; }
+    if (!logged && AUTHLESS.indexOf(tab) < 0) tab = 'overview';   // 未登录时受保护页回落
+    document.querySelectorAll('.page').forEach(function (p) {
+      p.classList.toggle('on', p.dataset.page === tab);
+    });
+    wrap.querySelectorAll('.dockItem').forEach(function (a) {
+      a.classList.toggle('cur', a.dataset.tab === tab);
+    });
+    $('guest').classList.toggle('hide', logged || tab !== 'overview');
+    $('overviewBody').classList.toggle('hide', !logged || tab !== 'overview');
+    $('logout').classList.toggle('hide', !logged);
+    $('userChip').classList.toggle('hide', !logged);
+    $('devLink').classList.toggle('hide', !logged);
+    $('brandSub').textContent = logged ? '统一账户控制台' : '一个账户，连接 Current';
+    if (logged) {
+      var u = usr() || {}, name = u.nickname || u.username || 'Current 用户';
+      $('userName').textContent = name;
+      var ava = $('acctAva');
+      if (u.avatar) ava.innerHTML = '<img src="' + esc(u.avatar) + '" alt="">';
+      else ava.textContent = String(name).trim().slice(0, 1).toUpperCase();
+      $('userAva').textContent = String(name).trim().slice(0, 1).toUpperCase();
+      $('acctName').textContent = u.title ? (name + ' · ' + u.title) : name;
+      $('acctHello').textContent = '你好，' + name;
+    }
+    // 懒加载：切到哪页才请求哪页的数据
+    if (tab === 'overview' && logged && !loaded.account) { loaded.account = 1; loadAccount(); }
+    if (tab === 'music' && !loaded.music) { loaded.music = 1; loadRecent(); loadUsers(); }
+    if (tab === 'security' && logged && !loaded.security) { loaded.security = 1; loadProfile(); loadSessions(); loadGrants(); }
+    if (tab === 'announcements' && !loaded.ann) { loaded.ann = 1; loadAnn(); }
+    if (tab === 'docs' && !loaded.docs) { loaded.docs = 1; loadDocs(); }
+    moveDrop(true);
+    scrollTo({ top: 0, behavior: 'auto' });
+    refreshGlass();
+  }
+  wrap.querySelectorAll('.dockItem').forEach(function (a) {
+    a.onclick = function (e) {
+      if (a.dataset.auth && !tok()) {
+        e.preventDefault();
+        location.hash = '#/overview';
+        toast('请先登录 CurrentStation 通行证');
+        return;
+      }
+      if (a.dataset.tab === currentTab()) e.preventDefault();
+    };
+  });
+  addEventListener('hashchange', route);
+
+  /* ---------------- 登录 / 注册 / 找回密码 ---------------- */
+  function showAuth(panel) {
+    var isForgot = panel === 'forgot';
+    $('tabs').classList.toggle('hide', isForgot);
+    $('login').classList.toggle('hide', panel !== 'login');
+    $('reg').classList.toggle('hide', panel !== 'reg');
+    $('forgot').classList.toggle('hide', !isForgot);
+    if (!isForgot) {
+      document.querySelectorAll('#tabs button').forEach(function (x) {
+        x.classList.toggle('on', x.dataset.tab === panel);
+      });
+    }
+  }
+  document.querySelectorAll('#tabs button').forEach(function (b) {
+    b.onclick = function () { showAuth(b.dataset.tab); };
+  });
+  $('forgotLink').onclick = function () {
+    $('le').textContent = ''; $('feErr').textContent = '';
+    showAuth('forgot');
+    setTimeout(function () { $('fe').focus(); }, 60);
+  };
+  $('backLogin').onclick = function () { showAuth('login'); };
+  var pending2FA = '';
+  var pendingQuestion = false;
+  var otpRow = document.createElement('div');
+  otpRow.className = 'field'; otpRow.hidden = true;
+  otpRow.innerHTML = '<label for="loginOTP">两步验证：验证器验证码或恢复码</label><input id="loginOTP" autocomplete="one-time-code" placeholder="6 位验证码或恢复码"><button type="button" id="cancelOTP">重新输入账号密码</button>';
+  $('login').appendChild(otpRow);
+  $('cancelOTP').onclick = function () { pending2FA = ''; otpRow.hidden = true; $('le').textContent = ''; };
+  function acceptLogin(r) {
+    if (r.requires2FA || r.requiresSecurityQuestion) {
+      pending2FA = r.challengeToken; pendingQuestion = !!r.requiresSecurityQuestion;
+      otpRow.querySelector('label').textContent = pendingQuestion ? '密保问题：' + r.securityQuestion : '两步验证：验证器验证码或恢复码';
+      $('loginOTP').type = pendingQuestion ? 'password' : 'text';
+      $('loginOTP').placeholder = pendingQuestion ? '请输入密保答案' : '6 位验证码或恢复码';
+      $('loginOTP').autocomplete = pendingQuestion ? 'off' : 'one-time-code';
+      otpRow.hidden = false; $('loginOTP').value = ''; $('loginOTP').focus();
+      return;
+    }
+    pending2FA = ''; otpRow.hidden = true;
+    sess(r.token, r.user); loaded = {}; toast('已登录'); route();
+  }
+  $('login').onsubmit = function (e) {
+    e.preventDefault();
+    if (pending2FA) {
+      var verifyBtn = $('loginBtn'); verifyBtn.disabled = true;
+      api('POST', pendingQuestion ? '/auth/security-question/login' : '/auth/2fa/login', pendingQuestion ? { challengeToken: pending2FA, answer: $('loginOTP').value } : { challengeToken: pending2FA, code: $('loginOTP').value.trim() }, false)
+        .then(acceptLogin).catch(function (err) { $('le').textContent = err.message; })
+        .then(function () { verifyBtn.disabled = false; });
+      return;
+    }
+
+    var btn = $('loginBtn'); btn.disabled = true; btn.textContent = '登录中…';
+    api('POST', '/auth/login', {
+      username: $('lu').value.trim(), password: $('lp').value,
+      device: 'CurrentStation 控制台', platform: 'web',
+    }, false)
+      .then(acceptLogin)
+      .catch(function (err) { $('le').textContent = err.message; })
+      .then(function () { btn.disabled = false; btn.textContent = '登录'; });
+  };
+  var codeTimer = 0;
+  $('send').onclick = function () {
+    var email = $('re').value.trim(), btn = this;
+    if (!email) { $('ee').textContent = '请先填邮箱'; return; }
+    btn.disabled = true;
+    api('POST', '/auth/email/code', { email: email }, false)
+      .then(function () {
+        toast('验证码已发送（5 分钟内有效）');
+        var left = 60; btn.textContent = left + 's';
+        clearInterval(codeTimer);
+        codeTimer = setInterval(function () {
+          if (--left <= 0) { clearInterval(codeTimer); btn.disabled = false; btn.textContent = '获取验证码'; }
+          else btn.textContent = left + 's';
+        }, 1000);
+      })
+      .catch(function (e) { btn.disabled = false; $('ee').textContent = e.message; });
+  };
+  $('reg').onsubmit = function (e) {
+    e.preventDefault();
+    if (!$('legalConsent').checked) { $('ee').textContent = '请先阅读并勾选同意《用户协议》与《隐私政策》'; return; }
+    var btn = $('regBtn'); btn.disabled = true; btn.textContent = '注册中…';
+    api('POST', '/auth/register', {
+      username: $('ru').value.trim(), nickname: $('rn').value.trim(), email: $('re').value.trim(),
+      emailCode: $('rc').value.trim(), password: $('rp').value,
+      device: 'CurrentStation 控制台', platform: 'web',
+    }, false)
+      .then(function (r) { sess(r.token, r.user); loaded = {}; toast('注册成功，欢迎！'); route(); })
+      .catch(function (err) { $('ee').textContent = err.message; })
+      .then(function () { btn.disabled = false; btn.textContent = '注册并登录'; });
+  };
+  var forgotTimer = 0;
+  $('fsend').onclick = function () {
+    var email = $('fe').value.trim(), btn = this;
+    if (!email) { $('feErr').textContent = '请先填邮箱'; return; }
+    $('feErr').textContent = ''; btn.disabled = true;
+    api('POST', '/auth/password/code', { email: email }, false)
+      .then(function () {
+        toast('验证码已发送（5 分钟内有效）');
+        var left = 60; btn.textContent = left + 's';
+        clearInterval(forgotTimer);
+        forgotTimer = setInterval(function () {
+          if (--left <= 0) { clearInterval(forgotTimer); btn.disabled = false; btn.textContent = '获取验证码'; }
+          else btn.textContent = left + 's';
+        }, 1000);
+      })
+      .catch(function (e) { btn.disabled = false; $('feErr').textContent = e.message; });
+  };
+  $('forgot').onsubmit = function (e) {
+    e.preventDefault();
+    var email = $('fe').value.trim(), code = $('fc').value.trim(), pw = $('fp').value;
+    var btn = $('fbtn');
+    if (!email || !code || !pw) { $('feErr').textContent = '请把表单填完整'; return; }
+    if (pw.length < 6 || pw.length > 64) { $('feErr').textContent = '新密码需 6~64 位'; return; }
+    $('feErr').textContent = ''; btn.disabled = true; btn.textContent = '重置中…';
+    api('POST', '/auth/password/reset', {
+      email: email, code: code, newPassword: pw,
+      device: 'CurrentStation 控制台', platform: 'web',
+    }, false)
+      .then(function (r) {
+        toast('密码已重置，请用新密码登录');
+        $('lu').value = r.username || email;
+        $('lp').value = '';
+        $('fc').value = ''; $('fp').value = '';
+        showAuth('login');
+      })
+      .catch(function (err) { $('feErr').textContent = err.message; })
+      .then(function () { btn.disabled = false; btn.textContent = '重置密码'; });
+  };
+  $('logout').onclick = function () {
+    api('POST', '/auth/logout', {}).catch(function () {}).then(function () {
+      sess('', null); loaded = {}; toast('已退出'); route();
+    });
+  };
+
+  /* ---------------- 概览：统计 ---------------- */
+  function loadAccount() {
+    $('stats').innerHTML = skeleton(5);
+    api('GET', '/bootstrap').then(function (d) {
+      var m = d.me || {}, s = m.stat || {};
+      $('stats').innerHTML = [
+        ['点赞', s.likes || 0], ['收藏', s.favs || 0], ['歌单', s.playlists || 0],
+        ['听歌天数', s.playDays || 0],
+        ['听歌时长', (Math.round((s.listenMs || 0) / 360000) / 10) + ' 小时'],
+      ].map(function (x) {
+        return '<div class="card stat"><b>' + esc(x[1]) + '</b><span>' + esc(x[0]) + '</span></div>';
+      }).join('');
+      $('acctMeta').innerHTML = [
+        '<span class="pill">@' + esc(m.username || '—') + '</span>',
+        '<span class="pill">' + (m.passportUid ? '通行证 ' + esc(String(m.passportUid).slice(0, 10)) + '…' : '通行证未生成') + '</span>',
+        '<span class="pill">注册于 ' + esc(rel(m.createdAt)) + '</span>',
+      ].join('');
+    }).catch(function (e) { $('stats').innerHTML = emptyBox(e.message); });
+  }
+
+  /* ---------------- 账户资料 ---------------- */
+  function loadProfile() {
+    $('accountInfo').innerHTML = skeleton(3);
+    api('GET', '/bootstrap').then(function (d) {
+      var m = d.me || {};
+      $('accountInfo').innerHTML = [
+        ['昵称', esc(m.nickname || m.username || '—')],
+        ['用户名', esc(m.username || '—')],
+        ['通行证标识', '<code class="small">' + esc(m.passportUid || '尚未生成') + '</code>'
+          + (m.passportUid ? ' <button class="btn sm ghost" id="copyUid">复制</button>' : '')],
+        ['邮箱', esc(m.email || '未绑定')],
+        ['手机号', esc(m.phone || '未绑定')],
+        ['注册时间', esc(fmt(m.createdAt))],
+      ].map(function (x) {
+        return '<div class="kv"><span class="k">' + x[0] + '</span><span class="v">' + x[1] + '</span></div>';
+      }).join('');
+      var cu = $('copyUid');
+      if (cu) cu.onclick = function () { copy(m.passportUid); };
+    }).catch(function (e) { $('accountInfo').innerHTML = emptyBox(e.message); });
+  }
+
+  /* ---------------- 音乐 ---------------- */
+  function loadRecent() {
+    $('recent').innerHTML = skeleton(4);
+    api('GET', '/bootstrap').then(function (d) {
+      var songs = (d.recent && d.recent.songs) || [];
+      $('recent').innerHTML = songs.length ? songs.map(function (x) {
+        return '<div class="row">'
+          + (x.pic ? '<img class="cover" src="' + esc(x.pic) + '" alt="" loading="lazy">'
+                   : '<div class="cover" style="display:grid;place-items:center">' + icon('i-music') + '</div>')
+          + '<div class="rowmain"><b>' + esc(x.name || '未知歌曲') + '</b><span>' + esc(x.artists || x.artist || '') + '</span></div>'
+          + '</div>';
+      }).join('') : emptyBox('还没有播放记录', 'i-music');
+    }).catch(function (e) { $('recent').innerHTML = emptyBox(e.message, 'i-music'); });
+  }
+  function loadUsers() {
+    $('users').innerHTML = skeleton(3);
+    var q = encodeURIComponent($('userQuery').value.trim());
+    api('GET', '/users/square?limit=8&query=' + q, undefined, false).then(function (d) {
+      var a = d.users || d.items || [];
+      $('users').innerHTML = a.length ? a.map(function (u) {
+        var name = u.nickname || u.username || '?';
+        return '<div class="row">'
+          + '<div class="cover" style="display:grid;place-items:center;color:var(--accent);font-weight:600">'
+          + esc(name.slice(0, 1)) + '</div>'
+          + '<div class="rowmain"><b>' + esc(name) + '</b><span>' + esc(u.bio || 'CurrentMusic 用户') + '</span></div>'
+          + '</div>';
+      }).join('') : emptyBox('没有找到匹配的用户', 'i-user');
+    }).catch(function (e) { $('users').innerHTML = emptyBox(e.message, 'i-user'); });
+  }
+  $('userSearch').onclick = loadUsers;
+  $('userQuery').onkeydown = function (e) { if (e.key === 'Enter') loadUsers(); };
+
+  /* ---------------- 在线设备 ---------------- */
+  function loadSessions() {
+    $('sessions').innerHTML = skeleton(2);
+    api('GET', '/auth/sessions').then(function (d) {
+      var a = d.sessions || [];
+      $('sessCount').textContent = a.length + ' / ' + (d.max || 5) + ' 台在线';
+      $('kickOthers').classList.toggle('hide', a.length < 2);
+      $('sessions').innerHTML = a.length ? a.map(function (s) {
+        return '<div class="row">'
+          + '<div class="cover" style="display:grid;place-items:center">' + icon('i-device') + '</div>'
+          + '<div class="rowmain"><b>' + esc(s.device)
+          + (s.current ? ' <span class="tag on">当前设备</span>' : '') + '</b>'
+          + '<span>最近活跃 ' + esc(rel(s.lastSeen)) + ' · 登录于 ' + esc(rel(s.createdAt))
+          + (s.platform ? ' · ' + esc(s.platform) : '') + '</span></div>'
+          + (s.current ? '' : '<button class="btn sm" data-sid="' + esc(s.id) + '">下线</button>')
+          + '</div>';
+      }).join('') : emptyBox('没有在线设备记录', 'i-device');
+      document.querySelectorAll('[data-sid]').forEach(function (b) {
+        b.onclick = function () {
+          b.disabled = true;
+          api('DELETE', '/auth/sessions/' + encodeURIComponent(b.dataset.sid))
+            .then(function () { toast('该设备已下线'); loadSessions(); })
+            .catch(function (e) { b.disabled = false; toast(e.message); });
+        };
+      });
+    }).catch(function (e) { $('sessions').innerHTML = emptyBox(e.message, 'i-device'); });
+  }
+  $('kickOthers').onclick = function () {
+    var b = this; b.disabled = true;
+    api('DELETE', '/auth/sessions/others', {})
+      .then(function () { toast('其他设备已全部下线'); loadSessions(); })
+      .catch(function (e) { toast(e.message); })
+      .then(function () { b.disabled = false; });
+  };
+
+  /* ---------------- 应用授权 ---------------- */
+  function loadGrants() {
+    $('grants').innerHTML = skeleton(2);
+    api('GET', '/passport/grants').then(function (d) {
+      var a = d.grants || [];
+      $('grants').innerHTML = a.length ? a.map(function (g) {
+        return '<div class="row">'
+          + '<div class="cover" style="display:grid;place-items:center">' + icon('i-key') + '</div>'
+          + '<div class="rowmain"><b>' + esc(g.app || g.clientId || '未知应用') + '</b>'
+          + '<span>' + esc(g.scope || 'openid') + ' · ' + esc(g.platform || '未知平台')
+          + (g.lastUsed ? ' · 最近使用 ' + esc(rel(g.lastUsed)) : '') + '</span></div>'
+          + '<button class="btn sm danger" data-revoke="' + esc(g.id) + '">解除授权</button>'
+          + '</div>';
+      }).join('') : emptyBox('还没有第三方应用使用你的账号', 'i-key');
+      document.querySelectorAll('[data-revoke]').forEach(function (b) {
+        b.onclick = function () {
+          if (!confirm('解除后该应用的令牌会立即失效，需要重新授权。继续吗？')) return;
+          b.disabled = true;
+          api('DELETE', '/passport/grants/' + encodeURIComponent(b.dataset.revoke))
+            .then(function () { toast('已解除授权'); loadGrants(); })
+            .catch(function (e) { b.disabled = false; toast(e.message); });
+        };
+      });
+    }).catch(function (e) { $('grants').innerHTML = emptyBox(e.message, 'i-key'); });
+  }
+
+  /* ---------------- 公告 ---------------- */
+  function loadAnn() {
+    $('annList').innerHTML = skeleton(2);
+    api('GET', '/announcements', undefined, false).then(function (d) {
+      var a = d.items || [];
+      $('annList').innerHTML = a.length ? a.map(function (x) {
+        return '<article class="ann' + (x.pinned ? ' pinned' : '') + '">'
+          + (x.pinned ? '<span class="pill blue">' + icon('i-pin') + ' 置顶</span>' : '')
+          + '<h3>' + esc(x.title) + '</h3>'
+          + '<div class="meta">' + esc(x.author || 'CurrentStation') + ' · ' + esc(fmt(x.createdAt)) + '</div>'
+          + '<div class="body">' + miniMarkdown(String(x.body || '').slice(0, 400)) + '</div>'
+          + (x.link ? '<div style="margin-top:10px"><a class="btn sm ghost" href="' + esc(x.link)
+              + '" target="_blank" rel="noopener">' + icon('i-link') + ' 查看详情</a></div>' : '')
+          + '</article>';
+      }).join('') : emptyBox('暂无公告', 'i-mega');
+    }).catch(function (e) { $('annList').innerHTML = emptyBox('公告加载失败：' + e.message, 'i-mega'); });
+  }
+
+  /* ---------------- 接口目录 ---------------- */
+  var DOC_PAGE = 30, docShown = DOC_PAGE;
+  function methodClass(m) { return 'method ' + String(m || '').split('|')[0].trim().toLowerCase(); }
+  function renderDocs(reset) {
+    if (reset) docShown = DOC_PAGE;
+    var q = ($('docSearch').value || '').toLowerCase().trim();
+    var all = catalog.filter(function (x) {
+      var hitGroup = group === 'all' || x.group === group;
+      var hay = (x.path + ' ' + x.title + ' ' + x.auth + ' ' + x.method).toLowerCase();
+      return hitGroup && (!q || hay.indexOf(q) >= 0);
+    });
+    $('docCount').textContent = all.length + ' / ' + catalog.length + ' 个接口';
+    var shown = all.slice(0, docShown);
+    $('docs').innerHTML = shown.length ? shown.map(function (x) {
+      return '<article class="doc">'
+        + '<div class="doctop"><span class="' + methodClass(x.method) + '">' + esc(x.method) + '</span>'
+        + '<code class="path">' + esc(x.path) + '</code>'
+        + '<span class="tag">' + esc(x.auth || '—') + '</span>'
+        + '<button class="btn sm ghost copy" data-copy="' + esc(x.url || x.path) + '">' + icon('i-copy') + '复制</button>'
+        + '</div><p>' + esc(x.title)
+        + (x.url ? ' · <a href="' + esc(x.url) + '" target="_blank" rel="noopener">在线地址</a>' : '')
+        + '</p></article>';
+    }).join('') + (all.length > shown.length
+        ? '<div style="text-align:center;margin-top:14px"><button class="btn" id="docMore">显示更多（还有 '
+          + (all.length - shown.length) + ' 个）</button></div>'
+        : '') : emptyBox('没有匹配的接口', 'i-book');
+    var more = $('docMore');
+    if (more) more.onclick = function () { docShown += 60; renderDocs(); };
+    document.querySelectorAll('#docs [data-copy]').forEach(function (b) {
+      b.onclick = function () {
+        var old = b.innerHTML;
+        b.innerHTML = icon('i-check') + '已复制'; b.disabled = true;
+        copy(b.dataset.copy);
+        setTimeout(function () { b.innerHTML = old; b.disabled = false; }, 1200);
+      };
+    });
+  }
+  function loadDocs() {
+    $('docs').innerHTML = skeleton(4);
+    fetch(API + '/station/api-catalog').then(function (r) { return r.json(); }).then(function (d) {
+      catalog = [];
+      (d.groups || []).forEach(function (g) {
+        (g.items || []).forEach(function (x) { x.group = g.id; catalog.push(x); });
+      });
+      renderDocs(true);
+    }).catch(function (e) { $('docs').innerHTML = emptyBox('接口目录加载失败：' + e.message, 'i-book'); });
+  }
+  document.querySelectorAll('[data-group]').forEach(function (b) {
+    b.onclick = function () {
+      group = b.dataset.group;
+      document.querySelectorAll('[data-group]').forEach(function (x) { x.classList.toggle('primary', x === b); });
+      renderDocs(true);
+    };
+  });
+  $('docSearch').oninput = function () { renderDocs(true); };
+
+  /* ---------------- 产品卡与刷新 ---------------- */
+  document.querySelectorAll('[data-open="music"]').forEach(function (b) {
+    b.onclick = function () {
+      if (!tok()) { toast('登录后即可查看你的听歌数据'); return; }
+      location.hash = '#/music';
+    };
+  });
+  $('refresh').onclick = function () { loadRecent(); };
+  $('accountRefresh').onclick = function () { loadAccount(); };
+
+  /* ---------------- 顶栏滚动边缘 / 尺寸变化重建镜头 ---------------- */
+  addEventListener('scroll', function () { $('top').classList.toggle('scrolled', scrollY > 6); }, { passive: true });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) refreshGlass(); });
+
+  /* ---------------- 启动 ---------------- */
+  if (!location.hash) location.hash = '#/overview';
+  route();
+  // 首帧字体/布局稳定后再生成一次镜头（尺寸变了位移图必须重建）
+  refreshGlass();
+  var glassTries = 0;
+  var glassTimer2 = setInterval(function () {
+    refreshGlass();
+    if (++glassTries >= 4) clearInterval(glassTimer2);
+  }, 400);
+  addEventListener('load', refreshGlass);
+})();
+</script>
+</body>
+</html>

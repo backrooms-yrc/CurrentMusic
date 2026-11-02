@@ -1,6 +1,6 @@
 // 用户广场：所有用户（头像/昵称/个签）· 多排序（管理员置顶）· 搜索 · 分页
 import { api } from '../api.js';
-import { esc, toast, avatarHTML, fmtListen, userTags } from '../ui.js';
+import { esc, toast, avatarHTML, fmtListen, userTags, skelUsers } from '../ui.js';
 import { mountPosts } from '../posts.js';
 import { closeChat } from '../chat.js';
 
@@ -128,7 +128,7 @@ export async function render(el, params, state = {}) {
   }, 30000);
 
   const load = async (offset, append) => {
-    if (!append) grid.innerHTML = `<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>`;
+    if (!append) grid.innerHTML = skelUsers(6);
     else grid.querySelector('#sqMore')?.remove();
     let d;
     try {

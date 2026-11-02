@@ -1,0 +1,14 @@
+# CurrentMusic PHP 入口（Apache）
+# 放在站点目录（或 /cm/ 子目录）下。静态文件直接返回，其余交给 index.php。
+RewriteEngine On
+
+# Apache 常把 Authorization 头从 PHP 的 getallheaders() 中剥掉；显式补回。
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+SetEnvIf Proxy-Authorization "(.*)" HTTP_PROXY_AUTHORIZATION=$1
+
+# 已在 /cm/ 下部署时通常可自动识别；若识别错，取消下一行注释并改成实际前缀。
+# SetEnv CM_PHP_PREFIX /cm
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]

@@ -2,7 +2,7 @@
 // 数据：/album（含元数据与曲目，走后端已归一的路由）、/album/detail/dynamic、
 //      /album/privilege、/related/playlist、/album/sub（写）、/ugc/album/get（账号读）
 import { api, auth, ncmSongs } from '../api.js';
-import { esc, toast, renderSongList } from '../ui.js';
+import { esc, toast, renderSongList, skelDetail } from '../ui.js';
 import { player } from '../player.js';
 import { openShare } from '../share.js';
 
@@ -21,7 +21,7 @@ export async function render(el, params = []) {
   const id = String(params[0] || '');
   if (!id) { el.innerHTML = '<div class="cm-empty">缺少专辑参数</div>'; return; }
 
-  el.innerHTML = '<div class="cm-loading" style="padding:40px 0"><mdui-circular-progress></mdui-circular-progress></div>';
+  el.innerHTML = skelDetail();
 
   let al;
   try {

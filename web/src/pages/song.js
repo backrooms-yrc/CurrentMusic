@@ -1,14 +1,13 @@
 // 歌曲页（v1.28.46）：分享链接的落地页。
 // 打开分享链接后展示歌曲信息并可播放/再次分享；不自动播放（浏览器会拦截自动播放）。
 import { api } from '../api.js';
-import { esc, toast } from '../ui.js';
+import { esc, toast, skelSong } from '../ui.js';
 import { player } from '../player.js';
 import { openShare } from '../share.js';
 
 export async function render(el, params) {
   const id = parseInt((params && params[0]) || 0, 10);
-  el.innerHTML = `<div class="cm-page"><div class="cm-loading" style="padding:64px 0">
-    <mdui-circular-progress></mdui-circular-progress></div></div>`;
+  el.innerHTML = skelSong();
   let s = null;
   try {
     const d = await api.songDetail([id]);

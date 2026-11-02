@@ -1,0 +1,148 @@
+# Example nginx reverse proxy for CurrentMusic backend.
+# Adjust server_name, TLS paths, and the static web root for your deployment.
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name music.example.com;
+
+    # ssl_certificate     /etc/letsencrypt/live/music.example.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/music.example.com/privkey.pem;
+
+    client_max_body_size 4m;   # avatar / playlist cover uploads
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 256;
+    gzip_types application/json application/javascript text/css image/svg+xml;
+    gzip_proxied any;
+
+    # API: /cm/foo -> backend /foo
+    location /cm/ {
+        proxy_pass http://127.0.0.1:3010/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 90s;
+    }
+
+    # Chat SSE (exact match wins over /cm/)
+    location = /cm/live/chat {
+        gzip off;
+        proxy_pass http://127.0.0.1:3010/chat/live;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3700s;
+    }
+
+    # Playback-page AI SSE (POST + fetch streaming)
+    location = /cm/live/ai {
+        gzip off;
+        proxy_pass http://127.0.0.1:3010/ai/live;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+    # Direct API aliases used by the bundled Web client.
+    # Chat SSE (exact match wins over /cm/)
+    location = /cm/chat/live {
+        gzip off;
+        proxy_pass http://127.0.0.1:3010/chat/live;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3700s;
+    }
+
+    # Playback-page AI SSE (POST + fetch streaming)
+    location = /cm/ai/live {
+        gzip off;
+        proxy_pass http://127.0.0.1:3010/ai/live;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+
+    # Room SSE (/cm/live/<room> -> /rooms/<room>)
+    location ^~ /cm/live/ {
+        gzip off;
+        proxy_pass http://127.0.0.1:3010/rooms/;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+    # DLNA devices require streaming and Range forwarding.
+    location ^~ /cm/cast/ {
+        proxy_pass http://127.0.0.1:3010/cast/;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_set_header Range $http_range;
+        proxy_set_header If-Range $http_if_range;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Optional: the web client, if you serve a built frontend.
+    # Shared branding for default browser/Apple icon requests.
+    location = /favicon.ico { return 302 /app/brand-icon.png?v=sage1; }
+    location = /favicon.svg { return 302 /home/assets/favicon.svg?v=sage1; }
+    location = /apple-touch-icon.png { return 302 /app/apple-touch-icon.png?v=sage1; }
+    location = /apple-touch-icon-precomposed.png { return 302 /app/apple-touch-icon.png?v=sage1; }
+
+    # Dedicated API handbook (cd api-docs && npm ci && npm run build && npm run publish).
+    # location = /api-docs { return 302 /api-docs/; }
+    # location ^~ /api-docs/ {
+    #     root /srv/currentmusic/data;
+    #     index index.html;
+    #     try_files $uri $uri/ =404;
+    #     add_header Cache-Control "no-cache";
+    #     add_header X-Content-Type-Options "nosniff" always;
+    # }
+    # location = /app/auto {
+    #     alias /srv/currentmusic/data/app/auto.html;
+    #     default_type text/html;
+    #     add_header Cache-Control "no-cache";
+    # }
+    # location = /app/auto/ { return 302 /app/auto; }
+    # location /app/ {
+    #     alias /var/www/currentmusic/app/;
+    #     gzip_static on;  # requires --with-http_gzip_static_module; tools/deploy-web.py creates .gz
+    #     try_files $uri $uri/ /app/index.html;
+    # }
+}

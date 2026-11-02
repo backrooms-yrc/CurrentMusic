@@ -1,0 +1,441 @@
+phase,path,title,status
+EXCL,/api,（文档未收录）,不采用
+EXCL,/chart/detail,指定维度音乐排行榜详情,不可达
+EXCL,/chart/song/detail,指定维度音乐排行榜列表,不可达
+EXCL,/decrypt,（文档未收录）,不采用
+EXCL,/eapi/decrypt,（文档未收录）,不采用
+EXCL,/listentogether/accept,（文档未收录）,不采用
+EXCL,/listentogether/end,（文档未收录）,不采用
+EXCL,/listentogether/heatbeat,（文档未收录）,不采用
+EXCL,/listentogether/play/command,（文档未收录）,不采用
+EXCL,/listentogether/room/check,（文档未收录）,不采用
+EXCL,/listentogether/room/create,（文档未收录）,不采用
+EXCL,/listentogether/status,（文档未收录）,不采用
+EXCL,/listentogether/sync/list/command,（文档未收录）,不采用
+EXCL,/listentogether/sync/playlist/get,（文档未收录）,不采用
+EXCL,/register/checktoken/v2,（文档未收录）,不采用
+EXCL,/register/checktoken/v3,（文档未收录）,不采用
+EXCL,/register/xeapikey,（文档未收录）,不采用
+EXCL,/song/url/ncmget,（文档未收录）,不可达
+EXCL,/weblog,（文档未收录）,不采用
+P1,/banner,banner,待产品化
+P1,/calendar,音乐日历,待产品化
+P1,/cloudsearch,搜索,已封装
+P1,/countries/code/list,国家编码列表,待产品化
+P1,/homepage/block/page,首页-发现,待产品化
+P1,/homepage/dragon/ball,首页-发现-圆形图标入口列表,待产品化
+P1,/personalized,推荐歌单,待产品化
+P1,/personalized/djprogram,推荐电台,待产品化
+P1,/personalized/mv,推荐 mv,待产品化
+P1,/personalized/newsong,推荐新音乐,待产品化
+P1,/personalized/privatecontent,独家放送(入口列表),待产品化
+P1,/personalized/privatecontent/list,独家放送列表,待产品化
+P1,/recommend/resource,获取每日推荐歌单,待产品化
+P1,/recommend/songs,获取每日推荐歌曲,已封装
+P1,/recommend/songs/dislike,每日推荐歌曲-不感兴趣,待产品化
+P1,/search,搜索,待产品化
+P1,/search/default,默认搜索关键词,待产品化
+P1,/search/hot,热搜列表(简略),已封装
+P1,/search/hot/detail,热搜列表(详细),待产品化
+P1,/search/suggest,搜索建议,待产品化
+P1,/search/suggest/pc,搜索建议 - PC端,待产品化
+P1,/style/album,曲风-专辑,待产品化
+P1,/style/artist,曲风-歌手,待产品化
+P1,/style/detail,曲风详情,待产品化
+P1,/style/list,曲风列表,待产品化
+P1,/style/playlist,曲风-歌单,待产品化
+P1,/style/preference,曲风偏好,待产品化
+P1,/style/song,曲风-歌曲,待产品化
+P1,/top/album,新碟上架,待产品化
+P1,/top/artists,热门歌手,待产品化
+P1,/top/list,（文档未收录）,待产品化
+P1,/top/mv,mv 排行,待产品化
+P1,/top/playlist,歌单 ( 网友精选碟 ),待产品化
+P1,/top/playlist/highquality,获取精品歌单,待产品化
+P1,/top/song,新歌速递,待产品化
+P1,/toplist,所有榜单,待产品化
+P1,/toplist/artist,歌手榜,待产品化
+P1,/toplist/detail,所有榜单内容摘要,待产品化
+P1,/toplist/detail/v2,（文档未收录）,待产品化
+P2,/audio/match,听歌识曲,待产品化
+P2,/check/music,音乐是否可用,待产品化
+P2,/cloud,云盘上传,待产品化
+P2,/cloud/import,云盘导入歌曲,待产品化
+P2,/cloud/lyric/get,获取云盘歌词,待产品化
+P2,/cloud/match,云盘歌曲信息匹配纠正,待产品化
+P2,/cloud/upload/complete,云盘上传,待产品化
+P2,/cloud/upload/token,云盘上传,待产品化
+P2,/comment,发送/删除评论,已封装
+P2,/comment/add,（文档未收录）,待产品化
+P2,/comment/album,专辑评论,待产品化
+P2,/comment/delete,（文档未收录）,待产品化
+P2,/comment/dj,电台节目评论,待产品化
+P2,/comment/event,获取动态评论,待产品化
+P2,/comment/floor,楼层评论,已封装
+P2,/comment/hot,热门评论,待产品化
+P2,/comment/hug/list,评论抱一抱列表,待产品化
+P2,/comment/info/list,评论统计数据,待产品化
+P2,/comment/like,给评论点赞,已封装
+P2,/comment/music,歌曲评论,已封装
+P2,/comment/mv,mv 评论,待产品化
+P2,/comment/new,新版评论接口,待产品化
+P2,/comment/playlist,歌单评论,待产品化
+P2,/comment/reply,（文档未收录）,待产品化
+P2,/comment/report,举报评论,待产品化
+P2,/comment/video,视频评论,待产品化
+P2,/hug/comment,抱一抱评论,待产品化
+P2,/like,喜欢音乐,已封装
+P2,/like/v1,喜欢音乐 - 新版,待产品化
+P2,/likelist,喜欢音乐列表,已封装
+P2,/lyric,获取歌词,已封装
+P2,/lyric/new,获取逐字歌词,已封装
+P2,/music/first/listen/info,回忆坐标,待产品化
+P2,/playmode/song/vector,（文档未收录）,待产品化
+P2,/relay/play/state/submit,提交歌曲播放状态,待产品化
+P2,/resource/like,"资源点赞( MV,电台,视频)",待产品化
+P2,/scrobble,听歌打卡,待产品化
+P2,/scrobble/v1,听歌打卡,待产品化
+P2,/share/resource,分享文本、歌曲、歌单、mv、电台、电台节目到动态,待产品化
+P2,/sheet/list,乐谱列表,待产品化
+P2,/sheet/preview,乐谱内容,待产品化
+P2,/song/chorus,副歌时间,待产品化
+P2,/song/cloud/download,直接获取云盘歌曲下载链接,待产品化
+P2,/song/copyright/rcmd,灰色歌曲的其他版本推荐,待产品化
+P2,/song/creators,歌曲创作者信息,待产品化
+P2,/song/detail,获取歌曲详情,已封装
+P2,/song/downlist,会员下载歌曲记录,待产品化
+P2,/song/download/url,获取客户端歌曲下载 url,待产品化
+P2,/song/download/url/v1,获取客户端歌曲下载链接 - 新版,待产品化
+P2,/song/dynamic/cover,歌曲动态封面,待产品化
+P2,/song/like,喜欢歌曲 - 新版,待产品化
+P2,/song/like/check,歌曲是否喜爱,待产品化
+P2,/song/lyrics/mark,歌词摘录 - 歌词摘录信息,待产品化
+P2,/song/lyrics/mark/add,歌词摘录 - 添加/修改摘录歌词,待产品化
+P2,/song/lyrics/mark/del,歌词摘录 - 删除摘录歌词,待产品化
+P2,/song/lyrics/mark/user/page,歌词摘录 - 我的歌词本,待产品化
+P2,/song/monthdownlist,会员本月下载歌曲记录,待产品化
+P2,/song/music/detail,歌曲音质详情,待产品化
+P2,/song/order/update,调整歌曲顺序,待产品化
+P2,/song/purchased,已购单曲,待产品化
+P2,/song/red/count,歌曲红心数量,待产品化
+P2,/song/simi/get,插播相似歌曲,待产品化
+P2,/song/singledownlist,已购买单曲,待产品化
+P2,/song/url,获取音乐 url,待产品化
+P2,/song/url/match,直接获取灰色歌曲链接,待产品化
+P2,/song/url/v1,获取音乐 url - 新版,已封装
+P2,/song/url/v1/302,302到音乐 url - 新版,待产品化
+P2,/song/wiki/info,音乐百科,待产品化
+P2,/song/wiki/summary,音乐百科 - 简要信息,待产品化
+P3,/album,获取专辑内容,已封装
+P3,/album/detail,数字专辑详情,待产品化
+P3,/album/detail/dynamic,专辑动态信息,待产品化
+P3,/album/list,数字专辑-新碟上架,待产品化
+P3,/album/list/style,数字专辑-语种风格馆,待产品化
+P3,/album/new,全部新碟,待产品化
+P3,/album/newest,最新专辑,待产品化
+P3,/album/privilege,获取专辑歌曲的音质,待产品化
+P3,/album/songsaleboard,（文档未收录）,待产品化
+P3,/album/sub,收藏/取消收藏专辑,待产品化
+P3,/album/sublist,获取已收藏专辑列表,待产品化
+P3,/artist/album,获取歌手专辑,已封装
+P3,/artist/desc,获取歌手描述,待产品化
+P3,/artist/detail,获取歌手详情,待产品化
+P3,/artist/detail/dynamic,歌手详情动态,待产品化
+P3,/artist/fans,歌手粉丝,待产品化
+P3,/artist/follow/count,歌手粉丝数量,待产品化
+P3,/artist/list,歌手分类列表,待产品化
+P3,/artist/mv,获取歌手 mv,待产品化
+P3,/artist/new/mv,关注歌手新 MV,待产品化
+P3,/artist/new/song,关注歌手新歌,待产品化
+P3,/artist/new/song/mv/list/v2,关注歌手新作品（歌曲/MV）,待产品化
+P3,/artist/new/song/playall,关注歌手最近新歌 - 播放全部,待产品化
+P3,/artist/songs,歌手全部歌曲,已封装
+P3,/artist/sub,收藏/取消收藏歌手,已封装
+P3,/artist/sublist,收藏的歌手列表,已封装
+P3,/artist/top/song,歌手热门 50 首歌曲,待产品化
+P3,/artist/video,获取歌手视频,待产品化
+P3,/artists,获取歌手单曲,已封装
+P3,/mlog/music/rcmd,歌曲相关视频,待产品化
+P3,/mlog/to/video,将 mlog id 转为视频 id,待产品化
+P3,/mlog/url,获取 mlog 播放地址,待产品化
+P3,/mv/all,全部 mv,待产品化
+P3,/mv/detail,获取 mv 数据,待产品化
+P3,/mv/detail/info,获取 mv 点赞转发评论数数据,待产品化
+P3,/mv/exclusive/rcmd,网易出品 mv,待产品化
+P3,/mv/first,最新 mv,待产品化
+P3,/mv/sub,收藏/取消收藏 MV,待产品化
+P3,/mv/sublist,收藏的 MV 列表,待产品化
+P3,/mv/url,mv 地址,待产品化
+P3,/playlist/category/list,（文档未收录）,待产品化
+P3,/playlist/catlist,歌单分类,待产品化
+P3,/playlist/cover/update,歌单封面上传,待产品化
+P3,/playlist/create,新建歌单,待产品化
+P3,/playlist/delete,删除歌单,待产品化
+P3,/playlist/desc/update,更新歌单描述,待产品化
+P3,/playlist/detail,获取歌单详情,已封装
+P3,/playlist/detail/dynamic,歌单详情动态,待产品化
+P3,/playlist/detail/rcmd/get,相关歌单推荐,待产品化
+P3,/playlist/highquality/tags,精品歌单标签列表,待产品化
+P3,/playlist/hot,热门歌单分类,待产品化
+P3,/playlist/import/name/task/create,歌单导入 - 元数据/文字/链接导入,待产品化
+P3,/playlist/import/task/status,歌单导入 - 任务状态,待产品化
+P3,/playlist/mylike,获取点赞过的视频,待产品化
+P3,/playlist/name/update,更新歌单名,待产品化
+P3,/playlist/order/update,调整歌单顺序,待产品化
+P3,/playlist/privacy,公开隐私歌单,待产品化
+P3,/playlist/subscribe,收藏/取消收藏歌单,待产品化
+P3,/playlist/subscribers,歌单收藏者,待产品化
+P3,/playlist/tags/update,更新歌单标签,待产品化
+P3,/playlist/track/add,收藏视频到视频歌单,待产品化
+P3,/playlist/track/all,获取歌单所有歌曲,已封装
+P3,/playlist/track/delete,删除视频歌单里的视频,待产品化
+P3,/playlist/tracks,对歌单添加或删除歌曲,待产品化
+P3,/playlist/update,更新歌单,待产品化
+P3,/playlist/update/playcount,歌单更新播放量,待产品化
+P3,/playlist/video/recent,最近播放的视频,待产品化
+P3,/related/allvideo,相关视频,待产品化
+P3,/related/playlist,（文档未收录）,待产品化
+P3,/simi/artist,获取相似歌手,待产品化
+P3,/simi/mv,相似 mv,待产品化
+P3,/simi/playlist,获取相似歌单,待产品化
+P3,/simi/song,获取相似音乐,待产品化
+P3,/simi/user,获取最近 5 个听了这首歌的用户,待产品化
+P3,/ugc/album/get,专辑简要百科信息,待产品化
+P3,/ugc/artist/get,歌手简要百科信息,待产品化
+P3,/ugc/artist/search,搜索歌手,待产品化
+P3,/ugc/detail,用户贡献内容,待产品化
+P3,/ugc/mv/get,mv 简要百科信息,待产品化
+P3,/ugc/song/get,歌曲简要百科信息,待产品化
+P3,/ugc/user/devote,用户贡献条目、积分、云贝数量,待产品化
+P3,/video/category/list,获取视频分类列表,待产品化
+P3,/video/detail,视频详情,待产品化
+P3,/video/detail/info,获取视频点赞转发评论数数据,待产品化
+P3,/video/group,获取视频标签/分类下的视频,待产品化
+P3,/video/group/list,获取视频标签列表,待产品化
+P3,/video/sub,收藏视频,待产品化
+P3,/video/timeline/all,获取全部视频列表,待产品化
+P3,/video/timeline/recommend,获取推荐视频,待产品化
+P3,/video/url,获取视频播放地址,待产品化
+P4,/activate/init/profile,初始化昵称,待产品化
+P4,/avatar/upload,更新头像,待产品化
+P4,/captcha/safe/sent,发送安全验证码,待产品化
+P4,/captcha/sent,发送验证码,已封装
+P4,/captcha/sent/v1,新版发送验证码,待产品化
+P4,/captcha/verify,验证验证码,已封装
+P4,/cellphone/existence/check,检测手机号码是否已注册,待产品化
+P4,/daily_signin,签到,待产品化
+P4,/device/kickoff,强制下线设备,待产品化
+P4,/device/list,获取在线设备列表,待产品化
+P4,/deviceinfo/center/upload,上报设备中心设备名称,待产品化
+P4,/event,获取动态列表,待产品化
+P4,/event/del,删除用户动态,待产品化
+P4,/event/forward,转发用户动态,待产品化
+P4,/event/privacy,修改动态可见权限,待产品化
+P4,/follow,关注/取消关注用户,待产品化
+P4,/get/userids,根据 nickname 获取 userid,待产品化
+P4,/history/recommend/songs,获取历史日推可用日期列表,待产品化
+P4,/history/recommend/songs/detail,获取历史日推详情数据,待产品化
+P4,/listen/data/realtime/report,听歌足迹 - 本周/本月收听时长,待产品化
+P4,/listen/data/report,听歌足迹 - 周/月/年收听报告,待产品化
+P4,/listen/data/song/play/rank,听歌足迹 - 歌曲播放排行,待产品化
+P4,/listen/data/today/song,听歌足迹 - 今日收听,待产品化
+P4,/listen/data/total,听歌足迹 - 总收听时长,待产品化
+P4,/listen/data/year/report,听歌足迹 - 年度听歌足迹,待产品化
+P4,/login,登录,待产品化
+P4,/login/cellphone,登录,已封装
+P4,/login/qr/check,登录,已封装
+P4,/login/qr/create,登录,已封装
+P4,/login/qr/key,登录,已封装
+P4,/login/refresh,（文档未收录）,已自动化
+P4,/login/status,登录状态,已自动化
+P4,/logout,（文档未收录）,待产品化
+P4,/msg/comments,通知 - 评论,待产品化
+P4,/msg/forwards,通知 - @我,待产品化
+P4,/msg/notices,通知 - 通知,待产品化
+P4,/msg/private,通知 - 私信,待产品化
+P4,/msg/private/history,（文档未收录）,待产品化
+P4,/msg/recentcontact,最近联系人,待产品化
+P4,/nickname/check,重复昵称检测,待产品化
+P4,/pl/count,私信和通知接口,待产品化
+P4,/rebind,更换绑定手机,待产品化
+P4,/recent/listen/list,最近听歌列表,待产品化
+P4,/record/recent/album,最近播放-专辑,待产品化
+P4,/record/recent/dj,最近播放-播客,待产品化
+P4,/record/recent/playlist,最近播放-歌单,待产品化
+P4,/record/recent/song,最近播放-歌曲,待产品化
+P4,/record/recent/video,最近播放-视频,待产品化
+P4,/record/recent/voice,最近播放-声音,待产品化
+P4,/register/anonimous,登录,待产品化
+P4,/register/cellphone,注册(修改密码),待产品化
+P4,/send/album,发送私信(带专辑),待产品化
+P4,/send/playlist,发送私信(带歌单),待产品化
+P4,/send/song,发送私信(带歌曲),待产品化
+P4,/send/text,发送私信,待产品化
+P4,/setting,设置,待产品化
+P4,/sign/happy/info,乐签信息,待产品化
+P4,/signin/progress,签到进度,待产品化
+P4,/summary/annual,年度听歌报告,待产品化
+P4,/topic/detail,获取话题详情,待产品化
+P4,/topic/detail/event/hot,获取话题详情热门动态,待产品化
+P4,/topic/sublist,收藏的专栏,待产品化
+P4,/user/account,获取账号信息,已封装
+P4,/user/audio,用户电台,待产品化
+P4,/user/binding,获取用户绑定信息,待产品化
+P4,/user/bindingcellphone,（文档未收录）,待产品化
+P4,/user/cloud,云盘,待产品化
+P4,/user/cloud/del,云盘歌曲删除,待产品化
+P4,/user/cloud/detail,云盘数据详情,待产品化
+P4,/user/comment/history,获取用户历史评论,待产品化
+P4,/user/detail,获取用户详情,待产品化
+P4,/user/detail/new,（文档未收录）,待产品化
+P4,/user/dj,获取用户电台,待产品化
+P4,/user/event,获取用户动态,待产品化
+P4,/user/event/all,获取当前登录用户的全部可枚举动态,待产品化
+P4,/user/follow/mixed,当前账号关注的用户/歌手,待产品化
+P4,/user/followeds,获取用户粉丝列表,待产品化
+P4,/user/follows,获取用户关注列表,待产品化
+P4,/user/level,获取用户等级信息,待产品化
+P4,/user/medal,用户徽章,待产品化
+P4,/user/mutualfollow/get,用户是否互相关注,待产品化
+P4,/user/playlist,获取用户歌单,已封装
+P4,/user/playlist/collect,用户的收藏歌单列表,待产品化
+P4,/user/playlist/create,用户的创建歌单列表,待产品化
+P4,/user/record,获取用户播放记录,待产品化
+P4,/user/replacephone,用户绑定手机,待产品化
+P4,/user/social/status,用户状态,待产品化
+P4,/user/social/status/edit,用户状态 - 编辑,待产品化
+P4,/user/social/status/rcmd,用户状态 - 相同状态的用户,待产品化
+P4,/user/social/status/support,用户状态 - 支持设置的状态,待产品化
+P4,/user/subcount,"获取用户信息 , 歌单，收藏，mv, dj 数量",待产品化
+P4,/user/update,更新用户信息,待产品化
+P5,/ad/get,获取广告,待产品化
+P5,/ad/listening/rights,获取免费听时长状态,待产品化
+P5,/ad/listening/rights/gain,看广告领取权益（免费听歌时长 / 云贝等）,待产品化
+P5,/aidj/content/rcmd,私人 DJ,待产品化
+P5,/batch,batch 批量请求接口,待产品化
+P5,/broadcast/category/region/get,广播电台 - 分类/地区信息,待产品化
+P5,/broadcast/channel/collect/list,广播电台 - 我的收藏,待产品化
+P5,/broadcast/channel/currentinfo,广播电台 - 电台信息,待产品化
+P5,/broadcast/channel/list,广播电台 - 全部电台,待产品化
+P5,/broadcast/sub,广播电台 - 收藏/取消收藏电台,待产品化
+P5,/creator/authinfo/get,（文档未收录）,待产品化
+P5,/digitalAlbum/detail,数字专辑详情,待产品化
+P5,/digitalAlbum/ordering,购买数字专辑,待产品化
+P5,/digitalAlbum/purchased,我的数字专辑,待产品化
+P5,/digitalAlbum/sales,数字专辑销量,待产品化
+P5,/dj/banner,电台 banner,待产品化
+P5,/dj/category/excludehot,电台 - 非热门类型,待产品化
+P5,/dj/category/recommend,电台 - 推荐类型,待产品化
+P5,/dj/catelist,电台 - 分类,待产品化
+P5,/dj/detail,电台 - 详情,待产品化
+P5,/dj/difm/all/style/channel,DIFM电台 - 分类,待产品化
+P5,/dj/difm/channel/subscribe,DIFM电台 - 收藏频道,待产品化
+P5,/dj/difm/channel/unsubscribe,DIFM电台 - 取消收藏频道,待产品化
+P5,/dj/difm/playing/tracks/list,DIFM电台 - 播放列表,待产品化
+P5,/dj/difm/subscribe/channels/get,DIFM电台 - 收藏列表,待产品化
+P5,/dj/hot,热门电台,待产品化
+P5,/dj/paygift,电台 - 付费精选,待产品化
+P5,/dj/personalize/recommend,电台个性推荐,待产品化
+P5,/dj/program,电台 - 节目,待产品化
+P5,/dj/program/detail,电台 - 节目详情,待产品化
+P5,/dj/program/toplist,电台 - 节目榜,待产品化
+P5,/dj/program/toplist/hours,电台 - 24 小时节目榜,待产品化
+P5,/dj/radio/hot,电台 - 类别热门电台,待产品化
+P5,/dj/recommend,电台 - 推荐,待产品化
+P5,/dj/recommend/type,电台 - 分类推荐,待产品化
+P5,/dj/sub,电台 - 订阅,待产品化
+P5,/dj/sublist,电台的订阅列表,待产品化
+P5,/dj/subscriber,电台订阅者列表,待产品化
+P5,/dj/today/perfered,电台 - 今日优选,待产品化
+P5,/dj/toplist,电台 - 新晋电台榜/热门电台榜,待产品化
+P5,/dj/toplist/hours,电台 - 24 小时主播榜,待产品化
+P5,/dj/toplist/newcomer,电台 - 主播新人榜,待产品化
+P5,/dj/toplist/pay,电台 - 付费精品,待产品化
+P5,/dj/toplist/popular,电台 - 最热主播榜,待产品化
+P5,/djRadio/top,电台排行榜获取,待产品化
+P5,/fanscenter/basicinfo/age/get,（文档未收录）,待产品化
+P5,/fanscenter/basicinfo/gender/get,（文档未收录）,待产品化
+P5,/fanscenter/basicinfo/province/get,（文档未收录）,待产品化
+P5,/fanscenter/overview/get,（文档未收录）,待产品化
+P5,/fanscenter/trend/list,（文档未收录）,待产品化
+P5,/fm_trash,垃圾桶,待产品化
+P5,/hot/topic,获取热门话题,待产品化
+P5,/inner/version,内部版本接口,待产品化
+P5,/lbs/city/code,多级行政区划数据,待产品化
+P5,/middle/play/do/lottery,云小编 - 每日抽奖,待产品化
+P5,/middle/play/lottery/remain/chance,云小编 - 剩余抽奖次数,待产品化
+P5,/musician/cloudbean,账号云豆数,待产品化
+P5,/musician/cloudbean/obtain,领取云豆,待产品化
+P5,/musician/data/overview,音乐人数据概况,待产品化
+P5,/musician/play/trend,音乐人播放趋势,待产品化
+P5,/musician/sign,音乐人签到,待产品化
+P5,/musician/tasks,音乐人任务,待产品化
+P5,/musician/tasks/new,音乐人任务(新),待产品化
+P5,/musician/vip/tasks,音乐人黑胶会员任务,待产品化
+P5,/personal/fm/mode,私人 FM 模式选择,待产品化
+P5,/personal_fm,私人 FM,待产品化
+P5,/playmode/intelligence/list,心动模式/智能播放,待产品化
+P5,/program/recommend,推荐节目,待产品化
+P5,/radio/sport/get,跑步漫游,待产品化
+P5,/rep/ugc/activity/collect,云小编 - 领取任务积分,待产品化
+P5,/rep/ugc/activity/get,云小编 - 活动信息,待产品化
+P5,/rep/ugc/exam/info/get,（文档未收录）,待产品化
+P5,/rep/ugc/exam/question/single/get,（文档未收录）,待产品化
+P5,/rep/ugc/exam/result/get,（文档未收录）,待产品化
+P5,/rep/ugc/exam/start,（文档未收录）,待产品化
+P5,/rep/ugc/exam/submit,（文档未收录）,待产品化
+P5,/rep/ugc/user/collect-vip,云小编 - 领取一日会员,待产品化
+P5,/rep/ugc/user/get,云小编 - 获取用户详情,待产品化
+P5,/rep/ugc/user/sign,云小编 - 每日签到,待产品化
+P5,/rep/ugc/user/vip,云小编 - 查询会员任务状态,待产品化
+P5,/sati/resource/list,助眠解压 - 获取标签下资源列表,待产品化
+P5,/sati/resource/list/more,助眠解压 - 查看同类推荐,待产品化
+P5,/sati/resource/sub,助眠解压 - 收藏,待产品化
+P5,/sati/resource/sub/list,助眠解压 - 收藏列表,待产品化
+P5,/sati/tag/list,助眠解压 - 标签列表,待产品化
+P5,/sati/timescene/resources/get,助眠解压 - 特定时间场景下的推荐资源,待产品化
+P5,/search/match,本地歌曲文件匹配网易云歌曲信息,待产品化
+P5,/search/multimatch,搜索多重匹配,待产品化
+P5,/starpick/comments/summary,云村星评馆 - 简要评论,待产品化
+P5,/thinktank/audit/resource/detail,云小编 - 获取任务,待产品化
+P5,/thinktank/audit/resource/update,云小编 - 提交任务,待产品化
+P5,/threshold/detail/get,（文档未收录）,待产品化
+P5,/verify/getQr,验证接口-二维码生成,待产品化
+P5,/verify/qrcodestatus,验证接口-二维码检测,待产品化
+P5,/vip/growthpoint,vip 成长值,待产品化
+P5,/vip/growthpoint/details,vip 成长值获取记录,待产品化
+P5,/vip/growthpoint/get,领取 vip 成长值,待产品化
+P5,/vip/growthpoint/getall,一键领取所有 vip 成长值,待产品化
+P5,/vip/info,获取 VIP 信息,待产品化
+P5,/vip/info/v2,获取 VIP 信息(app 端),待产品化
+P5,/vip/sign,黑胶乐签打卡,待产品化
+P5,/vip/sign/detail,黑胶乐签详情,待产品化
+P5,/vip/sign/history,黑胶乐签历史,待产品化
+P5,/vip/sign/info,黑胶乐签未来打卡信息,待产品化
+P5,/vip/tasks,vip 任务,待产品化
+P5,/vip/tasks/v1,（文档未收录）,待产品化
+P5,/vip/timemachine,黑胶时光机,待产品化
+P5,/voice/delete,播客删除,待产品化
+P5,/voice/detail,播客声音详情,待产品化
+P5,/voice/lyric,获取声音歌词,待产品化
+P5,/voice/upload,播客上传声音,待产品化
+P5,/voicelist/detail,播客列表详情,待产品化
+P5,/voicelist/list,播客声音列表,待产品化
+P5,/voicelist/list/search,播客声音搜索,待产品化
+P5,/voicelist/my/created,我创建的播客声音,待产品化
+P5,/voicelist/search,播客列表,待产品化
+P5,/voicelist/trans,播客声音排序,待产品化
+P5,/yunbei,云贝,待产品化
+P5,/yunbei/expense,（文档未收录）,待产品化
+P5,/yunbei/info,云贝账户信息,待产品化
+P5,/yunbei/rcmd/song,云贝推歌,待产品化
+P5,/yunbei/rcmd/song/history,云贝推歌历史记录,待产品化
+P5,/yunbei/receipt,（文档未收录）,待产品化
+P5,/yunbei/sign,云贝签到,待产品化
+P5,/yunbei/task/finish,云贝完成任务,待产品化
+P5,/yunbei/task/finish/v1,云贝广告任务 - 完成任务领取云贝,待产品化
+P5,/yunbei/task/list/v1,云贝广告任务 - 今日任务状态,待产品化
+P5,/yunbei/task/recommend/song,云贝广告任务 - 获取推荐歌曲,待产品化
+P5,/yunbei/tasks,云贝所有任务,待产品化
+P5,/yunbei/tasks/todo,云贝 todo 任务,待产品化
+P5,/yunbei/today,云贝今日签到信息,待产品化

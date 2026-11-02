@@ -1,0 +1,62 @@
+# AI 审查机器人（第一阶段）：收集 PR diff 并上传为工件。
+#
+# 为什么要拆两阶段：AI 审查需要调用外部 API（要密钥），而 fork PR 触发的
+# pull_request 事件只有只读令牌、且不应让未合并的代码接触密钥。
+# 故第一阶段用普通 pull_request 事件（fork PR 也能跑）只做"导出 diff"，
+# 全程不接触任何 Secret；第二阶段由 workflow_run 在基础仓库上下文里跑，
+# 才使用密钥。这套做法与 astrbot_plugin_currentcortex 保持一致。
+name: AI 审查机器人（收集差异）
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  upload-diff:
+    name: 导出 PR 差异
+    runs-on: ubuntu-latest
+    steps:
+      - name: 导出 PR diff
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: diff } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              mediaType: { format: 'diff' }
+            });
+            const fs = require('fs');
+            // 压缩产物（assets/www 下的 minified 文件）的 diff 是整行替换的巨型单行，
+            // 一个文件就能吃掉几十 KB，把真正有审查价值的 web/src 源码改动挤出
+            // 60KB 截断窗口——AI 会因此误判"只提交了产物没提交源码"（实测踩过）。
+            // 处理：产物类文件只保留 diff 头 + 一行说明，把预算留给源码。
+            const skipRe = /^diff --git a\/app\/src\/main\/assets\/www\//;
+            const lines = String(diff).split('\n');
+            const out = [];
+            let inSkipped = false;
+            for (const line of lines) {
+              if (line.startsWith('diff --git ')) {
+                inSkipped = skipRe.test(line);
+                out.push(line);
+                if (inSkipped) out.push('（构建产物：压缩单行已省略——与源码的同步性由 CI 的「校验构建产物是否已同步提交」保证）');
+                continue;
+              }
+              if (inSkipped) continue;
+              out.push(line);
+            }
+            const pruned = out.join('\n');
+            fs.writeFileSync(`${process.env.RUNNER_TEMP}/pr.diff`, pruned);
+            core.info(`diff: ${Buffer.from(diff).length} → ${pruned.length} bytes（产物已省略）`);
+
+      - name: 上传 diff 工件
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-diff-${{ github.event.pull_request.number }}
+          path: ${{ runner.temp }}/pr.diff
+          retention-days: 1
+          if-no-files-found: error

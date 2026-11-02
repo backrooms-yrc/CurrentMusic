@@ -1,0 +1,25 @@
+# Report push provenance without changing anyone's commits or refs.
+name: main 直推检查
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          PUSH_ALLOWLIST: ${{ vars.PUSH_ALLOWLIST }}
+        with:
+          script: |
+            const allowed = new Set([context.repo.owner, ...(process.env.PUSH_ALLOWLIST || '').split(',').map(s => s.trim()).filter(Boolean)]);
+            if (allowed.has(context.actor)) { core.info('Maintainer push'); return; }
+            const {data} = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner, repo: context.repo.repo, commit_sha: context.sha
+            });
+            if (!data.some(pr => pr.merged_at && pr.base.ref === 'main')) {
+              core.setFailed('Please contribute through a pull request. This check does not rewrite refs.');
+            }

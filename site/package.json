@@ -1,0 +1,14 @@
+{
+  "name": "currentmusic-site",
+  "private": true,
+  "version": "1.0.0",
+  "description": "CurrentMusic 官方网站（单页，MDUI 设计规范）",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "mdui": "^2.1.5",
+    "@material-design-icons/font": "^0.14.13"
+  }
+}

@@ -1,0 +1,73 @@
+name: Windows native client
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+    paths: ['windows/**', '.github/workflows/windows.yml']
+  pull_request:
+    paths: ['windows/**', '.github/workflows/windows.yml']
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project CurrentMusic.Core.Tests -c Release
+        working-directory: windows
+  windows:
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: x64
+            rid: win-x64
+            architecture: x64
+          - platform: ARM64
+            rid: win-arm64
+            architecture: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Core contract checks
+        run: dotnet run --project CurrentMusic.Core.Tests -c Release
+        working-directory: windows
+      - name: Publish native application
+        run: dotnet publish CurrentMusic.Windows/CurrentMusic.Windows.csproj -c Release -p:Platform=${{ matrix.platform }} -r ${{ matrix.rid }} -o artifacts/${{ matrix.rid }}
+        working-directory: windows
+      - name: Native window startup before packaging
+        if: matrix.architecture == 'x64'
+        shell: pwsh
+        run: |
+          $folder = Join-Path (Get-Location) 'artifacts/installers/verification'
+          New-Item $folder -ItemType Directory -Force | Out-Null
+          $report = Join-Path $folder 'preinstall-smoke.json'
+          $process = Start-Process (Resolve-Path 'artifacts/win-x64/CurrentMusic.Windows.exe') -ArgumentList "--smoke-test=`"$report`"" -PassThru
+          if (-not $process.WaitForExit(90000)) { Stop-Process -Id $process.Id -Force; throw 'Native startup timed out' }
+          if (-not (Test-Path $report)) { throw "Native startup failed: $($process.ExitCode)" }
+          Get-Content $report
+          if (-not (Get-Content $report -Raw | ConvertFrom-Json).success) { throw 'Native startup checks failed' }
+        working-directory: windows
+      - name: Build self-contained MSI
+        run: ./installer/build.ps1 -Architecture ${{ matrix.architecture }}
+        working-directory: windows
+      - name: Install, native UI smoke, repair and uninstall
+        if: matrix.architecture == 'x64'
+        run: ./installer/test-install.ps1 -Installer artifacts/installers/CurrentMusic-For-Windows-1.0.0-x64.msi
+        working-directory: windows
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: CurrentMusic-Windows-${{ matrix.rid }}
+          path: |
+            windows/artifacts/installers/*.msi
+            windows/artifacts/installers/*.sha256
+            windows/artifacts/installers/verification/
+          if-no-files-found: error
+          retention-days: 14

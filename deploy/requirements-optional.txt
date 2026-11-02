@@ -1,0 +1,3 @@
+# Optional share-image renderer. Install requirements-auth.txt separately for authentication.
+Pillow>=9
+segno>=1.5

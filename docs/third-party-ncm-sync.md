@@ -9,7 +9,7 @@
 
 网易云登录态保存在服务端（按 CurrentMusic 用户维度）。客户端拿 CurrentMusic 的
 Bearer token 调用 `/cm/ncm/*` 的 T1/T2 接口，服务端会自动注入该用户的绑定 cookie。
-这样既能「同步登录态」，又不会让 cookie 落到客户端、被日志/抓包泄露。
+已有服务端绑定可直接沿用，不需要下载 Cookie。对于在 X 本机直接登录产生的新凭据，使用下文专用导入接口写入服务端；服务端仍不会将 Cookie 下发给其他客户端。
 
 ## 1. 登录 CurrentMusic 账号
 
@@ -84,6 +84,50 @@ Authorization: Bearer <token>
 |---|---|---|
 | 1 | `POST /cm/ncmbind/phone/code` `{ "phone": "138…", "ctcode": "86" }` | 60 秒冷却 |
 | 2 | `POST /cm/ncmbind/phone/login` `{ "phone": "138…", "captcha": "1234", "ctcode": "86" }` | 成功即绑定 |
+
+## 本机登录同步至 CurrentMusic（X 侧）
+
+X 扫码/手机登录可能直接连接网易云并将凭据保存在设备本地。这与服务端绑定是两份状态。
+新版接入流程在本机登录成功后自动调用以下接口；旧版本 X 不会因后端上线而自动具备此能力。
+已有本机有效登录在升级、启动或登录 CurrentMusic 后会静默同步，无需再次扫码或手动确认。切换账号或服务器后同步至当前账号与当前所选 HTTPS 服务器；绑定页保留「同步绑定」入口。
+
+### `POST /cm/ncmbind/import`
+
+使用 **HTTPS**，并携带发起绑定时同一 CurrentMusic 账号的 `Authorization: Bearer <token>`。
+只把凭据发往该账号当时选定的服务器；禁止传入 URL 查询参数、输出到日志或发送给无关服务。
+
+```json
+{
+  "cookie": "MUSIC_U=<device-session>; __csrf=<csrf>",
+  "expectedNcmUid": 12345
+}
+```
+
+- `cookie`：必填字符串，最多 16384 个 ASCII 字符，只接受 `MUSIC_U`、`__csrf`、`NMTID`、`MUSIC_A`，其中 `MUSIC_U` 必填；不接受重复键、控制字符或其他 Cookie。
+- `expectedNcmUid`：必填正整数，为本机刚登录的网易云 UID，用于与服务端验证结果比对。
+- 服务端向网易云验证 Cookie，昵称、头像和 UID 均使用验证结果，不信任客户端伪造资料。
+- 只更新 Bearer 对应的 CurrentMusic 用户；成功响应不含 Cookie，使用 `Cache-Control: no-store`。
+- 同一网易云账号重复同步保留歌单导入进度；换绑其他网易云账号时清除旧绑定的红心歌单定位和同步统计，并使相关缓存失效。已导入歌单快照保留。
+
+成功响应结构：
+
+```json
+{"ok":true,"bound":true,"profile":{"uid":12345,"nickname":"示例昵称","avatar":"https://example.com/avatar.jpg"}}
+```
+
+| HTTP 状态 | 含义 |
+| --- | --- |
+| 400 | 参数、Cookie 格式或期望 UID 无效 |
+| 401 | CurrentMusic 未登录，或网易云登录凭据失效；应区分错误文案，网易云失效不表示本站会话失效 |
+| 409 | Cookie 对应的网易云账号与 `expectedNcmUid` 不一致；保留原服务端绑定 |
+| 429 | 请求限流 |
+| 502 | 网易云验证失败或超时；保留原服务端绑定 |
+
+客户端在账号、服务器或本机网易云登录态变化时停止旧同步，不重试旧账号的凭据。
+同步失败保留本机登录，后台在 5 秒、30 秒、120 秒间隔后有限重试，切换账号/服务器/本机登录态会取消旧任务。一次运行中，同一会话与网易云登录态同步成功后不重复上传。绑定页也提供重试入口；成功后同一账号的 Web/CurrentMusic App
+通过 `GET /cm/ncmbind` 或 `/cm/ncmbind/session` 即可读到绑定。
+这里同步的是绑定登录态，**歌单快照仍通过 `POST /cm/ncmbind/sync` 单独导入**。
+X 的「退出本机」仍只清理本机凭据，服务端绑定保留；需要全端解绑时使用本站的解绑入口。
 
 ## 5. 绑定后：正常调用音乐接口
 

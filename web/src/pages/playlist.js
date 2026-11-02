@@ -1,6 +1,6 @@
 // 列表详情页：自己的歌单 / likes / favs / 每日推荐 / NCM 排行榜（#/ncmpl/:pid）
 import { api, auth } from '../api.js';
-import { esc, renderSongList, toast, confirmDialog, skelList } from '../ui.js';
+import { esc, renderSongList, toast, confirmDialog, skelList, skelDetail } from '../ui.js';
 import { player } from '../player.js';
 import { addToPlaylist } from '../player-ui.js';
 import { openShare } from '../share.js';
@@ -9,7 +9,7 @@ export async function render(el, params) {
   const kind = params[0]; // pl | ncmpl | special
   const id = params[1];
 
-  el.innerHTML = skelList(8);
+  el.innerHTML = skelDetail();
   let title = '', desc = '', songs = [], removable = false, owner = false, cover = '', badge = '';
   let shareKind = '', shareSub = '';
 

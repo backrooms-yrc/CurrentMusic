@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- ── 基础 SEO ─────────────────────────────────────────────────────── -->
+  <title>CurrentMusic — 免费畅听网易云音乐 SVIP 曲目的音乐社区</title>
+  <meta name="description" content="CurrentMusic 是一个免费畅听网易云音乐 SVIP 曲目的音乐社区，提供 Android 客户端、Web 网页端与开放 API，支持多设备流转音乐资产，鼓励社区开发者参与生态建设。">
+  <meta name="keywords" content="CurrentMusic,网易云音乐,SVIP,免费听歌,音乐社区,Android 客户端,Web 网页端,开放 API,CurrentMusicX,CurrentStation">
+  <meta name="author" content="CurrentMusic">
+  <meta name="theme-color" content="#6750a4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141218" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="canonical" href="https://music.20110208.xyz/">
+
+  <!-- ── Open Graph / 社交分享 ────────────────────────────────────────── -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="CurrentMusic">
+  <meta property="og:title" content="CurrentMusic — 免费畅听网易云音乐 SVIP 曲目的音乐社区">
+  <meta property="og:description" content="免费畅听网易云音乐 SVIP 曲目的音乐社区。提供 Android 客户端、Web 网页端与开放 API，支持多设备流转音乐资产。">
+  <meta property="og:url" content="https://music.20110208.xyz/">
+  <meta property="og:image" content="https://music.20110208.xyz/home/assets/og-cover.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="CurrentMusic —— 免费畅听网易云音乐 SVIP 曲目的音乐社区">
+  <meta property="og:locale" content="zh_CN">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CurrentMusic — 免费畅听网易云音乐 SVIP 曲目的音乐社区">
+  <meta name="twitter:description" content="免费畅听网易云音乐 SVIP 曲目的音乐社区。提供 Android 客户端、Web 网页端与开放 API。">
+  <meta name="twitter:image" content="https://music.20110208.xyz/home/assets/og-cover.jpg">
+
+  <!-- ── 图标 ─────────────────────────────────────────────────────────── -->
+  <link rel="icon" href="assets/favicon.svg?v=sage1" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=sage1">
+
+  <!-- ── 结构化数据（SEO）─────────────────────────────────────────────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "CurrentMusic",
+    "url": "https://music.20110208.xyz/",
+    "description": "CurrentMusic 是一个免费畅听网易云音乐 SVIP 曲目的音乐社区，提供 Android 客户端、Web 网页端与开放 API。",
+    "inLanguage": "zh-CN",
+    "sameAs": [
+      "https://github.com/bileizhen/CurrentMusicX",
+      "https://music.20110208.xyz/app",
+      "https://music.20110208.xyz/api-docs/"
+    ]
+  }
+  </script>
+
+  <!-- ── 主题预设：必须早于样式表，避免首帧闪白/闪黑 ─────────────────── -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('cm.theme');       // 'light' | 'dark' | null(跟随系统)
+        var dark = saved === 'dark' ||
+          (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('mdui-theme-dark', dark);
+        document.documentElement.classList.toggle('mdui-theme-light', !dark);
+      } catch (e) { /* 读取失败时保持 MDUI 默认浅色 */ }
+    })();
+  </script>
+
+  <!-- ── 样式：MDUI 2.1.5 + 站点样式（均为本地文件，无 CDN 依赖）────── -->
+  <link rel="stylesheet" href="vendor/mdui/mdui.css">
+  <link rel="stylesheet" href="vendor/material-icons/outlined.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <!-- 键盘用户跳过导航 -->
+  <a class="skip-link" href="#hero">跳到主要内容</a>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       顶部导航栏
+       ═══════════════════════════════════════════════════════════════════ -->
+  <header class="site-header" id="siteHeader">
+    <div class="container header-inner">
+      <a class="brand" href="#hero" aria-label="CurrentMusic 首页">
+        <span class="brand-mark" aria-hidden="true">
+          <img src="assets/favicon.svg?v=sage1" alt="" width="38" height="38">
+        </span>
+        <span class="brand-name">CurrentMusic</span>
+      </a>
+
+      <nav class="site-nav" aria-label="主导航">
+        <ul>
+          <li><a class="nav-link" href="#hero">首页</a></li>
+          <li><a class="nav-link" href="#clients">客户端与入口</a></li>
+          <li><a class="nav-link" href="#about">项目简介</a></li>
+          <li><a class="nav-link" href="#contact">联系我们</a></li>
+          <li>
+            <a class="nav-link nav-link-ext" href="https://github.com/backrooms-yrc/CurrentMusic"
+               target="_blank" rel="noopener noreferrer"
+               title="在本项目 GitHub 仓库查看源码（新窗口打开）">
+              <span class="gh-ic" aria-hidden="true"></span>
+              GitHub
+              <span class="visually-hidden">（新窗口打开）</span>
+            </a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="header-actions">
+        <button class="icon-btn" id="themeToggle" type="button"
+                aria-label="切换深色主题" title="切换深色主题">
+          <mdui-icon name="dark_mode" aria-hidden="true"></mdui-icon>
+        </button>
+        <button class="icon-btn nav-toggle" id="navToggle" type="button"
+                aria-label="打开导航菜单" aria-expanded="false" aria-controls="mobileDrawer">
+          <mdui-icon name="menu" aria-hidden="true"></mdui-icon>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 移动端抽屉导航 -->
+  <mdui-navigation-drawer id="mobileDrawer" placement="right" modal close-on-esc close-on-overlay-click
+                          aria-label="移动端导航">
+    <nav class="drawer-nav" aria-label="移动端主导航">
+      <div class="drawer-head">
+        <span class="brand-mark" aria-hidden="true"><img src="assets/favicon.svg?v=sage1" alt="" width="38" height="38"></span>
+        <b>CurrentMusic</b>
+      </div>
+      <ul>
+        <li><a href="#hero"><mdui-icon name="home" aria-hidden="true"></mdui-icon>首页</a></li>
+        <li><a href="#clients"><mdui-icon name="devices" aria-hidden="true"></mdui-icon>客户端与入口</a></li>
+        <li><a href="#about"><mdui-icon name="info" aria-hidden="true"></mdui-icon>项目简介</a></li>
+        <li><a href="#contact"><mdui-icon name="forum" aria-hidden="true"></mdui-icon>联系我们</a></li>
+        <li><a href="#github"><mdui-icon name="code" aria-hidden="true"></mdui-icon>GitHub 仓库</a></li>
+      </ul>
+      <mdui-divider></mdui-divider>
+      <div class="drawer-actions">
+        <mdui-button variant="filled" full-width href="https://github.com/backrooms-yrc/CurrentMusic" target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="code" aria-hidden="true"></mdui-icon>本项目 GitHub 仓库</mdui-button>
+      </div>
+    </nav>
+  </mdui-navigation-drawer>
+
+  <main id="main">
+
+    <!-- ═════════════════════════════════════════════════════════════════
+         首屏品牌区
+         ═════════════════════════════════════════════════════════════════ -->
+    <section class="hero" id="hero" aria-labelledby="heroTitle">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="container hero-inner">
+        <p class="hero-eyebrow">
+          <mdui-icon name="verified" aria-hidden="true"></mdui-icon>
+          免费 · 社区驱动 · 多端同步
+        </p>
+
+        <h1 class="hero-title" id="heroTitle">
+          Current<span class="hero-title-accent">Music</span>
+        </h1>
+
+        <p class="hero-tagline">免费畅听网易云音乐 SVIP 曲目的音乐社区。</p>
+
+        <p class="hero-sub">
+          提供 Android 客户端、Web 网页端与开放 API，支持多设备流转音乐资产，
+          并鼓励社区开发者参与生态建设。
+        </p>
+
+        <div class="hero-actions" role="group" aria-label="主要行动">
+          <mdui-button class="cta-primary btn-lg" variant="filled" href="https://music.20110208.xyz/app" target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="play_arrow" aria-hidden="true"></mdui-icon>立即体验 Web 端</mdui-button>
+          <mdui-button variant="tonal" href="#clients"><mdui-icon slot="icon" name="download" aria-hidden="true"></mdui-icon>查看客户端下载</mdui-button>
+          <mdui-button variant="outlined" href="https://music.20110208.xyz/api-docs/" target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="menu_book" aria-hidden="true"></mdui-icon>阅读 API 文档</mdui-button>
+        </div>
+
+        <!-- 核心卖点 -->
+        <ul class="hero-features" aria-label="核心卖点">
+          <li class="feature-chip">
+            <mdui-icon name="music_note" aria-hidden="true"></mdui-icon>
+            <b>免费畅听</b>
+            <span>无需会员即可试听 SVIP 曲目</span>
+          </li>
+          <li class="feature-chip">
+            <mdui-icon name="groups" aria-hidden="true"></mdui-icon>
+            <b>社区驱动</b>
+            <span>由社区开发者共同维护</span>
+          </li>
+          <li class="feature-chip">
+            <mdui-icon name="sync" aria-hidden="true"></mdui-icon>
+            <b>多端同步</b>
+            <span>登录即流转音乐资产</span>
+          </li>
+          <li class="feature-chip">
+            <mdui-icon name="api" aria-hidden="true"></mdui-icon>
+            <b>开放 API</b>
+            <span>免费接入你自己的应用</span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════
+         客户端与入口
+         ═════════════════════════════════════════════════════════════════ -->
+    <section class="section" id="clients" aria-labelledby="clientsTitle">
+      <div class="container">
+        <header class="section-head">
+          <h2 id="clientsTitle">客户端与入口</h2>
+          <p class="section-sub">四种使用 CurrentMusic 的方式，按你的设备与场景选择。</p>
+        </header>
+
+        <div class="card-grid">
+
+          <!-- 1. CurrentMusicX -->
+          <article class="client-card reveal" aria-labelledby="cardCmx">
+            <div class="card-top">
+              <span class="card-icon" aria-hidden="true"><mdui-icon name="android"></mdui-icon></span>
+              <mdui-chip class="badge-recommend" variant="filled"><mdui-icon slot="icon" name="star" aria-hidden="true"></mdui-icon>推荐</mdui-chip>
+            </div>
+            <h3 id="cardCmx">CurrentMusicX</h3>
+            <dl class="meta-list">
+              <div class="meta-row">
+                <dt>开发者</dt>
+                <dd>社区开发者 <b>bileizhen</b></dd>
+              </div>
+              <div class="meta-row">
+                <dt>平台形态</dt>
+                <dd>原生 Android 客户端</dd>
+              </div>
+            </dl>
+            <p class="card-desc">
+              精美的 UI，流畅的动画，为您带来最佳的音乐体验。
+            </p>
+            <ul class="feature-list">
+              <li><mdui-icon name="check_circle" aria-hidden="true"></mdui-icon>原生实现，动画流畅</li>
+              <li><mdui-icon name="check_circle" aria-hidden="true"></mdui-icon>界面精致，操作顺手</li>
+            </ul>
+            <div class="card-note note-info">
+              <mdui-icon name="info" aria-hidden="true"></mdui-icon>
+              <span>由社区开发者独立开发与维护，问题与建议请在对应仓库反馈。</span>
+            </div>
+            <div class="card-actions">
+              <mdui-button variant="filled" full-width href="https://github.com/bileizhen/CurrentMusicX/releases" target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="download" aria-hidden="true"></mdui-icon>前往 GitHub Releases 下载</mdui-button>
+            </div>
+          </article>
+
+          <!-- 2. CurrentMusic 概念版 -->
+          <article class="client-card reveal" aria-labelledby="cardConcept">
+            <div class="card-top">
+              <span class="card-icon" aria-hidden="true"><mdui-icon name="science"></mdui-icon></span>
+              <mdui-chip class="badge-concept" variant="outlined"><mdui-icon slot="icon" name="polyline" aria-hidden="true"></mdui-icon>概念版</mdui-chip>
+            </div>
+            <h3 id="cardConcept">CurrentMusic 概念版</h3>
+            <dl class="meta-list">
+              <div class="meta-row">
+                <dt>开发者</dt>
+                <dd>开发者本人</dd>
+              </div>
+              <div class="meta-row">
+                <dt>平台形态</dt>
+                <dd>Android 客户端（基于 Android WebView）</dd>
+              </div>
+            </dl>
+            <p class="card-desc">
+              同步 CurrentMusic 后端，实时体验最新功能。
+            </p>
+            <ul class="feature-list">
+              <li><mdui-icon name="check_circle" aria-hidden="true"></mdui-icon>与后端同步，功能更新最快</li>
+              <li><mdui-icon name="check_circle" aria-hidden="true"></mdui-icon>发布节奏紧跟开发进度</li>
+            </ul>
+            <div class="card-note note-warn" role="note">
+              <mdui-icon name="warning" aria-hidden="true"></mdui-icon>
+              <span>
+                <b>兼容性提示：</b>基于 Android WebView，在部分老设备上可能出现显示异常、版式错乱、
+                性能降低等问题。若遇到上述情况，建议更新系统 WebView 或改用 CurrentMusicX。
+              </span>
+            </div>
+            <div class="card-actions">
+              <mdui-button variant="filled" full-width
+                           href="https://music.20110208.xyz/cm/download/latest"
+                           target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="cloud_download" aria-hidden="true"></mdui-icon>服务器源下载（始终最新版）</mdui-button>
+              <mdui-button variant="tonal" full-width
+                           href="https://github.com/backrooms-yrc/CurrentMusic/releases"
+                           target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="open_in_new" aria-hidden="true"></mdui-icon>本仓库 Releases</mdui-button>
+            </div>
+          </article>
+
+          <!-- 3. CurrentMusic Web 网页端 -->
+          <article class="client-card reveal" aria-labelledby="cardWeb">
+            <div class="card-top">
+              <span class="card-icon" aria-hidden="true"><mdui-icon name="language"></mdui-icon></span>
+              <mdui-chip class="badge-web" variant="outlined"><mdui-icon slot="icon" name="public" aria-hidden="true"></mdui-icon>网页端</mdui-chip>
+            </div>
+            <h3 id="cardWeb">CurrentMusic Web 网页端</h3>
+            <dl class="meta-list">
+              <div class="meta-row">
+                <dt>开发者</dt>
+                <dd>开发者本人</dd>
+              </div>
+              <div class="meta-row">
+                <dt>平台形态</dt>
+                <dd>Web 网页端，跨平台免安装</dd>
+              </div>
+            </dl>
+            <p class="card-desc">
+              随时随地，打开网页，想听即听；登录即可多设备流转音乐资产。
+            </p>
+            <ul class="feature-list">
+              <li><mdui-icon name="check_circle" aria-hidden="true"></mdui-icon>无需安装，浏览器直达</li>
+              <li><mdui-icon name="check_circle" aria-hidden="true"></mdui-icon>登录后多设备同步音乐资产</li>
+            </ul>
+            <div class="card-note note-info">
+              <mdui-icon name="info" aria-hidden="true"></mdui-icon>
+              <span>推荐使用较新版本的 Chrome、Edge 或系统自带浏览器访问。</span>
+            </div>
+            <div class="card-actions">
+              <mdui-button variant="filled" full-width href="https://music.20110208.xyz/app" target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="open_in_new" aria-hidden="true"></mdui-icon>打开 Web 网页端</mdui-button>
+            </div>
+          </article>
+
+          <!-- 4. CurrentStation 控制台 -->
+          <article class="client-card reveal" aria-labelledby="cardStation">
+            <div class="card-top">
+              <span class="card-icon" aria-hidden="true"><mdui-icon name="terminal"></mdui-icon></span>
+              <mdui-chip class="badge-api" variant="outlined"><mdui-icon slot="icon" name="api" aria-hidden="true"></mdui-icon>开放 API</mdui-chip>
+            </div>
+            <h3 id="cardStation">CurrentStation 控制台</h3>
+            <dl class="meta-list">
+              <div class="meta-row">
+                <dt>维护者</dt>
+                <dd>CurrentMusic 项目</dd>
+              </div>
+              <div class="meta-row">
+                <dt>平台形态</dt>
+                <dd>Web 控制台 / 开发者 API 文档</dd>
+              </div>
+            </dl>
+            <p class="card-desc">
+              阅读 API 文档，将你的应用免费接入 CurrentMusic。
+            </p>
+            <ul class="feature-list">
+              <li><mdui-icon name="check_circle" aria-hidden="true"></mdui-icon>免费接入，文档齐全</li>
+              <li><mdui-icon name="check_circle" aria-hidden="true"></mdui-icon>面向社区开发者的开放生态</li>
+            </ul>
+            <div class="card-note note-info">
+              <mdui-icon name="info" aria-hidden="true"></mdui-icon>
+              <span>接入前请先阅读文档中的鉴权与调用限制说明。</span>
+            </div>
+            <div class="card-actions">
+              <mdui-button variant="filled" full-width href="https://music.20110208.xyz/api-docs/" target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="menu_book" aria-hidden="true"></mdui-icon>阅读 API 文档</mdui-button>
+            </div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════
+         项目简介
+         ═════════════════════════════════════════════════════════════════ -->
+    <section class="section section-alt" id="about" aria-labelledby="aboutTitle">
+      <div class="container">
+        <header class="section-head">
+          <h2 id="aboutTitle">项目简介</h2>
+          <p class="section-sub">CurrentMusic 是什么，以及它想做成什么样。</p>
+        </header>
+
+        <div class="about-layout">
+          <div class="about-main reveal">
+            <p class="lead">
+              CurrentMusic 是一个<strong>免费畅听网易云音乐 SVIP 曲目的音乐社区</strong>。
+              它提供 Web 网页端、Android 客户端与开放 API，支持多设备流转音乐资产，
+              并鼓励社区开发者参与生态建设。
+            </p>
+            <p>
+              项目的出发点很直接：让听歌这件事不被会员门槛切断。你可以在浏览器里直接打开网页收听，
+              也可以安装 Android 客户端获得更完整的体验；登录同一账号后，歌单、收藏与播放进度等
+              音乐资产会在多台设备之间流转，不必反复整理。
+            </p>
+            <p>
+              与此同时，CurrentMusic 把能力通过开放 API 暴露出来。任何开发者都可以阅读文档、
+              免费接入，把自己的想法做成新的客户端或小工具，让整个生态由社区一起长出来。
+            </p>
+
+            <h3 class="about-sub">功能亮点</h3>
+            <ul class="highlight-list">
+              <li>
+                <mdui-icon name="library_music" aria-hidden="true"></mdui-icon>
+                <div>
+                  <b>免费畅听 SVIP 曲目</b>
+                  <span>无需开通会员，直接收听原本需要会员权限的曲目。</span>
+                </div>
+              </li>
+              <li>
+                <mdui-icon name="devices" aria-hidden="true"></mdui-icon>
+                <div>
+                  <b>多端覆盖</b>
+                  <span>Web 网页端、Android 客户端（CurrentMusicX / 概念版）按需选择。</span>
+                </div>
+              </li>
+              <li>
+                <mdui-icon name="sync_alt" aria-hidden="true"></mdui-icon>
+                <div>
+                  <b>音乐资产流转</b>
+                  <span>登录后歌单、收藏与播放数据在多设备间同步。</span>
+                </div>
+              </li>
+              <li>
+                <mdui-icon name="code" aria-hidden="true"></mdui-icon>
+                <div>
+                  <b>开放 API 与社区生态</b>
+                  <span>通过 CurrentStation 控制台免费接入，文档完善，便于二次开发。</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+
+          <aside class="about-aside reveal" aria-label="适用人群与项目愿景">
+            <mdui-card class="aside-card" variant="filled">
+              <h3><mdui-icon name="person_search" aria-hidden="true"></mdui-icon>适用人群</h3>
+              <ul class="plain-list">
+                <li>想免费收听网易云音乐 SVIP 曲目的普通听众</li>
+                <li>希望在手机与电脑之间无缝续听的用户</li>
+                <li>偏好网页端、不愿安装额外软件的用户</li>
+                <li>想把音乐能力接入自己应用的开发者</li>
+              </ul>
+            </mdui-card>
+
+            <mdui-card class="aside-card" variant="filled">
+              <h3><mdui-icon name="rocket_launch" aria-hidden="true"></mdui-icon>项目愿景</h3>
+              <p>
+                把音乐能力开放出来，让客户端、工具与玩法由社区共同创造；
+                在合规与尊重版权方的前提下，做一个长期可用的音乐社区。
+              </p>
+            </mdui-card>
+
+            <mdui-card class="aside-card aside-card-warn" variant="filled">
+              <h3><mdui-icon name="report" aria-hidden="true"></mdui-icon>使用提示</h3>
+              <p>
+                概念版基于 Android WebView，在部分老设备上可能出现显示异常、版式错乱、
+                性能降低等问题；追求稳定体验时请选择 CurrentMusicX 或 Web 网页端。
+              </p>
+            </mdui-card>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════
+         联系我们
+         ═════════════════════════════════════════════════════════════════ -->
+    <section class="section" id="contact" aria-labelledby="contactTitle">
+      <div class="container">
+        <header class="section-head">
+          <h2 id="contactTitle">联系我们</h2>
+          <p class="section-sub">加入 QQ 交流群，获取使用帮助、反馈问题与交流开发经验。</p>
+        </header>
+
+        <div class="group-grid">
+
+          <!-- 群 1 -->
+          <article class="group-card reveal" aria-labelledby="groupCurrent">
+            <div class="group-head">
+              <span class="group-icon" aria-hidden="true"><mdui-icon name="forum"></mdui-icon></span>
+              <div>
+                <h3 id="groupCurrent">Current 系项目 QQ 交流群</h3>
+                <p class="group-sub">200+ 人</p>
+              </div>
+            </div>
+
+            <div class="group-number">
+              <span class="gn-label">群号</span>
+              <b class="gn-value">1106353813</b>
+              <button class="icon-btn copy-btn" type="button"
+                      data-copy="1106353813" aria-label="复制 Current 系项目 QQ 交流群群号 1106353813">
+                <mdui-icon name="content_copy" aria-hidden="true"></mdui-icon>
+              </button>
+            </div>
+
+            <div class="long-link">
+              <span class="ll-label">加群链接（完整地址，可复制）</span>
+              <code class="ll-url" id="linkGroupCurrent">https://qun.qq.com/universal-share/share?ac=1&authKey=Y4c39DZ%2B5qe4El%2BEkTtA0oVd%2Fd8fNpeeM6L%2FzBL66MmmYdzkxbKppptGLY6gKNq3&busi_data=eyJncm91cENvZGUiOiIxMTA2MzUzODEzIiwidG9rZW4iOiJ0a0xQdURuY1BSMkJFNVhnaFRXRXB3aE8yL00rN2hQY1RuNkdXVGRWVTAxbEZSQUFKTE94ZGxmb3kvUnFHcGM3IiwidWluIjoiMTk0NTgyNjM0NiJ9&data=v_HFZHpbRvG_rmyOocGsN36GysIjAWp_PUvrNfq9hNAl4Uwd196RGQ8eNwVMMXQF8meUlBNNG1eJy6WJHZ-V9w&svctype=4&tempid=h5_group_info</code>
+            </div>
+
+            <div class="group-actions">
+              <mdui-button variant="filled" href="https://qun.qq.com/universal-share/share?ac=1&authKey=Y4c39DZ%2B5qe4El%2BEkTtA0oVd%2Fd8fNpeeM6L%2FzBL66MmmYdzkxbKppptGLY6gKNq3&busi_data=eyJncm91cENvZGUiOiIxMTA2MzUzODEzIiwidG9rZW4iOiJ0a0xQdURuY1BSMkJFNVhnaFRXRXB3aE8yL00rN2hQY1RuNkdXVGRWVTAxbEZSQUFKTE94ZGxmb3kvUnFHcGM3IiwidWluIjoiMTk0NTgyNjM0NiJ9&data=v_HFZHpbRvG_rmyOocGsN36GysIjAWp_PUvrNfq9hNAl4Uwd196RGQ8eNwVMMXQF8meUlBNNG1eJy6WJHZ-V9w&svctype=4&tempid=h5_group_info" target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="group_add" aria-hidden="true"></mdui-icon>点击加群</mdui-button>
+              <button class="copy-link-btn" type="button" data-copy-target="linkGroupCurrent">
+                <mdui-icon name="link" aria-hidden="true"></mdui-icon>复制加群链接
+              </button>
+            </div>
+          </article>
+
+          <!-- 群 2 -->
+          <article class="group-card reveal" aria-labelledby="groupCmx">
+            <div class="group-head">
+              <span class="group-icon" aria-hidden="true"><mdui-icon name="forum"></mdui-icon></span>
+              <div>
+                <h3 id="groupCmx">CurrentMusicX 项目 QQ 交流群</h3>
+                <p class="group-sub">由社区开发者 bileizhen 创建 · 25+ 人</p>
+              </div>
+            </div>
+
+            <div class="group-number">
+              <span class="gn-label">群号</span>
+              <b class="gn-value">946064821</b>
+              <button class="icon-btn copy-btn" type="button"
+                      data-copy="946064821" aria-label="复制 CurrentMusicX 项目 QQ 交流群群号 946064821">
+                <mdui-icon name="content_copy" aria-hidden="true"></mdui-icon>
+              </button>
+            </div>
+
+            <div class="long-link">
+              <span class="ll-label">加群链接（完整地址，可复制）</span>
+              <code class="ll-url" id="linkGroupCmx">https://qun.qq.com/universal-share/share?ac=1&authKey=iqIyjZ7V4UyQaP8wfNUYZ0abTor%2F9rNpMQy94zUsD178YelEuVY9NYh4Frh8059v&busi_data=eyJncm91cENvZGUiOiI5NDYwNjQ4MjEiLCJ0b2tlbiI6InltNjdMSW5sRHJUZCtjVjZlVlFPK1A1ZG5zZUNLU0NTcUdpR04yVzM3OFArMTlCL3NiV3dJNGJFMnNhNWV5UjUiLCJ1aW4iOiIxOTQ1ODI2MzQ2In0%3D&data=XY0_2HqpxmqCM888IUKkofONjtd1plpoJOJRKZpvgXRL_lH_rBP2lqAsDHnu_6dkLBPhcUfq0DkLzTiPX1bwSQ&svctype=4&tempid=h5_group_info</code>
+            </div>
+
+            <div class="group-actions">
+              <mdui-button variant="filled" href="https://qun.qq.com/universal-share/share?ac=1&authKey=iqIyjZ7V4UyQaP8wfNUYZ0abTor%2F9rNpMQy94zUsD178YelEuVY9NYh4Frh8059v&busi_data=eyJncm91cENvZGUiOiI5NDYwNjQ4MjEiLCJ0b2tlbiI6InltNjdMSW5sRHJUZCtjVjZlVlFPK1A1ZG5zZUNLU0NTcUdpR04yVzM3OFArMTlCL3NiV3dJNGJFMnNhNWV5UjUiLCJ1aW4iOiIxOTQ1ODI2MzQ2In0%3D&data=XY0_2HqpxmqCM888IUKkofONjtd1plpoJOJRKZpvgXRL_lH_rBP2lqAsDHnu_6dkLBPhcUfq0DkLzTiPX1bwSQ&svctype=4&tempid=h5_group_info" target="_blank" rel="noopener noreferrer"><mdui-icon slot="icon" name="group_add" aria-hidden="true"></mdui-icon>点击加群</mdui-button>
+              <button class="copy-link-btn" type="button" data-copy-target="linkGroupCmx">
+                <mdui-icon name="link" aria-hidden="true"></mdui-icon>复制加群链接
+              </button>
+            </div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ═════════════════════════════════════════════════════════════════
+         GitHub 仓库链接
+         ═════════════════════════════════════════════════════════════════ -->
+    <section class="section section-alt" id="github" aria-labelledby="githubTitle">
+      <div class="container">
+        <header class="section-head">
+          <h2 id="githubTitle">GitHub 仓库链接</h2>
+          <p class="section-sub">项目源码与发布页面。地址取自项目 README 与 App 内更新检查所用仓库。</p>
+        </header>
+
+        <ul class="repo-list">
+
+          <li class="repo-item reveal">
+            <div class="repo-main">
+              <h3><mdui-icon name="smartphone" aria-hidden="true"></mdui-icon>CurrentMusicX 仓库 Releases</h3>
+              <a class="repo-url" href="https://github.com/bileizhen/CurrentMusicX/releases"
+                 target="_blank" rel="noopener noreferrer">https://github.com/bileizhen/CurrentMusicX/releases</a>
+            </div>
+            <div class="repo-side">
+              <span class="status-tag status-ok">已提供</span>
+              <a class="copy-link-btn" href="https://github.com/bileizhen/CurrentMusicX/releases"
+                 target="_blank" rel="noopener noreferrer">
+                <mdui-icon name="open_in_new" aria-hidden="true"></mdui-icon>前往 Releases
+              </a>
+              <button class="copy-link-btn" type="button" data-copy="https://github.com/bileizhen/CurrentMusicX/releases">
+                <mdui-icon name="content_copy" aria-hidden="true"></mdui-icon>复制
+              </button>
+            </div>
+          </li>
+
+          <li class="repo-item reveal">
+            <div class="repo-main">
+              <h3><mdui-icon name="folder_special" aria-hidden="true"></mdui-icon>CurrentMusic 主仓库（公共）</h3>
+              <a class="repo-url" href="https://github.com/backrooms-yrc/CurrentMusic"
+                 target="_blank" rel="noopener noreferrer">https://github.com/backrooms-yrc/CurrentMusic</a>
+              <p class="repo-desc">后端、Web、Android、Windows 与部署文档完整源码。</p>
+            </div>
+            <div class="repo-side">
+              <span class="status-tag status-ok">已提供</span>
+              <a class="copy-link-btn" href="https://github.com/backrooms-yrc/CurrentMusic/releases"
+                 target="_blank" rel="noopener noreferrer">
+                <mdui-icon name="open_in_new" aria-hidden="true"></mdui-icon>前往 Releases
+              </a>
+              <button class="copy-link-btn" type="button" data-copy="https://github.com/backrooms-yrc/CurrentMusic">
+                <mdui-icon name="content_copy" aria-hidden="true"></mdui-icon>复制
+              </button>
+            </div>
+          </li>
+
+          <li class="repo-item reveal">
+            <div class="repo-main">
+              <h3><mdui-icon name="science" aria-hidden="true"></mdui-icon>CurrentMusic 概念版仓库</h3>
+              <a class="repo-url" href="https://github.com/backrooms-yrc/CurrentMusic/releases"
+                 target="_blank" rel="noopener noreferrer">https://github.com/backrooms-yrc/CurrentMusic/releases</a>
+              <p class="repo-desc">
+                概念版即开发者本人基于 Android WebView 的客户端，与主仓库同源，
+                安装包在该仓库的 Releases 发布。
+              </p>
+            </div>
+            <div class="repo-side">
+              <span class="status-tag status-ok">已提供</span>
+              <button class="copy-link-btn" type="button" data-copy="https://github.com/backrooms-yrc/CurrentMusic/releases">
+                <mdui-icon name="content_copy" aria-hidden="true"></mdui-icon>复制
+              </button>
+            </div>
+          </li>
+
+        </ul>
+
+        <p class="section-footnote">
+          <mdui-icon name="info" aria-hidden="true"></mdui-icon>
+          CurrentStation 通行证与控制台不单独开源，随主仓库一同分发，故不单列仓库地址。
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       页脚
+       ═══════════════════════════════════════════════════════════════════ -->
+  <footer class="site-footer" aria-labelledby="footerTitle">
+    <h2 class="visually-hidden" id="footerTitle">页脚</h2>
+    <div class="container footer-inner">
+
+      <div class="footer-brand">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"><img src="assets/favicon.svg?v=sage1" alt="" width="38" height="38"></span>
+          <span class="brand-name">CurrentMusic</span>
+        </div>
+        <p class="footer-tagline">免费畅听网易云音乐 SVIP 曲目的音乐社区。</p>
+        <p class="footer-copy">© <span id="year">2026</span> CurrentMusic · 项目名称：CurrentMusic</p>
+      </div>
+
+      <nav class="footer-nav" aria-label="页脚导航">
+        <h3>导航</h3>
+        <ul>
+          <li><a href="#hero">首页</a></li>
+          <li><a href="#clients">客户端与入口</a></li>
+          <li><a href="#about">项目简介</a></li>
+          <li><a href="#contact">联系我们</a></li>
+          <li><a href="#github">GitHub 仓库链接</a></li>
+        </ul>
+      </nav>
+
+      <nav class="footer-nav" aria-label="友情链接">
+        <h3>友情链接</h3>
+        <ul>
+          <li>
+            <a href="https://github.com/backrooms-yrc/CurrentMusic"
+               target="_blank" rel="noopener noreferrer">
+              <span class="gh-ic" aria-hidden="true"></span>CurrentMusic 项目仓库</a>
+          </li>
+          <li>
+            <a href="https://github.com/bileizhen/CurrentMusicX/releases"
+               target="_blank" rel="noopener noreferrer">CurrentMusicX Releases</a>
+          </li>
+          <li>
+            <a href="https://music.20110208.xyz/app"
+               target="_blank" rel="noopener noreferrer">CurrentMusic Web 网页端</a>
+          </li>
+          <li>
+            <a href="https://music.20110208.xyz/api-docs/"
+               target="_blank" rel="noopener noreferrer">CurrentStation API 文档</a>
+          </li>
+          <li>
+            <a href="https://qun.qq.com/universal-share/share?ac=1&authKey=Y4c39DZ%2B5qe4El%2BEkTtA0oVd%2Fd8fNpeeM6L%2FzBL66MmmYdzkxbKppptGLY6gKNq3&busi_data=eyJncm91cENvZGUiOiIxMTA2MzUzODEzIiwidG9rZW4iOiJ0a0xQdURuY1BSMkJFNVhnaFRXRXB3aE8yL00rN2hQY1RuNkdXVGRWVTAxbEZSQUFKTE94ZGxmb3kvUnFHcGM3IiwidWluIjoiMTk0NTgyNjM0NiJ9&data=v_HFZHpbRvG_rmyOocGsN36GysIjAWp_PUvrNfq9hNAl4Uwd196RGQ8eNwVMMXQF8meUlBNNG1eJy6WJHZ-V9w&svctype=4&tempid=h5_group_info"
+               target="_blank" rel="noopener noreferrer">QQ 交流群（1106353813）</a>
+          </li>
+        </ul>
+      </nav>
+
+      <div class="footer-note">
+        <h3>免责声明</h3>
+        <p>
+          CurrentMusic 是第三方开源项目，与网易云音乐官方无任何隶属或合作关系。
+          本站不存储、不传播任何音频文件，所有内容均来自第三方接口，仅供学习与技术研究使用。
+          请勿将本项目用于商业用途；如权利人认为内容侵犯其合法权益，请联系我们及时处理。
+          使用本项目所产生的任何后果由使用者自行承担。
+        </p>
+      </div>
+
+    </div>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

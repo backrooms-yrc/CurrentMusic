@@ -2,12 +2,12 @@
 // 读：/song/lyrics/mark/user/page（T1）  写：/song/lyrics/mark/add、/del（T2，需 confirm=1）
 // 摘录是网易云账号维度数据，必须用用户自己的 cookie，未绑定则整页提示绑定。
 import { api, auth } from '../api.js';
-import { esc, toast } from '../ui.js';
+import { esc, toast, skelList } from '../ui.js';
 
 export async function render(el) {
   el.innerHTML = `
     <div class="cm-sec-head"><h2>我的歌词本</h2><span class="cm-sec-sub">来自你的网易云账号</span></div>
-    <div id="lmBody"><div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div></div>`;
+    <div id="lmBody">${skelList(6)}</div>`;
 
   const body = el.querySelector('#lmBody');
   if (!auth.token) {
@@ -23,7 +23,7 @@ export async function render(el) {
   }
 
   async function load() {
-    body.innerHTML = '<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>';
+    body.innerHTML = skelList(6);
     let list = [];
     try {
       const d = await api.ncm('/song/lyrics/mark/user/page');

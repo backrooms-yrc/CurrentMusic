@@ -1,0 +1,21 @@
+[Unit]
+Description=CurrentMusic backend
+After=network.target ncm-api.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=currentmusic
+Group=currentmusic
+WorkingDirectory=/srv/currentmusic/backend
+EnvironmentFile=/etc/currentmusic/backend.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /srv/currentmusic/backend/cm_server.py
+Restart=always
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

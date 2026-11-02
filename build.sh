@@ -9,8 +9,11 @@ PLATFORM="$SDK/platforms/android-34/android.jar"
 APP="$ROOT/app"
 WEB="$ROOT/web"
 OUT="${1:-/tmp/cm-apk}"
-VER_NAME="${VER_NAME:-1.28.81}"
-VER_CODE="${VER_CODE:-173}"
+VERSION_FILE="$WEB/src/version.js"
+DEFAULT_VER_NAME="$(sed -n "s/.*name: '\([^']*\)'.*/\1/p" "$VERSION_FILE")"
+DEFAULT_VER_CODE="$(sed -n 's/.*code: \([0-9]*\).*/\1/p' "$VERSION_FILE")"
+VER_NAME="${VER_NAME:-$DEFAULT_VER_NAME}"
+VER_CODE="${VER_CODE:-$DEFAULT_VER_CODE}"
 KS="$ROOT/keystore.jks"
 APK_FINAL="$ROOT/dist/CurrentMusic-v${VER_NAME}.apk"
 
@@ -66,6 +69,12 @@ mkdir -p "$ROOT/dist"
 "$BT/apksigner" sign --ks "$KS" --ks-pass pass:"${CM_KS_PASS:-currentmusic}" \
   --out "$APK_FINAL" "$OUT/aligned.apk"
 "$BT/apksigner" verify "$APK_FINAL" && echo "签名校验通过"
+
+echo "==> 同步网页版静态资源"
+WEB_DIR="$ROOT/data/app"
+mkdir -p "$WEB_DIR"
+python3 "$ROOT/tools/deploy-web.py" --target "$WEB_DIR"
+echo "    网页版已同步 → $WEB_DIR（$(du -sh "$WEB_DIR" | cut -f1)）"
 
 echo "==> 完成: $APK_FINAL ($(du -h "$APK_FINAL" | cut -f1))"
 "$BT/aapt" dump badging "$APK_FINAL" | head -6

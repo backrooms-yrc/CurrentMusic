@@ -334,15 +334,15 @@ export function defaultLyricSizeKey() {
 // ---------- 骨架屏（MD3 形状 + 微妙 shimmer） ----------
 
 export const skelList = (n = 6) =>
-  `<div class="cm-skel-list">${Array.from({ length: n }, () =>
+  `<div class="cm-skel-list cm-skeleton" role="status" aria-label="正在加载列表" aria-busy="true">${Array.from({ length: n }, () =>
     `<div class="cm-skel-song"><div class="sk sk-pic"></div><div class="cm-skel-main"><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div></div>`).join('')}</div>`;
 
 export const skelCards = (n = 8) =>
-  `<div class="cm-hscroll">${Array.from({ length: n }, () =>
+  `<div class="cm-hscroll cm-skeleton" role="status" aria-label="正在加载推荐" aria-busy="true">${Array.from({ length: n }, () =>
     `<div class="cm-skel-card"><div class="sk sk-cover"></div><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div>`).join('')}</div>`;
 
-export const skelGrid = (n = 6) =>
-  `<div class="cm-plgrid">${Array.from({ length: n }, () =>
+export const skelGrid = (n = 6, variant = 'cover') =>
+  `<div class="cm-plgrid cm-skeleton${variant === 'video' ? ' cm-skel-videos' : ''}" role="status" aria-label="正在加载卡片" aria-busy="true">${Array.from({ length: n }, () =>
     `<div><div class="sk sk-cover"></div><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div>`).join('')}</div>`;
 
 export const skelComments = (n = 5) =>
@@ -357,10 +357,34 @@ export const skelComments = (n = 5) =>
     </div>`).join('');
 
 export const skelProfile = () =>
-  `<div class="cm-skel-profile">
+  `<div class="cm-skel-profile cm-skeleton" role="status" aria-label="正在加载个人资料" aria-busy="true">
     <div class="cm-skel-head"><div class="sk sk-ava"></div><div class="cm-skel-main"><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div></div>
     ${skelGrid(6)}
   </div>`;
+
+// Skeletons follow the final content's proportions; placeholders never look like active controls.
+export const skelDetail = (kind = 'album') => `<div class="cm-skeleton cm-skel-detail" role="status" aria-label="正在加载详情" aria-busy="true">
+  <div class="cm-detail-head"><div class="sk cm-skel-artwork${kind === 'artist' ? ' cm-skel-round' : ''}"></div>
+    <div class="cm-skel-detail-main"><div class="sk cm-skel-title"></div><div class="sk sk-l1"></div><div class="sk sk-l2"></div>
+    <div class="cm-skel-actions"><div class="sk"></div><div class="sk"></div></div></div></div>
+  ${kind === 'artist' ? skelCards(4) : ''}${skelList(6)}</div>`;
+
+export const skelSong = () => `<div class="cm-songpage cm-skeleton cm-skel-songpage" role="status" aria-label="正在加载歌曲" aria-busy="true">
+  <div class="sk cm-songpage-cover"></div><div class="sk cm-skel-title"></div><div class="sk sk-l1"></div>
+  <div class="cm-skel-actions"><div class="sk"></div><div class="sk"></div></div></div>`;
+
+export const skelVideo = () => `<div class="cm-skeleton" role="status" aria-label="正在加载视频" aria-busy="true">
+  <div class="sk cm-skel-media"></div><div class="cm-skel-detail-main"><div class="sk cm-skel-title"></div><div class="sk sk-l1"></div>
+  <div class="cm-skel-actions"><div class="sk"></div><div class="sk"></div></div></div>${skelGrid(4, 'video')}</div>`;
+
+export const skelUsers = (n = 6) => `<div class="cm-skeleton cm-skel-users" role="status" aria-label="正在加载用户" aria-busy="true">${Array.from({ length: n }, () =>
+  `<div class="cm-skel-user"><div class="sk sk-ava"></div><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div>`).join('')}</div>`;
+
+export const skelPosts = (n = 3) => `<div class="cm-skeleton cm-skel-posts" role="status" aria-label="正在加载帖子" aria-busy="true">${Array.from({ length: n }, () =>
+  `<div class="cm-skel-post"><div class="cm-skel-head"><div class="sk sk-pic cm-skel-round"></div><div class="cm-skel-main"><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div></div><div class="sk cm-skel-paragraph"></div><div class="sk sk-l1"></div></div>`).join('')}</div>`;
+
+export const skelRoom = () => `<div class="cm-skeleton cm-skel-room" role="status" aria-label="正在加载房间" aria-busy="true">
+  <div class="sk cm-skel-title"></div><div class="sk sk-l1"></div><div class="sk cm-skel-room-media"></div>${skelList(6)}</div>`;
 
 // ---------- 歌曲列表渲染（状态一次拉取） ----------
 

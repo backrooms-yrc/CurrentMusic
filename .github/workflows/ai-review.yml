@@ -1,0 +1,255 @@
+# AI 审查机器人（第二阶段）：下载 diff 工件，调用 OpenAI 兼容 API 生成中文审查评论。
+# 通过 workflow_run 在基础仓库上下文运行，可安全使用密钥（fork PR 同样生效）。
+#
+# 需要配置（Settings → Secrets and variables → Actions）：
+#   Secret  AI_API_KEY   必填，API 密钥
+#   Variable AI_BASE_URL 可选，默认 https://api.openai.com/v1
+#                        OpenAI 兼容例：DeepSeek https://api.deepseek.com/v1
+#                                      智谱 GLM https://open.bigmodel.cn/api/paas/v4
+#                        Anthropic 兼容例（URL 含 anthropic 时自动切换协议）：
+#                                      z.ai https://api.z.ai/api/anthropic/v1
+#   Variable AI_MODEL    可选，默认 gpt-4o-mini
+name: AI 审查机器人
+
+on:
+  workflow_run:
+    workflows: ['AI 审查机器人（收集差异）']
+    types: [completed]
+
+permissions:
+  # actions: read 是**必需**的：跨 run 下载 diff 工件时，actions/download-artifact
+  # 需要它。注意 workflow 里一旦显式声明 permissions，未列出的权限一律变为 none，
+  # 只写 pull-requests: write 会让下载步骤报 403 "Resource not accessible by integration"。
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: 解析 PR 编号
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // 按优先级解析 PR 编号：载荷 → 触发 run 的工件名 → commit 关联（兜底）。
+            // fork PR 的载荷 pull_requests 为空、commit 关联查询也常返回空
+            // （GitHub 已知限制），而收集器由 pull_request 事件触发、天然知道
+            // 编号并写进了工件名 pr-diff-<N>，因此工件名是 fork PR 的可靠来源。
+            let pr = context.payload.workflow_run.pull_requests[0]?.number;
+            if (!pr) {
+              const { data: arts } = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.payload.workflow_run.id,
+              });
+              for (const a of arts.artifacts) {
+                const m = a.name.match(/^pr-diff-(\d+)$/);
+                if (m) { pr = Number(m[1]); break; }
+              }
+            }
+            if (!pr) {
+              const { data } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.payload.workflow_run.head_sha
+              });
+              pr = data[0]?.number;
+            }
+            if (pr) {
+              core.info(`已解析 PR #${pr}`);
+              core.setOutput('number', pr);
+            } else {
+              // 解析失败必须让 run 变红：静默跳过会导致 fork PR 长期无审查且无任何告警
+              core.setFailed(
+                '未能解析 PR 编号（载荷 pull_requests 为空、工件名无 pr-diff-N、' +
+                'commit 关联查询也为空），请人工核查'
+              );
+            }
+
+      - name: 下载 diff 工件
+        if: steps.pr.outputs.number
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-diff-${{ steps.pr.outputs.number }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 调用 AI 审查
+        if: steps.pr.outputs.number
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_BASE_URL: ${{ vars.AI_BASE_URL || 'https://api.openai.com/v1' }}
+          AI_MODEL: ${{ vars.AI_MODEL || 'gpt-4o-mini' }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          if [ -z "$AI_API_KEY" ]; then
+            echo "::warning::AI_API_KEY 未配置，跳过 AI 审查（请在仓库 Secrets 中添加后自动生效）"
+            exit 0
+          fi
+          # 过大的 diff 截断，避免超出上下文
+          head -c 60000 pr.diff > diff.trunc || true
+
+          # 提示词按本仓库的实际约定定制：这些是最容易踩、也最该被拦下的问题。
+          read -r -d '' SYSTEM_PROMPT <<'PROMPT' || true
+          你是 CurrentMusic 项目的代码审查助手。请审查给出的 git diff，用中文回复，格式为：
+          ## 🤖 AI 代码审查
+          ### 改动概述
+          ### 潜在风险
+          ### 建议
+          内容简洁，只提真实问题；没有风险就明确说"没有发现明显风险"。
+
+          本项目的关键约定（违反这些约定的改动应被明确指出）：
+          1. 后端是 Python 3 标准库实现（http.server + sqlite3），**不要引入第三方依赖**；数据库迁移用
+             PRAGMA table_info + ALTER TABLE，不能破坏既有数据。
+          2. 前端是 vanilla ES modules，用 esbuild 打成单文件 IIFE，构建目标 chrome58（Android 8 出厂
+             WebView）。因此不能使用 :is()/:where()/:has() 等新选择器、不能依赖 backdrop-filter 等
+             需要新内核的特性而不留降级。
+          3. **默认 UI 不得被改动**：新增皮肤/样式必须严格限定在 html[data-ui-preset="..."] 作用域下；
+             改动默认外观属于破坏性变更。
+          4. 构建产物已纳入版本管理（app/src/main/assets/www/*、web/src/decor-scales.js）：
+             改了 web/src 就必须重新构建并一并提交，否则线上会继续跑旧包。
+          5. index.html 里 app.css/app.js 必须带 ?v=<内容哈希> 指纹（构建时自动写入），否则发版会出现
+             「新 HTML + 旧 CSS/JS」混搭。
+          6. 仓库有公开镜像：**任何密钥、签名文件（*.jks）、APK 都不能入库**。
+          7. 安卓端无 Gradle：build.sh 用 aapt2 + javac + d8 + zipalign + apksigner，改动需保持可构建。
+          8. 涉及投屏（DLNA）的改动要注意：投屏音频必须经后端 /cast/<id> 中转（原 CDN 是 https 签名短链，
+             设备放不了），且下载要单飞共享、支持 Range。
+          只审查 diff 本身，不要臆测未展示的代码。
+          PROMPT
+
+          if [[ "$AI_BASE_URL" == *anthropic* ]]; then
+            # Anthropic 兼容端点（如 z.ai）：POST /messages
+            # thinking 必须显式关闭：glm-5.3 等推理模型默认先输出 thinking 块，
+            # max_tokens 若在思考阶段耗尽，text 块一个都不会有（实测 review.md 为空）。
+            jq -n --arg s "$SYSTEM_PROMPT" --rawfile d diff.trunc \
+              '{model: env.AI_MODEL, max_tokens: 2048, temperature: 0.2, system: $s,
+                thinking: {type: "disabled"},
+                messages: [{role: "user", content: ("请审查以下拉取请求的 diff：\n\n" + $d)}]}' > req.json
+            code=$(curl -s -o resp.json -w '%{http_code}' \
+              --retry 2 --max-time 300 \
+              -H "x-api-key: $AI_API_KEY" \
+              -H "anthropic-version: 2023-06-01" \
+              -H "Content-Type: application/json" \
+              "$AI_BASE_URL/messages" \
+              -d @req.json)
+          else
+            # OpenAI 兼容端点：POST /chat/completions
+            jq -n --arg s "$SYSTEM_PROMPT" --rawfile d diff.trunc \
+              '{model: env.AI_MODEL, temperature: 0.2, messages: [
+                {role: "system", content: $s},
+                {role: "user", content: ("请审查以下拉取请求的 diff：\n\n" + $d)}]}' > req.json
+            code=$(curl -s -o resp.json -w '%{http_code}' \
+              --retry 2 --max-time 300 \
+              -H "Authorization: Bearer $AI_API_KEY" \
+              -H "Content-Type: application/json" \
+              "$AI_BASE_URL/chat/completions" \
+              -d @req.json)
+          fi
+
+          # 区分「外部原因」与「配置错误」：
+          #   429（额度/限流）与 5xx（服务端故障）都不是代码问题，不该让 PR 挂红叉
+          #   —— 真实踩过：z.ai 账号 5 小时额度用尽，导致每个 PR 都出现一个误导性的红叉。
+          #   故只告警 + 留一条简短说明，本轮判为成功；
+          #   401/403/404 之类属密钥或端点配错，必须显式失败，避免"静默无审查"。
+          if [ "$code" != "200" ]; then
+            echo "AI API 返回 $code："; cat resp.json
+            if [ "$code" = "429" ] || [ "${code:0:1}" = "5" ]; then
+              echo "external" > /tmp/ai_status
+              echo "::warning::AI 审查本轮跳过（API 返回 $code，属额度或服务端问题，非代码问题）"
+              exit 0
+            fi
+            echo "config" > /tmp/ai_status
+            echo "::error::AI 审查配置有误（API 返回 $code），请检查 AI_API_KEY / AI_BASE_URL / AI_MODEL"
+            exit 1
+          fi
+
+          echo "ok" > /tmp/ai_status
+          if [[ "$AI_BASE_URL" == *anthropic* ]]; then
+            jq -r '[.content[]? | select(.type == "text") | .text] | join("\n")' resp.json > review.md
+          else
+            jq -r '.choices[0].message.content' resp.json > review.md
+          fi
+          cat review.md
+          # API 成功但内容为空：必须显式失败——否则 PR 上什么都没有，
+          # 「静默无审查」恰恰是这个机器人要避免的事（实测踩过：思考耗尽 token）。
+          if [ ! -s review.md ]; then
+            echo "::error::AI 返回 200 但审查内容为空（模型可能把 token 耗在了思考上，或响应结构异常）"
+            echo "empty" > /tmp/ai_status
+            exit 1
+          fi
+
+      - name: 发布审查评论
+        if: steps.pr.outputs.number
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        with:
+          script: |
+            const fs = require('fs');
+            let status = '';
+            try { status = fs.readFileSync('/tmp/ai_status', 'utf8').trim(); } catch (e) {}
+
+            // 额度/服务端问题导致跳过：留一条简短说明（避免"这个 PR 为什么没有 AI 审查"的疑问），
+            // 但不发审查正文，也不让 PR 因此变红。
+            // 用 upsert 而不是每次新建：否则每推一次提交就多一条一模一样的通知，纯噪音。
+            if (status === 'external') {
+              let detail = '';
+              try {
+                const resp = JSON.parse(fs.readFileSync('resp.json', 'utf8'));
+                detail = resp?.error?.message || '';
+              } catch (e) {}
+              const marker = 'AI 审查本轮跳过';
+              const notice = [
+                '## 🤖 ' + marker,
+                '',
+                '调用 AI 接口返回了**额度或服务端**错误，属于外部原因、**与本次改动无关**，',
+                '因此这一轮没有生成审查内容，也不会影响其它检查与合并。',
+                '',
+                detail ? '> ' + String(detail).replace(/\n/g, ' ').slice(0, 300) : '',
+                '',
+                '*额度恢复后重新推送一次提交即可自动重跑。*'
+              ].filter(Boolean).join('\n');
+
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number(process.env.PR_NUMBER),
+                per_page: 100
+              });
+              const existing = comments.find(c =>
+                c.user?.type === 'Bot' && c.body && c.body.includes(marker));
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body: notice
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: Number(process.env.PR_NUMBER),
+                  body: notice
+                });
+              }
+              return;
+            }
+
+            if (!fs.existsSync('review.md')) return;
+            let review = fs.readFileSync('review.md', 'utf8').trim();
+            if (!review) return;
+            if (!review.includes('AI 代码审查')) {
+              review = '## 🤖 AI 代码审查\n' + review;
+            }
+            const body = review + '\n\n---\n*以上内容由 AI 自动生成，仅供参考，最终以人工审查为准。*';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number(process.env.PR_NUMBER),
+              body: body
+            });

@@ -1,0 +1,3 @@
+# 依赖目录（本仓库里是指向 ../web/node_modules 的软链接，
+# 根 .gitignore 的 "node_modules/" 只匹配目录，匹配不到软链接，故在此单独忽略）
+/node_modules

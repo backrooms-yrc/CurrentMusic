@@ -1,16 +1,54 @@
-node_modules/
-dist/
-web/node_modules/
 *.apk
-*.jks
-*.idsig
+btr-pr/
+data/
+dist/
+dsh-deepseek-web-login-*.tgz
 .DS_Store
-app/src/main/assets/
+keystore.jks
+*.log
+node_modules/
+__pycache__/
 
-/AGENTS.md
+# 其它工作区的笔记/草稿（非本仓库内容，误入过一次）
+notes/
+*.bak-*
+
+# 后端自托管/开源准备：运行数据与凭据
 .env
 .env.*
-/data/
-/keystore.jks
+*.cookie
+ncm-cookie
+*.secret
+*.db
+*.sqlite*
+deploy/backend.env
 
-web/node_modules
+# 本地智能体规范包含凭据，禁止提交
+/AGENTS.md
+/api-docs/.generated/
+/api-docs/.docusaurus/
+/api-docs/build/
+/api-docs/static/manifest.json
+/api-docs/static/build-info.json
+/api-docs/static/licenses/
+
+# Windows 原生客户端的本机构建输出与 IDE 状态
+/windows/**/bin/
+/windows/**/obj/
+/windows/.vs/
+/windows/**/*.user
+/windows/artifacts/
+
+/windows/**/*.msi
+/windows/**/*.wixpdb
+
+# Local environments, signing material and private operational notes
+.venv/
+venv/
+*.keystore
+*.p12
+*.pfx
+*.idsig
+*.aab
+*.db-*
+/docs/session-recovery-2026-09-30.md

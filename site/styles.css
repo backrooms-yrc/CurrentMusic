@@ -1,0 +1,1123 @@
+/* ============================================================================
+   CurrentMusic 官方网站样式
+   ----------------------------------------------------------------------------
+   全部颜色、圆角、阴影、动效时长均取自 MDUI 设计令牌（--mdui-color-*、
+   --mdui-shape-corner-*、--mdui-elevation-*、--mdui-motion-*），
+   因此浅色 / 深色主题可自动切换，无需重复维护两套配色。
+   ========================================================================== */
+
+/* ── 1. 设计令牌与基础 ─────────────────────────────────────────────────── */
+
+:root {
+  --site-max: 1180px;
+  --site-gutter: clamp(16px, 4vw, 32px);
+  --header-h: 64px;
+  --radius-card: var(--mdui-shape-corner-large, 1rem);
+  --radius-panel: var(--mdui-shape-corner-extra-large, 1.75rem);
+  --ease: var(--mdui-motion-easing-emphasized-decelerate, cubic-bezier(.05, .7, .1, 1));
+  --dur: var(--mdui-motion-duration-medium2, 300ms);
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  /* 锚点定位留出吸顶导航的高度 */
+  scroll-padding-top: calc(var(--header-h) + 20px);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
+               "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  color: rgb(var(--mdui-color-on-background));
+  background-color: rgb(var(--mdui-color-background));
+  overflow-x: hidden;                      /* 防止装饰元素撑出横向滚动条 */
+}
+
+/* 仅在有 JS 时启用滚动入场动画：脚本失效时内容依然完整可见 */
+html.js .reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+html.js .reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+p { margin: 0 0 1em; }
+p:last-child { margin-bottom: 0; }
+
+ul, ol { margin: 0; padding: 0; list-style: none; }
+
+a {
+  color: rgb(var(--mdui-color-primary));
+  text-decoration: none;
+  transition: color var(--mdui-motion-duration-short4, 200ms) var(--ease),
+              opacity var(--mdui-motion-duration-short4, 200ms) var(--ease);
+}
+a:hover { text-decoration: underline; }
+
+img, svg { max-width: 100%; height: auto; }
+
+/* 统一可见焦点环，保证键盘导航可感知 */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 3px solid rgb(var(--mdui-color-primary));
+  outline-offset: 2px;
+  border-radius: var(--mdui-shape-corner-extra-small, .25rem);
+}
+
+.container {
+  width: 100%;
+  max-width: var(--site-max);
+  margin-inline: auto;
+  padding-inline: var(--site-gutter);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 跳到主要内容：默认用 clip 隐藏（不使用负偏移，避免撑出横向滚动条），聚焦时滑入 */
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 200;
+  padding: 10px 18px;
+  border-radius: var(--mdui-shape-corner-full, 999px);
+  background: rgb(var(--mdui-color-primary));
+  color: rgb(var(--mdui-color-on-primary));
+  font-weight: 600;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-14px);
+  transition: opacity var(--mdui-motion-duration-short4, 200ms) var(--ease),
+              transform var(--mdui-motion-duration-short4, 200ms) var(--ease),
+              visibility 0s linear var(--mdui-motion-duration-short4, 200ms);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  text-decoration: none;
+  transition-delay: 0s;
+}
+
+/* ── 2. 顶部导航栏 ─────────────────────────────────────────────────────── */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  background: rgba(var(--mdui-color-surface-container), 0.86);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid transparent;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.site-header.is-scrolled {
+  border-bottom-color: rgb(var(--mdui-color-outline-variant));
+  box-shadow: var(--mdui-elevation-level2, 0 1px 3px rgba(0, 0, 0, .16));
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 100%;
+}
+
+/* MDUI 的 <mdui-icon> 通过连字（liga）渲染：元素内部文本即为图标名，
+   由字体把 "graphic_eq" 这类文本合成为单个字形。因此这里必须：
+     1) 指定图标字体家族（MDUI 默认找 "Material Icons"，站点使用 Outlined 变体）；
+     2) 保留 font-feature-settings: "liga"，关掉它图标就会退化成一段文字。 */
+mdui-icon {
+  display: inline-block;
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1;
+  font-family: "Material Icons Outlined", sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  direction: ltr;
+  text-rendering: optimizeLegibility;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: rgb(var(--mdui-color-on-surface));
+  font-weight: 700;
+  font-size: 1.125rem;
+  letter-spacing: -0.015em;
+}
+.brand:hover { text-decoration: none; }
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: var(--mdui-shape-corner-medium, .75rem);
+  background: transparent;
+  color: rgb(var(--mdui-color-on-primary));
+  box-shadow: var(--mdui-elevation-level1);
+}
+.brand-mark { box-shadow: none; }
+.brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+.site-nav { margin-inline-start: auto; }
+.site-nav ul {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 9px 14px;
+  border-radius: var(--mdui-shape-corner-full, 999px);
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: .9375rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color var(--mdui-motion-duration-short4, 200ms) var(--ease),
+              color var(--mdui-motion-duration-short4, 200ms) var(--ease);
+}
+.nav-link:hover {
+  text-decoration: none;
+  color: rgb(var(--mdui-color-on-surface));
+  background: rgba(var(--mdui-color-on-surface), 0.08);
+}
+/* 键盘/滚动定位到当前区块时高亮 */
+.nav-link[aria-current="true"] {
+  color: rgb(var(--mdui-color-primary));
+  background: rgba(var(--mdui-color-primary), 0.12);
+  font-weight: 600;
+}
+.nav-link mdui-icon { font-size: 16px; opacity: .8; }
+
+/* GitHub 官方标记（内置图标字体里没有 GitHub logo，用内联 SVG 以 mask 方式着色，
+   这样能自动跟随文字颜色，浅色/深色主题都不需要单独维护一份） */
+.gh-ic {
+  display: inline-block;
+  width: 17px;
+  height: 17px;
+  flex: none;
+  background-color: currentColor;
+  -webkit-mask: var(--gh-mask) center / contain no-repeat;
+  mask: var(--gh-mask) center / contain no-repeat;
+}
+:root {
+  --gh-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z'/%3E%3C/svg%3E");
+}
+
+/* 外链类导航项：与内部锚点视觉区分，并给出明确的可交互反馈 */
+.nav-link-ext { color: rgb(var(--mdui-color-primary)); }
+.nav-link-ext:hover {
+  color: rgb(var(--mdui-color-primary));
+  background: rgba(var(--mdui-color-primary), 0.12);
+}
+.nav-link-ext .gh-ic { opacity: .9; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--mdui-shape-corner-full, 999px);
+  background: transparent;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font: inherit;
+  cursor: pointer;
+  transition: background-color var(--mdui-motion-duration-short4, 200ms) var(--ease),
+              color var(--mdui-motion-duration-short4, 200ms) var(--ease);
+}
+.icon-btn:hover {
+  background: rgba(var(--mdui-color-on-surface), 0.08);
+  color: rgb(var(--mdui-color-on-surface));
+}
+.icon-btn mdui-icon { font-size: 22px; }
+
+.nav-toggle { display: none; }
+
+/* 移动端抽屉 */
+.drawer-nav { padding: 8px 4px 16px; min-width: 264px; }
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 16px;
+  font-size: 1.0625rem;
+}
+.drawer-nav ul { padding: 8px 8px 4px; }
+.drawer-nav ul a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--mdui-shape-corner-full, 999px);
+  color: rgb(var(--mdui-color-on-surface));
+  font-size: .9375rem;
+  font-weight: 500;
+}
+.drawer-nav ul a:hover {
+  text-decoration: none;
+  background: rgba(var(--mdui-color-on-surface), 0.08);
+}
+.drawer-nav ul mdui-icon {
+  font-size: 20px;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.drawer-actions { padding: 16px; }
+
+/* ── 3. 首屏品牌区 ─────────────────────────────────────────────────────── */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding-block: clamp(56px, 11vw, 112px) clamp(48px, 9vw, 88px);
+  text-align: center;
+}
+
+.hero-glow {
+  position: absolute;
+  inset: -30% -10% auto;
+  height: 720px;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 52% at 22% 32%, rgba(var(--mdui-color-primary), 0.30), transparent 70%),
+    radial-gradient(42% 48% at 78% 24%, rgba(var(--mdui-color-tertiary), 0.26), transparent 70%),
+    radial-gradient(50% 50% at 52% 78%, rgba(var(--mdui-color-secondary), 0.20), transparent 72%);
+  filter: blur(28px);
+}
+
+.hero-inner { position: relative; z-index: 1; }
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 22px;
+  padding: 7px 16px;
+  border-radius: var(--mdui-shape-corner-full, 999px);
+  background: rgba(var(--mdui-color-surface-container-high), 0.75);
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: .8125rem;
+  font-weight: 500;
+}
+.hero-eyebrow mdui-icon {
+  font-size: 17px;
+  color: rgb(var(--mdui-color-primary));
+}
+
+.hero-title {
+  font-size: clamp(2.5rem, 8vw, 4.25rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  margin-bottom: 18px;
+}
+.hero-title-accent {
+  background: linear-gradient(120deg,
+              rgb(var(--mdui-color-primary)),
+              rgb(var(--mdui-color-tertiary)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-tagline {
+  max-width: 46ch;
+  margin: 0 auto 14px;
+  font-size: clamp(1.0625rem, 2.4vw, 1.375rem);
+  font-weight: 600;
+  line-height: 1.6;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.hero-sub {
+  max-width: 60ch;
+  margin: 0 auto 32px;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: clamp(.9375rem, 1.6vw, 1.0625rem);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: clamp(40px, 7vw, 64px);
+}
+.hero-actions mdui-button { --shape-corner: 999px; }
+.hero-actions .btn-lg::part(button) { height: 56px; }
+/* 图标与文字尺寸按 MDUI 部件选择器对齐 */
+.hero-actions mdui-button::part(icon) { font-size: 20px; }
+
+.hero-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(196px, 100%), 1fr));
+  gap: 14px;
+  max-width: 940px;
+  margin-inline: auto;
+  text-align: start;
+}
+
+.feature-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 18px 16px;
+  border-radius: var(--radius-card);
+  background: rgba(var(--mdui-color-surface-container-low), 0.85);
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  box-shadow: var(--mdui-elevation-level1);
+  transition: transform var(--dur) var(--ease),
+              box-shadow var(--dur) var(--ease),
+              border-color var(--dur) var(--ease);
+}
+.feature-chip:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--mdui-elevation-level3);
+  border-color: rgba(var(--mdui-color-primary), 0.4);
+}
+.feature-chip mdui-icon {
+  font-size: 26px;
+  margin-bottom: 8px;
+  color: rgb(var(--mdui-color-primary));
+}
+.feature-chip b {
+  font-size: 1rem;
+  font-weight: 650;
+  color: rgb(var(--mdui-color-on-surface));
+}
+.feature-chip span {
+  font-size: .8125rem;
+  line-height: 1.55;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+/* ── 4. 通用区块 ───────────────────────────────────────────────────────── */
+
+.section { padding-block: clamp(56px, 8vw, 92px); }
+.section-alt {
+  background: rgba(var(--mdui-color-surface-container-low), 0.55);
+  border-block: 1px solid rgba(var(--mdui-color-outline-variant), 0.7);
+}
+
+.section-head {
+  max-width: 62ch;
+  margin-bottom: clamp(28px, 4vw, 44px);
+}
+.section-head h2 {
+  font-size: clamp(1.5rem, 3.6vw, 2rem);
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+}
+.section-head h2::after {
+  content: "";
+  display: block;
+  width: 48px;
+  height: 4px;
+  margin-top: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+              rgb(var(--mdui-color-primary)),
+              rgb(var(--mdui-color-tertiary)));
+}
+.section-sub {
+  margin: 0;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: .9688rem;
+}
+
+.section-footnote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 14px 16px;
+  border-radius: var(--radius-card);
+  background: rgba(var(--mdui-color-surface-container), 0.7);
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: .875rem;
+}
+.section-footnote mdui-icon {
+  font-size: 18px;
+  flex: none;
+  margin-top: 3px;
+}
+
+/* ── 5. 客户端与入口卡片 ───────────────────────────────────────────────── */
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(288px, 100%), 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.client-card {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border-radius: var(--radius-panel);
+  background: rgb(var(--mdui-color-surface-container-low));
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  box-shadow: var(--mdui-elevation-level1);
+  transition: transform var(--dur) var(--ease),
+              box-shadow var(--dur) var(--ease),
+              border-color var(--dur) var(--ease);
+}
+.client-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--mdui-elevation-level3);
+  border-color: rgba(var(--mdui-color-primary), 0.42);
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: var(--mdui-shape-corner-medium, .75rem);
+  background: rgb(var(--mdui-color-primary-container));
+  color: rgb(var(--mdui-color-on-primary-container));
+}
+.card-icon mdui-icon { font-size: 26px; }
+
+.client-card h3 {
+  font-size: 1.1875rem;
+  margin-bottom: 12px;
+}
+
+.badge-recommend,
+.badge-concept,
+.badge-web,
+.badge-api {
+  --shape-corner: 999px;
+  font-size: .75rem;
+}
+.badge-recommend { flex: none; }
+
+.meta-list {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--mdui-shape-corner-medium, .75rem);
+  background: rgba(var(--mdui-color-surface-container-high), 0.6);
+  font-size: .8438rem;
+}
+.meta-row {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+}
+.meta-row dt {
+  flex: none;
+  width: 4.6em;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.meta-row dd {
+  margin: 0;
+  min-width: 0;
+  color: rgb(var(--mdui-color-on-surface));
+}
+
+.card-desc {
+  margin-bottom: 14px;
+  color: rgb(var(--mdui-color-on-surface));
+  font-size: .9375rem;
+  line-height: 1.7;
+}
+
+.feature-list {
+  margin-bottom: 16px;
+  font-size: .875rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+}
+.feature-list mdui-icon {
+  font-size: 17px;
+  flex: none;
+  margin-top: 4px;
+  color: rgb(var(--mdui-color-primary));
+}
+
+/* 注意事项 */
+.card-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: auto;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border-radius: var(--mdui-shape-corner-medium, .75rem);
+  font-size: .8125rem;
+  line-height: 1.65;
+}
+.card-note mdui-icon {
+  font-size: 18px;
+  flex: none;
+  margin-top: 2px;
+}
+.note-info {
+  background: rgba(var(--mdui-color-secondary-container), 0.7);
+  color: rgb(var(--mdui-color-on-secondary-container));
+}
+.note-warn {
+  background: rgba(var(--mdui-color-error-container), 0.72);
+  color: rgb(var(--mdui-color-on-error-container));
+}
+.note-warn b { font-weight: 700; }
+
+.card-actions { margin-top: 0; }
+.client-card .card-actions mdui-button {
+  --shape-corner: 999px;
+  display: block;
+}
+.btn-hint {
+  margin: 10px 0 0;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  font-size: .75rem;
+  line-height: 1.6;
+}
+
+/* 禁用按钮的可读性兜底 */
+mdui-button[disabled] { opacity: .72; }
+
+/* ── 6. 项目简介 ───────────────────────────────────────────────────────── */
+
+.about-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 40px);
+  align-items: start;
+}
+
+.about-main .lead {
+  font-size: clamp(1rem, 1.9vw, 1.125rem);
+  line-height: 1.8;
+  color: rgb(var(--mdui-color-on-surface));
+}
+.about-main p {
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.about-main strong {
+  color: rgb(var(--mdui-color-on-surface));
+  font-weight: 650;
+}
+
+.about-sub {
+  margin: 32px 0 16px;
+  font-size: 1.0625rem;
+}
+
+.highlight-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(232px, 100%), 1fr));
+  gap: 14px;
+}
+.highlight-list li {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-card);
+  background: rgba(var(--mdui-color-surface-container-lowest), 0.9);
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+}
+.highlight-list mdui-icon {
+  font-size: 22px;
+  flex: none;
+  margin-top: 3px;
+  color: rgb(var(--mdui-color-primary));
+}
+.highlight-list b {
+  display: block;
+  font-size: .9375rem;
+  color: rgb(var(--mdui-color-on-surface));
+}
+.highlight-list span {
+  display: block;
+  margin-top: 3px;
+  font-size: .8125rem;
+  line-height: 1.6;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.about-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.aside-card {
+  --shape-corner: var(--radius-panel);
+  padding: 22px;
+  display: block;
+}
+.aside-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 1rem;
+}
+.aside-card h3 mdui-icon {
+  font-size: 20px;
+  color: rgb(var(--mdui-color-primary));
+}
+.aside-card p,
+.aside-card li {
+  font-size: .875rem;
+  line-height: 1.7;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.plain-list li {
+  position: relative;
+  padding-left: 18px;
+  margin-bottom: 7px;
+}
+.plain-list li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: .68em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgb(var(--mdui-color-primary));
+}
+.aside-card-warn {
+  background: rgba(var(--mdui-color-error-container), 0.55);
+  border: 1px solid rgba(var(--mdui-color-error), 0.35);
+}
+.aside-card-warn p { color: rgb(var(--mdui-color-on-error-container)); }
+.aside-card-warn h3 mdui-icon { color: rgb(var(--mdui-color-error)); }
+
+/* ── 7. 联系我们 ───────────────────────────────────────────────────────── */
+
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 20px;
+}
+
+.group-card {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border-radius: var(--radius-panel);
+  background: rgb(var(--mdui-color-surface-container-low));
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  box-shadow: var(--mdui-elevation-level1);
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.group-card:hover {
+  box-shadow: var(--mdui-elevation-level2);
+  border-color: rgba(var(--mdui-color-primary), 0.35);
+}
+
+.group-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: var(--mdui-shape-corner-medium, .75rem);
+  background: rgb(var(--mdui-color-primary-container));
+  color: rgb(var(--mdui-color-on-primary-container));
+}
+.group-icon mdui-icon { font-size: 24px; }
+.group-head h3 { font-size: 1.0625rem; }
+.group-sub {
+  margin: 4px 0 0;
+  font-size: .8125rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.group-number {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--mdui-shape-corner-medium, .75rem);
+  background: rgba(var(--mdui-color-primary), 0.1);
+  border: 1px solid rgba(var(--mdui-color-primary), 0.22);
+}
+.gn-label {
+  flex: none;
+  font-size: .8125rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.gn-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.3125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  color: rgb(var(--mdui-color-primary));
+  user-select: all;
+  word-break: break-all;
+}
+.copy-btn {
+  width: 38px;
+  height: 38px;
+  color: rgb(var(--mdui-color-primary));
+  background: rgba(var(--mdui-color-surface-container-lowest), 0.7);
+}
+.copy-btn mdui-icon { font-size: 19px; }
+
+/* 长链接：完整展示，不截断，可复制 */
+.long-link { margin-bottom: 18px; }
+.ll-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: .75rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.ll-url {
+  display: block;
+  /* 完整展示整条地址，不做高度裁剪、不出现内部滚动条；
+     超长内容靠 pre-wrap + break-all 自然折行。 */
+  padding: 12px 14px;
+  border-radius: var(--mdui-shape-corner-medium, .75rem);
+  background: rgba(var(--mdui-color-surface-container-high), 0.75);
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .75rem;
+  line-height: 1.65;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  white-space: pre-wrap;      /* 保留完整地址并自动换行，绝不省略 */
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  user-select: all;
+  -webkit-overflow-scrolling: touch;
+}
+
+.group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+}
+.group-actions mdui-button { --shape-corner: 999px; }
+
+.copy-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--mdui-shape-corner-full, 999px);
+  border: 1px solid rgb(var(--mdui-color-outline));
+  background: transparent;
+  color: rgb(var(--mdui-color-on-surface));
+  font: inherit;
+  font-size: .875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--mdui-motion-duration-short4, 200ms) var(--ease),
+              border-color var(--mdui-motion-duration-short4, 200ms) var(--ease);
+}
+.copy-link-btn:hover {
+  background: rgba(var(--mdui-color-primary), 0.1);
+  border-color: rgba(var(--mdui-color-primary), 0.5);
+  color: rgb(var(--mdui-color-primary));
+}
+.copy-link-btn mdui-icon { font-size: 18px; }
+.copy-link-btn.is-copied {
+  background: rgba(var(--mdui-color-primary), 0.14);
+  border-color: rgb(var(--mdui-color-primary));
+  color: rgb(var(--mdui-color-primary));
+}
+
+/* ── 8. GitHub 仓库列表 ────────────────────────────────────────────────── */
+
+.repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.repo-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+  padding: 18px 22px;
+  border-radius: var(--radius-card);
+  background: rgba(var(--mdui-color-surface-container-lowest), 0.9);
+  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  box-shadow: var(--mdui-elevation-level1);
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.repo-item:hover {
+  border-color: rgba(var(--mdui-color-primary), 0.42);
+  transform: translateX(3px);
+}
+
+.repo-main { flex: 1 1 320px; min-width: 0; }
+.repo-main h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+.repo-main h3 mdui-icon {
+  font-size: 20px;
+  color: rgb(var(--mdui-color-primary));
+}
+.repo-url {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .8125rem;
+  line-height: 1.6;
+  white-space: normal;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+.repo-placeholder {
+  margin: 0;
+  font-size: .875rem;
+  font-weight: 600;
+  color: rgb(var(--mdui-color-on-surface-variant));
+  letter-spacing: .06em;
+}
+
+/* 仓库条目的补充说明 */
+.repo-desc {
+  margin: 6px 0 0;
+  font-size: .8125rem;
+  line-height: 1.65;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.repo-desc a { font-weight: 500; }
+
+.repo-side {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: none;
+}
+/* 仓库行的“前往 Releases”是链接形态的按钮，去掉下划线 */
+a.copy-link-btn:hover { text-decoration: none; }
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: var(--mdui-shape-corner-full, 999px);
+  font-size: .75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-ok {
+  background: rgba(var(--mdui-color-primary), 0.14);
+  color: rgb(var(--mdui-color-primary));
+}
+.status-todo {
+  background: rgb(var(--mdui-color-surface-container-highest));
+  color: rgb(var(--mdui-color-on-surface-variant));
+  border: 1px dashed rgb(var(--mdui-color-outline));
+}
+
+/* ── 9. 页脚 ───────────────────────────────────────────────────────────── */
+
+.site-footer {
+  padding-block: clamp(44px, 6vw, 68px) 36px;
+  background: rgba(var(--mdui-color-surface-container), 0.6);
+  border-top: 1px solid rgb(var(--mdui-color-outline-variant));
+}
+
+.footer-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)) minmax(0, 1.6fr);
+  gap: clamp(24px, 4vw, 44px);
+  align-items: start;
+}
+
+.footer-brand .brand { margin-bottom: 12px; }
+.footer-tagline {
+  margin-bottom: 10px;
+  font-size: .875rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.footer-copy {
+  margin: 0;
+  font-size: .8125rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+.footer-nav h3,
+.footer-note h3 {
+  margin-bottom: 12px;
+  font-size: .875rem;
+  font-weight: 650;
+  color: rgb(var(--mdui-color-on-surface));
+}
+.footer-nav li { margin-bottom: 8px; }
+.footer-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .875rem;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+.footer-nav a:hover { color: rgb(var(--mdui-color-primary)); }
+.footer-nav .gh-ic { width: 15px; height: 15px; }
+
+.footer-note p {
+  margin: 0;
+  font-size: .8125rem;
+  line-height: 1.75;
+  color: rgb(var(--mdui-color-on-surface-variant));
+}
+
+/* ── 10. 响应式 ────────────────────────────────────────────────────────── */
+
+/* 平板及以下：隐藏桌面导航，显示抽屉按钮，单列布局 */
+@media (max-width: 899px) {
+  .site-nav { display: none; }
+  .nav-toggle { display: inline-flex; }
+  .header-actions { margin-inline-start: auto; }
+
+  .about-layout { grid-template-columns: minmax(0, 1fr); }
+  .footer-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 599px) {
+  :root { --header-h: 58px; }
+
+  .hero { padding-block: 44px 40px; }
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hero-actions mdui-button { width: 100%; }
+  .hero-actions .btn-lg::part(button) { height: 52px; }
+
+  .hero-features { grid-template-columns: minmax(0, 1fr); }
+
+  .client-card,
+  .group-card { padding: 20px 18px; }
+
+  .repo-item {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 18px;
+  }
+  .repo-item:hover { transform: none; }
+  .repo-side { justify-content: space-between; }
+
+  .footer-inner { grid-template-columns: minmax(0, 1fr); }
+  .group-actions mdui-button,
+  .group-actions .copy-link-btn { width: 100%; justify-content: center; }
+}
+
+/* 超小屏（含手表形态） */
+@media (max-width: 380px) {
+  .brand-name { display: none; }
+  .feature-chip { padding: 16px 14px; }
+}
+
+/* ── 11. 动效降级与打印 ────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  html.js .reveal { opacity: 1; transform: none; }
+  .client-card:hover,
+  .feature-chip:hover,
+  .repo-item:hover { transform: none; }
+}
+
+/* 不支持 backdrop-filter 时改用不透明底色，保证文字对比度 */
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .site-header { background: rgb(var(--mdui-color-surface-container)); }
+}
+
+@media print {
+  html.js .reveal { opacity: 1; transform: none; }
+  .site-header, .hero-glow, .copy-btn, .copy-link-btn, .nav-toggle { display: none; }
+  .repo-url, .ll-url { white-space: pre-wrap; word-break: break-all; }
+}

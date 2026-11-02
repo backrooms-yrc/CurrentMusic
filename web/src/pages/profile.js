@@ -1,13 +1,13 @@
 // 公开用户主页：资料 + 统计（点赞/歌单/听歌天数/累计时长）+ 当前在听 + 最近听过 + TA 的歌单
 import { api } from '../api.js';
-import { esc, toast, avatarHTML, fmtListen, userTags } from '../ui.js';
+import { esc, toast, avatarHTML, fmtListen, userTags, skelProfile } from '../ui.js';
 import { player } from '../player.js';
 
 const fmtTime = ts => new Date(ts * 1000).toLocaleDateString('zh-CN');
 
 export async function render(el, params) {
   const uid = params[0];
-  el.innerHTML = `<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>`;
+  el.innerHTML = skelProfile();
   let d;
   try {
     d = await api.userProfile(uid);

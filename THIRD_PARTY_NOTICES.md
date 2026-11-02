@@ -15,9 +15,8 @@ consumes its JSON over `127.0.0.1`. LDDC can be stopped or removed at any time a
 the backend falls back to its own lyric timing.
 
 If you redistribute a system image or bundle that includes LDDC, you must comply
-with GPL-3.0-only for LDDC and provide the corresponding source. The CurrentMusic
-backend's own license is not decided in this repository; consult the repository
-owner before publishing.
+with GPL-3.0-only for LDDC and provide the corresponding source. CurrentMusic's own source code is licensed under MIT;
+that license does not replace LDDC's license.
 
 The headless compatibility shim under `tools/lddc_headless/` contains no LDDC code;
 it only provides a few empty `PySide6.QtCore` types so LDDC's non-GUI modules can
@@ -37,3 +36,30 @@ be imported without installing the Qt GUI stack.
   (MIT), https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced.
   Source is the deployed upstream checkout; license in `api-docs/licenses/ncm-api-MIT.txt`.
   CurrentMusic gateway restrictions take precedence over original upstream examples.
+
+## Web and client dependencies
+
+- MDUI 2 (MIT), https://github.com/zdhxiong/mdui. License copy: `licenses/mdui-MIT.txt`.
+- Material Design Icons font (Apache-2.0), https://github.com/google/material-design-icons.
+  Distributed through @material-design-icons/font; license copy: `licenses/material-icons-Apache-2.0.txt`.
+- qrcode-generator (MIT), https://github.com/kazuhikoarase/qrcode-generator.
+  The installed npm package includes its copyright/license notice in the QR implementation.
+- esbuild (MIT), https://github.com/evanw/esbuild (build-time dependency).
+- .NET / Windows App SDK / WinUI dependencies are restored from NuGet under their
+  respective licenses; no Microsoft runtime source is relicensed by this repository.
+- Windows diagnostic audio fixtures are synthetic 440 Hz sine waves generated
+  with FFmpeg, not recordings of third-party songs.
+
+## Backend dependencies and content
+
+- py_webauthn (BSD-3-Clause), https://github.com/duo-labs/py_webauthn,
+  pinned in `deploy/requirements-auth.txt`; transitive dependencies retain their own licenses.
+- Pillow (HPND) and segno (BSD-3-Clause) are optional sharing-image dependencies.
+- NetEaseCloudMusicApiEnhanced / api-enhanced (MIT) is deployed separately;
+  its backend source and account cookies are not bundled here. The license for
+  documentation excerpts is retained in `api-docs/licenses/ncm-api-MIT.txt`.
+- CurrentMusic branding in `assets/brand/` was generated for this project;
+  provenance is recorded in its README. Third-party decoration metadata does
+  not grant rights to the images referenced by it. User uploads, avatars,
+  music/audio, covers, and third-party service responses are not licensed by
+  CurrentMusic's MIT license and are not included in the source snapshot.

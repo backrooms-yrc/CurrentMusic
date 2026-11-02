@@ -1,3 +1,6 @@
+import { mountSettingsNavigation } from '../settings-navigation.js';
+import { startWelcome } from '../auth-flow.js';
+import { manage2FA } from '../twofactor.js';
 // 设置页：配色/音质/主题/下载目录/服务器/关于（与「我的」分离，顶栏齿轮直达）
 import { mdui } from '../md.js';
 import { api, settings, auth } from '../api.js';
@@ -73,7 +76,7 @@ export async function render(el) {
     <div class="cm-sec-head"><h2>播放与下载</h2></div>
     <div class="cm-setting-list">
       <div class="cm-setting" id="quality"><span class="material-icons-outlined">high_quality</span>默认音质<i>${tierLabel(settings.quality)}</i></div>
-      <div class="cm-setting" id="dlDir"><span class="material-icons-outlined">download</span>下载目录<i>Music/${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}</i></div>
+      <div class="cm-setting" id="dlDir"><span class="material-icons-outlined">download</span>下载目录<i>Music/<wbr>${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}</i></div>
       ${hasDesktopLyrics ? `<div class="cm-setting" id="desktopLyrics"><span class="material-icons-outlined">subtitles</span>桌面歌词<i id="desktopLyricsV">${desktopState.enabled ? '已开启' : desktopState.permission ? '已关闭' : '未授权'}</i><mdui-switch id="desktopLyricsSw" ${desktopState.enabled ? 'checked' : ''} style="margin-left:8px"></mdui-switch></div>` : ''}
     </div>
     <div class="cm-sec-head"><h2>红心与点赞</h2></div>
@@ -102,18 +105,44 @@ export async function render(el) {
     <div class="cm-sec-head"><h2>服务器</h2></div>
     <div class="cm-setting-list">
       <div class="cm-setting" id="secure"><span class="material-icons-outlined">lock</span>安全连接<i>${settings.secureMode ? 'HTTPS 已启用' : '已关闭'}</i></div>
-      <div class="cm-setting" id="server"><span class="material-icons-outlined">dns</span>服务器地址<i>${esc(settings.base)}</i></div>
+      <div class="cm-setting" id="network"><span class="material-icons-outlined">network_check</span>CDN 与音源<i>自动测速 · 可用性测试</i></div>
+      <div class="cm-setting" id="server"><span class="material-icons-outlined">dns</span>服务器地址<i>${esc(settings.base).replace(/(:\/\/|\/|\.)/g, '$1<wbr>')}</i></div>
     </div>
     <div class="cm-sec-head"><h2>关于</h2></div>
     <div class="cm-setting-list">
       ${!isApp ? `<div class="cm-setting" id="dlApk"><span class="material-icons-outlined">android</span>下载安卓版 APP<i>APK · 支持后台播放</i></div>` : ''}
       <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:calc(15px * var(--cm-fs, 1));vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
-      <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i id="acctRole">${esc(u.nickname || u.username || '未登录')}${roleText ? ' · ' + esc(roleText) : ''}</i></div>
+      <div class="cm-setting" id="passkeys"><span class="material-icons-outlined">fingerprint</span>通行密钥<i>绑定与管理 · 免密码登录</i></div>
+      <div class="cm-setting" id="accountInfo"><span class="material-icons-outlined">person</span>当前账号<i id="acctRole">${esc(u.nickname || u.username || '未登录')}${roleText ? ' · ' + esc(roleText) : ''}</i></div>
       ${(auth.user && auth.user.isAdmin) ? `<div class="cm-setting" id="adminEntry"><span class="material-icons-outlined">admin_panel_settings</span>管理员面板<i>用户/设备/系统</i></div>` : ''}
+      ${auth.token ? `<div class="cm-setting" id="securityQuestion"><span class="material-icons-outlined">quiz</span>登录密保问题<i>加载中…</i></div>` : ''}
+      ${auth.token ? `<div class="cm-setting" id="twoFactor"><span class="material-icons-outlined">verified_user</span>两步验证<i>加载中…</i></div>` : ''}
       ${auth.token ? `<div class="cm-setting" id="devices"><span class="material-icons-outlined">devices</span>登录设备<i id="devCount">—</i></div>` : ''}
       <div class="cm-setting" id="engine"><span class="material-icons-outlined">public</span>系统 WebView<i>${engineChrome() ? 'Chromium ' + engineChrome() : (isApp ? '未知' : '浏览器')}${engineOutdated() ? ' · 建议更新' : ''}</i></div>
+      ${auth.token ? `<button type="button" class="cm-setting" id="replayWelcome"><span class="material-icons-outlined">auto_awesome</span>重新观看引导<i>从头了解 CurrentMusic</i></button>` : ''}
+      <div class="cm-setting" id="privacyPolicy"><span class="material-icons-outlined">shield</span>隐私政策<i>数据处理与用户权利</i></div>
+      <div class="cm-setting" id="userTerms"><span class="material-icons-outlined">gavel</span>用户协议<i>服务与使用规则</i></div>
     </div>`;
 
+  mountSettingsNavigation(el);
+  el.querySelector('#passkeys').onclick = () => { location.hash = '#/passkeys'; };
+  el.querySelector('#network').onclick = () => { location.hash = '#/network'; };
+
+  const replayWelcome = el.querySelector('#replayWelcome');
+  if (replayWelcome) replayWelcome.onclick = () => startWelcome({ replay: true });
+
+  const securityQuestion = el.querySelector('#securityQuestion');
+  if (securityQuestion) {
+    securityQuestion.onclick = () => { location.hash = '#/security-question'; };
+    api.securityQuestionStatus().then(r => { securityQuestion.querySelector('i').textContent = r.enabled ? '已开启' : r.twoFactorEnabled ? '已使用验证器 2FA' : '未开启'; }).catch(() => { securityQuestion.querySelector('i').textContent = '点击重试'; });
+  }
+
+  const twoFactor = el.querySelector('#twoFactor');
+  if (twoFactor) {
+    const update = enabled => { twoFactor.querySelector('i').textContent = enabled ? '已开启' : '未开启'; };
+    api.twoFactorStatus().then(r => { update(r.enabled); if (r.securityQuestionEnabled) twoFactor.querySelector('i').textContent = '已使用密保问题'; }).catch(() => { twoFactor.querySelector('i').textContent = '点击重试'; });
+    twoFactor.onclick = () => manage2FA();
+  }
   // 公开到发现页广场：关闭后不出现在广场列表（主页仍可被链接访问）
   const sqSw = el.querySelector('#sqPublicSw');
   if (sqSw) {
@@ -710,6 +739,8 @@ export async function render(el) {
     });
   };
   el.querySelector('#adminEntry')?.addEventListener('click', () => { location.hash = '#/admin'; });
+  el.querySelector('#privacyPolicy').onclick = () => { location.hash = '#/legal/privacy'; };
+  el.querySelector('#userTerms').onclick = () => { location.hash = '#/legal/terms'; };
 
   const devRow = el.querySelector('#devices');
   if (devRow) {

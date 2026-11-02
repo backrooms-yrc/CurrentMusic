@@ -5,7 +5,7 @@
 // 注意：这几个接口的响应结构上游未公开且需要登录态，这里用**容错解析**——在常见字段名里
 // 找第一个「看起来像歌曲列表」的数组，取不到就显示空态，不猜结构、不硬编码。
 import { api, auth, ncmSongs } from '../api.js';
-import { esc, toast } from '../ui.js';
+import { esc, toast, skelList } from '../ui.js';
 import { player } from '../player.js';
 
 const TABS = [
@@ -45,7 +45,7 @@ export async function render(el) {
     <div class="cm-plsort" id="asTabs">
       ${TABS.map((t, i) => `<mdui-chip ${i === 0 ? 'selected' : ''} data-k="${t.key}">${t.label}</mdui-chip>`).join('')}
     </div>
-    <div id="asBody"><div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div></div>`;
+    <div id="asBody">${skelList(6)}</div>`;
 
   const body = el.querySelector('#asBody');
   if (!auth.token) { body.innerHTML = '<div class="cm-empty">登录后可查看</div>'; return; }
@@ -60,7 +60,7 @@ export async function render(el) {
   let cur = 'purchased';
   async function load() {
     const tab = TABS.find(t => t.key === cur);
-    body.innerHTML = '<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>';
+    body.innerHTML = skelList(6);
     let songs = [];
     try {
       const d = await api.ncm(tab.path, { limit: 100, offset: 0 });

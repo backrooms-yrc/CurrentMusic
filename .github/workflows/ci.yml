@@ -1,0 +1,85 @@
+name: 检查机器人
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  backend:
+    name: 后端与文档
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 -m pip install -r deploy/requirements-auth.txt -r deploy/requirements-optional.txt
+      - name: Python 和 Shell 语法
+        run: |
+          python3 -m compileall -q backend tools publish_release.py
+          bash -n build.sh tools/run-tests.sh deploy/*.sh
+      - name: 后端完整回归（临时数据库）
+        run: tools/run-tests.sh
+      - name: 文档与公开导出回归
+        run: |
+          python3 tools/test-api-docs.py
+          python3 tools/test-open-source.py
+          python3 tools/test-lyric-merge.py
+  frontend:
+    name: 前端与站点构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            api-docs/package-lock.json
+      - run: npm --prefix web ci
+      - run: python3 tools/check-js-refs.py
+      - run: npm --prefix web run build
+      - name: 校验已提交的前端产物
+        run: |
+          git diff --exit-code -- app/src/main/assets/www web/src/decor-scales.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path('app/src/main/assets/www')
+          for name in ('app.js', 'app.css', 'index.html'):
+              assert (root / name).stat().st_size > 0, name
+          html = (root / 'index.html').read_text()
+          assert re.search(r'app\.js\?v=[0-9a-f]{8,}', html)
+          assert re.search(r'app\.css\?v=[0-9a-f]{8,}', html)
+          PY
+      - run: node site/build.mjs
+      - run: npm --prefix api-docs ci
+      - name: 无本机上游源码的文档构建
+        run: npm --prefix api-docs run build
+        env:
+          NCM_API_DIR: /tmp/currentmusic-no-upstream
+  secrets:
+    name: 敏感信息扫描
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 tools/check-open-source.py
+      - name: Gitleaks（完整当前源码，脱敏日志）
+        run: |
+          docker run --rm -v "$PWD:/source:ro" -w /source \
+            ghcr.io/gitleaks/gitleaks:v8.30.1 dir /source \
+            --config /source/.gitleaks.toml --redact --no-banner

@@ -1,0 +1,74 @@
+# PR 欢迎机器人：新 PR 打开时自动回复欢迎语 + 改动统计。
+#
+# 注意：必须用 pull_request_target 而非 pull_request —— fork PR 触发的
+# pull_request 事件拿到的是只读 GITHUB_TOKEN，createComment 会 403，
+# 欢迎机器人在所有 fork PR 上都会失败。
+# pull_request_target 在基础仓库上下文运行、令牌可写；本工作流只读 PR
+# 元数据并发评论，不 checkout PR 代码、不使用任何 Secret，无注入风险。
+name: PR 欢迎机器人
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  welcome:
+    name: 欢迎新 PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: 发送欢迎评论
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const number = context.issue.number;
+            const author = context.payload.pull_request.user.login;
+            const base = context.payload.pull_request.base.ref;
+            const head = context.payload.pull_request.head.ref;
+            const fromFork = context.payload.pull_request.head.repo.full_name !==
+                             `${context.repo.owner}/${context.repo.repo}`;
+
+            // 统计改动（listFiles 单页上限 100，超过时标注）
+            const files = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: number,
+              per_page: 100
+            });
+            let add = 0, del = 0;
+            for (const f of files.data) { add += f.additions; del += f.deletions; }
+            const more = files.data.length >= 100 ? '（可能还有更多）' : '';
+
+            const body = [
+              `## 👋 感谢贡献 CurrentMusic！`,
+              '',
+              `@${author}，你好！你的拉取请求 **#${number}** 已收到` +
+                (fromFork ? `（来自 fork \`${head}\`）` : `（分支 \`${head}\`）`) +
+                `，目标分支 \`${base}\`。`,
+              '',
+              `**本次改动**：${files.data.length}${more} 个文件，+${add} / -${del}`,
+              '',
+              '**接下来会发生什么**',
+              '1. 🔍 **检查机器人**会跑后端与脚本检查、前端构建、敏感信息扫描，并把结果贴在下面',
+              '2. 🤖 **AI 审查机器人**会对 diff 做一次初步审查（仅供参考，不代替人工评审）',
+              '3. 👀 维护者会进行人工审查。**合并前请确保检查全绿**',
+              '',
+              '**本仓库的合并规则**',
+              '- `main` **不接受直接推送**：所有改动必须经 PR 合入（直接推到 main 会被自动回退并留痕）',
+              '- 请在 PR 描述里写清：**做了什么、为什么这么做、影响范围**（模板已自动填好）',
+              '- 涉及用户可见行为的改动，请在 `CHANGELOG.md` 追加变更条目，并同步 `web/src/version.js` 的版本号',
+              '- 完整版本历史见 `CHANGELOG.md`（`README.md` 只保留最近几个版本的摘要）',
+              '- **默认 UI 不得被改动**：新增样式必须限定在对应皮肤的作用域下（如 `html[data-ui-preset="..."]`）',
+              '',
+              '期间你可以继续向该分支推送提交，机器人会自动跟进最新改动。祝顺利合并！ 🎉'
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              body: body
+            });

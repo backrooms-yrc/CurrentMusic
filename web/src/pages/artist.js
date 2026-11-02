@@ -2,7 +2,7 @@
 // 阶段三扩展：/artist/desc、/artist/detail、/artist/detail/dynamic、/artist/fans、
 //            /artist/follow/count、/artist/top/song、/artist/mv、/artist/video、/simi/artist
 import { api, auth, ncmSongs } from '../api.js';
-import { esc, toast, renderSongList, fmtCount } from '../ui.js';
+import { esc, toast, renderSongList, fmtCount, skelDetail } from '../ui.js';
 import { mdui } from '../md.js';
 import { player } from '../player.js';
 import { openMlog } from '../mlog.js';
@@ -72,7 +72,7 @@ function albumsDialog(artistId, artistName, total) {
 
 export async function render(el, params) {
   const id = params[0];
-  el.innerHTML = `<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>`;
+  el.innerHTML = skelDetail('artist');
   let d;
   try {
     d = await api.artist(id, 0, 100);

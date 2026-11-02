@@ -1,0 +1,28 @@
+[Unit]
+Description=CurrentMusic LDDC lyrics bridge
+Documentation=https://github.com/chenmozhijin/LDDC
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=currentmusic-lddc
+Environment=HOME=/var/lib/currentmusic-lddc
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/lddc/bridge.env
+ExecStart=/opt/lddc/venv/bin/python /srv/currentmusic/tools/lddc_bridge.py --host 127.0.0.1 --port 3015
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/currentmusic-lddc
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CurrentDeveloper 开发者平台</title>
+<link rel="icon" href="/app/brand-icon.png?v=sage1" type="image/png"><link rel="apple-touch-icon" href="/app/apple-touch-icon.png?v=sage1">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-11"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.4v.2"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5l9 16H3l9-16z"/><path d="M12 9.5v4.2M12 16.6v.2"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 01-12 0V8zM12 17v4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M15 5.5A2.5 2.5 0 0012.5 3H6.5A2.5 2.5 0 004 5.5v6A2.5 2.5 0 006.5 14"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.1 2.1 0 00-3-3L5 17v3z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><path d="M11 11l9 9M17 17l2-2M14.5 14.5l2-2"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 4v8"/><path d="M7.5 7a6.5 6.5 0 109 0"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3.5h7l4.5 4.5v12.5h-11z"/><path d="M14 3.5V8h4.5M9.5 12.5h6M9.5 16h4"/></symbol>
+</defs></svg>
+<style>
+  :root {
+    /* Apple HIG 令牌（出处见 web/src/apple-hig.css） */
+    --bg: #f5f5f7; --bg-elev: #ffffff; --panel: #ffffff; --panel-2: #fbfbfd;
+    --fg: #1d1d1f; --fg2: #6e6e73; --fg3: #86868b; --fg4: #aeaeb2;
+    --line: rgba(0, 0, 0, .08); --line-soft: rgba(0, 0, 0, .05);
+    --accent: #0071e3; --accent-hover: #0077ed; --accent-soft: rgba(0, 113, 227, .10);
+    --ok: #34c759; --ok-fg: #1c7c37; --warn: #ff8d28; --danger: #ff383c;
+    --code-bg: #1d1d1f; --code-fg: #f5f5f7; --chip: rgba(0, 0, 0, .05);
+    --r-chip: 8px; --r-thumb: 12px; --r-sheet: 16px; --r-card: 18px; --r-panel: 22px;
+    --hit: 44px;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .05);
+    --shadow-lift: 0 12px 32px rgba(0, 0, 0, .10);
+    --shadow-overlay: 0 2px 8px rgba(0, 0, 0, .10), 0 30px 80px rgba(0, 0, 0, .24);
+    --ease: cubic-bezier(.25, 1, .5, 1);
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui,
+            'PingFang SC', 'HarmonyOS Sans', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    --mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000; --bg-elev: #0a0a0b; --panel: #1c1c1e; --panel-2: #2c2c2e;
+      --fg: #f5f5f7; --fg2: rgba(235, 235, 245, .62); --fg3: rgba(235, 235, 245, .45); --fg4: rgba(235, 235, 245, .3);
+      --line: rgba(255, 255, 255, .12); --line-soft: rgba(255, 255, 255, .07);
+      --accent: #0a84ff; --accent-hover: #3d9bff; --accent-soft: rgba(10, 132, 255, .16);
+      --ok: #30d158; --ok-fg: #30d158; --warn: #ff9230; --danger: #ff4245;
+      --code-bg: #0a0a0b; --code-fg: #f5f5f7; --chip: rgba(255, 255, 255, .08);
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, .6), 0 8px 24px rgba(0, 0, 0, .5);
+      --shadow-overlay: 0 2px 8px rgba(0, 0, 0, .7), 0 30px 80px rgba(0, 0, 0, .8);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 var(--font);
+    -webkit-font-smoothing: antialiased; font-optical-sizing: auto;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  b, strong { font-weight: 600; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 22px; }
+  .muted { color: var(--fg2); }
+  .small { font-size: 13px; }
+  .hide { display: none !important; }
+
+  /* ---------- 顶栏 ---------- */
+  header.site {
+    position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid transparent; transition: border-color .25s var(--ease);
+  }
+  header.site.scrolled { border-bottom-color: var(--line); }
+  .bar { display: flex; align-items: center; gap: 10px; min-height: 60px; flex-wrap: nowrap; }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1 1 auto; overflow: hidden; }
+  .brand .txt { min-width: 0; }
+  .logo {
+    width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff;
+    font-weight: 700; font-size: 13px; letter-spacing: -.02em; flex: none;
+    background: linear-gradient(135deg, #0071e3, #5e5ce6);
+  }
+  .brand h1 { font-size: 17px; margin: 0; letter-spacing: -.012em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand .sub { font-size: 12px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar .spacer { flex: 0 1 8px; }
+  .bar > .btn, .bar > .userchip { flex: 0 0 auto; }
+  .brand .short { display: none; }
+  @media (max-width: 560px) {
+    .brand .sub { display: none; }
+    .brand h1 { font-size: 16px; }
+    .brand .full { display: none; }
+    .brand .short { display: inline; }
+    .userchip span { display: none; }        /* 只留头像，把宽度让给品牌与按钮 */
+    .bar { gap: 8px; }
+  }
+  .userchip {
+    display: flex; align-items: center; gap: 8px; padding: 5px 6px 5px 5px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel); max-width: 46vw;
+  }
+  .avatar {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: none; overflow: hidden;
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .userchip span { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---------- 按钮 ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--hit);
+    padding: 0 18px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel);
+    color: var(--fg); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
+    transition: transform .12s var(--ease), background .18s var(--ease), border-color .18s var(--ease);
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--panel-2); border-color: color-mix(in srgb, var(--fg) 18%, transparent); }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+  .btn.primary:hover { background: var(--accent-hover); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--accent); }
+  .btn.ghost:hover { background: var(--accent-soft); }
+  .btn.sm { min-height: 36px; padding: 0 14px; font-size: 13.5px; }
+  .btn[disabled] { opacity: .5; cursor: default; transform: none; }
+  /* 统一图标：内联 SVG（stroke 走 currentColor）—— 界面里不使用 emoji */
+  .i { width: 1.05em; height: 1.05em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8;
+       stroke-linecap: round; stroke-linejoin: round; vertical-align: -.13em; }
+  .i.lg { width: 40px; height: 40px; stroke-width: 1.5; color: var(--accent); }
+
+  /* ---------- 首屏（未登录） ---------- */
+  .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: start; padding: 60px 0 72px; }
+  /* grid 子项默认 min-width:auto：右侧长篇代码块会把整列撑出手机视口，弹窗也会被裁。 */
+  .hero > * { min-width: 0; }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: 26px; padding: 30px 0 40px; } }
+  .eyebrow { font-size: 12.5px; font-weight: 600; color: var(--accent); letter-spacing: .06em; text-transform: uppercase; }
+  .hero h2.big { font-size: clamp(30px, 5.2vw, 46px); line-height: 1.1; letter-spacing: -.028em; margin: 10px 0 14px; font-weight: 700; }
+  .hero p.lede { font-size: 19px; line-height: 1.55; color: var(--fg2); margin: 0 0 24px; }
+  .feat { list-style: none; padding: 0; margin: 0 0 26px; display: grid; gap: 16px; }
+  .feat li { display: flex; gap: 12px; align-items: flex-start; }
+  .feat .ic {
+    width: 28px; height: 28px; border-radius: 9px; background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; flex: none; font-size: 14px; font-weight: 700;
+  }
+  .feat b { display: block; font-size: 15.5px; }
+  .feat span.d { color: var(--fg2); font-size: 14px; }
+  .peek { border-radius: var(--r-card); overflow: hidden; box-shadow: var(--shadow-card); border: 1px solid var(--line-soft); }
+  .peek .peek-head {
+    display: flex; align-items: center; gap: 7px; padding: 9px 12px; background: var(--panel-2);
+    border-bottom: 1px solid var(--line-soft); font-size: 12.5px; color: var(--fg2);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+  .dot.r { background: #ff5f57; } .dot.y { background: #febc2e; } .dot.g { background: #28c840; }
+  pre.code { margin: 0; padding: 16px; background: var(--code-bg); color: var(--code-fg); font-size: 12.5px; line-height: 1.65; overflow: auto; }
+  pre.code .c { color: #98989d; } pre.code .k { color: #ffd60a; } pre.code .s { color: #64d2ff; }
+
+  /* ---------- 卡片 / 表单 ---------- */
+  .card { background: var(--panel); border: 1px solid var(--line-soft); border-radius: var(--r-panel); box-shadow: var(--shadow-card); }
+  .auth { padding: 26px; }
+  .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--chip); margin-bottom: 20px; }
+  .tabs button {
+    flex: 1; min-height: 38px; border: 0; border-radius: 999px; background: transparent; color: var(--fg2);
+    font: inherit; font-size: 14.5px; font-weight: 500; cursor: pointer; transition: background .18s var(--ease), color .18s var(--ease);
+  }
+  .tabs button.on { background: var(--panel); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--fg2); margin-bottom: 6px; }
+  .field input {
+    width: 100%; min-height: var(--hit); padding: 0 14px; border-radius: var(--r-thumb); border: 1px solid var(--line);
+    background: var(--bg-elev); color: inherit; font: inherit; font-size: 16px;
+    transition: border-color .16s var(--ease), box-shadow .16s var(--ease);
+  }
+  .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .field input.bad, .modal textarea.bad { border-color: var(--danger); }
+  .dd { position: relative; }
+  .dd-btn {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: var(--hit); padding: 0 12px 0 14px;
+    border-radius: var(--r-thumb); border: 1px solid var(--line); background: var(--bg-elev); color: inherit;
+    font: inherit; font-size: 15px; cursor: pointer; text-align: left;
+  }
+  .dd-btn:hover { border-color: color-mix(in srgb, var(--fg) 20%, transparent); }
+  .dd-btn[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .dd-sum { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-btn .i.chev { transition: transform .2s var(--ease); }
+  .dd-btn[aria-expanded="true"] .i.chev { transform: rotate(180deg); }
+  .dd-panel {
+    position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 6px); padding: 6px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-sheet);
+    box-shadow: var(--shadow-overlay); max-height: 320px; overflow: auto;
+  }
+  .dd-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-chip); cursor: pointer; min-height: var(--hit); }
+  .dd-row:hover { background: var(--panel-2); }
+  .dd-row input { width: auto; height: 18px; margin-top: 3px; flex: none; }
+  .dd-row .t { font-size: 15px; font-weight: 500; }
+  .dd-row .d { display: block; font-size: 12.5px; color: var(--fg2); }
+  .dd-row[data-locked="1"] .t::after { content: "必需"; margin-left: 8px; font-size: 11.5px; font-weight: 500;
+    color: var(--accent); background: var(--accent-soft); padding: 1px 7px; border-radius: 999px; }
+  .seg { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--chip); }
+  .seg button { flex: 1; min-height: 38px; border: 0; border-radius: 999px; background: transparent; color: var(--fg2);
+    font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .seg button.on { background: var(--panel); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .field .row { display: flex; gap: 8px; }
+  .field .row input { flex: 1; }
+  .hint { font-size: 12.5px; color: var(--fg3); margin-top: 6px; line-height: 1.6; }
+  .auth-links { text-align: right; margin-top: 2px; }
+  .linkbtn {
+    border: 0; background: none; color: var(--accent); font: inherit; font-size: 13.5px;
+    cursor: pointer; padding: 4px 0; min-height: 32px;
+  }
+  .linkbtn:hover { text-decoration: underline; }
+  .err { color: var(--danger); font-size: 13.5px; min-height: 20px; margin-top: 4px; }
+  .form-actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+  .form-actions .btn { flex: 1; }
+
+  /* ---------- 仪表盘 ---------- */
+  .dash { padding: 26px 0 80px; }
+  .dash-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .dash-head h2 { font-size: 28px; letter-spacing: -.022em; margin: 0 0 4px; }
+  .stats { display: flex; gap: 18px; color: var(--fg2); font-size: 13.5px; flex-wrap: wrap; }
+  .stats b { color: var(--fg); font-variant-numeric: tabular-nums; }
+  .empty {
+    text-align: center; padding: 54px 24px; border-radius: var(--r-panel); border: 1px dashed var(--line);
+    background: color-mix(in srgb, var(--panel) 60%, transparent);
+  }
+  .empty .big-ic { font-size: 34px; }
+  .empty h3 { margin: 12px 0 6px; font-size: 19px; letter-spacing: -.012em; }
+  .empty p { margin: 0 auto 18px; max-width: 460px; color: var(--fg2); font-size: 14.5px; }
+
+  .app { padding: 20px 22px; margin-bottom: 14px; }
+  .app-top { display: flex; gap: 14px; align-items: flex-start; }
+  .app-badge {
+    width: 42px; height: 42px; border-radius: var(--r-thumb); flex: none; display: grid; place-items: center;
+    font-weight: 700; font-size: 15px; color: #fff; background: linear-gradient(135deg, var(--accent), #5e5ce6);
+  }
+  .app-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .app-name h3 { margin: 0; font-size: 19px; letter-spacing: -.012em; }
+  .kv { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .kv code { background: var(--chip); padding: 4px 9px; border-radius: 8px; font-size: 12.5px; color: var(--fg); word-break: break-all; }
+  .tag {
+    display: inline-block; font-size: 12px; font-weight: 500; padding: 2px 9px; border-radius: 999px;
+    background: var(--chip); color: var(--fg2); white-space: nowrap;
+  }
+  .tag.blue { background: var(--accent-soft); color: var(--accent); }
+  .tag.green { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok-fg); }
+  .tag.red { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+  .meta { display: grid; gap: 8px; margin: 16px 0 0; }
+  .meta .line { display: flex; gap: 10px; font-size: 14px; align-items: flex-start; }
+  .meta .line > .lb { color: var(--fg3); flex: none; width: 52px; font-size: 13.5px; padding-top: 1px; }
+  .meta .line > .vl { min-width: 0; word-break: break-all; }
+  .scope-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .app-foot {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 18px; padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .app-foot .stat { font-size: 13px; color: var(--fg3); }
+  .app-foot .stat b { color: var(--fg); }
+  .app-foot .spacer { flex: 1; }
+
+  /* ---------- 四步接入 ---------- */
+  .quick { margin-top: 28px; padding: 22px 24px; }
+  .quick h3 { margin: 0 0 4px; font-size: 19px; letter-spacing: -.012em; }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 14px; }
+  .steps li { counter-increment: s; position: relative; padding-left: 38px; }
+  .steps li::before {
+    content: counter(s); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-size: 13.5px; font-weight: 700;
+  }
+  .steps b { font-size: 15.5px; }
+  .steps p { margin: 2px 0 0; color: var(--fg2); font-size: 14px; word-break: break-all; }
+
+  /* ---------- 弹层 ---------- */
+  .mask {
+    position: fixed; inset: 0; z-index: 60; display: none; align-items: center; justify-content: center; padding: 18px;
+    background: rgba(0, 0, 0, .42);
+  }
+  .mask.on { display: flex; animation: fade .18s var(--ease); }
+  @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+  .modal {
+    width: 100%; max-width: 580px; max-height: 88vh; overflow: auto; background: var(--panel);
+    border-radius: var(--r-panel); box-shadow: var(--shadow-overlay); animation: pop .22s var(--ease);
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
+  .modal-head { display: flex; align-items: flex-start; gap: 12px; padding: 22px 22px 0; }
+  .modal-head h2 { margin: 0; font-size: 20px; letter-spacing: -.015em; }
+  .modal-head .x {
+    margin-left: auto; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--panel); color: var(--fg2); font-size: 15px; cursor: pointer; flex: none; line-height: 1;
+  }
+  .modal-head .x:hover { background: var(--panel-2); }
+  .modal-body { padding: 12px 22px 0; }
+  .modal-body p.lead { margin: 0 0 4px; color: var(--fg2); font-size: 14px; }
+  .modal-foot { display: flex; gap: 10px; justify-content: flex-end; padding: 18px 22px 22px; flex-wrap: wrap; }
+  .modal textarea {
+    width: 100%; padding: 12px 14px; border-radius: var(--r-thumb); border: 1px solid var(--line);
+    background: var(--bg-elev); color: inherit; font: inherit; font-size: 15px; resize: vertical; min-height: 74px;
+  }
+  .modal textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .copy-row {
+    display: flex; align-items: center; gap: 8px; background: var(--chip); border-radius: var(--r-thumb); padding: 4px 4px 4px 12px;
+  }
+  .copy-row code { flex: 1; font-size: 13px; word-break: break-all; }
+  .codeblock { margin-top: 4px; }
+  .codeblock pre.code { border-radius: var(--r-thumb); max-height: 300px; }
+  .secret-note {
+    display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--r-thumb);
+    background: color-mix(in srgb, var(--warn) 14%, transparent); font-size: 13.5px; line-height: 1.6;
+  }
+  .try-out { margin-top: 12px; font-size: 13.5px; min-height: 20px; }
+
+  /* ---------- 提示 ---------- */
+  #toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 26px; z-index: 90; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+  #toast .t { background: rgba(29, 29, 31, .94); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; max-width: 86vw; animation: pop .18s var(--ease); }
+  @media (prefers-color-scheme: dark) { #toast .t { background: rgba(245, 245, 247, .96); color: #1d1d1f; } }
+
+  footer.site { border-top: 1px solid var(--line); padding: 22px 0 40px; color: var(--fg3); font-size: 13px; }
+  footer.site .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<p style="padding:8px 20px;font-size:13px">通行密钥：<a href="/app/#/passkeys">在网页端绑定与管理</a>，设备验证成功后登录无需二步验证码或密保。<a href="/api-docs/reference/guide-passkeys-api/">接口说明</a></p>
+
+
+<header class="site" id="siteHead">
+  <div class="wrap bar">
+    <div class="brand">
+      <img class="logo" src="/app/brand-icon.png?v=sage1" alt="CurrentMusic" width="34" height="34" style="background:transparent;object-fit:contain">
+      <div class="txt">
+        <h1><span class="full">CurrentDeveloper</span><span class="short">Developer</span></h1>
+        <div class="sub">接入 CurrentStation 通行证</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <a class="btn sm ghost" href="{{BASE}}/api-docs/reference/guide-passport-api/" target="_blank" rel="noopener">文档</a>
+    <div class="userchip hide" id="userChip">
+      <div class="avatar" id="userAva">U</div>
+      <span id="userName">—</span>
+    </div>
+    <button class="btn sm hide" id="btnLogout">退出</button>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ 未登录 ============ -->
+  <section id="guest">
+    <div class="hero">
+      <div>
+        <div class="eyebrow">CurrentStation Passport</div>
+        <h2 class="big">让你的应用<br>用通行证登录</h2>
+        <p class="lede">用户一次登录，全 Current 系产品通用。你的应用只拿到被授权的信息，<b>永远拿不到密码</b>。</p>
+        <ul class="feat">
+          <li><div class="ic">1</div><div><b>标准 OAuth 2.0 + PKCE</b><span class="d">授权码换令牌；公开客户端无需密钥；刷新令牌 30 天且每次轮换。</span></div></li>
+          <li><div class="ic">2</div><div><b>自助登记，即时可用</b><span class="d">建应用、填主页与回调地址、拿 client_id 与密钥，全在浏览器里完成。</span></div></li>
+          <li><div class="ic">3</div><div><b>用户可控、全程留痕</b><span class="d">用户随时可在设置里解除授权；登记/授权/换令牌/撤销都有审计。</span></div></li>
+        </ul>
+        <div class="peek">
+          <div class="peek-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span style="margin-left:6px">接入长这样</span></div>
+          <pre class="code"><span class="c"># 1) 送用户去授权页（PKCE）</span>
+<span class="s">/cm/passport/authorize</span>?response_type=<span class="k">code</span>
+  &amp;client_id=<span class="s">cs_app_…</span>&amp;redirect_uri=<span class="s">https://你的域名/cb</span>
+  &amp;scope=<span class="k">openid</span>%20<span class="k">profile</span>&amp;code_challenge=<span class="s">…</span>
+
+<span class="c"># 2) 回调用 code 换令牌</span>
+POST <span class="s">/cm/passport/token</span> → <span class="s">cs_at_…</span> + <span class="s">cs_rt_…</span>
+
+<span class="c"># 3) 取资料</span>
+GET <span class="s">/cm/passport/userinfo</span> → { sub, nickname, email }</pre>
+        </div>
+      </div>
+
+      <div class="card auth">
+        <div class="tabs" id="tabs">
+          <button class="on" type="button" data-tab="login">登录</button>
+          <button type="button" data-tab="reg">注册新账号</button>
+        </div>
+
+        <form id="loginForm" autocomplete="on">
+          <div class="field">
+            <label for="lgUser">用户名 / 邮箱 / 手机号</label>
+            <input id="lgUser" autocomplete="username" autocapitalize="off" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="lgPass">密码</label>
+            <input id="lgPass" type="password" autocomplete="current-password">
+          </div>
+          <div class="err" id="lgErr"></div>
+          <div class="form-actions"><button class="btn primary" type="submit" id="btnLogin">登录</button></div>
+          <div class="hint">登录后即可登记应用。通行证账号与 CurrentMusic 客户端通用。</div>
+          <div class="auth-links"><button type="button" class="linkbtn" id="btnForgot">忘记密码？</button></div>
+        </form>
+
+        <form id="regForm" class="hide" autocomplete="on">
+          <div class="field"><label for="rgUser">用户名</label><input id="rgUser" autocapitalize="off" spellcheck="false"></div>
+          <div class="field"><label for="rgNick">昵称</label><input id="rgNick"></div>
+          <div class="field"><label for="rgEmail">邮箱</label><input id="rgEmail" type="email" autocapitalize="off" spellcheck="false"></div>
+          <div class="field">
+            <label for="rgCode">邮箱验证码</label>
+            <div class="row">
+              <input id="rgCode" inputmode="numeric" autocomplete="one-time-code">
+              <button class="btn" type="button" id="btnCode" style="flex:0 0 auto">获取验证码</button>
+            </div>
+          </div>
+          <div class="field"><label for="rgPass">密码（至少 6 位）</label><input id="rgPass" type="password" autocomplete="new-password"></div>
+          <div class="err" id="rgErr"></div>
+          <div class="form-actions"><button class="btn primary" type="submit" id="btnRegister">注册并登录</button></div>
+          <label class="hint"><input type="checkbox" id="legalConsent" required> 我已阅读并同意 <a href="{{BASE}}/app/#/legal/terms" target="_blank" rel="noopener">《用户协议》</a> 与 <a href="{{BASE}}/app/#/legal/privacy" target="_blank" rel="noopener">《隐私政策》</a></label>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 已登录 ============ -->
+  <section id="dash" class="dash hide">
+    <div class="dash-head">
+      <div style="flex:1;min-width:220px">
+        <h2>我的应用</h2>
+        <div class="stats">
+          <span>已登记 <b id="stUsed">0</b> / <b id="stMax">5</b></span>
+          <span>在用授权 <b id="stGrants">0</b></span>
+          <span id="stAdmin" class="hide">管理员</span>
+        </div>
+      </div>
+      <label class="small muted hide" id="allWrap" style="display:flex;align-items:center;gap:6px;min-height:44px">
+        <input type="checkbox" id="chkAll" style="width:auto;height:18px"> 显示全部
+      </label>
+      <button class="btn primary" id="btnNew"><svg class="i"><use href="#i-plus"/></svg>新建应用</button>
+    </div>
+
+    <div id="apps"></div>
+
+    <div class="card quick">
+      <h3>四步接入</h3>
+      <p class="muted small" style="margin:0">拿到 <code>client_id</code> 后，按下面四步就能跑通「通行证登录」。</p>
+      <ol class="steps">
+        <li><b>把用户送到授权页</b><p><code>GET /cm/passport/authorize?client_id=…&amp;redirect_uri=…&amp;scope=…&amp;state=…&amp;code_challenge=…&amp;code_challenge_method=S256</code></p></li>
+        <li><b>回调里拿 code</b><p>用户在通行证页面点「同意」后跳回你登记的回调地址，带上 <code>?code=…&amp;state=…</code>（code 60 秒、只能用一次）。</p></li>
+        <li><b>用 code 换令牌</b><p>服务端 <code>POST /cm/passport/token</code>，带 <code>code_verifier</code>（公开客户端）或 <code>client_secret</code>（机密客户端）。</p></li>
+        <li><b>拿用户信息</b><p><code>GET /cm/passport/userinfo</code> 带 <code>Authorization: Bearer cs_at_…</code>，按 scope 返回昵称/头像/脱敏邮箱等。</p></li>
+      </ol>
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn sm" href="{{BASE}}/api-docs/reference/guide-passport-api/" target="_blank" rel="noopener">完整文档</a>
+        <a class="btn sm ghost" href="{{BASE}}/cm/passport/meta" target="_blank" rel="noopener">平台元信息</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <span>CurrentDeveloper · 由 CurrentStation 通行证提供身份与授权</span>
+    <span style="flex:1"></span>
+    <a href="{{BASE}}/api-docs/reference/guide-passport-api/" target="_blank" rel="noopener">接口文档</a>
+    <a href="{{BASE}}/cm/passport/meta" target="_blank" rel="noopener">平台元信息</a>
+    <a href="{{BASE}}/app/#/legal/privacy" target="_blank" rel="noopener">隐私政策</a>
+    <a href="{{BASE}}/app/#/legal/terms" target="_blank" rel="noopener">用户协议</a>
+    <a href="{{BASE}}/app/" target="_blank" rel="noopener">CurrentMusic</a>
+  </div>
+</footer>
+
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var BASE = '{{BASE}}';
+  var API = BASE + '/cm';
+  var TKEY = 'csdev.token', UKEY = 'csdev.user';   // 独立会话：与 CurrentMusic 的 cm.* 无关
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  function toast(msg) {
+    var box = $('toast'), d = document.createElement('div');
+    d.className = 't'; d.textContent = msg; box.appendChild(d);
+    setTimeout(function () { d.remove(); }, 2600);
+  }
+  function copyText(text, okMsg) {
+    var done = function () { toast(okMsg || '已复制'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fb);
+    else fb();
+    function fb() {
+      var t = document.createElement('textarea');
+      t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); done(); } catch (e) { toast('复制失败，请手动选择'); }
+      t.remove();
+    }
+  }
+  function fmtTime(sec) {
+    if (!sec) return '—';
+    var d = new Date(sec * 1000), p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  function token() { try { return localStorage.getItem(TKEY) || ''; } catch (e) { return ''; } }
+  function user() { try { return JSON.parse(localStorage.getItem(UKEY) || 'null'); } catch (e) { return null; } }
+  function setSession(tok, u) {
+    try {
+      if (tok) localStorage.setItem(TKEY, tok); else localStorage.removeItem(TKEY);
+      if (u) localStorage.setItem(UKEY, JSON.stringify(u)); else localStorage.removeItem(UKEY);
+    } catch (e) { /* 隐私模式 */ }
+  }
+  function api(method, path, body, opts) {
+    opts = opts || {};
+    var headers = { 'Content-Type': 'application/json' };
+    if (opts.auth !== false && token()) headers.Authorization = 'Bearer ' + token();
+    return fetch(API + path, { method: method, headers: headers,
+      body: body === undefined ? undefined : JSON.stringify(body) })
+      .then(function (r) {
+        return r.text().then(function (txt) {
+          var data = null; try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
+          if (r.ok) return data || {};
+          if (r.status === 401 && opts.auth !== false && !opts.noLogout) { setSession('', null); render(); }
+          throw new Error((data && (data.error_description || data.error)) || ('HTTP ' + r.status));
+        });
+      });
+  }
+
+  // ---------- 弹层 ----------
+  var lastFocus = null;
+  function openModal(html) {
+    lastFocus = document.activeElement;
+    $('modal').innerHTML = html;
+    $('mask').classList.add('on');
+    var first = $('modal').querySelector('input, textarea');
+    if (first && first.focus) setTimeout(function () { first.focus(); }, 60);
+    return $('modal');
+  }
+  function closeModal() {
+    $('mask').classList.remove('on');
+    $('modal').innerHTML = '';
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  $('mask').addEventListener('click', function (e) { if (e.target === $('mask')) closeModal(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && $('mask').classList.contains('on')) closeModal();
+  });
+  addEventListener('scroll', function () { $('siteHead').classList.toggle('scrolled', scrollY > 6); }, { passive: true });
+
+  // ---------- 登录 / 注册 ----------
+  var tabs = $('tabs');
+  tabs.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-tab]'); if (!b) return;
+    var isLogin = b.dataset.tab === 'login';
+    [].forEach.call(tabs.querySelectorAll('button'), function (x) { x.classList.toggle('on', x === b); });
+    $('loginForm').classList.toggle('hide', !isLogin);
+    $('regForm').classList.toggle('hide', isLogin);
+  });
+  var pending2FA = '';
+  var pendingQuestion = false;
+  var otpRow = document.createElement('div');
+  otpRow.className = 'field'; otpRow.hidden = true;
+  otpRow.innerHTML = '<label for="loginOTP">两步验证：验证器验证码或恢复码</label><input id="loginOTP" autocomplete="one-time-code" placeholder="6 位验证码或恢复码"><button type="button" id="cancelOTP">重新输入账号密码</button>';
+  $('loginForm').appendChild(otpRow);
+  $('cancelOTP').onclick = function () { pending2FA = ''; otpRow.hidden = true; $('lgErr').textContent = ''; };
+  function acceptLogin(r) {
+    if (r.requires2FA || r.requiresSecurityQuestion) {
+      pending2FA = r.challengeToken; pendingQuestion = !!r.requiresSecurityQuestion;
+      otpRow.querySelector('label').textContent = pendingQuestion ? '密保问题：' + r.securityQuestion : '两步验证：验证器验证码或恢复码';
+      $('loginOTP').type = pendingQuestion ? 'password' : 'text';
+      $('loginOTP').placeholder = pendingQuestion ? '请输入密保答案' : '6 位验证码或恢复码';
+      $('loginOTP').autocomplete = pendingQuestion ? 'off' : 'one-time-code';
+      otpRow.hidden = false; $('loginOTP').value = ''; $('loginOTP').focus();
+      return;
+    }
+    pending2FA = ''; otpRow.hidden = true;
+    setSession(r.token, r.user); toast('已登录'); render();
+  }
+  $('loginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (pending2FA) {
+      var verifyBtn = $('btnLogin'); verifyBtn.disabled = true;
+      api('POST', pendingQuestion ? '/auth/security-question/login' : '/auth/2fa/login', pendingQuestion ? { challengeToken: pending2FA, answer: $('loginOTP').value } : { challengeToken: pending2FA, code: $('loginOTP').value.trim() }, { auth: false })
+        .then(acceptLogin).catch(function (err) { $('lgErr').textContent = err.message; })
+        .then(function () { verifyBtn.disabled = false; });
+      return;
+    }
+
+    var username = $('lgUser').value.trim(), password = $('lgPass').value, btn = $('btnLogin');
+    if (!username || !password) { $('lgErr').textContent = '请填写用户名与密码'; return; }
+    $('lgErr').textContent = ''; btn.disabled = true; btn.textContent = '登录中…';
+    api('POST', '/auth/login', { username: username, password: password, device: '开发者平台', platform: 'web' }, { auth: false })
+      .then(acceptLogin)
+      .catch(function (err) { $('lgErr').textContent = err.message; })
+      .then(function () { btn.disabled = false; btn.textContent = '登录'; });
+  });
+  $('btnForgot').onclick = function () {
+    var m = openModal(
+      '<div class="modal-head"><h2>找回密码</h2>'
+      + '<button class="x" type="button" data-x="cancel"><svg class="i"><use href="#i-x"/></svg></button></div>'
+      + '<div class="modal-body">'
+      + '<p class="lead">用注册或已绑定的邮箱接收验证码；重置成功后所有设备需重新登录。</p>'
+      + '<div class="field" style="margin-top:12px"><label for="fgEmail">邮箱</label>'
+      + '<input id="fgEmail" type="email" autocomplete="email" autocapitalize="off" spellcheck="false"></div>'
+      + '<div class="field"><label for="fgCode">邮箱验证码</label><div class="row">'
+      + '<input id="fgCode" inputmode="numeric" autocomplete="one-time-code">'
+      + '<button class="btn" type="button" id="fgSend" style="flex:0 0 auto">获取验证码</button></div></div>'
+      + '<div class="field"><label for="fgPass">新密码（至少 6 位）</label>'
+      + '<input id="fgPass" type="password" autocomplete="new-password"></div>'
+      + '<div class="err" id="fgErr"></div></div>'
+      + '<div class="modal-foot"><button class="btn" type="button" data-x="cancel">取消</button>'
+      + '<button class="btn primary" type="button" data-x="ok">重置密码</button></div>');
+    [].forEach.call(m.querySelectorAll('[data-x=cancel]'), function (b) { b.onclick = closeModal; });
+    var send = m.querySelector('#fgSend'), timer = 0;
+    send.onclick = function () {
+      var email = m.querySelector('#fgEmail').value.trim(), btn = this;
+      if (!email) { m.querySelector('#fgErr').textContent = '请先填邮箱'; return; }
+      m.querySelector('#fgErr').textContent = ''; btn.disabled = true;
+      api('POST', '/auth/password/code', { email: email }, { auth: false })
+        .then(function () {
+          toast('验证码已发送（5 分钟内有效）');
+          var left = 60; btn.textContent = left + 's';
+          clearInterval(timer);
+          timer = setInterval(function () {
+            if (--left <= 0) { clearInterval(timer); btn.disabled = false; btn.textContent = '获取验证码'; }
+            else btn.textContent = left + 's';
+          }, 1000);
+        })
+        .catch(function (e) { btn.disabled = false; m.querySelector('#fgErr').textContent = e.message; });
+    };
+    m.querySelector('[data-x=ok]').onclick = function () {
+      var email = m.querySelector('#fgEmail').value.trim();
+      var code = m.querySelector('#fgCode').value.trim();
+      var pw = m.querySelector('#fgPass').value, btn = this;
+      if (!email || !code || !pw) { m.querySelector('#fgErr').textContent = '请把表单填完整'; return; }
+      if (pw.length < 6 || pw.length > 64) { m.querySelector('#fgErr').textContent = '新密码需 6~64 位'; return; }
+      m.querySelector('#fgErr').textContent = '';
+      btn.disabled = true; btn.textContent = '重置中…';
+      api('POST', '/auth/password/reset', {
+        email: email, code: code, newPassword: pw,
+        device: '开发者平台', platform: 'web',
+      }, { auth: false })
+        .then(function (r) {
+          closeModal();
+          toast('密码已重置，请用新密码登录');
+          $('lgUser').value = r.username || email;
+          $('lgPass').value = '';
+        })
+        .catch(function (e) {
+          m.querySelector('#fgErr').textContent = e.message;
+          btn.disabled = false; btn.textContent = '重置密码';
+        });
+    };
+  };
+  var codeTimer = 0;
+  $('btnCode').onclick = function () {
+    var email = $('rgEmail').value.trim(), btn = this;
+    if (!email) { $('rgErr').textContent = '请先填邮箱'; return; }
+    $('rgErr').textContent = ''; btn.disabled = true;
+    api('POST', '/auth/email/code', { email: email }, { auth: false })
+      .then(function () {
+        toast('验证码已发送（5 分钟内有效）');
+        var left = 60; btn.textContent = left + 's 后重发';
+        clearInterval(codeTimer);
+        codeTimer = setInterval(function () {
+          if (--left <= 0) { clearInterval(codeTimer); btn.disabled = false; btn.textContent = '获取验证码'; }
+          else btn.textContent = left + 's 后重发';
+        }, 1000);
+      })
+      .catch(function (err) { btn.disabled = false; $('rgErr').textContent = err.message; });
+  };
+  $('regForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!$('legalConsent').checked) { $('rgErr').textContent = '请先阅读并勾选同意《用户协议》与《隐私政策》'; return; }
+    var payload = { username: $('rgUser').value.trim(), nickname: $('rgNick').value.trim(),
+      email: $('rgEmail').value.trim(), emailCode: $('rgCode').value.trim(), password: $('rgPass').value,
+      device: '开发者平台', platform: 'web' };
+    var btn = $('btnRegister');
+    if (!payload.username || !payload.nickname || !payload.email || !payload.emailCode || !payload.password) {
+      $('rgErr').textContent = '请把表单填完整'; return;
+    }
+    $('rgErr').textContent = ''; btn.disabled = true; btn.textContent = '注册中…';
+    api('POST', '/auth/register', payload, { auth: false })
+      .then(function (r) { setSession(r.token, r.user); toast('注册成功，欢迎！'); render(); })
+      .catch(function (err) { $('rgErr').textContent = err.message; })
+      .then(function () { btn.disabled = false; btn.textContent = '注册并登录'; });
+  });
+  $('btnLogout').onclick = function () {
+    api('POST', '/auth/logout', {}).catch(function () {}).then(function () {
+      setSession('', null); toast('已退出'); render();
+    });
+  };
+
+  // ---------- 接入代码 ----------
+  function snippet(a) {
+    var cb = (a.redirects || [])[0] || 'https://你的域名/auth/callback';
+    return '# 1) 送用户去授权页（PKCE：verifier 随机 43~128 位，challenge = BASE64URL(SHA256(verifier))）\n'
+      + BASE + '/cm/passport/authorize?response_type=code\n'
+      + '  &client_id=' + a.clientId + '\n'
+      + '  &redirect_uri=' + encodeURIComponent(cb) + '\n'
+      + '  &scope=' + encodeURIComponent(a.scopes || 'openid profile') + '\n'
+      + '  &state=<随机串>\n  &code_challenge=<challenge>&code_challenge_method=S256\n\n'
+      + '# 2) 回调用 code 换令牌\n'
+      + 'curl -X POST ' + BASE + '/cm/passport/token -H "Content-Type: application/json" -d \'{\n'
+      + '  "grant_type":"authorization_code","client_id":"' + a.clientId + '",\n'
+      + '  "client_secret":"<你的 client_secret>","code":"<回调里的 code>",\n'
+      + '  "redirect_uri":"' + cb + '","code_verifier":"<第 1 步的 verifier>"}\'\n\n'
+      + '# 3) 取用户信息\n'
+      + 'curl ' + BASE + '/cm/passport/userinfo -H "Authorization: Bearer cs_at_…"';
+  }
+  function snippetBlock(a) {
+    return '<div class="codeblock"><pre class="code">' + esc(snippet(a)) + '</pre></div>';
+  }
+  function copyBtn(text, label) {
+    return '<button class="btn sm" type="button" data-copy="' + esc(text) + '">' + (label || '复制') + '</button>';
+  }
+  function bindCopy(root) {
+    [].forEach.call(root.querySelectorAll('[data-copy]'), function (b) {
+      b.onclick = function () {
+        var old = b.textContent;
+        b.innerHTML = '<svg class="i"><use href="#i-check"/></svg> 已复制'; b.disabled = true;
+        copyText(b.dataset.copy, '已复制');
+        setTimeout(function () { b.textContent = old; b.disabled = false; }, 1200);
+      };
+    });
+  }
+
+  // ---------- 凭据弹窗（创建后 / 轮换后） ----------
+  function showSecret(app, secret) {
+    var m = openModal(
+      '<div class="modal-head"><h2>' + (secret ? '保存你的 client_secret' : '应用已创建') + '</h2>'
+      + '<button class="x" type="button" data-x="close"><svg class="i"><use href="#i-x"/></svg></button></div>'
+      + '<div class="modal-body">'
+      + (secret
+          ? '<div class="secret-note"><svg class="i" style="width:20px;height:20px;color:var(--warn)"><use href="#i-warn"/></svg><div><b>只显示这一次。</b>请立刻存进应用服务端的环境变量；'
+            + '服务端只保存哈希，之后无法再查看（丢了就轮换）。</div></div>'
+          : '<p class="lead">公开客户端（App / 纯前端）不需要密钥，但换令牌时必须带 <code>code_verifier</code>。</p>')
+      + '<div class="field" style="margin-top:14px"><label>client_id</label>'
+      + '<div class="copy-row"><code>' + esc(app.clientId) + '</code>' + copyBtn(app.clientId) + '</div></div>'
+      + (secret
+          ? '<div class="field"><label>client_secret</label>'
+            + '<div class="copy-row"><code>' + esc(secret) + '</code>' + copyBtn(secret) + '</div></div>' : '')
+      + '<div class="field" style="margin-top:18px"><label>接入代码</label>' + snippetBlock(app) + '</div>'
+      + '<div class="try-out" id="tryOut"></div>'
+      + '</div>'
+      + '<div class="modal-foot">'
+      + (secret ? '<button class="btn" type="button" data-x="try">试取应用令牌</button>' : '')
+      + '<button class="btn" type="button" data-x="docs">查看文档</button>'
+      + '<button class="btn primary" type="button" data-x="close">完成</button></div>');
+    bindCopy(m);
+    [].forEach.call(m.querySelectorAll('[data-x]'), function (b) {
+      var act = b.dataset.x;
+      b.onclick = function () {
+        if (act === 'close') return closeModal();
+        if (act === 'docs') return window.open(BASE + '/api-docs/reference/guide-passport-api/', '_blank');
+        if (act === 'try') {
+          var out = $('tryOut'); out.textContent = '请求中…'; b.disabled = true;
+          api('POST', '/passport/token', { grant_type: 'client_credentials', client_id: app.clientId,
+            client_secret: secret, scope: 'openid' }, { auth: false, noLogout: true })
+            .then(function (d) {
+              out.innerHTML = '<span style="color:var(--ok-fg)"><svg class="i"><use href="#i-check"/></svg> 拿到应用令牌 ' + esc(String(d.access_token || '').slice(0, 18))
+                + '…</span>（' + Math.round((d.expires_in || 0) / 3600) + ' 小时有效）';
+            })
+            .catch(function (e) { out.innerHTML = '<span style="color:var(--danger)"><svg class="i"><use href="#i-alert"/></svg> ' + esc(e.message) + '</span>'; })
+            .then(function () { b.disabled = false; });
+        }
+      };
+    });
+  }
+
+  // ---------- 应用表单 ----------
+  var SCOPE_OPTS = [
+    { k: 'openid', d: '登录身份：应用会拿到你的通行证标识（sub），必需' },
+    { k: 'profile', d: '公开资料：昵称、头像、个人简介' },
+    { k: 'email', d: '邮箱（脱敏返回，如 a***@qq.com）' },
+    { k: 'phone', d: '手机号（脱敏返回，如 138****8000）' },
+    { k: 'offline_access', d: '长期授权：允许 30 天内刷新令牌（不下发刷新令牌）' }
+  ];
+  var SCOPE_ORDER = SCOPE_OPTS.map(function (o) { return o.k; });
+
+  function redirectIssue(list) {
+    if (!list.length) return '请至少填一个回调地址';
+    for (var i = 0; i < list.length; i++) {
+      var v = list[i];
+      if (v.indexOf('*') >= 0) return '回调地址不支持通配符：' + v;
+      var ok = /^https?:\/\//.test(v);
+      if (!ok) return '回调地址要以 http(s):// 开头：' + v;
+      if (/^http:\/\//.test(v) && !/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(v)) {
+        return '除本机调试外必须用 https：' + v;
+      }
+    }
+    return '';
+  }
+
+  function appForm(app) {
+    var isNew = !app;
+    var a = app || { name: '', homepage: '', redirects: [], scopes: 'openid profile', public: false };
+    var m = openModal(
+      '<div class="modal-head"><h2>' + (isNew ? '新建应用' : '编辑应用') + '</h2>'
+      + '<button class="x" type="button" data-x="cancel"><svg class="i"><use href="#i-x"/></svg></button></div>'
+      + '<div class="modal-body">'
+      + '<div class="field"><label for="fName">应用名称</label><input id="fName" value="' + esc(a.name) + '" placeholder="例如 CurrentSpace"></div>'
+      + '<div class="field"><label for="fHome">应用主页（可选）</label><input id="fHome" value="' + esc(a.homepage || '') + '" placeholder="https://…"></div>'
+      + '<div class="field"><label for="fRedirect">回调地址 redirect_uri（每行一个）</label>'
+      + '<textarea id="fRedirect" rows="2" placeholder="https://你的域名/auth/callback">' + esc((a.redirects || []).join('\n')) + '</textarea>'
+      + '<div class="hint" id="fRedirectHint">必须 https（本机调试可用 http://localhost）；服务端精确匹配，不支持通配。</div></div>'
+      + '<div class="field"><label>需要的权限 scope</label>'
+      + '<div class="dd">'
+      + '<button type="button" class="dd-btn" id="fScopeBtn" aria-expanded="false" aria-haspopup="listbox">'
+      + '<span class="dd-sum" id="fScopeSum"></span><svg class="i chev"><use href="#i-chev"/></svg></button>'
+      + '<div class="dd-panel hide" id="fScopePanel">'
+      + SCOPE_OPTS.map(function (o) {
+          var on = (a.scopes || 'openid profile').split(/\s+/).indexOf(o.k) >= 0 || o.k === 'openid';
+          return '<label class="dd-row"' + (o.k === 'openid' ? ' data-locked="1"' : '') + '>'
+            + '<input type="checkbox" data-scope="' + o.k + '"' + (on ? ' checked' : '') + (o.k === 'openid' ? ' disabled' : '') + '>'
+            + '<span><span class="t">' + esc(o.k) + '</span><span class="d">' + esc(o.d) + '</span></span></label>';
+        }).join('')
+      + '</div></div>'
+      + '<div class="hint">点开勾选即可，不用手写。<code>openid</code> 必需；勾了 <code>offline_access</code> 才会下发刷新令牌。</div></div>'
+      + '<div class="field"><label>客户端类型</label>'
+      + '<div class="seg" id="fType">'
+      + '<button type="button" data-v="confidential"' + (a.public ? '' : ' class="on"') + '>机密客户端</button>'
+      + '<button type="button" data-v="public"' + (a.public ? ' class="on"' : '') + '>公开客户端</button></div>'
+      + '<div class="hint" id="fTypeHint"></div></div>'
+      + '<div class="err" id="fErr"></div>'
+      + '</div>'
+      + '<div class="modal-foot"><button class="btn" type="button" data-x="cancel">取消</button>'
+      + '<button class="btn primary" type="button" data-x="ok">' + (isNew ? '创建应用' : '保存') + '</button></div>');
+
+    // —— scope 下拉（多选）——
+    var panel = m.querySelector('#fScopePanel'), btn = m.querySelector('#fScopeBtn'), sum = m.querySelector('#fScopeSum');
+    function boxes() { return [].slice.call(panel.querySelectorAll('input[data-scope]')); }
+    function selectedScopes() {
+      var got = boxes().filter(function (b) { return b.checked; }).map(function (b) { return b.dataset.scope; });
+      return SCOPE_ORDER.filter(function (k) { return got.indexOf(k) >= 0; });
+    }
+    function syncScope() {
+      var list = selectedScopes();
+      sum.innerHTML = list.length
+        ? list.map(esc).join(' · ')
+        : '<span class="ph">选择应用需要的权限…</span>';
+    }
+    function closePanel() { panel.classList.add('hide'); btn.setAttribute('aria-expanded', 'false'); }
+    btn.onclick = function (e) {
+      e.stopPropagation();                       // 否则冒泡到 document 上的 closePanel 立刻又关掉
+      var hidden = panel.classList.toggle('hide');
+      btn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+    };
+    boxes().forEach(function (b) { b.onchange = syncScope; });
+    panel.addEventListener('click', function (e) { e.stopPropagation(); });
+    document.addEventListener('click', closePanel);
+    syncScope();
+
+    // —— 客户端类型 ——
+    var isPublic = !!a.public;
+    var typeHint = m.querySelector('#fTypeHint');
+    function syncType() {
+      [].forEach.call(m.querySelectorAll('#fType button'), function (b) {
+        b.classList.toggle('on', (b.dataset.v === 'public') === isPublic);
+      });
+      typeHint.textContent = isPublic
+        ? '公开客户端：不签发密钥，必须使用 PKCE —— 适用于原生 App、纯前端 SPA。'
+        : '机密客户端：签发 client_secret，只能放在有服务端的应用里（密钥不要写进前端）。';
+    }
+    [].forEach.call(m.querySelectorAll('#fType button'), function (b) {
+      b.onclick = function () { isPublic = b.dataset.v === 'public'; syncType(); };
+    });
+    syncType();
+
+    // —— 回调地址实时校验 ——
+    var ta = m.querySelector('#fRedirect'), rHint = m.querySelector('#fRedirectHint');
+    var rHintDefault = rHint.textContent;
+    function checkRedirects(show) {
+      var list = ta.value.split(/[\n,]/).map(function (x) { return x.trim(); }).filter(Boolean);
+      var bad = redirectIssue(list);
+      ta.classList.toggle('bad', !!bad && show);
+      if (show) {
+        rHint.textContent = bad || ('将登记 ' + list.length + ' 个回调地址：' + list.join(' , '));
+        rHint.style.color = bad ? 'var(--danger)' : '';
+      } else {
+        rHint.textContent = rHintDefault; rHint.style.color = '';
+      }
+      return { list: list, bad: bad };
+    }
+    ta.addEventListener('input', function () { checkRedirects(true); });
+    ta.addEventListener('blur', function () { checkRedirects(true); });
+
+    [].forEach.call(m.querySelectorAll('[data-x=cancel]'), function (b) { b.onclick = closeModal; });
+    m.querySelector('[data-x=ok]').onclick = function () {
+      var okBtn = this;
+      var r = checkRedirects(true);
+      var name = m.querySelector('#fName').value.trim();
+      if (!name) { m.querySelector('#fErr').textContent = '请填写应用名称'; return; }
+      if (r.bad) { m.querySelector('#fErr').textContent = r.bad; return; }
+      var payload = { name: name, homepage: m.querySelector('#fHome').value.trim(),
+        redirects: r.list, scopes: selectedScopes().join(' '), public: isPublic };
+      m.querySelector('#fErr').textContent = '';
+      document.removeEventListener('click', closePanel);
+      okBtn.disabled = true; okBtn.textContent = '提交中…';
+      (isNew ? api('POST', '/passport/apps', payload)
+             : api('PUT', '/passport/apps/' + encodeURIComponent(app.clientId), payload))
+        .then(function (res) {
+          closeModal();
+          var view = { clientId: isNew ? res.clientId : app.clientId, redirects: payload.redirects, scopes: payload.scopes };
+          if (isNew) { toast('应用已创建'); loadApps(); showSecret(view, res.clientSecret || ''); }
+          else if (res.clientSecret) { loadApps(); showSecret(view, res.clientSecret); }
+          else { toast('已保存'); loadApps(); }
+        })
+        .catch(function (e) {
+          okBtn.disabled = false; okBtn.textContent = isNew ? '创建应用' : '保存';
+          m.querySelector('#fErr').textContent = e.message;
+        });
+    };
+  }
+
+  // ---------- 列表 ----------
+  var apps = [];
+  function scopeChips(scopes) {
+    var list = String(scopes || '').split(/\s+/).filter(Boolean);
+    if (!list.length) list = ['openid'];
+    return '<div class="scope-chips">' + list.map(function (s) {
+      return '<span class="tag blue">' + esc(s) + '</span>';
+    }).join('') + '</div>';
+  }
+  function initialsOf(name) {
+    var s = String(name || 'A').trim();
+    if (/^[\x00-\x7f]+$/.test(s)) {
+      var words = s.split(/[\s._-]+/).filter(Boolean);
+      if (words.length > 1) return (words[0][0] + words[1][0]).toUpperCase();
+      var caps = s.match(/[A-Z]/g);
+      if (caps && caps.length > 1) return (caps[0] + caps[1]).toUpperCase();
+      return s.slice(0, 2).toUpperCase();
+    }
+    return s.slice(0, 1);          // 中文名取首字
+  }
+  function appCard(a) {
+    var initials = initialsOf(a.name);
+    return '<article class="card app" data-id="' + esc(a.clientId) + '">'
+      + '<div class="app-top">'
+      + '<div class="app-badge">' + esc(initials) + '</div>'
+      + '<div style="flex:1;min-width:0">'
+      + '<div class="app-name"><h3>' + esc(a.name) + '</h3>'
+      + (a.firstParty ? '<span class="tag green">官方</span>' : '')
+      + (a.public ? '<span class="tag">公开客户端</span>' : '<span class="tag">机密客户端</span>')
+      + (a.disabled ? '<span class="tag red">已停用</span>' : '')
+      + (a.mine === false ? '<span class="tag">他人</span>' : '')
+      + '</div>'
+      + '<div class="kv"><code>' + esc(a.clientId) + '</code>' + copyBtn(a.clientId, '复制 ID') + '</div>'
+      + '</div></div>'
+      + '<div class="meta">'
+      + '<div class="line"><span class="lb">权限</span><span class="vl">' + scopeChips(a.scopes) + '</span></div>'
+      + '<div class="line"><span class="lb">回调</span><span class="vl mono small">' + esc((a.redirects || []).join('  ·  ') || '（未设置）') + '</span></div>'
+      + (a.homepage ? '<div class="line"><span class="lb">主页</span><span class="vl small"><a href="' + esc(a.homepage)
+          + '" target="_blank" rel="noopener">' + esc(a.homepage) + '</a></span></div>' : '')
+      + '</div>'
+      + '<div class="app-foot">'
+      + '<span class="stat">在用授权 <b>' + (a.grants || 0) + '</b></span>'
+      + '<span class="stat">创建于 ' + fmtTime(a.createdAt) + '</span>'
+      + '<span class="spacer"></span>'
+      + '<button class="btn sm" type="button" data-act="snippet"><svg class="i"><use href="#i-code"/></svg>接入代码</button>'
+      + '<button class="btn sm" type="button" data-act="edit"><svg class="i"><use href="#i-edit"/></svg>编辑</button>'
+      + (a.public ? '' : '<button class="btn sm" type="button" data-act="rotate"><svg class="i"><use href="#i-key"/></svg>轮换密钥</button>')
+      + '<button class="btn sm" type="button" data-act="toggle"><svg class="i"><use href="#i-power"/></svg>' + (a.disabled ? '启用' : '停用') + '</button>'
+      + '</div></article>';
+  }
+  function skeleton() {
+    return '<div class="card app" style="opacity:.55"><div class="app-top">'
+      + '<div class="app-badge" style="background:var(--chip)"></div>'
+      + '<div style="flex:1"><div style="height:19px;width:38%;background:var(--chip);border-radius:6px"></div>'
+      + '<div style="height:13px;width:62%;background:var(--chip);border-radius:6px;margin-top:10px"></div></div></div></div>';
+  }
+  function loadApps() {
+    var box = $('apps');
+    box.innerHTML = skeleton() + skeleton();
+    api('GET', '/passport/apps' + ($('chkAll').checked ? '?all=1' : ''))
+      .then(function (d) {
+        apps = d.apps || [];
+        var q = d.quota || {};
+        var total = apps.reduce(function (n, a) { return n + (a.grants || 0); }, 0);
+        $('stUsed').textContent = (q.used != null ? q.used : apps.length);
+        $('stMax').textContent = q.max || 5;
+        $('stGrants').textContent = total;
+        $('stAdmin').classList.toggle('hide', !q.admin);
+        $('allWrap').classList.toggle('hide', !q.admin);
+        if (!apps.length) {
+          box.innerHTML = '<div class="empty"><svg class="i lg"><use href="#i-plug"/></svg><h3>还没有应用</h3>'
+            + '<p>建一个应用，填上名称与回调地址，就能用通行证登录了 —— 全程在你自己的浏览器里完成。</p>'
+            + '<button class="btn primary" type="button" id="btnNewEmpty">新建应用</button></div>';
+          var b = $('btnNewEmpty');
+          if (b) b.onclick = function () { appForm(null); };
+          return;
+        }
+        box.innerHTML = apps.map(appCard).join('');
+        bindCopy(box);
+        [].forEach.call(box.querySelectorAll('.app'), function (card) {
+          var a = apps.filter(function (x) { return x.clientId === card.dataset.id; })[0];
+          if (!a) return;
+          [].forEach.call(card.querySelectorAll('[data-act]'), function (btn) {
+            btn.onclick = function () {
+              var act = btn.dataset.act;
+              if (act === 'snippet') {
+                var m = openModal('<div class="modal-head"><h2>' + esc(a.name) + ' · 接入代码</h2>'
+                  + '<button class="x" type="button" data-x="close"><svg class="i"><use href="#i-x"/></svg></button></div>'
+                  + '<div class="modal-body"><p class="lead">把 <code>&lt;你的 client_secret&gt;</code> 换成保存的那把；'
+                  + '公开客户端不带密钥，改为在换令牌时传 <code>code_verifier</code>。</p>'
+                  + snippetBlock(a) + '</div>'
+                  + '<div class="modal-foot"><button class="btn" type="button" data-x="copy">复制全部</button>'
+                  + '<button class="btn" type="button" data-x="docs">文档</button>'
+                  + '<button class="btn primary" type="button" data-x="close">关闭</button></div>');
+                [].forEach.call(m.querySelectorAll('[data-x]'), function (b2) {
+                  b2.onclick = function () {
+                    if (b2.dataset.x === 'copy') return copyText(snippet(a), '接入代码已复制');
+                    if (b2.dataset.x === 'docs') return window.open(BASE + '/api-docs/reference/guide-passport-api/', '_blank');
+                    closeModal();
+                  };
+                });
+                return;
+              }
+              if (act === 'edit') return appForm(a);
+              if (act === 'rotate') {
+                var m2 = openModal('<div class="modal-head"><h2>轮换 client_secret</h2>'
+                  + '<button class="x" type="button" data-x="cancel"><svg class="i"><use href="#i-x"/></svg></button></div>'
+                  + '<div class="modal-body"><p class="lead">新密钥<b>只显示一次</b>，旧密钥立即失效。'
+                  + '轮换会同时撤销该应用已发出的全部授权，客户端需要重新走一次授权。</p></div>'
+                  + '<div class="modal-foot"><button class="btn" type="button" data-x="cancel">取消</button>'
+                  + '<button class="btn primary" type="button" data-x="ok">轮换密钥</button></div>');
+                [].forEach.call(m2.querySelectorAll('[data-x=cancel]'), function (b2) { b2.onclick = closeModal; });
+                m2.querySelector('[data-x=ok]').onclick = function () {
+                  var b2 = this; b2.disabled = true; b2.textContent = '轮换中…';
+                  api('POST', '/passport/apps/' + encodeURIComponent(a.clientId) + '/secret', { revokeGrants: true })
+                    .then(function (r) {
+                      closeModal(); loadApps();
+                      showSecret({ clientId: a.clientId, redirects: a.redirects, scopes: a.scopes }, r.clientSecret);
+                    })
+                    .catch(function (e) { b2.disabled = false; b2.textContent = '轮换密钥'; toast(e.message); });
+                };
+                return;
+              }
+              if (act === 'toggle') {
+                var off = !a.disabled;
+                btn.disabled = true;
+                (off ? api('DELETE', '/passport/apps/' + encodeURIComponent(a.clientId), {})
+                     : api('PUT', '/passport/apps/' + encodeURIComponent(a.clientId), { disabled: false }))
+                  .then(function () { toast(off ? '已停用，该应用授权已撤销' : '已启用'); loadApps(); })
+                  .catch(function (e) { btn.disabled = false; toast(e.message); });
+              }
+            };
+          });
+        });
+      })
+      .catch(function (e) {
+        box.innerHTML = '<div class="empty"><svg class="i lg" style="color:var(--danger)"><use href="#i-alert"/></svg><h3>读取失败</h3><p>' + esc(e.message)
+          + '</p><button class="btn" type="button" id="btnRetry">重试</button></div>';
+        var b = $('btnRetry');
+        if (b) b.onclick = loadApps;
+      });
+  }
+  $('chkAll').onchange = loadApps;
+  $('btnNew').onclick = function () { appForm(null); };
+
+  // ---------- 会话渲染 ----------
+  function render() {
+    var t = token(), u = user();
+    $('guest').classList.toggle('hide', !!t);
+    $('dash').classList.toggle('hide', !t);
+    $('btnLogout').classList.toggle('hide', !t);
+    $('userChip').classList.toggle('hide', !t);
+    if (t) {
+      var name = (u && (u.nickname || u.username)) || '已登录';
+      $('userName').textContent = name;
+      var ava = $('userAva');
+      if (u && u.avatar) ava.innerHTML = '<img src="' + esc(u.avatar) + '" alt="">';
+      else ava.textContent = String(name).trim().slice(0, 1).toUpperCase();
+      loadApps();
+    }
+  }
+  render();
+})();
+</script>
+</body>
+</html>

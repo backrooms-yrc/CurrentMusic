@@ -1,18 +1,10 @@
+import { passkeyLogin } from '../passkeys.js';
+import { afterLogin, startWelcome, authArt } from '../auth-flow.js';
+import { finishLogin } from '../twofactor.js';
 // 用户页：未登录=登录/注册；已登录=我的主页（资料/统计/歌单/多账号/设置）
 import { mdui } from '../md.js';
 import { api, auth, settings, adoptDecorScales } from '../api.js';
 import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile, fmtListen, userTags } from '../ui.js';
-
-/** 登录/注册成功后的落点：如果是从通行证授权页跳来的，处理完自动回去。 */
-function afterLogin() {
-  let back = '';
-  try {
-    back = sessionStorage.getItem('cm.ppBack') || '';
-    sessionStorage.removeItem('cm.ppBack');
-  } catch { /* 隐私模式 */ }
-  location.hash = back || '#/home';
-}
-
 
 export async function render(el, params) {
   if (!auth.token) return renderAuth(el);
@@ -185,31 +177,22 @@ function passwordResetDialog(onDone) {
 
 function renderAuth(el) {
   el.innerHTML = `
-    <div class="cm-auth">
+    <section class="cm-auth-layout cm-login-layout">
+      <aside class="cm-auth-story">${authArt('music')}<span class="cm-auth-eyebrow">YOUR MUSIC, YOUR MOMENT</span><h1>让喜欢的旋律，<br>回到你的生活里。</h1><p>收藏每一次心动，发现下一首喜欢。<br>用一个账号，连接你的音乐世界。</p><span class="cm-auth-brand">CurrentMusic <span>·</span> CurrentStation 通行证</span></aside>
+      <div class="cm-auth cm-auth-panel">
       <div class="cm-auth-logo"><img src="brand-icon.png?v=sage1" alt="CurrentMusic" width="64" height="64"></div>
-      <div class="cm-auth-title">使用 CurrentStation 通行证以继续</div>
-      <div class="cm-auth-sub">CurrentMusic · 账号与 Current 系产品通用</div>
-      <mdui-segmented-button-group value="login" selects="single" id="mode">
-        <mdui-segmented-button value="login">登录</mdui-segmented-button>
-        <mdui-segmented-button value="code">验证码登录</mdui-segmented-button>
-        <mdui-segmented-button value="register">注册</mdui-segmented-button>
-      </mdui-segmented-button-group>
+      <div class="cm-auth-kicker">CURRENTSTATION 通行证</div><h2 class="cm-auth-title" id="authTitle">欢迎回来</h2>
+      <p class="cm-auth-description" id="authDescription">登录账号，继续你的音乐时光。</p>
       <div class="cm-auth-form">
-        <mdui-text-field id="fUser" label="用户名" variant="outlined"></mdui-text-field>
+        <mdui-text-field id="fUser" label="用户名" variant="outlined" autocomplete="username"></mdui-text-field>
         <mdui-text-field id="fNick" label="昵称（可留空）" variant="outlined" hidden></mdui-text-field>
-        <mdui-text-field id="fPass" label="密码" variant="outlined" type="password" password-icon></mdui-text-field>
-        <div class="cm-vfy-tabs" id="vfyTabs" hidden>
-          <mdui-segmented-button-group value="phone" selects="single" id="vfy">
-            <mdui-segmented-button value="phone">手机验证</mdui-segmented-button>
-            <mdui-segmented-button value="email">邮箱验证</mdui-segmented-button>
-          </mdui-segmented-button-group>
+        <mdui-text-field id="fPass" label="密码" variant="outlined" type="password" password-icon autocomplete="current-password"></mdui-text-field>
+        <div class="cm-email-row" id="rowContact" hidden>
+          <mdui-text-field id="fContact" label="手机号或邮箱" variant="outlined" style="flex:1"></mdui-text-field>
         </div>
-        <div class="cm-email-row" id="rowPhone" hidden>
-          <mdui-text-field id="fPhone" label="手机号" variant="outlined" type="tel" style="flex:1"></mdui-text-field>
-        </div>
-        <div class="cm-email-row" id="rowPhoneCode" hidden>
-          <mdui-text-field id="fPhoneCode" label="短信验证码" variant="outlined" style="flex:1"></mdui-text-field>
-          <mdui-button variant="tonal" id="sendPhoneCode">获取验证码</mdui-button>
+        <div class="cm-email-row" id="rowContactCode" hidden>
+          <mdui-text-field id="fContactCode" label="验证码" variant="outlined" style="flex:1"></mdui-text-field>
+          <mdui-button variant="tonal" id="sendContactCode">获取验证码</mdui-button>
         </div>
         <div class="cm-vfy-hint" id="vfyHint" hidden></div>
         <div class="cm-email-row" id="rowEmail" hidden>
@@ -219,12 +202,22 @@ function renderAuth(el) {
           <mdui-text-field id="fEmailCode" label="邮箱验证码" variant="outlined" style="flex:1"></mdui-text-field>
           <mdui-button variant="tonal" id="sendCode">获取验证码</mdui-button>
         </div>
-        <mdui-button variant="filled" id="go" full-width>${'登录'}</mdui-button>
-        <div class="cm-auth-forgot" id="forgotRow" hidden>
+        <label class="cm-auth-note" id="consentRow" hidden><input type="checkbox" id="legalConsent"> 我已阅读并同意《用户协议》与《隐私政策》</label>
+        <div class="cm-auth-error" id="authError" role="alert" aria-live="polite"></div><mdui-button variant="filled" id="go" full-width>${'登录'}</mdui-button>
+        <div class="cm-auth-links" id="loginLinks">
           <button type="button" id="forgot">忘记密码？</button>
+          <button type="button" id="toCode">邮箱验证码登录</button>
+        </div>
+        <div class="cm-auth-links" id="codeLinks" hidden>
+          <button type="button" id="backLogin"><span class="material-icons-outlined" aria-hidden="true">arrow_back</span>返回密码登录</button>
         </div>
       </div>
+      <p class="cm-auth-switch" id="authSwitch">
+        <span id="switchToReg">还没有账号？<button type="button" id="toRegister">立即注册</button></span>
+        <span id="switchToLogin" hidden>已有账号？<button type="button" id="toLogin">返回登录</button></span>
+      </p>
       <div class="cm-auth-alt"><span>其他登录方式</span></div>
+      <mdui-button variant="tonal" full-width id="passkeyLogin">通行密钥登录</mdui-button>
       <mdui-button variant="tonal" full-width id="altInternal">
         <span class="material-icons-outlined">key</span>&nbsp;内部账户登录
       </mdui-button>
@@ -232,68 +225,83 @@ function renderAuth(el) {
         <a class="cm-auth-apk" id="dlApk" href="${esc(settings.base + '/download/latest')}">
           <span class="material-icons-outlined">android</span>下载安卓版 APP（支持后台播放）
         </a>` : ''}
-      <div class="cm-auth-note" id="authNote">注册需完成手机或邮箱验证（验证码 5 分钟内有效）；本服务为自建音乐社区，数据存储于服务器管理员处。</div>
-    </div>`;
+      <div class="cm-auth-note" id="authNote">注册前请阅读 <a href="#/legal/terms" target="_blank" rel="noopener">《用户协议》</a> 与 <a href="#/legal/privacy" target="_blank" rel="noopener">《隐私政策》</a>，了解服务规则与个人信息处理方式。</div>
+    </div></section>`;
 
-  const mode = el.querySelector('#mode');
+  // 模式不再用顶部等分 tab：登录为主视图，「验证码登录」与「忘记密码」是行内链接，
+  // 注册通过底部「还没有账号？」切换线进入（主流登录页惯例）。
+  el.querySelector('#passkeyLogin').onclick = async () => {
+    const button = el.querySelector('#passkeyLogin'); if (button.loading) return; button.loading = true;
+    try { await passkeyLogin(); } catch(e) { el.querySelector('#authError').textContent = e.message; } finally { button.loading = false; }
+  };
+  let curMode = 'login';
   const nick = el.querySelector('#fNick');
   const go = el.querySelector('#go');
-  const vfyTabs = el.querySelector('#vfyTabs');
-  const vfy = el.querySelector('#vfy');
   const vfyHint = el.querySelector('#vfyHint');
-  const rowPhone = el.querySelector('#rowPhone');
-  const rowPhoneCode = el.querySelector('#rowPhoneCode');
+  const rowContact = el.querySelector('#rowContact');
+  const rowContactCode = el.querySelector('#rowContactCode');
   const rowEmail = el.querySelector('#rowEmail');
   const rowEmailCode = el.querySelector('#rowEmailCode');
-  const forgotRow = el.querySelector('#forgotRow');
+  const loginLinks = el.querySelector('#loginLinks');
+  const codeLinks = el.querySelector('#codeLinks');
 
-  // 短信通道提示（服务端给：自建网关 / 网易云通道），只在注册-手机验证时展示
+  // 短信通道提示（服务端给：自建网关 / 网易云通道），只在注册且填的是手机号时展示
   let smsHint = '';
   api.smsInfo().then(d => { smsHint = d.hint || ''; showHint(); }).catch(() => {});
 
+  // 注册的验证通道由填写的联系方式自动判断：纯数字→短信，含 @→邮箱
+  const contactInfo = () => {
+    const raw = (el.querySelector('#fContact')?.value || '').trim();
+    const digits = raw.replace(/\D/g, '');
+    if (digits && digits === raw.replace(/[\s-]/g, '') && /^\d{5,15}$/.test(digits)) return { type: 'phone', value: digits };
+    if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw)) return { type: 'email', value: raw };
+    return { type: '', value: raw };
+  };
+
   function showHint() {
-    // 异步回调（如 smsInfo 返回）也可能在登录 tab 期间到达：只在「注册 + 手机验证」下显示
-    if (mode.value !== 'register' || vfy.value !== 'phone') { vfyHint.hidden = true; return; }
+    // 异步回调（如 smsInfo 返回）也可能在登录视图期间到达：只在「注册 + 手机号」下显示
+    if (curMode !== 'register' || contactInfo().type !== 'phone') { vfyHint.hidden = true; return; }
     vfyHint.textContent = smsHint || '验证码 5 分钟内有效，请勿泄露';
     vfyHint.hidden = false;
   }
+  el.querySelector('#fContact').addEventListener('input', showHint);
 
-  // 验证方式：手机验证（默认）/ 邮箱验证
-  const setVerify = v => {
-    const phone = v === 'phone';
-    rowPhone.hidden = !phone;
-    rowPhoneCode.hidden = !phone;
-    rowEmail.hidden = phone;
-    rowEmailCode.hidden = phone;
-    vfyHint.hidden = true;
-    if (phone) showHint();
-  };
-  vfy.addEventListener('change', () => setVerify(vfy.value));
-
-  // 按模式只显示必填项：登录=用户名+密码；验证码登录=邮箱+验证码；注册=用户名+昵称+密码+验证方式对应字段
+  // 按模式只显示必填项：登录=用户名+密码；验证码登录=邮箱+验证码；注册=用户名+昵称+密码+联系方式+验证码
   const setMode = m => {
+    curMode = m;
     const reg = m === 'register';
+    el.querySelector('#authTitle').textContent = reg ? '开启你的音乐旅程' : '欢迎回来';
+    el.querySelector('#authDescription').textContent = reg ? '创建一个账号，把喜欢的音乐留在身边。' : m === 'code' ? '用绑定邮箱接收验证码，轻松登录。' : '登录账号，继续你的音乐时光。';
+    el.querySelector('#authError').textContent = '';
+    el.querySelector('#fPass').setAttribute('label', reg ? '设置密码（6~64 位）' : '密码');
+    el.querySelector('#fPass').setAttribute('autocomplete', reg ? 'new-password' : 'current-password');
+    el.querySelector('#consentRow').hidden = !reg;
     const byCode = m === 'code';
     nick.hidden = !reg;
-    vfyTabs.hidden = !reg;
     el.querySelector('#fUser').hidden = byCode;
     el.querySelector('#fPass').hidden = byCode;
-    forgotRow.hidden = m !== 'login';
     el.querySelector('#fUser').setAttribute('label', reg ? '用户名' : '用户名 / 手机号');
-    go.textContent = reg ? '注册并登录' : '登录';
-    if (reg) setVerify(vfy.value);
-    else {
-      rowPhone.hidden = rowPhoneCode.hidden = vfyHint.hidden = true;
-      // 验证码登录：邮箱两行只在 code 模式显示；普通登录全部收起
-      rowEmail.hidden = rowEmailCode.hidden = !byCode;
-    }
+    go.textContent = reg ? '创建账号' : '登录';
+    loginLinks.hidden = m !== 'login';
+    codeLinks.hidden = m !== 'code';
+    el.querySelector('#switchToReg').hidden = reg;
+    el.querySelector('#switchToLogin').hidden = !reg;
+    // 注册：联系方式+验证码两行；验证码登录：邮箱两行；普通登录全部收起
+    rowContact.hidden = rowContactCode.hidden = !reg;
+    rowEmail.hidden = rowEmailCode.hidden = !byCode;
+    showHint();
   };
-  mode.addEventListener('change', () => setMode(mode.value));
   setMode('login');
 
-  // 忘记密码：仅登录模式显示；重置成功后回填用户名，回到密码登录
+  // 视图切换：进入时聚焦第一个要填的输入框
+  const focusField = sel => setTimeout(() => el.querySelector(sel)?.focus?.(), 120);
+  el.querySelector('#toCode').onclick = () => { setMode('code'); focusField('#fEmail'); };
+  el.querySelector('#backLogin').onclick = () => { setMode('login'); focusField('#fUser'); };
+  el.querySelector('#toRegister').onclick = () => { setMode('register'); focusField('#fUser'); };
+  el.querySelector('#toLogin').onclick = () => { setMode('login'); focusField('#fUser'); };
+
+  // 忘记密码：仅登录视图；重置成功后回填用户名，回到密码登录
   el.querySelector('#forgot').onclick = () => passwordResetDialog(r => {
-    mode.value = 'login';
     setMode('login');
     const userEl = el.querySelector('#fUser');
     userEl.value = (r && r.username) || '';
@@ -329,7 +337,8 @@ function renderAuth(el) {
           onClick: () => {
             const pw = diag.querySelector('#iPass').value;
             if (!pw) { toast('请填写内部密码'); return false; }
-            api.internalLogin(pw).then(r => {
+            api.internalLogin(pw).then(r => { diag.open = false; return finishLogin(r); }).then(r => {
+              if (!r) return;
               diag.open = false;
               auth.saveLogin(r.token, r.user);
               toast('已进入内部账户');
@@ -343,19 +352,18 @@ function renderAuth(el) {
     setTimeout(() => diag.querySelector('#iPass')?.focus?.(), 200);
   };
 
-  // 获取验证码：60s 倒计时（邮箱 / 短信各一份）
+  // 获取验证码：60s 倒计时（验证码登录邮箱一份 / 注册联系方式一份）
   const sendBtn = el.querySelector('#sendCode');
-  const sendPhoneBtn = el.querySelector('#sendPhoneCode');
-  const cdEmail = { timer: null }, cdPhone = { timer: null };
+  const sendContactBtn = el.querySelector('#sendContactCode');
+  const cdEmail = { timer: null }, cdContact = { timer: null };
 
   sendBtn.onclick = async () => {
     const email = el.querySelector('#fEmail').value.trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return toast('请先填写正确的邮箱地址');
     try {
       sendBtn.loading = true;
-      // 注册模式发注册码；验证码登录模式发登录码（服务端要求邮箱已注册）
-      if (mode.value === 'code') await api.loginEmailCode(email);
-      else await api.sendEmailCode(email);
+      // 验证码登录发登录码（服务端要求邮箱已注册）
+      await api.loginEmailCode(email);
       toast('验证码已发送，请查收邮箱（注意垃圾箱）');
       countdown(sendBtn, cdEmail);
     } catch (e) {
@@ -365,26 +373,41 @@ function renderAuth(el) {
     }
   };
 
-  sendPhoneBtn.onclick = async () => {
-    const phone = el.querySelector('#fPhone').value.replace(/\D/g, '');
-    if (!/^\d{5,15}$/.test(phone)) return toast('请先填写正确的手机号');
+  sendContactBtn.onclick = async () => {
+    const { type, value } = contactInfo();
+    if (!type) return toast(value ? '请填写正确的手机号或邮箱' : '请先填写手机号或邮箱');
     try {
-      sendPhoneBtn.loading = true;
-      const r = await api.sendPhoneCode(phone);
-      if (r && r.hint) { smsHint = r.hint; showHint(); }
-      toast('验证码已发送，请留意短信');
-      countdown(sendPhoneBtn, cdPhone);
+      sendContactBtn.loading = true;
+      if (type === 'phone') {
+        const r = await api.sendPhoneCode(value);
+        if (r && r.hint) { smsHint = r.hint; showHint(); }
+        toast('验证码已发送，请留意短信');
+      } else {
+        await api.sendEmailCode(value);
+        toast('验证码已发送，请查收邮箱（注意垃圾箱）');
+      }
+      countdown(sendContactBtn, cdContact);
     } catch (e) {
       toast(e.message);
     } finally {
-      sendPhoneBtn.loading = false;
+      sendContactBtn.loading = false;
     }
   };
 
+  el.querySelectorAll('.cm-auth-form mdui-text-field').forEach(input => input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); go.click(); }
+  }));
   go.onclick = async () => {
+    if (go.loading) return;
+    el.querySelector('#authError').textContent = '';
+    if (curMode === 'register' && !el.querySelector('#legalConsent').checked) {
+      toast('请先阅读并勾选同意《用户协议》与《隐私政策》');
+      el.querySelector('#legalConsent').focus();
+      return;
+    }
     const username = el.querySelector('#fUser').value.trim();
     const password = el.querySelector('#fPass').value;
-    if (mode.value === 'code') {
+    if (curMode === 'code') {
       // 邮箱验证码登录：邮箱 + 验证码两步
       const email = el.querySelector('#fEmail').value.trim();
       const code = el.querySelector('#fEmailCode').value.trim();
@@ -392,41 +415,34 @@ function renderAuth(el) {
       if (!code) return toast('请填写邮箱验证码');
       try {
         go.loading = true;
-        const r = await api.loginByEmail(email, code);
+        const r = await finishLogin(await api.loginByEmail(email, code));
+        if (!r) return;
         auth.saveLogin(r.token, r.user);
         toast(`欢迎，${r.user.nickname}！`);
         afterLogin();
       } catch (e) {
-        toast(e.message);
+        el.querySelector('#authError').textContent = e.message;
       } finally {
         go.loading = false; }
       return;
     }
     if (!username || !password) return toast('请填写用户名和密码');
-    if (mode.value === 'register') {
+    if (curMode === 'register') {
       const nickname = nick.value.trim() || username;
-      let payload;
-      if (vfy.value === 'phone') {
-        const phone = el.querySelector('#fPhone').value.replace(/\D/g, '');
-        const phoneCode = el.querySelector('#fPhoneCode').value.trim();
-        if (!/^\d{5,15}$/.test(phone)) return toast('请填写正确的手机号');
-        if (!phoneCode) return toast('请填写短信验证码');
-        payload = { username, password, nickname, phone, phoneCode };
-      } else {
-        const email = el.querySelector('#fEmail').value.trim();
-        const emailCode = el.querySelector('#fEmailCode').value.trim();
-        if (!email) return toast('请填写邮箱');
-        if (!emailCode) return toast('请填写邮箱验证码');
-        payload = { username, password, nickname, email, emailCode };
-      }
+      const { type, value } = contactInfo();
+      const code = el.querySelector('#fContactCode').value.trim();
+      if (!type) return toast('请填写正确的手机号或邮箱');
+      if (!code) return toast(type === 'phone' ? '请填写短信验证码' : '请填写邮箱验证码');
+      const payload = type === 'phone'
+        ? { username, password, nickname, phone: value, phoneCode: code }
+        : { username, password, nickname, email: value, emailCode: code };
       try {
         go.loading = true;
         const r = await api.register(payload);
         auth.saveLogin(r.token, r.user);
-        toast(`欢迎，${r.user.nickname}！`);
-        afterLogin();
+        startWelcome();
       } catch (e) {
-        toast(e.message);
+        el.querySelector('#authError').textContent = e.message;
       } finally {
         go.loading = false;
       }
@@ -434,12 +450,13 @@ function renderAuth(el) {
     }
     try {
       go.loading = true;
-      const r = await api.login(username, password);
+      const r = await finishLogin(await api.login(username, password));
+      if (!r) return;
       auth.saveLogin(r.token, r.user);
       toast(`欢迎，${r.user.nickname}！`);
       afterLogin();
     } catch (e) {
-      toast(e.message);
+      el.querySelector('#authError').textContent = e.message;
     } finally {
       go.loading = false;
     }

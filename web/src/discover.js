@@ -1,7 +1,7 @@
 // 发现页「音乐」TAB：Banner / 推荐歌单 / 推荐新歌 / 独家放送 / 榜单 / 曲风入口
 // 数据全部来自阶段一的 /ncm/* 泛化网关（接口须在 backend/cm_ncm_registry.py 登记）。
 import { api, auth, ncmSongs } from './api.js';
-import { esc, toast } from './ui.js';
+import { esc, toast, skelGrid } from './ui.js';
 import { player } from './player.js';
 
 const fmtPlay = n => {
@@ -14,7 +14,7 @@ const fmtPlay = n => {
 const cardShell = (id, title) => `
   <section class="cm-sec" id="${id}">
     <div class="cm-sec-head"><h2>${title}</h2></div>
-    <div class="cm-loading"><mdui-linear-progress style="width:120px"></mdui-linear-progress></div>
+    ${skelGrid(4)}
   </section>`;
 
 /** 歌单卡片网格（复用现有 .cm-plgrid/.cm-plcard 样式，不新增默认皮肤样式）。 */

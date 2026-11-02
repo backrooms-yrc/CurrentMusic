@@ -8,7 +8,7 @@
 //                /dj/difm/subscribe/channels/get
 // 写：  /dj/sub、/dj/difm/channel/subscribe、/dj/difm/channel/unsubscribe（均 T2）
 import { api, auth, ncmSongs } from '../api.js';
-import { esc, toast, fmtCount, skelGrid, confirmDialog } from '../ui.js';
+import { esc, toast, fmtCount, skelGrid, confirmDialog, skelDetail } from '../ui.js';
 import { player } from '../player.js';
 
 const KEY = 'cm.radioTab';
@@ -321,7 +321,7 @@ async function renderList(el) {
 
 /** 电台详情：/dj/detail + /dj/program（节目列表，可分页）+ 订阅开关。 */
 async function renderDetail(el, rid) {
-  el.innerHTML = `<div class="cm-loading" style="padding:40px 0"><mdui-circular-progress></mdui-circular-progress></div>`;
+  el.innerHTML = skelDetail();
   let d;
   try { d = await api.ncm('/dj/detail', { rid }); } catch (e) {
     el.innerHTML = `<div class="cm-empty">电台加载失败：${esc(e.message)}</div>`;

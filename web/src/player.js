@@ -1,3 +1,4 @@
+import { network, probeLines, swapLine, lineBest, famOf, sourceIdentity } from './network.js';
 // 播放引擎：单例 audio、队列、音质选择（默认自动最高，后端并行探测母带档）、循环/随机、MediaSession。
 import { mdui } from './md.js';
 import { api, auth, settings, ncmSongs } from './api.js';
@@ -298,40 +299,6 @@ setInterval(() => {
 // 用户自己测得准**——服务器在洛杉矶，它的体感与用户无关。
 // 为什么按族记忆：两族边缘（m7/m8/m9 与 m701~m804）互不相通，锁定的最优线只对
 // 同族对象有效；swapLine 会在「不在已验证候选里」时放弃换线，绝不硬换。
-const PROBE_BYTES = 262144;                   // 每条线拉 256KB：够分高下，不偷太多流量
-function famOf(h) { return /^m\d\./.test(h) ? 'f2' : /^m\d{3}\./.test(h) ? 'f3' : ''; }
-function withHost(url, host) { return url.replace(/^https?:\/\/[^/]+/, 'https://' + host); }
-const lineBest = { byFam: {}, probing: {} };  // fam → 最优 host；probing 防同族并发探测
-async function probeLines(info) {
-  const fam = famOf(info.host || '');
-  const cands = [...new Set([info.host, ...(info.hosts || [])])].filter(Boolean);
-  if (!fam || cands.length < 2 || lineBest.byFam[fam] || lineBest.probing[fam]) return;
-  lineBest.probing[fam] = true;
-  try {
-    const ranked = await Promise.all(cands.map(async h => {
-      const t0 = performance.now();
-      try {
-        const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), 6000);
-        const r = await fetch(withHost(info.url, h),
-          { headers: { Range: `bytes=0-${PROBE_BYTES - 1}` }, signal: ctl.signal, cache: 'no-store' });
-        const buf = await r.arrayBuffer();
-        clearTimeout(to);
-        return { h, ms: buf.byteLength > 0 ? performance.now() - t0 : Infinity };
-      } catch (e) { return { h, ms: Infinity }; }
-    }));
-    ranked.sort((a, b) => a.ms - b.ms);
-    if (ranked[0].ms < Infinity) lineBest.byFam[fam] = ranked[0].h;
-  } finally { delete lineBest.probing[fam]; }
-}
-/** 本会话已锁定且对该对象有效的更优线路：返回换线后的 URL，否则 null。 */
-function swapLine(info) {
-  if (!info || !info.host) return null;
-  const best = lineBest.byFam[famOf(info.host)];
-  if (!best || best === info.host || !(info.hosts || []).includes(best)) return null;
-  return withHost(info.url, best);
-}
-
 // ---------- 未登录播放拦截（v1.28.34） ----------
 // 音源自 v1.28.33 起仅对注册用户开放。游客点播放时**不能**再走「解析失败 → toast →
 // 自动跳下一首」那条烂路径（会连续报错并跳歌），改为弹一次登录提示、原地停住。
@@ -447,6 +414,7 @@ export const player = {
     } catch { /* 忽略 */ }
     this._prefetchBusy = true;
     try {
+      const identity = sourceIdentity();
       const _pl = effectiveLevel();
       let info;
       try {
@@ -459,8 +427,11 @@ export const player = {
       }
       // 期间可能已切歌或又预取了别的：过期结果直接丢弃
       const still = this.queue[this.index + 1] || this.queue[0];
+      if (identity !== sourceIdentity()) return;
       if (!still || String(still.ncm_id) !== String(nx.ncm_id)) return;
       this._discardPrefetch();               // 换目标：旧元素的下载立即停
+      const swapPf = swapLine(info);
+      if (swapPf) info.url = swapPf;
       const el = new Audio();
       el.preload = 'auto';
       el.muted = true;                       // 不发声（也不接 Web Audio 图）
@@ -480,10 +451,7 @@ export const player = {
         } catch (e) { /* 忽略 */ }
       }, 2000);
       const hardStop = setTimeout(stop, capWall * 1000);
-      // 线路优选：预取也走锁定的最优线（warm 的字节要能被正播复用，必须同一条线）
-      const swapPf = swapLine(info);
-      if (swapPf) info.url = swapPf;
-      this._prefetch = { id: nx.ncm_id, url: info.url, type: info.type, level: info.level,
+      this._prefetch = { identity, id: nx.ncm_id, url: info.url, type: info.type, level: info.level,
                          host: info.host, hosts: info.hosts, el };
     } catch { /* 预取失败不影响正常播放 */ }
     finally { this._prefetchBusy = false; }
@@ -631,7 +599,7 @@ export const player = {
     let info;
     try {
       const pf = this._prefetch;
-      if (pf && String(pf.id) === String(this.meta.ncm_id) && pf.url) {
+      if (pf && pf.identity === sourceIdentity() && String(pf.id) === String(this.meta.ncm_id) && pf.url) {
         info = { url: pf.url, type: pf.type || 'mp3', level: pf.level || 'auto',
                  host: pf.host, hosts: pf.hosts };
         // 用完即弃：已缓冲字节留在媒体缓存供主元素复用，下载立即终止
@@ -669,6 +637,7 @@ export const player = {
         this.wantPlaying = false;
         return;
       }
+      if (e.noAutoNext) { this.wantPlaying = false; emit('state'); return; }
       // 自动跳下一首（避免队列卡死）
       if (this.queue.length > 1) setTimeout(() => this.next(true), 800);
       return;
@@ -1033,7 +1002,7 @@ async function recoverStalled() {
     // 于是每 6 秒重试一次同一条线，用户看到的就是"一直卡"）。档位保持用户所选不变。
     // refresh 重拿地址：已锁定线路时带 host 在**同一条最优线**上重连（新签名/新连接，
     // 不让服务端轮换到别的线）；未锁定（刚进站还没测完）时由服务端换线兜底
-    const pin = lineBest.byFam[famOf(((player.urlInfo || {}).host) || '')] || '';
+    const pin = network.cdn === 'auto' ? (lineBest.byFam[famOf(((player.urlInfo || {}).host) || '')] || '') : '';
     const info = await resolveSongUrl(player.meta, _pl3.level, _pl3.immerse,
                                       pin ? { refresh: true, host: pin } : { refresh: true });
     const betterR = swapLine(info);

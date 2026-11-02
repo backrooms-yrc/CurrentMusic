@@ -1,9 +1,12 @@
 import './polyfill.js';   // 旧版 WebView 兼容垫片（必须在 mdui 之前）
+import { createPageMotion, dismissBoot } from './page-motion.js';
 // CurrentMusic 入口：mdui 注册、主题、路由、播放器 UI 挂载。
 import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './apple-hig.css';   // Apple HIG 设计令牌层（字体/系统色/圆角/阴影/命中区/材质）
 import './app.css';
+import './auth.css';
+import './settings.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
 import { mdui } from './md.js';
@@ -43,6 +46,12 @@ import * as library from './pages/library.js';
 import * as playlist from './pages/playlist.js';
 import * as plazaPage from './pages/plaza.js';
 import * as user from './pages/user.js';
+import * as twoFactorPage from './twofactor.js';
+import * as securityQuestionPage from './pages/security-question.js';
+import * as welcomePage from './pages/welcome.js';
+import { needsWelcome } from './auth-flow.js';
+import * as passkeysPage from './passkeys.js';
+import * as networkPage from './pages/network.js';
 import * as settingsPage from './pages/settings.js';
 import * as adminPage from './pages/admin.js';
 import * as roomsPage from './pages/rooms.js';
@@ -75,6 +84,7 @@ import * as repPage from './pages/rep.js';
 import * as postNewPage from './pages/post-new.js';
 import * as announceEditPage from './pages/announce-edit.js';
 import * as songPage from './pages/song.js';
+import * as legalPage from './pages/legal.js';
 
 const ROUTES = [
   { re: /^#\/home$/, page: home, title: 'CurrentMusic' },
@@ -109,7 +119,13 @@ const ROUTES = [
   { re: /^#\/library$/, page: library, title: '歌单' },
   { re: /^#\/plaza$/, page: plazaPage, title: '歌单广场' },
   { re: /^#\/user$/, page: user, title: '我的' },
-  { re: /^#\/settings$/, page: settingsPage, title: '设置' },
+  { re: /^#\/security-question$/, page: securityQuestionPage, title: '登录密保问题' },
+  { re: /^#\/two-factor$/, page: twoFactorPage, title: '两步验证' },
+  { re: /^#\/welcome$/, page: welcomePage, title: '欢迎加入' },
+  { re: /^#\/passkeys$/, page: passkeysPage, title: '通行密钥' },
+  { re: /^#\/network$/, page: networkPage, title: 'CDN 与音源' },
+  { re: /^#\/settings(?:\/([a-z-]+)(?:\/([a-z-]+))?)?$/, page: settingsPage, title: '设置' },
+  { re: /^#\/legal\/(privacy|terms)$/, page: legalPage, title: '政策与协议', fixed: m => [m[1]] },
   { re: /^#\/admin$/, page: adminPage, title: '管理员' },
   { re: /^#\/post\/new$/, page: postNewPage, title: '发帖' },
   { re: /^#\/song\/(\d+)$/, page: songPage, title: '歌曲', fixed: m => [m[1]] },
@@ -124,6 +140,7 @@ const ROUTES = [
 ];
 
 const out = () => document.getElementById('out');
+let showPage = null;
 
 // ---------- 路由方向感知（前进=上入 / 后退=左入） ----------
 let navStack = [];
@@ -144,6 +161,7 @@ window.addEventListener('hashchange', () => {
 
 async function router() {
   const hash = location.hash || '#/home';
+  if (needsWelcome() && !/^#\/(welcome|two-factor|security-question|legal)(?:[/?]|$)/.test(hash)) { location.hash = '#/welcome'; return; }
   if (!navStack.length) navStack.push(hash);
   // 路由允许带查询串（如 #/user?decor=1 直达挂件设置）：匹配时只取路径部分，
   // 查询参数解析成 params.query 交给页面（不解析的话 ?xxx 会让所有路由都匹配不上）
@@ -170,21 +188,13 @@ async function router() {
   if (!matched) { location.hash = '#/home'; return; }
   if (params) params.query = query;   // 页面按需读取（大多忽略）
 
-  document.getElementById('pageTitle').textContent = matched.title;
+  document.body.classList.toggle('cm-onboarding-active', needsWelcome() && /^#\/(welcome|two-factor|security-question)$/.test(routePath));
+  document.getElementById('pageTitle').textContent = routePath === '#/user' && !auth.token ? '登录与注册' : matched.title;
   document.querySelectorAll('#bottomNav .navItem').forEach(a => {
     a.classList.toggle('cur', a.getAttribute('href') === hash.split('/').slice(0, 2).join('/'));
   });
-  // MD3 页面过渡：每页包一层；后退时用 back 变体（左入）
-  const wrap = document.createElement('div');
-  wrap.className = 'cm-page' + (navDirection === 'back' ? ' cm-page-back' : '');
-  out().replaceChildren(wrap);
-  try {
-    await matched.page.render(wrap, params);
-  } catch (e) {
-    wrap.innerHTML = `<div class="cm-empty">页面加载失败：${e.message}</div>`;
-  }
-  out().scrollTop = 0;
-  window.scrollTo(0, 0);
+  if (!showPage) showPage = createPageMotion(out());
+  await showPage(wrap => matched.page.render(wrap, params), navDirection === 'back');
 }
 
 function boot() {
@@ -206,7 +216,7 @@ function boot() {
   initImageFade();   // 全局图片加载动画（骨架微光 → 渐显）
   warmDecorScales(); // 预热头像挂件比例表（本地缓存即时可用，后台校验版本号）
   window.__cmBooted = true;   // 供 index.html 的启动诊断判定
-  document.getElementById('boot').remove();
+  dismissBoot();
 
   document.getElementById('topAction').onclick = () => { location.hash = '#/settings'; };   // 齿轮直达设置页
 
@@ -253,7 +263,7 @@ function boot() {
     if (!auth.token) return;                 // 已处理过（并发请求）
     auth.clear();                            // 主动退出，清掉失效会话
     const h = location.hash || '#/home';
-    if (h.startsWith('#/user') || h.startsWith('#/settings')) {
+    if (h.startsWith('#/user') || h.startsWith('#/settings') || h.startsWith('#/two-factor') || h.startsWith('#/security-question') || h.startsWith('#/welcome')) {
       try { router(); } catch { /* 忽略：重渲染失败不影响退出与提示 */ }
     }
     mdui.dialog({

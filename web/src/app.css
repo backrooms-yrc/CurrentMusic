@@ -115,21 +115,9 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 #ptrInd.spin svg { animation: ptrSpin .8s linear infinite; }
 @keyframes ptrSpin { to { transform: rotate(360deg); } }
 
-/* MD3 页面过渡（emphasized decelerate）：分段渐入 + 轻微上移；后退变体左入 */
-.cm-page > * { animation: cmSecIn 320ms cubic-bezier(0.05, 0.7, 0.1, 1) both; }
-.cm-page > *:nth-child(2) { animation-delay: 50ms; }
-.cm-page > *:nth-child(3) { animation-delay: 100ms; }
-.cm-page > *:nth-child(4) { animation-delay: 150ms; }
-.cm-page > *:nth-child(5) { animation-delay: 200ms; }
-.cm-page-back > * { animation-name: cmSecBack; animation-duration: 260ms; }
-@keyframes cmSecIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes cmSecBack {
-  from { opacity: 0; transform: translateX(-18px); }
-  to { opacity: 1; transform: none; }
-}
+/* Route entry/exit and skeleton replacement are coordinated by page-motion.js.
+   Avoid persistent transforms: page content may contain fixed-position dialogs. */
+.cm-route-page { min-height: 120px; }
 
 /* 全屏 overlay 关闭动画（下滑退场） */
 #playerOverlay.closing, #commentOverlay.closing { animation: cmSlideDown .24s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
@@ -143,11 +131,13 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 /* ---------- 骨架屏（MD3 shape + shimmer） ---------- */
 .sk {
   position: relative; overflow: hidden;
-  background: var(--mdui-color-surface-container-high, #ece6f0);
+  background: #e6e0e9;
+  background: rgb(var(--mdui-color-surface-container-high, 230, 224, 233));
   border-radius: 10px;
 }
 .sk::after {
   content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.4), transparent);
   background: linear-gradient(90deg, transparent,
     color-mix(in srgb, var(--label-4, #aeaeb2) 55%, transparent), transparent);
   animation: skShimmer 1.5s cubic-bezier(0.05, 0.7, 0.1, 1) infinite;
@@ -314,6 +304,21 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
   background: var(--mdui-color-surface-container, #f3edf7); text-align: center; font-size: calc(14px * var(--cm-fs, 1));
 }
 .cm-login-tip.page { margin-top: 60px; }
+
+/* 独立政策页：保留文档的长文阅读感，同时适配 App/PC 与全部主题。 */
+.cm-legal { max-width: 820px; margin: 18px auto 44px; padding: 0 22px 24px; color: var(--cm-on-surface, inherit); }
+.cm-legal header { display:flex; align-items:center; gap:16px; padding:22px 0 16px; border-bottom:1px solid color-mix(in srgb, currentColor 14%, transparent); }
+.cm-legal header > .material-icons-outlined { font-size:38px; color:var(--cm-primary); }
+.cm-legal h1 { margin:0 0 5px; font-size:28px; letter-spacing:-.02em; }
+.cm-legal header p { margin:0; opacity:.62; font-size:13px; }
+.cm-legal-lead { margin:22px 0; padding:16px 18px; border-radius:16px; background:color-mix(in srgb, var(--cm-primary) 9%, transparent); line-height:1.8; }
+.cm-legal section { margin:28px 0; }
+.cm-legal h2 { margin:0 0 12px; font-size:19px; }
+.cm-legal h3 { margin:18px 0 6px; font-size:15px; }
+.cm-legal p { margin:8px 0; line-height:1.85; opacity:.88; }
+.cm-legal a { color:var(--cm-primary); text-underline-offset:3px; }
+.cm-legal nav { display:flex; flex-wrap:wrap; gap:10px; margin-top:32px; padding-top:18px; border-top:1px solid color-mix(in srgb, currentColor 14%, transparent); }
+@media (max-width:600px) { .cm-legal { margin-top:0; padding-inline:18px; } .cm-legal h1 { font-size:24px; } }
 
 /* ---------- 歌曲行（MD3 list item：48px 缩略图 + pressed 状态层） ---------- */
 .cm-songs { display: flex; flex-direction: column; }
@@ -592,13 +597,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 }
 .cm-auth-sub { font-size: var(--ios-footnote, calc(13px * var(--cm-fs, 1))); color: var(--frs-fg2, var(--mdui-color-on-surface-variant, #49454f)); margin-top: -8px; text-align: center; }
 .cm-auth-form { display: flex; flex-direction: column; gap: 12px; width: 100%; }
-/* 登录框内「忘记密码？」：右对齐的轻量文字按钮，不抢主按钮视觉 */
-.cm-auth-forgot { display: flex; justify-content: flex-end; margin-top: -6px; }
-.cm-auth-forgot button {
-  border: 0; background: none; color: var(--cm-primary); font: inherit;
-  font-size: calc(13px * var(--cm-fs, 1)); cursor: pointer; padding: 4px 2px; min-height: 32px;
-}
-.cm-auth-forgot button:hover { text-decoration: underline; }
 .cm-auth-note { font-size: calc(11px * var(--cm-fs, 1)); opacity: .55; text-align: center; line-height: 1.6; }
 /* 网页版登录页「下载安卓版 APP」入口（仅浏览器渲染） */
 .cm-auth-apk {
@@ -721,6 +719,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 
 .cm-setting-list { border-radius: var(--cm-radius); overflow: hidden; background: var(--mdui-color-surface-container, #f3edf7); }
 .cm-setting { display: flex; align-items: center; gap: 12px; min-height: var(--hit); padding: 12px 16px; font-size: var(--ios-body); cursor: pointer; border-bottom: 1px solid var(--hairline, rgba(0, 0, 0, .08)); }
+.cm-setting-list > button.cm-setting { width: 100%; border-top: 0; border-right: 0; border-left: 0; background: transparent; color: inherit; font-family: inherit; text-align: left; }
 .cm-setting:last-child { border-bottom: none; }
 .cm-setting .material-icons-outlined { font-size: calc(20px * var(--cm-fs, 1)); color: var(--cm-primary); }
 .cm-setting i { margin-left: auto; font-style: normal; font-size: var(--ios-footnote); color: var(--label-2); max-width: 45%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4277,3 +4276,29 @@ html[data-ui-preset="cmx"] body.player-open #mini { visibility: hidden; }
   html[data-ui-preset="cmx"] .cm-quick { padding: 12px 10px; }
   html[data-ui-preset="cmx"] .cm-quick b { font-size: calc(14px * var(--cm-fs, 1)); }
 }
+
+/* Content-specific loading layouts; reuse MDUI surfaces in every theme. */
+.cm-skeleton { pointer-events: none; }
+.cm-skel-detail-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 12px; padding: 8px 0; }
+.cm-skel-artwork { width: 108px; height: 108px; flex: none; border-radius: 16px; }
+.cm-skel-round { border-radius: 50%; }
+.cm-skel-title { width: 64%; max-width: 280px; height: 26px; }
+.cm-skel-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+.cm-skel-actions > .sk { width: 100px; height: 40px; border-radius: 24px; }
+.cm-skel-songpage { gap: 16px; }
+.cm-skel-songpage .sk-l1 { width: 35%; }
+.cm-skel-detail > .cm-hscroll { margin: 12px 0 24px; }
+.cm-skel-media { width: 100%; aspect-ratio: 16 / 9; border-radius: 18px; min-height: 140px; }
+.cm-skel-videos .sk-cover { aspect-ratio: 16 / 9; }
+.cm-plgrid > .cm-skel-videos { grid-column: 1 / -1; }
+.cm-skel-videos > div { display: flex; flex-direction: column; gap: 8px; }
+.cm-skel-users { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; grid-column: 1 / -1; }
+.cm-skel-user { padding: 22px 12px; border: 1px solid rgba(127,127,127,.12); border-radius: 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.cm-skel-user .sk-ava { width: 64px; height: 64px; }
+.cm-skel-posts { display: flex; flex-direction: column; gap: 16px; }
+.cm-skel-post { display: flex; flex-direction: column; gap: 14px; padding: 20px; border: 1px solid rgba(127,127,127,.12); border-radius: 20px; }
+.cm-skel-paragraph { height: 60px; width: 90%; }
+.cm-skel-room { display: flex; flex-direction: column; gap: 16px; }
+.cm-skel-room-media { width: 100%; height: 170px; border-radius: 24px; }
+@media (min-width: 840px) { .cm-skel-artwork { width: 150px; height: 150px; } }
+@media (prefers-reduced-motion: reduce) { .cm-skeleton *, .cm-skeleton *::after { animation: none !important; transition: none !important; } }

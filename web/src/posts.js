@@ -8,7 +8,7 @@
 //   · 评论用底部弹层（mdui dialog）呈现，与「当前播放列表」等既有交互一致
 import { mdui } from './md.js';
 import { api, auth } from './api.js';
-import { esc, avatarHTML, toast, confirmDialog, userTags } from './ui.js';
+import { esc, avatarHTML, toast, confirmDialog, userTags, skelPosts } from './ui.js';
 import { renderMarkdown, applyToolbar } from './markdown.js';
 import { attachHTML, bindAttach } from './attach.js';
 
@@ -81,7 +81,7 @@ export function mountPosts(box) {
   function paint() {
     const loading = !state.loaded && !state.posts.length;
     listEl.innerHTML = state.posts.map(postHTML).join('') || (loading
-      ? '<div class="cm-loading"><mdui-linear-progress style="width:140px"></mdui-linear-progress></div>'
+      ? skelPosts(3)
       : `<div class="cm-empty"><span class="material-icons-outlined">forum</span>还没有帖子，来发第一条吧</div>`);
     hintEl.textContent = state.total ? `共 ${state.total} 条` : (canPost() ? '' : '登录后可发帖与互动');
     listEl.querySelectorAll('.cm-post').forEach(card => bindCard(card));

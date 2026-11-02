@@ -1,0 +1,28 @@
+title = "CurrentMusic source scan"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented bearer placeholder, never a usable session"
+targetRules = ["curl-auth-header"]
+condition = "AND"
+paths = ['''(?:^|/)(?:tools/build-api-docs\.py|api-docs/pages/quickstart\.md)$''']
+regexTarget = "match"
+regexes = ['''Bearer YOUR_CURRENTMUSIC_TOKEN''']
+
+[[allowlists]]
+description = "Passport documentation's ellipsis placeholders"
+targetRules = ["curl-auth-user"]
+condition = "AND"
+paths = ['''(?:^|/)backend/passport_docs\.html$''']
+regexTarget = "match"
+regexes = ['''cs_app_…:cs_sk_…''']
+
+[[allowlists]]
+description = "Public QQ group invitation URL intentionally displayed on the official site"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)site/(?:index\.html|build\.mjs)$''']
+regexTarget = "secret"
+regexes = ['''^(?:Y4c39DZ\+5qe4El\+EkTtA0oVd/d8fNpeeM6L/zBL66MmmYdzkxbKppptGLY6gKNq3|iqIyjZ7V4UyQaP8wfNUYZ0abTor/9rNpMQy94zUsD178YelEuVY9NYh4Frh8059v|tkLPuDncPR2BE5XghTWEpwhO2/M\+7hPcTn6GWTdVU01lFRAAJLOxdlfoy/RqGpc7|ym67LInlDrTd\+cV6eVQO\+P5dnseCKSCSqGiGN2W378P\+19B/sbWwI4bE2sa5eyR5)$''']

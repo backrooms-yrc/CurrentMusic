@@ -1,0 +1,32 @@
+# CurrentMusic 的 PHP 入口（nginx + PHP-FPM）示例。
+# 适用于没有 nginx proxy_pass、只有 PHP-FPM 的部署。
+#
+# 重要：PHP 必须是 php2shell 修复版本（8.2.35 / 8.3.36 / 8.4.27 / 8.5.12+），
+# 入口自身也会检查并在旧版本上返回 503。
+#
+# 放置：站点 server{} 内；index.php 路径与 socket 按实际部署修改。
+# 静态网页 /app/ 仍由 nginx 直接托管，不要塞进 PHP。
+
+location = /cm { return 301 /cm/; }
+
+location ^~ /cm/ {
+    include fastcgi_params;
+
+    # 所有 /cm/ 请求都交给同一个 front controller；CM_PHP_PREFIX 让它剥掉 /cm。
+    fastcgi_param SCRIPT_FILENAME /var/www/currentmusic/deploy/php/index.php;
+    fastcgi_param SCRIPT_NAME /cm/index.php;
+    fastcgi_param REQUEST_URI $request_uri;
+    fastcgi_param CM_PHP_PREFIX /cm;
+    fastcgi_param REMOTE_ADDR $remote_addr;
+    fastcgi_param HTTPS $https if_not_empty;
+
+    # Debian/Ubuntu 常见路径；宝塔通常是 /tmp/php-cgi-85.sock。
+    fastcgi_pass unix:/run/php/php8.5-fpm.sock;
+
+    # SSE（/cm/live/chat、/cm/live/ai）与下载必须关闭缓冲。
+    fastcgi_buffering off;
+    fastcgi_read_timeout 3600s;
+    fastcgi_send_timeout 3600s;
+
+    client_max_body_size 4m;
+}

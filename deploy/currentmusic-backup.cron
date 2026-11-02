@@ -1,0 +1,4 @@
+# Daily full backup of CurrentMusic data; keep the newest 3 archives.
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+30 4 * * * root CM_DATA_DIR=/srv/currentmusic/data CM_BACKUP_DIR=/var/backups/currentmusic /usr/local/sbin/currentmusic-backup >> /var/log/currentmusic-backup.log 2>&1
