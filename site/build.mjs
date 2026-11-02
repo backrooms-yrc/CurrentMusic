@@ -20,7 +20,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(join(HERE, 'package.json'));
+// Reuse the dependencies pinned by web/package-lock.json in a fresh checkout.
+const require = createRequire(join(HERE, '../web/package.json'));
 
 const OUT = resolve(HERE, process.argv[2] || '../data/www');
 

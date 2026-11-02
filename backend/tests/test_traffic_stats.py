@@ -26,7 +26,8 @@ class TestTrafficStats(unittest.TestCase):
     def _today(hour_min_sec, day_offset=0):
         # 日期必须动态生成：写死日期的测试一过午夜就失效
         ts = time.time() + day_offset * 86400
-        return time.strftime("%d/%b/%Y:", time.localtime(ts)) + hour_min_sec + " +0800"
+        return (time.strftime("%d/%b/%Y:", time.localtime(ts)) + hour_min_sec
+                + time.strftime(" %z", time.localtime(ts)))
 
     def test_unavailable_without_log(self):
         out = cm_traffic.snapshot("")
@@ -67,8 +68,8 @@ class TestTrafficStats(unittest.TestCase):
 
     def test_rate_uses_last_5min(self):
         now = int(time.time())
-        lt = time.strftime("%d/%b/%Y:%H:%M:%S +0800", time.localtime(now))
-        old = time.strftime("%d/%b/%Y:%H:%M:%S +0800", time.localtime(now - 3600))
+        lt = time.strftime("%d/%b/%Y:%H:%M:%S %z", time.localtime(now))
+        old = time.strftime("%d/%b/%Y:%H:%M:%S %z", time.localtime(now - 3600))
         path = self._log([
             _line(lt, "/a", nbytes=3000),
             _line(old, "/a", nbytes=9999),
