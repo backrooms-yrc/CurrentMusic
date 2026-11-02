@@ -49,7 +49,7 @@ await build({
   // 会因此生成访问 this 先于 super() 的代码，导致每个组件构造都抛 "Must call super..."。
   minify: true,
   outfile: `${OUT}/app.js`,
-  loader: { '.woff2': 'file' },
+  loader: { '.woff2': 'file', '.svg': 'text' },
   assetNames: '[name]',
   logLevel: 'info',
 });
@@ -69,7 +69,7 @@ await build({
   ]);
   const stamp = createHash('sha1').update(css).update(js).digest('hex').slice(0, 10);
   let html = await readFile('index.html', 'utf8');
-  html = html.replace('<!-- CM_LOADING_INDICATOR -->', await readFile('assets/loading-indicator.svg', 'utf8'));
+  html = html.replace('<!-- CM_LOADING_INDICATOR -->', '<style>' + await readFile('src/loading-indicator.css', 'utf8') + '</style>' + await readFile('assets/loading-indicator.svg', 'utf8'));
   const before = html;
   html = html
     .replace(/(href="app\.css)(\?[^"]*)?(")/, `$1?v=${stamp}$3`)

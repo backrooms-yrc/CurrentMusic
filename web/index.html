@@ -64,6 +64,16 @@
 </head>
 <body>
   <div id="boot" role="status" aria-label="CurrentMusic 正在加载"><!-- CM_LOADING_INDICATOR --></div>
+  <script>
+    // Record the first displayed animation cycle before the main bundle arrives.
+    (function () {
+      var boot = document.getElementById('boot');
+      boot.setAttribute('data-loading-start', String(performance.now()));
+      boot.addEventListener('animationstart', function (event) {
+        if (event.animationName === 'cmIndicatorMorph') boot.setAttribute('data-loading-start', String(performance.now()));
+      });
+    })();
+  </script>
 
   <header id="topbar">
     <div id="brandLock"><img src="brand-icon.png?v=sage1" alt="" width="32" height="32"><b>CurrentMusic</b></div>
@@ -100,6 +110,12 @@
         shown = true;
         var boot = document.getElementById('boot');
         if (!boot) return;
+        // Even startup failures keep the first complete shape group before showing diagnostics.
+        var cycleAge = performance.now() - Number(boot.getAttribute('data-loading-start') || 0);
+        if (boot.querySelector('.cm-loading-indicator') && cycleAge < 4550) {
+          setTimeout(function () { shown = false; show(title, detail); }, 4550 - cycleAge + 80);
+          return;
+        }
         var ua = navigator.userAgent || '';
         var m = ua.match(/Chrome\/([0-9.]+)/);
         boot.innerHTML =

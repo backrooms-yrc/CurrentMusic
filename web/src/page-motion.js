@@ -1,7 +1,8 @@
+import { createLoadingIndicator, loadingCycle, enhanceLoading } from './loading.js';
 // A single route owner: interrupted navigations cancel their animation and never reset the new page's scroll.
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 export function createPageMotion(container) {
-  let generation = 0, exit = null, observer = null;
+  let generation = 0, exit = null, observer = null, indicator = null, cycle = null;
   const animations = new Set();
   function animate(node, frames, duration) {
     if (reduced() || !node.animate) return null;
@@ -15,8 +16,11 @@ export function createPageMotion(container) {
     animations.add(animation);
     return animation;
   }
-  return async function show(render, back = false) {
+  return async function show(render, back = false, { refresh = false } = {}) {
     const own = ++generation;
+    if (cycle) { cycle.cancel(); cycle = null; }
+    if (indicator) { indicator.remove(); indicator = null; }
+    container.classList.remove('cm-route-loading-active');
     if (observer) observer.disconnect();
     animations.forEach(a => a.cancel()); animations.clear();
     if (exit) { exit.cancel(); exit = null; }
@@ -51,6 +55,20 @@ export function createPageMotion(container) {
     let result;
     try { result = render(wrap); }
     catch (error) { result = Promise.reject(error); }
+    enhanceLoading(wrap);
+    const hasSkeleton = !!wrap.querySelector('.sk, .cm-skeleton, .cm-search-result-skeleton');
+    let ownIndicator = null, ownCycle = null;
+    if (!hasSkeleton && !refresh) {
+      if (document.getElementById('boot')) {
+        // Boot already guarantees a full cycle; keep a visible fallback if the request outlives it.
+        if (!wrap.firstElementChild) wrap.appendChild(createLoadingIndicator('cm-route-loading-placeholder'));
+      } else {
+        ownIndicator = createLoadingIndicator('cm-route-loading');
+        ownCycle = loadingCycle(ownIndicator); indicator = ownIndicator; cycle = ownCycle;
+        container.appendChild(ownIndicator); container.classList.add('cm-route-loading-active');
+        wrap.setAttribute('inert', ''); wrap.setAttribute('aria-hidden', 'true');
+      }
+    }
     animate(wrap, [{ opacity: 0, transform: back ? 'translateX(-14px)' : 'translateY(12px)' },
       { opacity: 1, transform: 'none' }], back ? 240 : 280);
     try { await result; }
@@ -60,12 +78,22 @@ export function createPageMotion(container) {
       empty.textContent = '页面加载失败：' + (error.message || '请稍后重试');
       wrap.replaceChildren(empty);
     }
+    if (ownCycle) {
+      await ownCycle.finish();
+      if (own !== generation) return;
+      ownIndicator.remove(); indicator = null; cycle = null;
+      wrap.removeAttribute('inert'); wrap.removeAttribute('aria-hidden');
+      container.classList.remove('cm-route-loading-active');
+      animate(wrap, [{ opacity: .35 }, { opacity: 1 }], 220);
+    }
   };
 }
 
-export function dismissBoot() {
+export async function dismissBoot() {
   const boot = document.getElementById('boot');
   if (!boot) return;
+  await loadingCycle(boot).finish();
+  if (!boot.isConnected) return;
   if (reduced() || !boot.animate) { boot.remove(); return; }
   boot.setAttribute('aria-hidden', 'true'); boot.style.pointerEvents = 'none';
   const animation = boot.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out' });

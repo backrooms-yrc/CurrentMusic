@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
-const motion = buildSync({entryPoints:[path.join(root,'web/src/page-motion.js')],bundle:true,format:'iife',globalName:'Motion',write:false}).outputFiles[0].text;
+const motion = buildSync({entryPoints:[path.join(root,'web/src/page-motion.js')],bundle:true,format:'iife',globalName:'Motion',loader:{'.svg':'text','.css':'empty'},write:false}).outputFiles[0].text;
 const base = 'https://music.20110208.xyz/app/';
 const asset = request => path.join(root, 'app/src/main/assets/www', new URL(request.url()).pathname.slice(5) || 'index.html');
 (async () => {
@@ -18,7 +18,8 @@ const asset = request => path.join(root, 'app/src/main/assets/www', new URL(requ
       await page.addScriptTag({content:motion});
       await page.evaluate(()=>Object.defineProperty(Animation.prototype,'finished',{get:()=>undefined,configurable:true}));
       await page.evaluate(async () => {
-        window.show = Motion.createPageMotion(document.getElementById('out'));
+        const navigate = Motion.createPageMotion(document.getElementById('out'));
+        window.show = (render, back) => navigate(render, back, {refresh:true});
         await show(el => {el.innerHTML='<div style="height:1000px">First</div>';});
       });
       assert.equal(await page.evaluate(()=>document.querySelector('#out').getAnimations({subtree:true}).length>0),!reduce);
@@ -57,13 +58,12 @@ const asset = request => path.join(root, 'app/src/main/assets/www', new URL(requ
       await page.goto(base,{waitUntil:'commit'});
       await page.locator('#boot svg').waitFor({state:'visible'});
       assert.equal((await page.locator('#boot').innerText()).trim(),'');
-      assert.equal(await page.locator('#boot .cm-indicator-morph').evaluate(e=>getComputedStyle(e).animationIterationCount),'infinite');
+      assert.equal(await page.locator('#boot .cm-indicator-morph').evaluate(e=>getComputedStyle(e).animationIterationCount),reduce?'1':'infinite');
       const initial=await page.evaluate(()=>document.querySelector('#boot .cm-indicator-turn path').getTotalLength());
       await page.waitForTimeout(700);
       const after=await page.evaluate(()=>document.querySelector('#boot .cm-indicator-turn path').getTotalLength());
       if(!reduce) assert(Math.abs(after-initial)>1,'SVG must morph before JS loads');
       assert.equal(await page.locator('#boot .cm-indicator-turn').evaluate(e=>getComputedStyle(e).display==='none'),reduce);
-      await page.screenshot({path:'/tmp/cm-boot-'+(reduce?'reduced':'morph')+'.png'});
       release();await page.getByText('启动失败：脚本资源加载失败').waitFor();
       console.log('PASS pre-bundle boot:',reduce?'reduced motion static shape':'seven-shape morph','no visible loading text; diagnostics preserved');
       await context.close();

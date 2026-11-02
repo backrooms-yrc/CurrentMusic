@@ -52,7 +52,7 @@
       if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
-  <link rel="stylesheet" href="app.css?v=09fc6a7dd8">
+  <link rel="stylesheet" href="app.css?v=9418f71e3f">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
     #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; inset: 0; z-index: 10000; display: flex;
@@ -63,11 +63,7 @@
   </style>
 </head>
 <body>
-  <div id="boot" role="status" aria-label="CurrentMusic 正在加载"><!-- Local SVG adaptation of Material 3 Expressive's seven-shape loading sequence.
-     MDUI 2.x has no morphing indicator component. No external runtime required. -->
-<svg class="cm-loading-indicator" viewBox="0 0 100 100" width="48" height="48" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
-<style>
-.cm-loading-indicator{display:inline-block;vertical-align:middle;overflow:visible;flex:none;color:var(--cm-primary,#6750a4)}
+  <div id="boot" role="status" aria-label="CurrentMusic 正在加载"><style>.cm-loading-indicator{display:inline-block;vertical-align:middle;overflow:visible;flex:none;color:var(--cm-primary,#6750a4)}
 .cm-indicator-turn{transform-origin:50px 50px;animation:cmIndicatorTurn 4.55s linear infinite}
 .cm-indicator-morph{animation:cmIndicatorMorph 4.55s cubic-bezier(.2,0,0,1) infinite}
 .cm-indicator-still{display:none}
@@ -81,11 +77,33 @@
 100.0%{d:path("M47.7,12.1Q50.0,9.6 52.3,12.1Q54.7,14.7 56.0,18.6Q57.3,22.6 59.3,22.7Q61.3,22.8 64.9,20.3Q68.6,17.8 71.5,17.9Q74.5,18.1 74.2,22.0Q74.0,26.0 73.0,29.5Q72.0,33.1 74.3,33.9Q76.6,34.6 81.1,34.9Q85.6,35.3 86.9,37.5Q88.2,39.8 85.1,42.8Q82.0,45.8 79.8,47.9Q77.5,50.0 79.8,52.1Q82.0,54.2 85.1,57.2Q88.2,60.2 86.9,62.5Q85.6,64.7 81.1,65.1Q76.6,65.4 74.3,66.1Q72.0,66.9 73.0,70.5Q74.0,74.0 74.2,78.0Q74.5,81.9 71.5,82.1Q68.6,82.2 64.9,79.7Q61.3,77.2 59.3,77.3Q57.3,77.4 56.0,81.4Q54.7,85.3 52.3,87.9Q50.0,90.4 47.7,87.9Q45.3,85.3 44.0,81.4Q42.7,77.4 40.7,77.3Q38.7,77.2 35.1,79.7Q31.4,82.2 28.5,82.1Q25.5,81.9 25.8,78.0Q26.0,74.0 27.0,70.5Q28.0,66.9 25.7,66.1Q23.4,65.4 18.9,65.1Q14.4,64.7 13.1,62.5Q11.8,60.2 14.9,57.2Q18.0,54.2 20.2,52.1Q22.5,50.0 20.2,47.9Q18.0,45.8 14.9,42.8Q11.8,39.8 13.1,37.5Q14.4,35.3 18.9,34.9Q23.4,34.6 25.7,33.9Q28.0,33.1 27.0,29.5Q26.0,26.0 25.8,22.0Q25.5,18.1 28.5,17.9Q31.4,17.8 35.1,20.3Q38.7,22.8 40.7,22.7Q42.7,22.6 44.0,18.6Q45.3,14.7 47.7,12.1Z")}}
 @keyframes cmIndicatorTurn{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.cm-indicator-turn{display:none;animation:none}.cm-indicator-still{display:inline}}
-</style>
+.cm-expressive-loading{display:flex;align-items:center;justify-content:center;flex:none}
+.cm-loading-inline{display:inline-flex;vertical-align:middle}
+.cm-loading-small .cm-loading-indicator{width:20px;height:20px}
+.cm-route-loading{position:absolute;top:0;right:0;bottom:0;left:0;z-index:8;min-height:180px;background:#f7f2fa;background:rgb(var(--mdui-color-surface,247,242,250));pointer-events:auto}
+.cm-route-loading .cm-loading-indicator{width:56px;height:56px}
+#out.cm-route-loading-active{overflow-y:hidden}
+.cm-route-loading-placeholder{min-height:180px}
+#ptrInd .cm-loading-indicator{width:38px;height:38px}
+#ptrInd:not(.spin) .cm-indicator-turn,#ptrInd:not(.spin) .cm-indicator-morph{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){.cm-indicator-morph{animation:none}}
+</style><!-- Local SVG adaptation of Material 3 Expressive's seven-shape loading sequence.
+     MDUI 2.x has no morphing indicator component. No external runtime required. -->
+<svg class="cm-loading-indicator" viewBox="0 0 100 100" width="48" height="48" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
 <g class="cm-indicator-turn"><path class="cm-indicator-morph" fill="currentColor" d="M47.7,12.1Q50.0,9.6 52.3,12.1Q54.7,14.7 56.0,18.6Q57.3,22.6 59.3,22.7Q61.3,22.8 64.9,20.3Q68.6,17.8 71.5,17.9Q74.5,18.1 74.2,22.0Q74.0,26.0 73.0,29.5Q72.0,33.1 74.3,33.9Q76.6,34.6 81.1,34.9Q85.6,35.3 86.9,37.5Q88.2,39.8 85.1,42.8Q82.0,45.8 79.8,47.9Q77.5,50.0 79.8,52.1Q82.0,54.2 85.1,57.2Q88.2,60.2 86.9,62.5Q85.6,64.7 81.1,65.1Q76.6,65.4 74.3,66.1Q72.0,66.9 73.0,70.5Q74.0,74.0 74.2,78.0Q74.5,81.9 71.5,82.1Q68.6,82.2 64.9,79.7Q61.3,77.2 59.3,77.3Q57.3,77.4 56.0,81.4Q54.7,85.3 52.3,87.9Q50.0,90.4 47.7,87.9Q45.3,85.3 44.0,81.4Q42.7,77.4 40.7,77.3Q38.7,77.2 35.1,79.7Q31.4,82.2 28.5,82.1Q25.5,81.9 25.8,78.0Q26.0,74.0 27.0,70.5Q28.0,66.9 25.7,66.1Q23.4,65.4 18.9,65.1Q14.4,64.7 13.1,62.5Q11.8,60.2 14.9,57.2Q18.0,54.2 20.2,52.1Q22.5,50.0 20.2,47.9Q18.0,45.8 14.9,42.8Q11.8,39.8 13.1,37.5Q14.4,35.3 18.9,34.9Q23.4,34.6 25.7,33.9Q28.0,33.1 27.0,29.5Q26.0,26.0 25.8,22.0Q25.5,18.1 28.5,17.9Q31.4,17.8 35.1,20.3Q38.7,22.8 40.7,22.7Q42.7,22.6 44.0,18.6Q45.3,14.7 47.7,12.1Z"></path></g>
 <path class="cm-indicator-still" fill="currentColor" d="M47.7,12.1Q50.0,9.6 52.3,12.1Q54.7,14.7 56.0,18.6Q57.3,22.6 59.3,22.7Q61.3,22.8 64.9,20.3Q68.6,17.8 71.5,17.9Q74.5,18.1 74.2,22.0Q74.0,26.0 73.0,29.5Q72.0,33.1 74.3,33.9Q76.6,34.6 81.1,34.9Q85.6,35.3 86.9,37.5Q88.2,39.8 85.1,42.8Q82.0,45.8 79.8,47.9Q77.5,50.0 79.8,52.1Q82.0,54.2 85.1,57.2Q88.2,60.2 86.9,62.5Q85.6,64.7 81.1,65.1Q76.6,65.4 74.3,66.1Q72.0,66.9 73.0,70.5Q74.0,74.0 74.2,78.0Q74.5,81.9 71.5,82.1Q68.6,82.2 64.9,79.7Q61.3,77.2 59.3,77.3Q57.3,77.4 56.0,81.4Q54.7,85.3 52.3,87.9Q50.0,90.4 47.7,87.9Q45.3,85.3 44.0,81.4Q42.7,77.4 40.7,77.3Q38.7,77.2 35.1,79.7Q31.4,82.2 28.5,82.1Q25.5,81.9 25.8,78.0Q26.0,74.0 27.0,70.5Q28.0,66.9 25.7,66.1Q23.4,65.4 18.9,65.1Q14.4,64.7 13.1,62.5Q11.8,60.2 14.9,57.2Q18.0,54.2 20.2,52.1Q22.5,50.0 20.2,47.9Q18.0,45.8 14.9,42.8Q11.8,39.8 13.1,37.5Q14.4,35.3 18.9,34.9Q23.4,34.6 25.7,33.9Q28.0,33.1 27.0,29.5Q26.0,26.0 25.8,22.0Q25.5,18.1 28.5,17.9Q31.4,17.8 35.1,20.3Q38.7,22.8 40.7,22.7Q42.7,22.6 44.0,18.6Q45.3,14.7 47.7,12.1Z"/>
 </svg>
 </div>
+  <script>
+    // Record the first displayed animation cycle before the main bundle arrives.
+    (function () {
+      var boot = document.getElementById('boot');
+      boot.setAttribute('data-loading-start', String(performance.now()));
+      boot.addEventListener('animationstart', function (event) {
+        if (event.animationName === 'cmIndicatorMorph') boot.setAttribute('data-loading-start', String(performance.now()));
+      });
+    })();
+  </script>
 
   <header id="topbar">
     <div id="brandLock"><img src="brand-icon.png?v=sage1" alt="" width="32" height="32"><b>CurrentMusic</b></div>
@@ -122,6 +140,12 @@
         shown = true;
         var boot = document.getElementById('boot');
         if (!boot) return;
+        // Even startup failures keep the first complete shape group before showing diagnostics.
+        var cycleAge = performance.now() - Number(boot.getAttribute('data-loading-start') || 0);
+        if (boot.querySelector('.cm-loading-indicator') && cycleAge < 4550) {
+          setTimeout(function () { shown = false; show(title, detail); }, 4550 - cycleAge + 80);
+          return;
+        }
         var ua = navigator.userAgent || '';
         var m = ua.match(/Chrome\/([0-9.]+)/);
         boot.innerHTML =
@@ -178,6 +202,6 @@
       }, 9000);
     })();
   </script>
-  <script src="app.js?v=09fc6a7dd8"></script>
+  <script src="app.js?v=9418f71e3f"></script>
 </body>
 </html>

@@ -1,7 +1,8 @@
-// 全局下拉刷新：#out 滚动到顶后继续向下拖 → MD3 圆形进度指示器 → 松手重渲染当前页。
+import { loadingMarkup, loadingCycle, LOADING_CYCLE_MS } from './loading.js';
+// 下拉刷新复用七形态动画；松手重新从第一形态开始，至少完整播放一轮。
 // 仅触摸手势（App/移动网页）；桌面上静默不生效。刷新动作由 main.js 注入（router 重跑当前路由）。
 const THRESHOLD = 64;     // 触发阈值：原始下拉 px
-const MAX_HIDE_MS = 4000; // 刷新指示器最长展示（防页面渲染挂死卡住转圈）
+const MAX_HIDE_MS = LOADING_CYCLE_MS * 3; // 刷新指示器最长展示（防页面渲染挂死卡住转圈）
 
 export function initPullToRefresh(runRefresh) {
   const out = document.getElementById('out');
@@ -9,13 +10,12 @@ export function initPullToRefresh(runRefresh) {
 
   const ind = document.createElement('div');
   ind.id = 'ptrInd';
+  ind.setAttribute('role', 'status');
+  ind.setAttribute('aria-label', '正在刷新');
   ind.setAttribute('aria-hidden', 'true');
-  // 弧形进度用 SVG stroke-dashoffset（Chrome 58 可用），自转动画走 CSS（内层 svg）
-  ind.innerHTML = '<svg viewBox="0 0 36 36"><circle class="ptr-ring" cx="18" cy="18" r="15"></circle></svg>';
+  ind.innerHTML = loadingMarkup();
   document.body.appendChild(ind);
-  const ring = ind.querySelector('.ptr-ring');
-  const CIRC = 2 * Math.PI * 15;
-  ring.style.strokeDasharray = String(CIRC);
+  let currentCycle = null, refreshId = 0;
 
   let startId = -1, startY = 0, startX = 0;
   let pulling = false;     // 本轮触摸从 scrollTop=0 处开始（候选）
@@ -27,14 +27,14 @@ export function initPullToRefresh(runRefresh) {
   const hideIndicator = () => {
     ind.classList.remove('drag');
     ind.classList.remove('show', 'armed', 'spin');
+    ind.setAttribute('aria-hidden', 'true');
     setProgress(0);
   };
 
   function setProgress(p) {           // p: 0~1（拉动进度）；armed 前弧最多 3/4 圈
-    ring.style.strokeDashoffset = String(CIRC * (1 - 0.75 * Math.max(0, Math.min(1, p))));
     const s = 0.62 + 0.38 * Math.min(1, p);
     ind.style.opacity = p > 0 ? String(Math.min(1, 0.3 + p)) : '0';
-    ind.style.transform = `translateY(${(-8 + 14 * Math.min(1, p)).toFixed(1)}px) scale(${s.toFixed(2)}) rotate(${Math.round(p * 150)}deg)`;
+    ind.style.transform = `translateY(${(-8 + 14 * Math.min(1, p)).toFixed(1)}px) scale(${s.toFixed(2)})`;
   }
 
   const springBack = () => {
@@ -44,20 +44,29 @@ export function initPullToRefresh(runRefresh) {
 
   const startRefresh = () => {
     refreshing = true;
-    ind.classList.remove('drag');
-    ind.classList.remove('armed');
-    ind.classList.add('spin');        // 内层 svg 自转（不与外层定位 transform 冲突）
+    const own = ++refreshId;
+    ind.classList.remove('drag', 'armed');
+    ind.classList.add('spin');
+    ind.setAttribute('aria-hidden', 'false');
+    ind.removeAttribute('data-loading-start');
+    ind.innerHTML = loadingMarkup(); // restart at shape one, independent of the drag duration
+    currentCycle = loadingCycle(ind);
+    const cycle = currentCycle;
     setProgress(1);
-    const began = Date.now();
-    Promise.resolve()
-      .then(() => runRefresh())
-      .catch(() => {})
+    let timeout;
+    const limit = new Promise(resolve => { timeout = setTimeout(resolve, MAX_HIDE_MS); });
+    Promise.race([Promise.resolve().then(() => runRefresh()).catch(() => {}), limit])
+      .then(() => { clearTimeout(timeout); return cycle.finish(); })
       .then(() => {
-        // 页面重渲染完成（或超时兜底）后收起指示器
-        const wait = Math.max(0, 350 - (Date.now() - began));   // 至少转 350ms，避免闪一下
-        setTimeout(() => { refreshing = false; hideIndicator(); }, wait);
+        if (own !== refreshId) return;
+        currentCycle = null; refreshing = false; hideIndicator();
       });
   };
+  window.addEventListener('hashchange', () => {
+    ++refreshId;
+    if (currentCycle) { currentCycle.cancel(); currentCycle = null; }
+    refreshing = false; reset(); hideIndicator();
+  });
 
   // 表单区域不接管：手指落在输入框（真实 target 是内层 input）或 mdui-text-field 宿主上时，手势留给原生
   const formish = t => t && t.closest && t.closest('input, textarea, [contenteditable="true"], mdui-text-field');

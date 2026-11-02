@@ -12,6 +12,7 @@ import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js
 import { mdui } from './md.js';
 import { toast, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
 import { checkUpdate } from './update.js';
+import { initExpressiveLoading } from './loading.js';
 import { initPullToRefresh } from './ptr.js';
 import { engineChrome, engineOutdated } from './version.js';
 import { player } from './player.js';
@@ -159,7 +160,7 @@ window.addEventListener('hashchange', () => {
   }
 });
 
-async function router() {
+async function router({ refresh = false } = {}) {
   const hash = location.hash || '#/home';
   if (needsWelcome() && !/^#\/(welcome|two-factor|security-question|legal)(?:[/?]|$)/.test(hash)) { location.hash = '#/welcome'; return; }
   if (!navStack.length) navStack.push(hash);
@@ -194,7 +195,7 @@ async function router() {
     a.classList.toggle('cur', a.getAttribute('href') === hash.split('/').slice(0, 2).join('/'));
   });
   if (!showPage) showPage = createPageMotion(out());
-  await showPage(wrap => matched.page.render(wrap, params), navDirection === 'back');
+  await showPage(wrap => matched.page.render(wrap, params), navDirection === 'back', { refresh });
 }
 
 function boot() {
@@ -216,6 +217,7 @@ function boot() {
   initImageFade();   // 全局图片加载动画（骨架微光 → 渐显）
   warmDecorScales(); // 预热头像挂件比例表（本地缓存即时可用，后台校验版本号）
   window.__cmBooted = true;   // 供 index.html 的启动诊断判定
+  initExpressiveLoading();
   dismissBoot();
 
   document.getElementById('topAction').onclick = () => { location.hash = '#/settings'; };   // 齿轮直达设置页
@@ -240,7 +242,7 @@ function boot() {
   router();
 
   // 全局下拉刷新：重跑当前路由（页面 render 自带骨架屏与数据重取）
-  initPullToRefresh(() => router());
+  initPullToRefresh(() => router({ refresh: true }));
 
   bootUiPreset();            // UI 皮肤：把预设属性打到 <html>
   applyCustomize();          // 个性化：自定义背景图 + 玻璃效果值（写到 <html> 内联）

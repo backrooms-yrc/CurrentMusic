@@ -97,7 +97,7 @@ body {
 body.no-mini #out { bottom: var(--cm-nav-h); }
 body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-bottom), var(--safe-b, 0px))); }
 
-/* ---------- 全局下拉刷新指示器（MD3 圆形） ---------- */
+/* ---------- 下拉刷新：共享七形态动画 ---------- */
 #ptrInd {
   position: fixed; left: 50%; margin-left: -19px;
   top: calc(56px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))) + 10px);
@@ -105,15 +105,8 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
   opacity: 0; transform: translateY(-8px) scale(.62);
   transition: opacity .18s ease, transform .26s cubic-bezier(.2, .9, .3, 1);
 }
-#ptrInd.drag { transition: none; }           /* 拖动期关过渡（跟手），松手后恢复以弹回 */
+#ptrInd.drag { transition: none; }
 #ptrInd svg { width: 100%; height: 100%; display: block; }
-#ptrInd .ptr-ring {
-  fill: none; stroke: var(--cm-primary); stroke-width: 3; stroke-linecap: round;
-  transform: rotate(-90deg); transform-origin: center;
-}
-#ptrInd.armed .ptr-ring { stroke-width: 3.5; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--cm-primary) 45%, transparent)); }
-#ptrInd.spin svg { animation: ptrSpin .8s linear infinite; }
-@keyframes ptrSpin { to { transform: rotate(360deg); } }
 
 /* Route entry/exit and skeleton replacement are coordinated by page-motion.js.
    Avoid persistent transforms: page content may contain fixed-position dialogs. */
