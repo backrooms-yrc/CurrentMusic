@@ -1,7 +1,7 @@
 import indicatorSVG from '../assets/loading-indicator.svg';
 import './loading-indicator.css';
 
-export const LOADING_CYCLE_MS = 4550;
+export const LOADING_CYCLE_MS = 2275;
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** The same locally bundled SVG is used by boot, routes, panels and pull-to-refresh. */

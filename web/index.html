@@ -112,8 +112,8 @@
         if (!boot) return;
         // Even startup failures keep the first complete shape group before showing diagnostics.
         var cycleAge = performance.now() - Number(boot.getAttribute('data-loading-start') || 0);
-        if (boot.querySelector('.cm-loading-indicator') && cycleAge < 4550) {
-          setTimeout(function () { shown = false; show(title, detail); }, 4550 - cycleAge + 80);
+        if (boot.querySelector('.cm-loading-indicator') && cycleAge < 2275) {
+          setTimeout(function () { shown = false; show(title, detail); }, 2275 - cycleAge + 80);
           return;
         }
         var ua = navigator.userAgent || '';
