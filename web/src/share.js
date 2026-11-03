@@ -1,6 +1,6 @@
 // 歌曲分享（v1.28.46）：分享图（实时生成可下载）/ 分享链接 / 分享歌曲信息。
 //
-// 分享图在客户端用 canvas 实时绘制：1080×1440 沉浸式封面，叠加信息与站点二维码。
+// 分享图在客户端用 canvas 实时绘制：1080×1440，生成前选择方块或沉浸式封面。
 // 封面走网易云 CDN（带 CORS 头）；App 的 WebView 是 file:// 页面，若封面加载/画布导出
 // 失败（tainted canvas），自动降级为「渐变占位封面」再画一遍——保证任何环境都能出图。
 import { mdui } from './md.js';
@@ -11,6 +11,10 @@ import brandIcon from '../../assets/brand/apple-touch-icon.png';
 
 const W = 1080, H = 1440;
 const FONT = '"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif';
+const IMAGE_STYLES = {
+  square: { label: '方块封面', icon: 'crop_square', description: '独立封面，搭配渐变背景' },
+  immersive: { label: '沉浸式封面', icon: 'wallpaper', description: '封面铺满，背景自然融合' },
+};
 
 /** 站点 base：Web 用当前页面地址，App（file://）用 API 站点 + /app/。 */
 function siteOrigin() {
@@ -127,14 +131,18 @@ function wrapLines(ctx, text, maxWidth, maxLines) {
   return out.length ? out : [''];
 }
 
+function drawCover(ctx, cover, x, y, width, height) {
+  const scale = Math.max(width / cover.naturalWidth, height / cover.naturalHeight);
+  const w = cover.naturalWidth * scale, h = cover.naturalHeight * scale;
+  ctx.drawImage(cover, x + (width - w) / 2, y + (height - h) / 2, w, h);
+}
+
 /** 封面等比铺满画布、居中裁切，图片本身就是整张海报的背景。 */
-function paintBackground(ctx, cover) {
+function paintImmersiveBackground(ctx, cover) {
   ctx.fillStyle = '#21152f';
   ctx.fillRect(0, 0, W, H);
   if (cover) {
-    const scale = Math.max(W / cover.naturalWidth, H / cover.naturalHeight);
-    const width = cover.naturalWidth * scale, height = cover.naturalHeight * scale;
-    ctx.drawImage(cover, (W - width) / 2, (H - height) / 2, width, height);
+    drawCover(ctx, cover, 0, 0, W, H);
   } else {
     const bg = ctx.createLinearGradient(0, 0, W, H);
     bg.addColorStop(0, '#7953a9');
@@ -172,6 +180,81 @@ function paintBackground(ctx, cover) {
   ctx.fillRect(0, 0, W, H);
 }
 
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  const d = max - min;
+  let h = 0, s = 0;
+  if (d > 1e-6) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s, l];
+}
+
+/** 方块版沿用封面主色渐变；读取失败或封面无彩色时使用品牌紫。 */
+function coverHue(cover) {
+  if (!cover) return 268;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 40;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(cover, 0, 0, 40, 40);
+    const pixels = ctx.getImageData(0, 0, 40, 40).data, bins = new Map();
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (pixels[i + 3] < 200) continue;
+      const [h, s, l] = rgb2hsl(pixels[i], pixels[i + 1], pixels[i + 2]);
+      if (l < 0.12 || l > 0.9 || s < 0.12) continue;
+      const key = Math.floor(h / 15) % 24;
+      const w = s * (0.35 + Math.min(1, l * 1.6)) * (1 - Math.abs(l - 0.52));
+      const bin = bins.get(key) || { w: 0, h: 0 };
+      bin.w += w; bin.h += h * w;
+      bins.set(key, bin);
+    }
+    let best = null;
+    for (const bin of bins.values()) if (!best || bin.w > best.w) best = bin;
+    return best ? best.h / best.w : 268;
+  } catch { return 268; }
+}
+
+function paintSquareBackground(ctx, cover) {
+  const h = coverHue(cover);
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, `hsl(${h}, 52%, 8%)`);
+  bg.addColorStop(0.55, `hsl(${(h + 18) % 360}, 46%, 13%)`);
+  bg.addColorStop(1, `hsl(${(h + 42) % 360}, 42%, 17%)`);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  for (const [x, y, radius, hue, opacity] of [[880, 160, 540, h, .26], [140, 1320, 560, (h + 50) % 360, .2]]) {
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    glow.addColorStop(0, `hsla(${hue}, 90%, 62%, ${opacity})`);
+    glow.addColorStop(1, `hsla(${hue}, 90%, 62%, 0)`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  const size = 620, x = (W - size) / 2, y = 180;
+  ctx.save();
+  roundRect(ctx, x, y, size, size, 32);
+  ctx.clip();
+  if (cover) drawCover(ctx, cover, x, y, size, size);
+  else {
+    const placeholder = ctx.createLinearGradient(x, y, x + size, y + size);
+    placeholder.addColorStop(0, '#7a52c9');
+    placeholder.addColorStop(1, '#3a2456');
+    ctx.fillStyle = placeholder;
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = 'rgba(255,255,255,.26)';
+    ctx.font = '220px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('♪', W / 2, y + size / 2 + 78);
+  }
+  ctx.restore();
+}
+
 /** 画二维码（白底 + 4 模块静区），居中于 (cx, cy)，maxSide 为含静区的最大边长。 */
 function drawQRCode(ctx, text, cx, cy, maxSide) {
   const qr = qrcode(0, 'M');
@@ -197,10 +280,12 @@ function drawQRCode(ctx, text, cx, cy, maxSide) {
   }
 }
 
-async function drawCard(meta, withCover) {
+async function drawCard(meta, withCover, style) {
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
+  const square = style === 'square', inset = square ? 90 : 80;
+  const textWidth = W - inset * 2, footerOffset = square ? -30 : 0;
 
   // 保留原有查询参数；较大尺寸用于全幅海报，非 HTTP 图片地址保持原样。
   let coverUrl = meta.pic;
@@ -218,7 +303,8 @@ async function drawCard(meta, withCover) {
     withCover && coverUrl ? loadCover(coverUrl) : null,
     loadCover(brandIcon),
   ]);
-  paintBackground(ctx, cover);
+  if (square) paintSquareBackground(ctx, cover);
+  else paintImmersiveBackground(ctx, cover);
 
   // 品牌
   const ui = uiOf(meta);
@@ -234,62 +320,63 @@ async function drawCard(meta, withCover) {
 
   // 主标题 / 副标题 / 补充信息
   ctx.fillStyle = '#ffffff';
-  ctx.font = `700 64px ${FONT}`;
-  const lines = wrapLines(ctx, meta.name || '', 920, 2);
-  let ty = 900;
-  lines.forEach(l => { ctx.fillText(l, 80, ty); ty += 78; });
+  ctx.font = `700 ${square ? 54 : 64}px ${FONT}`;
+  const lines = wrapLines(ctx, meta.name || '', textWidth, 2);
+  let ty = square ? 880 : 900;
+  lines.forEach(l => { ctx.fillText(l, inset, ty); ty += square ? 70 : 78; });
 
   const sub = meta.sub || meta.artists || '';
   const sub2 = meta.sub2 || meta.album || '';
   ctx.fillStyle = 'rgba(255,255,255,.88)';
   ctx.font = `500 32px ${FONT}`;
-  if (sub) ctx.fillText(fitText(ctx, sub, 920), 80, ty + 6);
+  if (sub) ctx.fillText(fitText(ctx, sub, textWidth), inset, ty + 6);
   if (sub2) {
     ctx.fillStyle = 'rgba(255,255,255,.68)';
     ctx.font = `400 26px ${FONT}`;
-    ctx.fillText(fitText(ctx, sub2, 920), 80, ty + 48);
+    ctx.fillText(fitText(ctx, sub2, textWidth), inset, ty + 48);
   }
 
   // 分隔线
   ctx.strokeStyle = 'rgba(255,255,255,.16)';
   ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(80, 1150); ctx.lineTo(W - 80, 1150); ctx.stroke();
+  const dividerY = square ? 1090 : 1150;
+  ctx.beginPath(); ctx.moveTo(inset, dividerY); ctx.lineTo(W - inset, dividerY); ctx.stroke();
 
   // 左侧：文案与链接
   const shareUrl = entityUrl(meta);
   ctx.fillStyle = 'rgba(255,255,255,.78)';
   ctx.font = `400 24px ${FONT}`;
-  ctx.fillText(ui.cta, 80, 1200);
+  ctx.fillText(ui.cta, inset, 1200 + footerOffset);
   ctx.fillStyle = 'rgba(255,255,255,.85)';
   ctx.font = '500 22px ui-monospace,Menlo,monospace';
-  ctx.fillText(fitText(ctx, shareUrl.replace(/^https?:\/\//, ''), 610), 80, 1246);
+  ctx.fillText(fitText(ctx, shareUrl.replace(/^https?:\/\//, ''), 610), inset, 1246 + footerOffset);
   ctx.fillStyle = 'rgba(255,255,255,.64)';
   ctx.font = `400 20px ${FONT}`;
-  ctx.fillText('扫码或访问链接', 80, 1286);
+  ctx.fillText('扫码或访问链接', inset, 1286 + footerOffset);
   ctx.fillStyle = 'rgba(255,255,255,.64)';
   ctx.font = `400 19px ${FONT}`;
-  ctx.fillText(fitText(ctx, `也可打开 CurrentMusicX 搜索「${meta.name || ''}」${ui.verb}`, 610), 80, 1326);
+  ctx.fillText(fitText(ctx, `也可打开 CurrentMusicX 搜索「${meta.name || ''}」${ui.verb}`, 610), inset, 1326 + footerOffset);
 
   // 右侧：二维码（含 4 模块静区，扫码可用）
-  drawQRCode(ctx, shareUrl, 880, 1260, 240);
+  drawQRCode(ctx, shareUrl, square ? 860 : 880, square ? 1250 : 1260, square ? 258 : 240);
 
   return cv;
 }
 
 /** 生成分享图（JPEG dataURL）。封面失败或画布被污染时自动重画无封面版本。 */
-export async function makeShareImage(meta) {
+export async function makeShareImage(meta, style = 'immersive') {
   try {
-    const cv = await drawCard(meta, true);
+    const cv = await drawCard(meta, true, style);
     return cv.toDataURL('image/jpeg', 0.92);     // 污染画布会在这里抛 SecurityError
   } catch (e) {
-    const cv = await drawCard(meta, false);
+    const cv = await drawCard(meta, false, style);
     return cv.toDataURL('image/jpeg', 0.92);
   }
 }
 
-function safeName(meta) {
+function safeName(meta, style) {
   const n = String(meta.name || 'share').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
-  return `CurrentMusic-${n}-${kindOf(meta)}-${entityId(meta)}.jpg`;
+  return `CurrentMusic-${n}-${kindOf(meta)}-${entityId(meta)}-${style}.jpg`;
 }
 
 async function copyText(text) {
@@ -309,8 +396,8 @@ async function copyText(text) {
   } catch { return false; }
 }
 
-function saveImage(dataUrl, meta) {
-  const name = safeName(meta);
+function saveImage(dataUrl, meta, style) {
+  const name = safeName(meta, style);
   const n = window.NativeApi;
   if (n && typeof n.saveImage === 'function') {
     try { n.saveImage(dataUrl, name); return; } catch { /* 回退浏览器下载 */ }
@@ -321,6 +408,45 @@ function saveImage(dataUrl, meta) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+async function previewShareImage(meta, style) {
+  toast('正在生成分享图…');
+  try {
+    const dataUrl = await makeShareImage(meta, style);
+    mdui.dialog({
+      headline: `分享图 · ${IMAGE_STYLES[style].label}`,
+      body: `<div class="cm-share-preview"><img src="${dataUrl}" alt="${IMAGE_STYLES[style].label}分享图预览"></div>`,
+      actions: [
+        { text: '关闭' },
+        { text: '保存图片', onClick: () => { saveImage(dataUrl, meta, style); } },
+      ],
+    });
+  } catch (e) {
+    toast('分享图生成失败：' + ((e && e.message) || '未知错误'));
+  }
+}
+
+function chooseShareImageStyle(meta) {
+  const dialog = mdui.dialog({
+    headline: '选择分享图样式',
+    body: `<div class="cm-share-opts">${Object.entries(IMAGE_STYLES).map(([style, ui]) => `
+      <button class="cm-share-opt" data-share-style="${style}">
+        <span class="material-icons-outlined">${ui.icon}</span><b>${ui.label}</b><i>${ui.description}</i>
+      </button>`).join('')}</div>`,
+    closeOnEsc: true,
+    closeOnOverlayClick: true,
+    actions: [{ text: '取消' }],
+  });
+  let selected = false;
+  dialog.querySelectorAll('[data-share-style]').forEach(btn => {
+    btn.onclick = () => {
+      if (selected) return;
+      selected = true;
+      dialog.open = false;
+      previewShareImage(meta, btn.dataset.shareStyle);
+    };
+  });
 }
 
 /** 分享入口：分享图 / 链接 / 信息；歌曲、歌单、歌手、专辑共用。 */
@@ -342,7 +468,7 @@ export function openShare(meta) {
       </div>
       <div class="cm-share-opts">
         <button class="cm-share-opt" data-k="img">
-          <span class="material-icons-outlined">image</span><b>分享图</b><i>沉浸式封面海报，可保存到相册</i>
+          <span class="material-icons-outlined">image</span><b>分享图</b><i>选择方块或沉浸式封面</i>
         </button>
         <button class="cm-share-opt" data-k="link">
           <span class="material-icons-outlined">link</span><b>分享链接</b><i>复制${ui.headline.replace('分享', '')}页面链接</i>
@@ -369,22 +495,9 @@ export function openShare(meta) {
         return;
       }
       // 分享图
+      btn.disabled = true;
       diag.open = false;
-      toast('正在生成分享图…');
-      try {
-        const dataUrl = await makeShareImage(meta);
-        const preview = mdui.dialog({
-          headline: '分享图',
-          body: `<div class="cm-share-preview"><img src="${dataUrl}" alt="分享图预览"></div>`,
-          actions: [
-            { text: '关闭' },
-            { text: '保存图片', onClick: () => { saveImage(dataUrl, meta); } },
-          ],
-        });
-        preview.addEventListener('closed', () => { /* 释放大字符串不发生额外动作 */ });
-      } catch (e) {
-        toast('分享图生成失败：' + ((e && e.message) || '未知错误'));
-      }
+      chooseShareImageStyle(meta);
     };
   });
 }
