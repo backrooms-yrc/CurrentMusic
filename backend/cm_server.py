@@ -1251,7 +1251,7 @@ def require_user(handler):
         raise ApiError(401, "未登录")
     u = cm_db.user_by_token(token)
     if not u:
-        raise ApiError(401, "登录已失效，请重新登录（可能已在其他设备登录或超出 5 台设备上限）")
+        raise ApiError(401, "登录已失效，请重新登录（会话可能已退出或被下线）")
     u["_token"] = token
     # v1.28.38：顺带刷新 IP 属地（内部已节流 + 异步，异常静默，绝不影响鉴权）
     cm_region.note(u["id"], cm_ncm_gateway.client_ip(handler))
@@ -2156,9 +2156,9 @@ def route(handler, method):
         return jresp(handler, 200, {"ok": True})
 
     if path == "/auth/sessions" and method == "GET":
-        """在线设备列表（最多 5 台，App 与网页共用额度）。"""
+        """在线设备列表；max=null 表示数量不限，超过 5 台时客户端显示风险提示。"""
         u = require_user(handler)
-        return jresp(handler, 200, {"max": cm_db.MAX_SESSIONS,
+        return jresp(handler, 200, {"max": None,
                                     "sessions": cm_db.list_sessions(u["id"], u.get("_token"))})
 
     m = re.fullmatch(r"/auth/sessions/([0-9a-f]{8,64})", path)
@@ -2307,7 +2307,7 @@ def route(handler, method):
             ("POST", "/auth/login", "公开", "登录 Current 账户；开启验证器 2FA 或密保时先返回验证挑战（requires2FA 或 requiresSecurityQuestion、challengeToken、expiresIn），不会签发会话"),
             ("POST", "/auth/logout", "Bearer", "退出当前设备并撤销会话"),
             ("GET", "/auth/me", "Bearer", "当前账户资料与统计"),
-            ("GET", "/auth/sessions", "Bearer", "在线设备列表"),
+            ("GET", "/auth/sessions", "Bearer", "在线设备列表 {max:null,sessions}；数量不限，超过 5 台时客户端提示风险"),
             ("DELETE", "/auth/sessions/{id}", "Bearer", "下线指定设备"),
             ("DELETE", "/auth/sessions/others", "Bearer", "下线其他设备"),
             ("GET", "/announcements", "公开", "站内公告（客户端每次打开拉取并弹窗，置顶在前）"),

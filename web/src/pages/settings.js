@@ -753,26 +753,38 @@ export async function render(el) {
       if (d.toDateString() === now.toDateString()) return '今天 ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
       return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
     };
-    let sessions = [];
+    let sessions = [], deviceDialog = null;
+    const riskText = () => `已登录 ${sessions.length} 台设备，超过 5 台，账号安全风险较高。请核对并退出不认识或不再使用的设备。`;
     const refresh = async () => {
       try {
         const d = await api.sessions();
         sessions = d.sessions || [];
         const c = el.querySelector('#devCount');
-        if (c) c.textContent = `${sessions.length}/${d.max} 台`;
-        return d.max;
+        if (c) c.textContent = `${sessions.length} 台`;
+        if (deviceDialog && deviceDialog.open) {
+          deviceDialog.headline = `登录设备（${sessions.length} 台）`;
+          const risk = deviceDialog.querySelector('.cm-dev-risk');
+          if (risk) {
+            risk.hidden = sessions.length <= 5;
+            risk.querySelector('p').textContent = riskText();
+          }
+        }
+        return true;
       } catch (e) {
         const c = el.querySelector('#devCount');
         if (c) c.textContent = '查看';
-        return 5;
+        return false;
       }
     };
     refresh();
     devRow.onclick = async () => {
-      const max = await refresh();
+      if (!await refresh()) { toast('无法加载登录设备，请稍后重试'); return; }
       const diag = mdui.dialog({
-        headline: `登录设备（最多 ${max} 台）`,
+        headline: `登录设备（${sessions.length} 台）`,
         body: `<div class="cm-devs">
+          <div class="cm-dev-risk" role="status" aria-live="polite" ${sessions.length <= 5 ? 'hidden' : ''}>
+            <span class="material-icons-outlined" aria-hidden="true">warning_amber</span><p>${riskText()}</p>
+          </div>
           ${sessions.map(s => `
             <div class="cm-dev">
               <span class="material-icons-outlined">${s.platform === 'web' ? 'language' : 'smartphone'}</span>
@@ -795,6 +807,7 @@ export async function render(el) {
             } },
         ],
       });
+      deviceDialog = diag;
       setTimeout(() => {
         diag.querySelectorAll('.cm-dev-kick').forEach(k => {
           k.onclick = async () => {
@@ -802,7 +815,7 @@ export async function render(el) {
               await api.revokeSession(k.dataset.id);
               toast('该设备已下线');
               k.closest('.cm-dev').remove();
-              refresh();
+              await refresh();
             } catch (e) { toast(e.message); }
           };
         });

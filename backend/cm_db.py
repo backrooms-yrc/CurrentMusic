@@ -695,11 +695,8 @@ def verify_login(username, password):
     return u
 
 
-MAX_SESSIONS = 5          # 同时在线设备上限（App + 网页合计）
-
-
 def issue_token(uid, device="", platform="", *, _conn=None):
-    """签发新会话；超过 MAX_SESSIONS 时按最近活跃时间淘汰最久未使用者。"""
+    """签发新会话；设备数量不设上限，已有会话由用户或安全操作主动撤销。"""
     token = secrets.token_urlsafe(32)
     import hashlib
     th = hashlib.sha256(token.encode()).hexdigest()
@@ -711,12 +708,6 @@ def issue_token(uid, device="", platform="", *, _conn=None):
             " VALUES(?,?,?,?,?,?)",
             (th, uid, str(device or "")[:120], str(platform or "")[:20], now, now),
         )
-        rows = conn.execute(
-            "SELECT token_hash FROM sessions WHERE user_id=? ORDER BY last_seen DESC", (uid,)
-        ).fetchall()
-        for r in rows[MAX_SESSIONS:]:                      # 超出上限：淘汰最旧（滑出会话）
-            conn.execute("DELETE FROM sessions WHERE token_hash=?", (r["token_hash"],))
-            _pp_revoke_sid_in(conn, r["token_hash"])       # 该会话发出的通行证授权一并撤销
         conn.execute("UPDATE users SET token_hash=?, token_at=? WHERE id=?", (th, now, uid))
         if _conn is None:
             conn.commit()

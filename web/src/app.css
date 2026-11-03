@@ -1398,6 +1398,10 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 
 /* ---------- 登录设备管理 ---------- */
 .cm-devs { display: flex; flex-direction: column; min-width: min(100%, 380px); }
+.cm-dev-risk { display: flex; align-items: flex-start; gap: 10px; padding: 12px; margin-bottom: 8px; border-radius: 12px; background: #fff3d6; color: #785800; }
+.cm-dev-risk > .material-icons-outlined { flex: none; font-size: 22px; }
+.cm-dev-risk p { margin: 0; font-size: calc(13px * var(--cm-fs, 1)); line-height: 1.6; }
+.mdui-theme-dark .cm-dev-risk { background: #3a2b10; color: #ffe3a1; }
 .cm-dev { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--hairline, rgba(0, 0, 0, .08)); }
 .cm-dev:last-child { border-bottom: none; }
 .cm-dev > .material-icons-outlined { color: var(--cm-primary); font-size: calc(22px * var(--cm-fs, 1)); }

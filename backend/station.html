@@ -198,6 +198,7 @@
   .field .row{display:flex;gap:8px}
   .field .row input{flex:1}
   .err{color:var(--danger);font-size:13.5px;min-height:20px;margin-top:4px}
+  .session-risk{padding:12px 14px;margin:10px 0;border-radius:12px;background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--fg);font-size:13px;line-height:1.7;border:1px solid color-mix(in srgb,var(--warn) 40%,transparent)}
   .hint{font-size:12.5px;color:var(--fg3);margin-top:6px;line-height:1.6}
   .auth-links{text-align:right;margin-top:2px}
   .linkbtn{border:0;background:none;color:var(--accent);font:inherit;font-size:13.5px;cursor:pointer;
@@ -506,10 +507,11 @@
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line-soft)">
         <div class="sechead" style="margin-bottom:6px">
           <div><h2 style="font-size:16px">在线设备 <span class="pill" id="sessCount"></span></h2>
-            <p>同一账号最多 5 台设备同时在线，App 与网页共用额度。</p></div>
+            <p>登录设备数量不限，可随时查看并下线不再使用的设备。</p></div>
           <div class="spacer"></div>
           <button class="btn sm danger hide" id="kickOthers">下线其他设备</button>
         </div>
+        <div id="sessionRisk" class="session-risk hide" role="status" aria-live="polite"></div>
         <div class="list" id="sessions"></div>
       </div>
     </div>
@@ -1056,7 +1058,9 @@
     $('sessions').innerHTML = skeleton(2);
     api('GET', '/auth/sessions').then(function (d) {
       var a = d.sessions || [];
-      $('sessCount').textContent = a.length + ' / ' + (d.max || 5) + ' 台在线';
+      $('sessCount').textContent = a.length + ' 台在线';
+      $('sessionRisk').textContent = '已登录 ' + a.length + ' 台设备，超过 5 台，账号安全风险较高。请核对并退出不认识或不再使用的设备。';
+      $('sessionRisk').classList.toggle('hide', a.length <= 5);
       $('kickOthers').classList.toggle('hide', a.length < 2);
       $('sessions').innerHTML = a.length ? a.map(function (s) {
         return '<div class="row">'
