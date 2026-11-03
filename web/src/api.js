@@ -51,16 +51,29 @@ export const settings = {
 
 // ---------- 账号本地存储（支持多账号切换） ----------
 
+function notifyAuthChange(login = false) {
+  // 只广播变化类型，不把 token 或用户资料放到事件载荷中。
+  window.dispatchEvent(new CustomEvent('cm-authchange', { detail: { login } }));
+}
+
 export const auth = {
   get token() { return localStorage.getItem(LS.token) || ''; },
   get user() { try { return JSON.parse(localStorage.getItem(LS.user)) || null; } catch { return null; } },
 
   saveLogin(token, user) {
+    const login = token !== this.token || !this.user || this.user.username !== user.username;
     localStorage.setItem(LS.token, token);
     localStorage.setItem(LS.user, JSON.stringify(user));
     const accounts = this.accounts().filter(a => a.username !== user.username);
     accounts.unshift({ username: user.username, nickname: user.nickname, avatar: user.avatar, token });
     localStorage.setItem(LS.accounts, JSON.stringify(accounts.slice(0, 5)));
+    notifyAuthChange(login);
+  },
+  updateUser(user, token) {
+    // 旧账号的请求晚到时，不能覆盖切换/退出后的当前账号。
+    if (!token || token !== this.token || !user || !user.username) return;
+    localStorage.setItem(LS.user, JSON.stringify(user));
+    notifyAuthChange();
   },
   accounts() { try { return JSON.parse(localStorage.getItem(LS.accounts)) || []; } catch { return []; } },
   switchTo(username) {
@@ -68,6 +81,7 @@ export const auth = {
     if (!a) return false;
     localStorage.setItem(LS.token, a.token);
     localStorage.setItem(LS.user, JSON.stringify({ id: 0, username: a.username, nickname: a.nickname, avatar: a.avatar, bio: '' }));
+    notifyAuthChange();
     return true;
   },
   clear() {
@@ -78,6 +92,7 @@ export const auth = {
     }
     localStorage.removeItem(LS.token);
     localStorage.removeItem(LS.user);
+    notifyAuthChange();
   },
 };
 
@@ -256,7 +271,12 @@ export const api = {
   adminSetOwner: (id, on) => call('POST', `/admin/users/${id}/owner`, { body: { on }, auth: true }),
   adminSessions: () => call('GET', '/admin/sessions', { auth: true }),
   adminClearCache: (scope = 'aux') => call('POST', '/admin/cache/clear', { body: { scope }, auth: true }),
-  me: () => call('GET', '/auth/me', { auth: true }),
+  me: async () => {
+    const token = auth.token;
+    const user = await call('GET', '/auth/me', { auth: true });
+    auth.updateUser(user, token);
+    return user;
+  },
   chatMessages: (before = 0, limit = 30) => call('GET', `/chat/messages?limit=${limit}${before ? `&before=${before}` : ''}`),
   chatSend: (body) => call('POST', '/chat/messages', { body, auth: true }),
   chatDelete: (id) => call('DELETE', `/chat/messages/${id}`, { auth: true }),

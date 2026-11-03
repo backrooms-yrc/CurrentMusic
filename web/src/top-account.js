@@ -1,0 +1,85 @@
+import { api, auth } from './api.js';
+import { avatarHTML, userTags, userTagsText } from './ui.js';
+
+// 独立于路由挂载；页面切换、滚动与登录后的跳转不会销毁顶部账号。
+export function initTopAccount() {
+  const account = document.getElementById('topAccount');
+  if (!account) return;
+  let owner = '', markup = '', flight = null, timer = 0, resizeTimer = 0, generation = 0;
+
+  function settle() {
+    generation++;
+    clearTimeout(timer);
+    clearTimeout(resizeTimer);
+    if (flight) { const old = flight; flight = null; old.cancel(); }
+    account.classList.remove('cm-account-arriving', 'cm-account-flying');
+  }
+
+  async function arrive() {
+    settle();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !account.animate) return;
+    const own = generation;
+    account.classList.add('cm-account-arriving');
+    // 等头像/挂件加载，但图片失败或慢网不能卡住账号入口。
+    await Promise.race([
+      Promise.all(Array.from(account.querySelectorAll('img')).map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      }))),
+      new Promise(resolve => setTimeout(resolve, 650)),
+    ]);
+    if (own !== generation || account.hidden) return;
+    const r = account.querySelector('.cm-top-avatar').getBoundingClientRect();
+    account.style.transformOrigin = `50% ${r.top - account.getBoundingClientRect().top + r.height / 2}px`;
+    const dx = innerWidth / 2 - (r.left + r.width / 2);
+    const dy = innerHeight / 2 - (r.top + r.height / 2);
+    account.classList.add('cm-account-flying');
+    flight = account.animate([
+      { opacity: 0, transform: `translate(${dx}px, ${dy + 18}px) scale(1.7)`, offset: 0, easing: 'ease-out' },
+      { opacity: 1, transform: `translate(${dx}px, ${dy}px) scale(2.5)`, offset: .2 },
+      { opacity: 1, transform: `translate(${dx}px, ${dy}px) scale(2.5)`, offset: .44, easing: 'cubic-bezier(.65,0,.2,1)' },
+      { opacity: 1, transform: 'none', offset: 1 },
+    ], { duration: 1550, easing: 'linear' });
+    account.classList.remove('cm-account-arriving');
+    const finish = () => { if (own === generation) settle(); };
+    flight.onfinish = finish;
+    // 老 WebView 不支持 Animation.finished；定时兜底防止残留高层级/不可点击状态。
+    timer = setTimeout(finish, 1750);
+  }
+
+  function sync(event) {
+    const user = auth.token && auth.user;
+    const nextOwner = user ? user.username : '';
+    if (nextOwner !== owner) settle();
+    owner = nextOwner;
+    account.hidden = !user;
+    document.body.classList.toggle('cm-has-account', !!user);
+    if (!user) { settle(); account.innerHTML = ''; markup = ''; return; }
+    const html = `<span class="cm-top-avatar" aria-hidden="true">${avatarHTML(user, 34)}</span><span class="cm-top-tags">${userTags(user)}</span>`;
+    if (html !== markup) { account.innerHTML = html; markup = html; }
+    const label = [user.nickname || user.username, userTagsText(user), '我的账号'].filter(Boolean).join(' · ');
+    account.setAttribute('aria-label', label);
+    account.title = label;
+    if (event && event.detail && event.detail.login) arrive();
+  }
+
+  const refresh = () => { if (auth.token) api.me().catch(() => {}); };
+  window.addEventListener('cm-authchange', sync);
+  window.addEventListener('storage', event => {
+    if (!event.key || ['cm.token', 'cm.user'].includes(event.key)) { sync(); if (event.key !== 'cm.user') refresh(); }
+  });
+  window.addEventListener('resize', () => {
+    const arriving = account.classList.contains('cm-account-arriving') || account.classList.contains('cm-account-flying');
+    settle();
+    // 手机登录后软键盘收起会改变视口；等尺寸稳定后从新的屏幕中心飞入。
+    if (arriving && !account.hidden) {
+      account.classList.add('cm-account-arriving');
+      resizeTimer = setTimeout(arrive, 150);
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) settle(); else refresh();
+  });
+  sync();
+  refresh();
+}

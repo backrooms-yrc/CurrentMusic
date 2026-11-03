@@ -8,6 +8,7 @@ import './app.css';
 import './auth.css';
 import './settings.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
+import './top-account.css';
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
 import { mdui } from './md.js';
 import { toast, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
@@ -24,6 +25,7 @@ import { applyCustomize } from './customize.js';
 import { initGlass } from './glass.js';
 import { initAnnouncements } from './announce.js';
 import { initNavDrop } from './navdrop.js';
+import { initTopAccount } from './top-account.js';
 
 // 手表小屏兜底：watch.css 用 mdui-dialog::part(panel) 压掉面板自带 min-width:280px，
 // 但 ::part() 需要 Chrome 73+；老 WebView（构建目标 chrome58）上该规则失效，
@@ -216,6 +218,7 @@ function boot() {
   initRipple();
   initImageFade();   // 全局图片加载动画（骨架微光 → 渐显）
   warmDecorScales(); // 预热头像挂件比例表（本地缓存即时可用，后台校验版本号）
+  initTopAccount();
   window.__cmBooted = true;   // 供 index.html 的启动诊断判定
   initExpressiveLoading();
   dismissBoot();
