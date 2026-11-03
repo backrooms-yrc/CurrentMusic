@@ -303,8 +303,9 @@ _SEARCH_TYPES = {
     "artist":   (100,  "artists",   "artistCount"),
     "album":    (10,   "albums",    "albumCount"),
     "playlist": (1000, "playlists", "playlistCount"),
+    "lyric":    (1006, "songs",     "songCount"),
 }
-_SEARCH_ALL = tuple(_SEARCH_TYPES)
+_SEARCH_ALL = ("song", "artist", "album", "playlist")
 
 
 def _norm_artist(a):
@@ -333,7 +334,7 @@ def _norm_playlist(p):
     }
 
 
-_NORMALIZERS = {"song": _norm_song, "artist": _norm_artist,
+_NORMALIZERS = {"song": _norm_song, "lyric": _norm_song, "artist": _norm_artist,
                 "album": _norm_album, "playlist": _norm_playlist}
 
 
@@ -351,6 +352,8 @@ def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0):
     """
     from concurrent.futures import ThreadPoolExecutor
     tsel = [t for t in types if t in _SEARCH_TYPES] or ["song"]
+    if "lyric" in tsel and len(tsel) != 1:
+        raise ValueError("歌词搜索请单独指定 type=lyric")
     with ThreadPoolExecutor(max_workers=len(tsel)) as ex:
         futs = {t: ex.submit(call, "/cloudsearch", {
             "keywords": keywords, "limit": limit, "offset": offset,
@@ -364,8 +367,12 @@ def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0):
         items = r.get(arr_key) or []
         total = int(r.get(cnt_key) or 0)
         out[arr_key] = [_NORMALIZERS[t](x) for x in items]
-        totals[t] = total
-        has_more[t] = (offset + len(items) < total) if total else (len(items) >= limit)
+        if t == "lyric":
+            import cm_search_lyrics
+            out[arr_key] = cm_search_lyrics.enrich(items, out[arr_key], keywords)
+        count_key = "song" if t == "lyric" else t
+        totals[count_key] = total
+        has_more[count_key] = (offset + len(items) < total) if total else (len(items) >= limit)
     out["totals"] = totals
     out["hasMore"] = has_more
     return out

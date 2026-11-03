@@ -29,6 +29,7 @@ GROUPS = {
     'download': '客户端与资源', 'x': '客户端与资源', 'cast': '客户端与资源',
 }
 GUIDES = {
+    'search-lyrics-api': '歌词搜索与命中前后文',
     'passkeys-api': '通行密钥登录与绑定',
     'two-factor-api': '登录两步验证', 'passport-api': '通行证完整接入', 'password-api': '密码找回与修改', 'lyrics-api': '歌词与逐字轴',
     'private-roaming-api': '私人漫游', 'play-history-sync': '网易云听歌历史同步',

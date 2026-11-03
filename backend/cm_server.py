@@ -2361,7 +2361,7 @@ def route(handler, method):
             ("POST", "/likes/{ncmId}", "Bearer", "CurrentMusic 自建红心 toggle {meta}，返回 {on,count}（本地计数）"),
             ("POST", "/ncmbind/like/{ncmId}", "Bearer", "网易云红心/取消红心 {like, meta}，返回 {liked,count}（网易云红心数）；写操作透传可信 RealIP"),
             ("GET", "/daily", "可选登录", "每日推荐"),
-            ("GET", "/ncm/search", "公开", "网易云搜索代理"),
+            ("GET", "/ncm/search", "公开", "网易云搜索代理；type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；上下文获取失败保留原片段。详见 /api-docs/reference/guide-search-lyrics-api/"),
             ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；返回 host 与耗时诊断）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
             ("GET", "/share/song/{id}", "公开", "歌曲分享元数据（name/artists/album/pic/duration/url/text/image；无需登录）"),
@@ -3628,6 +3628,9 @@ def route(handler, method):
         # 按类型搜索：不传 type 时保持旧行为（一次返回全部类型，供 room 等调用方）
         tsel = [t.strip() for t in (q.get("type") or q.get("types") or "").split(",")
                 if t.strip() in cm_ncm._SEARCH_TYPES]
+        tsel = list(dict.fromkeys(tsel))
+        if "lyric" in tsel and len(tsel) != 1:
+            raise ApiError(400, "歌词搜索请单独指定 type=lyric")
         limit = _int("limit", 30, 1, 50)
         offset = _int("offset", 0, 0, 1000)
 
@@ -3638,14 +3641,17 @@ def route(handler, method):
         else:
             # 缓存键必须含「类型 + 偏移 + 条数」：旧键 srch2:<kw> 不含这些，
             # 一旦分页就会互相覆盖（同一关键词翻第 2 页会拿到第 1 页的缓存）。
-            ckey = f"srch3:{keywords}:{','.join(tsel)}:{offset}:{limit}"
+            prefix = "srch-lyric:v1" if tsel == ["lyric"] else "srch3"
+            ckey = f"{prefix}:{keywords}:{','.join(tsel)}:{offset}:{limit}"
             build = lambda: cm_ncm.search_types(keywords, tuple(tsel), limit=limit, offset=offset)   # noqa: E731
 
         cached = cm_db.cache_get(ckey)
         if cached:
             return jresp(handler, 200, json.loads(cached))
         d = build()
-        cm_db.cache_set(ckey, json.dumps(d, ensure_ascii=False), 600)
+        # Partial context may be warmed by bounded background lookups; do not freeze it for 10 min.
+        partial = tsel == ["lyric"] and any(not s.get("lyricContextComplete") for s in d.get("songs", []))
+        cm_db.cache_set(ckey, json.dumps(d, ensure_ascii=False), 10 if partial else 600)
         return jresp(handler, 200, d)
 
     if path == "/artists/followed" and method == "GET":
