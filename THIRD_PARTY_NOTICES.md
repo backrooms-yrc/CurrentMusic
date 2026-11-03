@@ -40,6 +40,9 @@ be imported without installing the Qt GUI stack.
 ## Web and client dependencies
 
 - MDUI 2 (MIT), https://github.com/zdhxiong/mdui. License copy: `licenses/mdui-MIT.txt`.
+- The expressive loading indicator uses the fixed blue/red/yellow/green palette of MDUI 1.0.2
+  colorful spinners (MIT), https://github.com/zdhxiong/mdui/blob/v1.0.2/dist/css/mdui.css.
+  MDUI 1 runtime code is not bundled; see the MDUI MIT notice above.
 - Material Design Icons font (Apache-2.0), https://github.com/google/material-design-icons.
   Distributed through @material-design-icons/font; license copy: `licenses/material-icons-Apache-2.0.txt`.
 - qrcode-generator (MIT), https://github.com/kazuhikoarase/qrcode-generator.

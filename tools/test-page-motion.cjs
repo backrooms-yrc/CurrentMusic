@@ -58,7 +58,7 @@ const asset = request => path.join(root, 'app/src/main/assets/www', new URL(requ
       await page.goto(base,{waitUntil:'commit'});
       await page.locator('#boot svg').waitFor({state:'visible'});
       assert.equal((await page.locator('#boot').innerText()).trim(),'');
-      assert.equal(await page.locator('#boot .cm-indicator-morph').evaluate(e=>getComputedStyle(e).animationIterationCount),reduce?'1':'infinite');
+      assert(await page.locator('#boot .cm-indicator-morph').evaluate((e, reduce)=>getComputedStyle(e).animationIterationCount.split(',').every(v=>v.trim()===(reduce?'1':'infinite')),reduce));
       const initial=await page.evaluate(()=>document.querySelector('#boot .cm-indicator-turn path').getTotalLength());
       await page.waitForTimeout(700);
       const after=await page.evaluate(()=>document.querySelector('#boot .cm-indicator-turn path').getTotalLength());
