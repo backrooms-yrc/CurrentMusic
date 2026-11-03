@@ -9,7 +9,9 @@
   带 Authorization 的请求仍按 CORS 规范预检；OPTIONS 返回 `Access-Control-Max-Age: 600`，
   浏览器可复用 10 分钟，认证与接口权限规则不变。
 - `python3 tools/deploy-web.py` 将构建产物同步到 `data/app/`，并生成 gzip level 9 副本；
-  首页最后切换。副本不进入 Android assets，不增加 APK 体积。`build.sh` 已使用同一发布脚本。
+  Web 首页引用 `app.<SHA-256 前 16 位>.js/css`，不依赖 CDN 是否保留 `?v=`；全部资源就绪后
+  才切换首页，并保留旧指纹文件供已打开的标签页使用。副本不进入 Android assets，不增加
+  APK 体积。`build.sh` 已使用同一发布脚本。
 - Nginx 的 `/app/` 开启 `gzip_static on`（需要 gzip_static 模块），静态资源使用预压缩文件。
   API 继续由 Nginx 动态压缩；文本压缩阈值降至 256 字节，代理请求也可压缩。
   不压缩 SSE，不为账号、令牌、管理台或用户数据添加共享缓存。
@@ -37,6 +39,36 @@ JS 和 CSS 内容，以及 gzip 解压后与原文件一致；不要把服务器
 Web 首页现为 `/app` 和 `/app/` 设置 `/app/` 资源基址，兼容两种入口；
 Android `cm.local` 仍使用原来的 assets 根路径。启动诊断也会显示脚本加载失败的 URL，
 不再把通用加载超时归因为 WebView 版本过旧。
+
+## 镜像同步与回源排查
+
+所有镜像应回源同一份 `data/app/`，每次 Web 部署自动更新，无需等待 Android 发版。
+Android assets 保持构建时的 `app.js?v=...` 引用，Web 部署脚本另生成文件名指纹副本。
+参考 `deploy/nginx.conf.example` 配置以下缓存规则：
+
+- `/app/`、`/app/index.html`、SPA 路由、测速页和旧的无文件名指纹资源：
+  `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`、
+  `CDN-Cache-Control: no-store`。CDN 控制台也必须遵循源站响应头，禁止整站强制缓存 HTML。
+- `app.<16 位哈希>.js/css` 可长期缓存；缓存键必须包含完整路径。缺失的脚本、样式返回
+  404，不回退到 HTML。旧指纹文件不随新部署删除。
+- `/app` 的重定向使用相对 `Location: /app/`，避免 CDN 通过 HTTP 回源时把用户降到 HTTP。
+- 修改缓存规则后清理已有 HTML 和旧 `app.js/app.css` 缓存；仅修改源站响应头不会立即
+  驱逐已经被 CDN 强制缓存的旧首页。API、登录凭据和用户数据禁止共享缓存。
+
+发布后运行 `python3 tools/check-web-mirrors.py`，从公网逐个获取四个入口的首页及实际引用的
+JS/CSS，与本机部署内容比较；HTTP 错误、资源缺失或内容不同均返回失败退出码。
+部署逻辑回归：`python3 tools/test-deploy-web.py`（临时目录，不访问运行数据库）。
+
+2026-11-03 排查并修复：`cm.bileizhen.top` 原为 DNS-only CNAME，指向手工填写了
+Cloudflare 边缘 IP 的 `cf.bileizhen.top`，公网因此返回 Error 1000
+（DNS points to prohibited IP）；`currentmusic.geekertao.com` 的 ESA 回源链路也返回
+同一错误。已将 `cm.bileizhen.top` 改为指向实际源站的 A 记录并开启 Cloudflare 代理，
+其余域名记录及 SaaS fallback 配置保持原样，ESA 入口随之恢复。
+公网核验四个入口的 JS/CSS 均与本机部署一致，两个故障入口的官网及 API 探针均返回 200。
+
+后续若出现同类故障，应核对 A/AAAA/CNAME、回源 Host/SNI，避免回源到 CDN 自己或形成
+代理环；本机四个 Host 响应正常不能代表 CDN 公网正常。具体错误含义见
+[Cloudflare 官方说明](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1000/)。
 
 ## 网页 CDN 与音源设置（2026-11-02）
 

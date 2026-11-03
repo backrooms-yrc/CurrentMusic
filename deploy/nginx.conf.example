@@ -134,15 +134,43 @@ server {
     #     add_header Cache-Control "no-cache";
     #     add_header X-Content-Type-Options "nosniff" always;
     # }
+    # location = /app {
+    #     absolute_redirect off;  # preserve HTTPS through an HTTP CDN origin connection
+    #     return 302 /app/;
+    #     add_header Cache-Control "no-store" always;
+    #     add_header CDN-Cache-Control "no-store" always;
+    # }
     # location = /app/auto {
     #     alias /srv/currentmusic/data/app/auto.html;
     #     default_type text/html;
-    #     add_header Cache-Control "no-cache";
+    #     add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+    #     add_header CDN-Cache-Control "no-store" always;
     # }
-    # location = /app/auto/ { return 302 /app/auto; }
-    # location /app/ {
-    #     alias /var/www/currentmusic/app/;
+    # location = /app/auto/ {
+    #     absolute_redirect off;
+    #     return 302 /app/auto;
+    #     add_header Cache-Control "no-store" always;
+    #     add_header CDN-Cache-Control "no-store" always;
+    # }
+    # location ^~ /app/ {
+    #     root /srv/currentmusic/data;
+    #     index index.html;
     #     gzip_static on;  # requires --with-http_gzip_static_module; tools/deploy-web.py creates .gz
     #     try_files $uri $uri/ /app/index.html;
+    #     add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+    #     add_header CDN-Cache-Control "no-store" always;
+    #     add_header X-Content-Type-Options "nosniff" always;
+    #     location ~* "^/app/app\.[0-9a-f]{16}\.(js|css)$" {
+    #         try_files $uri =404;
+    #         add_header Cache-Control "public, max-age=31536000, immutable";
+    #         add_header CDN-Cache-Control "public, max-age=31536000";
+    #         add_header X-Content-Type-Options "nosniff" always;
+    #     }
+    #     location ~* \.(js|css|woff2|png|svg|json)$ {
+    #         try_files $uri =404;  # missing assets must not return the SPA HTML
+    #         add_header Cache-Control "no-store, no-cache, must-revalidate, max-age=0" always;
+    #         add_header CDN-Cache-Control "no-store" always;
+    #         add_header X-Content-Type-Options "nosniff" always;
+    #     }
     # }
 }

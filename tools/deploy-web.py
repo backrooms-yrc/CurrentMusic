@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""原子同步 Web 资源并生成 gzip 预压缩文件；不将压缩副本放入 APK。"""
+"""发布带文件名指纹的 Web 资源及 gzip 副本；不增加 APK 体积。"""
 import argparse
 import gzip
+import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import tempfile
 
@@ -19,25 +21,44 @@ def deploy(source, target):
     if source.resolve() == target.resolve():
         raise ValueError("源目录与发布目录不能相同")
     target.mkdir(parents=True, exist_ok=True)
-    files = sorted((p for p in source.iterdir() if p.is_file() and p.suffix != '.gz'),
-                   key=lambda p: (p.name == 'index.html', p.name))
+    files = {p.name: p.read_bytes() for p in source.iterdir()
+             if p.is_file() and p.suffix != '.gz'}
+    # 部分 CDN 忽略查询串，?v= 不能区分两次构建；Web 使用真正不同的文件路径。
+    # Android assets 继续使用构建时的 app.js/app.css，不重复打包这些副本。
+    html = files['index.html'].decode('utf-8')
+    for name in ('app.js', 'app.css'):
+        asset = Path(name)
+        stamp = hashlib.sha256(files[name]).hexdigest()[:16]
+        fingerprinted = f'{asset.stem}.{stamp}{asset.suffix}'
+        pattern = rf'''((?:src|href)=["']){re.escape(name)}(?:\?[^"']*)?(["'])'''
+        html, count = re.subn(pattern, lambda m: m[1] + fingerprinted + m[2], html)
+        if count != 1:
+            raise ValueError(f'首页必须且只能引用一次 {name}，实际 {count} 次')
+        files[fingerprinted] = files[name]
+    files['index.html'] = html.encode('utf-8')
     auto_page = ROOT / 'web' / 'auto.html'
-    if auto_page.is_file() and not any(p.name == 'auto.html' for p in files):
-        files.insert(0, auto_page)
+    if auto_page.is_file() and 'auto.html' not in files:
+        files['auto.html'] = auto_page.read_bytes()
+    names = sorted(files, key=lambda name: (name == 'index.html', name))
     # 全部先准备完，压缩失败时不动当前线上资源；首页最后切换。
     with tempfile.TemporaryDirectory(prefix='.web-stage-', dir=target) as staging:
         stage = Path(staging)
-        for src in files:
-            shutil.copy2(src, stage / src.name)
-            if src.suffix in ('.js', '.css', '.html', '.svg', '.json'):
-                packed = stage / (src.name + '.gz')
-                packed.write_bytes(gzip.compress(src.read_bytes(), compresslevel=9, mtime=0))
-                shutil.copystat(src, packed)
-        for src in files:
-            packed_name = src.name + '.gz'
+        for name in names:
+            dest = stage / name
+            dest.write_bytes(files[name])
+            original = source / name
+            if original.is_file():
+                shutil.copystat(original, dest)
+            if dest.suffix in ('.js', '.css', '.html', '.svg', '.json'):
+                packed = stage / (name + '.gz')
+                packed.write_bytes(gzip.compress(files[name], compresslevel=9, mtime=0))
+                shutil.copystat(dest, packed)
+        # 不删除旧的指纹文件：已打开的标签页或短暂滞后的 CDN 首页仍需加载对应资源。
+        for name in names:
+            packed_name = name + '.gz'
             if (stage / packed_name).exists():
                 os.replace(stage / packed_name, target / packed_name)
-            os.replace(stage / src.name, target / src.name)
+            os.replace(stage / name, target / name)
 
 
 if __name__ == '__main__':

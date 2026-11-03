@@ -26,4 +26,14 @@ Web 发布：`tools/deploy-web.py` 自动同步 `web/auto.html` 及 gzip 副本�
 Nginx 为 `/app/auto` 配置精确静态文件映射（见 `deploy/nginx.conf.example`），避免落入 SPA。
 页面为独立 HTML，不依赖音乐客户端脚本；接口不可用时仍有内置线路目录可执行本地测试。
 
+镜像版本同步：每次 Web 部署生成 `app.<16 位内容哈希>.js/css` 并最后切换首页，保留旧资源。
+首页及测速页使用 `Cache-Control: no-store` 和 `CDN-Cache-Control: no-store`，CDN 应遵循
+源站响应头；只有文件名带指纹的资源长期缓存。运行 `python3 tools/check-web-mirrors.py`
+可从公网检查四个入口实际加载的 JS/CSS 是否与本机部署一致。
+
+2026-11-03 已修复 `cm.bileizhen.top` 的 Cloudflare Error 1000：原 DNS-only CNAME
+指向 Cloudflare 边缘 IP，现改为代理到真实源站；依赖该链路的 `currentmusic.geekertao.com`
+也恢复正常。四个公网入口的资源内容一致，浏览器均可启动。
+部署与排查细节见[网络传输说明](https://github.com/backrooms-yrc/CurrentMusic/blob/main/docs/network-performance.md#镜像同步与回源排查)。
+
 验证：`tools/run-tests.sh -p test_network_lines.py`，以及浏览器桌面/手机尺寸测试。

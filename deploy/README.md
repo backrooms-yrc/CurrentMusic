@@ -17,6 +17,12 @@ automatically installed.
 - `nginx.conf.example` — reverse proxy with SSE locations. **Do not omit**
   `proxy_buffering off` for `/cm/live/chat` and `/cm/live/ai`, or streaming responses
   will be buffered.
+- Web/CDN caching: publish with `python3 tools/deploy-web.py --target data/app`.
+  It creates content-addressed JS/CSS paths, retains previous bundles, and switches
+  the index last. Enable the optional `/app/` locations in the Nginx template;
+  mirrors must bypass HTML caching and respect `CDN-Cache-Control`.
+  Run `python3 tools/check-web-mirrors.py` after deployment to compare public
+  mirror bundles with the local files. See [mirror troubleshooting](../docs/network-performance.md#镜像同步与回源排查).
 - `php/` — optional PHP front-controller entry for PHP-only hosts (Apache/nginx+FPM),
   with SSE/Range streaming and a php2shell runtime gate. See `php/README.md`.
 

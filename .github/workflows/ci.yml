@@ -48,6 +48,8 @@ jobs:
       - run: npm --prefix web ci
       - run: python3 tools/check-js-refs.py
       - run: npm --prefix web run build
+      - name: Web 发布回归（临时目录）
+        run: python3 tools/test-deploy-web.py
       - name: 校验已提交的前端产物
         run: |
           git diff --exit-code -- app/src/main/assets/www web/src/decor-scales.js
