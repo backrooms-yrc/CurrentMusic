@@ -7,6 +7,7 @@ import { mdui } from './md.js';
 import { settings } from './api.js';
 import { esc, toast } from './ui.js';
 import qrcode from 'qrcode-generator';
+import brandIcon from '../../assets/brand/apple-touch-icon.png';
 
 const W = 1080, H = 1440;
 const FONT = '"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif';
@@ -212,18 +213,24 @@ async function drawCard(meta, withCover) {
       }
     } catch { /* 无效地址交给加载失败占位处理 */ }
   }
-  const cover = withCover && coverUrl ? await loadCover(coverUrl) : null;
+  // Logo 随代码内嵌，离线及封面降级重绘时也可显示，不引入画布跨域污染。
+  const [cover, logo] = await Promise.all([
+    withCover && coverUrl ? loadCover(coverUrl) : null,
+    loadCover(brandIcon),
+  ]);
   paintBackground(ctx, cover);
 
   // 品牌
   const ui = uiOf(meta);
+  if (logo) ctx.drawImage(logo, 72, 56, 112, 112);
+  const brandX = logo ? 208 : 80;
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(255,255,255,.94)';
   ctx.font = `700 42px ${FONT}`;
-  ctx.fillText('CurrentMusic', 80, 112);
+  ctx.fillText('CurrentMusic', brandX, 112);
   ctx.fillStyle = 'rgba(255,255,255,.72)';
   ctx.font = `600 22px ${FONT}`;
-  ctx.fillText(ui.brand, 80, 152);
+  ctx.fillText(ui.brand, brandX, 152);
 
   // 主标题 / 副标题 / 补充信息
   ctx.fillStyle = '#ffffff';

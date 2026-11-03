@@ -49,7 +49,7 @@ await build({
   // 会因此生成访问 this 先于 super() 的代码，导致每个组件构造都抛 "Must call super..."。
   minify: true,
   outfile: `${OUT}/app.js`,
-  loader: { '.woff2': 'file', '.svg': 'text' },
+  loader: { '.woff2': 'file', '.svg': 'text', '.png': 'dataurl' },
   assetNames: '[name]',
   logLevel: 'info',
 });
