@@ -187,7 +187,7 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
   height: var(--cm-mini-h);
 }
 .cm-mini-prog {
-  --mini-progress: 0%; position: absolute; top: -24px; left: 16px; right: 16px;
+  --playback-progress: 0%; position: absolute; top: -24px; left: 16px; right: 16px;
   height: 32px; z-index: 2;
 }
 .cm-mini-track {
@@ -207,7 +207,7 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 }
 .cm-mini-prog input:disabled { cursor: default; }
 .cm-mini-thumb {
-  position: absolute; left: var(--mini-progress); top: 26px; width: 10px; height: 10px;
+  position: absolute; left: var(--playback-progress); top: 26px; width: 10px; height: 10px;
   box-sizing: border-box; border: 2px solid var(--surface, #fff); border-radius: 50%;
   background: var(--cm-primary); box-shadow: 0 1px 4px rgba(0,0,0,.24);
   transform: translate(-50%, -50%); opacity: 0; pointer-events: none;
@@ -887,30 +887,35 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-waveform canvas { display: block; width: 100%; height: 100%; }
 /* 宽屏（Pad / 桌面）有更多纵向空间，波形再高一些 */
 @media (min-width: 600px) { .pl-waveform { height: 58px; } }
-.pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: calc(10px * var(--cm-fs, 1)); opacity: .85; }
-.pl-seek input[type=range] { flex: 1; accent-color: var(--cm-primary, #d0bcff); }
-/* 进度条三层：底槽 → 已缓冲 → 已播放。range 自身轨道透明，只保留可拖的滑块，
-   这样"缓冲进度"才画得出来（原生 range 没法同时表达播放点与缓冲点）。 */
-.pl-seekbar { position: relative; flex: 1; min-width: 0; height: 22px; display: flex; align-items: center; }
-.pl-seekbar::before {
-  content: ''; position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
-  height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .22);
+.pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: calc(11px * var(--cm-fs, 1)); font-variant-numeric: tabular-nums; }
+.pl-seek > span { min-width: 3.4em; flex: none; color: rgba(255,255,255,.82); }
+.pl-seek > span:last-child { text-align: right; }
+/* 原生 range 负责输入；三层轨道和滑块同步预览，进度只用 transform 平滑推进。 */
+.pl-seekbar { --playback-progress: 0%; position: relative; flex: 1; min-width: 0; height: 36px; }
+.pl-seek-track { position: absolute; left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px;
+  border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.22); }
+.pl-seek-track i { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--cm-primary, #d0bcff); transform: scaleX(0); transform-origin: left center; transition: transform .22s linear; }
+.pl-seek-track #plBuf { background: rgba(255,255,255,.52); transition-duration: .4s; }
+.pl-seekbar input[type=range] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0;
+  opacity: 0; cursor: pointer; touch-action: none; }
+.pl-seekbar input:disabled { cursor: default; }
+.pl-seek-thumb { position: absolute; left: var(--playback-progress); top: 50%; width: 12px; height: 12px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4); pointer-events: none;
+  transform: translate(-50%, -50%); transition: left .22s linear; }
+.pl-seek-time { position: absolute; right: 0; bottom: 100%; padding: 5px 9px; border-radius: 8px;
+  background: rgba(18,18,24,.92); color: #fff; font-size: 11px; font-weight: 600;
+  white-space: nowrap; opacity: 0; pointer-events: none; }
+.pl-seekbar:focus-within .pl-seek-time, .pl-seekbar.is-dragging .pl-seek-time { opacity: 1; }
+.pl-seekbar:focus-within .pl-seek-track { outline: 2px solid #fff; outline-offset: 4px; }
+.pl-seekbar.is-dragging .pl-seek-track i, .pl-seekbar.is-dragging .pl-seek-thumb { transition: none; }
+.pl-seekbar.is-dragging .pl-seek-thumb { width: 16px; height: 16px; }
+.pl-seekbar.is-disabled .pl-seek-thumb, .pl-seekbar.is-disabled .pl-seek-time { opacity: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .pl-seekbar:not(.is-disabled):hover .pl-seek-time { opacity: 1; }
 }
-.pl-buf, .pl-fill {
-  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  height: 4px; width: 0; border-radius: 999px; pointer-events: none;
-}
-.pl-buf { background: color-mix(in srgb, var(--cm-primary, #d0bcff) 42%, rgba(255, 255, 255, .38)); transition: width .5s linear; }
-.pl-fill { background: var(--cm-primary, #d0bcff); }
-.pl-seekbar input[type=range] { position: relative; z-index: 1; flex: 1; margin: 0; background: transparent; }
-.pl-seekbar input[type=range]::-webkit-slider-runnable-track { height: 4px; background: transparent; }
-.pl-seekbar input[type=range]::-moz-range-track { height: 4px; background: transparent; }
-.pl-seekbar input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 13px; height: 13px; margin-top: -4.5px;
-  border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
-}
-.pl-seekbar input[type=range]::-moz-range-thumb {
-  width: 13px; height: 13px; border: 0; border-radius: 50%; background: #fff;
+@media (prefers-reduced-motion: reduce) {
+  .pl-seek-track i, .pl-seek-thumb { transition: none; }
 }
 /* 卡顿提示：waiting/stalled 时出现，位置就在进度条下方（不挤动控件布局） */
 .pl-stall { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 3px; font-size: calc(11px * var(--cm-fs, 1)); opacity: .85; }
@@ -4233,7 +4238,7 @@ html[data-ui-preset="cmx"] .pl-quality {
   border: 0; background: rgba(255, 255, 255, .14);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-html[data-ui-preset="cmx"] .pl-seekbar::before { background: rgba(255, 255, 255, .2); }
+html[data-ui-preset="cmx"] .pl-seek-track { background: rgba(255, 255, 255, .2); }
 html[data-ui-preset="cmx"] .pl-transport {
   justify-content: center;      /* pl-left 是 stretch，不给 justify 会整排贴左 */
   margin-top: 8px; margin-bottom: 22px;

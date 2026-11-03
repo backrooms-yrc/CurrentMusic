@@ -8,7 +8,7 @@ import { player, wave, on } from './player.js';
 import { openShare } from './share.js';
 import { castIconHTML, openCastDialog } from './cast.js';
 import { openAskAI, ensureAiBot } from './ask-ai.js';
-import { createMiniProgress } from './mini-progress.js';
+import { createMiniProgress, createPlayerProgress } from './playback-progress.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
 // 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
@@ -45,10 +45,11 @@ function waveformHTML() {
 
 // ---------- 迷你条 ----------
 
-let miniProgress = null, miniMeta = null;
+let miniProgress = null, miniMeta = null, fullProgress = null;
 function renderMini() {
   const el = document.getElementById('mini');
   if (!player.meta) {
+    if (miniProgress) miniProgress.destroy();
     miniProgress = miniMeta = null;
     el.innerHTML = ''; el.style.display = 'none'; return;
   }
@@ -63,6 +64,7 @@ function renderMini() {
     miniProgress.update();
     return;
   }
+  if (miniProgress) miniProgress.destroy();
   miniMeta = m;
   el.innerHTML = `
     <div class="cm-mini-prog"></div>
@@ -86,17 +88,9 @@ on('song', renderMini);
 on('time', () => {
   // 进度线紧贴迷你播放条上缘。位置/总长一律走 player.posMs()/durMs()：
   // 投屏时它们来自设备上报，直接读 audio 会永远是 0（进度条与歌词卡住）。
-  const pos = player.posMs(), dur = player.durMs();
   if (miniProgress) miniProgress.update();
-  const pbuf = document.getElementById('plBuf');
-  if (pbuf) pbuf.style.width = player.bufferPct() + '%';
-  const pfill = document.getElementById('plFill');
-  if (pfill && dur) pfill.style.width = (pos / dur * 100) + '%';
+  if (fullProgress) fullProgress.update();
   syncLyric();
-  const t = document.getElementById('plCur'), d = document.getElementById('plDur'), s = document.getElementById('plSeek');
-  if (t) t.textContent = fmtDur(pos);
-  if (d && dur) d.textContent = fmtDur(dur);
-  if (s && !s.dataset.drag) s.value = dur ? (pos / dur) * 100 : 0;
 });
 
 // ---------- 全屏播放页 ----------
@@ -519,11 +513,7 @@ async function openFull() {
             ${waveformHTML()}
             <div class="pl-seek">
               <span id="plCur">0:00</span>
-              <div class="pl-seekbar" id="plSeekbar">
-                <i class="pl-buf" id="plBuf" title="已缓冲"></i>
-                <i class="pl-fill" id="plFill"></i>
-                <input type="range" id="plSeek" min="0" max="100" step="0.1" value="0" aria-label="播放进度">
-              </div>
+              <div class="pl-seekbar" id="plSeekbar"></div>
               <span id="plDur">0:00</span>
             </div>
             <div class="pl-stall" id="plStall" hidden>
@@ -592,7 +582,9 @@ async function openFull() {
     }
   };
   ov.querySelector('#plQueue').onclick = openQueue;
-  const seek = ov.querySelector('#plSeek');
+  if (fullProgress) fullProgress.destroy();
+  fullProgress = createPlayerProgress(ov.querySelector('#plSeekbar'), player,
+    ov.querySelector('#plCur'), ov.querySelector('#plDur'));
   // 波形控制器：数据来自真实频谱（wave.read），进度来自 posMs/durMs
   // （投屏时这两个值来自设备上报，直接读 audio 会是 0）
   const canvas = ov.querySelector('#plWaveCanvas');
@@ -610,12 +602,6 @@ async function openFull() {
     waveCtl.setPlaying(player.isPlaying());
     window.__cmWave = waveCtl;          // 调试/测试入口（只读引用）
   }
-  seek.oninput = () => { seek.dataset.drag = '1'; };
-  seek.onchange = () => {
-    const dur = player.durMs();
-    if (dur) player.seek(seek.value / 100 * dur / 1000);
-    delete seek.dataset.drag;
-  };
   ov.querySelector('#plQuality').onclick = qualityMenu;
   ov.querySelector('#plMore').onclick = openMoreDrawer;
   const castBtn = ov.querySelector('#plCast');
@@ -661,6 +647,7 @@ async function loadStats() {
 function closeFull() {
   const ov = overlay();
   if (ov.hidden) return;
+  if (fullProgress) { fullProgress.destroy(); fullProgress = null; }
   stopKaraoke();
   // 关键：销毁波形控制器。否则关闭播放页后 rAF 仍会每帧读频谱并往**已脱离 DOM**
   // 的 canvas 上绘制——后台空转费电（AI 审查指出的一处真实泄漏）。
@@ -961,9 +948,8 @@ document.addEventListener('cm-colorscheme-mode', e => {
 });
 // 缓冲进度：progress 事件与 tick 都会驱动，这里保证进度条上的缓冲区间实时更新
 on('buffer', () => {
-  const pct = player.bufferPct() + '%';
-  const b = document.getElementById('plBuf'); if (b) b.style.width = pct;
   if (miniProgress) miniProgress.update();
+  if (fullProgress) fullProgress.update();
 });
 // 卡顿提示：waiting/stalled 时显示「缓冲中…」，恢复或自愈成功即隐藏
 on('stalling', on => {
@@ -1029,6 +1015,7 @@ function updateSongInfo() {
   if (artist) { artist.innerHTML = artistLineHTML(m); bindArtistLinks(artist); }
   const q = document.getElementById('plQuality');
   if (q) q.textContent = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
+  if (fullProgress) fullProgress.update();
   syncPlayerLike(m);
   // 更新背景
   applyPlayerBg();
@@ -1048,6 +1035,7 @@ on('state', () => {
   const b = document.getElementById('plPlay');
   if (b) b.innerHTML = amPlayIcon();
   if (waveCtl) waveCtl.setPlaying(player.isPlaying());
+  if (fullProgress) fullProgress.update();
   renderMini();
 });
 

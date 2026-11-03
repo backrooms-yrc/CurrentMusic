@@ -59,7 +59,7 @@ async function fixture(browser, width) {
   return { page, context, errors };
 }
 
-(async () => {
+async function run() {
   const browser = await chromium.launch({ ...(process.env.CM_CHROMIUM_EXECUTABLE ? { executablePath: process.env.CM_CHROMIUM_EXECUTABLE } : {}), args: ['--no-sandbox'] });
   try {
     for (const width of [390, 1440, 240]) {
@@ -168,4 +168,6 @@ async function fixture(browser, width) {
       await context.close();
     }
   } finally { await browser.close(); }
-})().catch(error => { console.error(error); process.exitCode = 1; });
+}
+module.exports = { fixture, base };
+if (require.main === module) run().catch(error => { console.error(error); process.exitCode = 1; });
