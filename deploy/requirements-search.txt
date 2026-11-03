@@ -1,0 +1,2 @@
+# Traditional/simplified lyric matching; Apache-2.0, including OpenCC dictionaries.
+opencc-python-reimplemented==0.1.7

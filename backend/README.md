@@ -7,7 +7,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
 
 - 通行密钥：WebAuthn/FIDO2 绑定与免密码登录（设备用户验证后无需额外二步验证或密保）；见 [协议](../docs/passkeys-api.md)
 - 自建账号：用户名/密码、邮箱/手机验证码注册与登录、**邮箱验证码找回/修改密码**、会话与设备管理
-- 按歌词搜索：`type=lyric` 返回命中行及真实前后文，兼容 X 侧歌词摘要；见 [接口说明](../docs/search-lyrics-api.md)
+- 按歌词搜索：`type=lyric` 在同次请求内自动补全真实前后文，失败明确显示状态，兼容 X 侧歌词摘要；见 [接口说明](../docs/search-lyrics-api.md)
 - 网易云代理：搜索、详情、歌词、评论、歌单、音质解析、MV/视频、云盘、账号绑定
 - 逐字歌词：网易云官方 YRC 优先；缺失时由独立 LDDC 服务从 QQ/酷狗/网易云等源补逐字轴，
   最后才回退到自研按行时长估算
@@ -19,7 +19,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
 
 ## 环境要求
 
-- Python **3.11+**；安装认证依赖：`python3 -m pip install -r deploy/requirements-auth.txt`
+- Python **3.11+**；安装后端依赖：`python3 -m pip install -r deploy/requirements-auth.txt -r deploy/requirements-search.txt`
 - 一个 api-enhanced/NetEaseCloudMusicApi 实例（默认 `http://127.0.0.1:3001`），
   并能提供 `/song/url/v1`、`/lyric/new`、`/comment` 等上游接口
 - 可用的网易云 cookie（写到 `CM_NCM_COOKIE` 指向的文件；服务端据此取音源）

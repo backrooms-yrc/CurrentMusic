@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python3 -m pip install -r deploy/requirements-auth.txt -r deploy/requirements-optional.txt
+      - run: python3 -m pip install -r deploy/requirements-auth.txt -r deploy/requirements-search.txt -r deploy/requirements-optional.txt
       - name: Python 和 Shell 语法
         run: |
           python3 -m compileall -q backend tools publish_release.py

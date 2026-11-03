@@ -52,6 +52,11 @@ be imported without installing the Qt GUI stack.
 
 ## Backend dependencies and content
 
+- opencc-python-reimplemented 0.1.7 (Apache-2.0), https://github.com/yichen0831/opencc-python,
+  uses OpenCC dictionaries (https://github.com/BYVoid/OpenCC) to normalize traditional/simplified
+  Chinese matching keys. Displayed lyric text is preserved. Pinned in `deploy/requirements-search.txt`;
+  license copy: `licenses/opencc-Apache-2.0.txt`; attribution: `licenses/opencc-NOTICE.txt`.
+
 - py_webauthn (BSD-3-Clause), https://github.com/duo-labs/py_webauthn,
   pinned in `deploy/requirements-auth.txt`; transitive dependencies retain their own licenses.
 - Pillow (HPND) and segno (BSD-3-Clause) are optional sharing-image dependencies.
