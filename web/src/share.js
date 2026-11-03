@@ -1,6 +1,6 @@
 // 歌曲分享（v1.28.46）：分享图（实时生成可下载）/ 分享链接 / 分享歌曲信息。
 //
-// 分享图在客户端用 canvas 实时绘制：1080×1440 卡片，封面 + 歌名/歌手/专辑 + 站点链接。
+// 分享图在客户端用 canvas 实时绘制：1080×1440 沉浸式封面，叠加信息与站点二维码。
 // 封面走网易云 CDN（带 CORS 头）；App 的 WebView 是 file:// 页面，若封面加载/画布导出
 // 失败（tainted canvas），自动降级为「渐变占位封面」再画一遍——保证任何环境都能出图。
 import { mdui } from './md.js';
@@ -101,88 +101,74 @@ function loadCover(url, timeout = 5000) {
 }
 
 function fitText(ctx, text, maxWidth) {
-  let str = String(text || '');
+  const str = String(text || '');
   if (ctx.measureText(str).width <= maxWidth) return str;
-  while (str.length && ctx.measureText(str + '…').width > maxWidth) str = str.slice(0, -1);
-  return str + '…';
+  const chars = Array.from(str);
+  while (chars.length && ctx.measureText(chars.join('') + '…').width > maxWidth) chars.pop();
+  return chars.join('') + '…';
 }
 
 function wrapLines(ctx, text, maxWidth, maxLines) {
-  const out = [];
+  const chars = Array.from(String(text || '')), out = [];
   let line = '';
-  for (const ch of String(text || '')) {
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
     if (ctx.measureText(line + ch).width > maxWidth && line) {
       out.push(line);
+      if (out.length >= maxLines - 1) {
+        out.push(fitText(ctx, chars.slice(i).join(''), maxWidth));
+        return out;
+      }
       line = ch;
-      if (out.length >= maxLines - 1) break;
     } else line += ch;
   }
   if (line && out.length < maxLines) out.push(line);
-  const consumed = out.join('').length;
-  if (consumed < String(text || '').length && out.length) out[out.length - 1] += '…';
   return out.length ? out : [''];
 }
 
-function rgb2hsl(r, g, b) {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
-  const d = max - min;
-  let h = 0, s = 0;
-  if (d > 1e-6) {
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-  }
-  return [h, s, l];
-}
-
-/** 从封面提取主色（按饱和度/中间亮度加权，忽略近黑近白与灰）。失败返回 null。 */
-function extractPalette(img) {
-  try {
-    const c = document.createElement('canvas');
-    c.width = c.height = 40;
-    const x = c.getContext('2d', { willReadFrequently: true });
-    x.drawImage(img, 0, 0, 40, 40);
-    const d = x.getImageData(0, 0, 40, 40).data;      // 画布被污染会在这里抛出
-    const bins = new Map();
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i + 3] < 200) continue;
-      const [h, s, l] = rgb2hsl(d[i], d[i + 1], d[i + 2]);
-      if (l < 0.12 || l > 0.9 || s < 0.12) continue;
-      const key = Math.floor(h / 15) % 24;
-      const w = s * (0.35 + Math.min(1, l * 1.6)) * (1 - Math.abs(l - 0.52));
-      const cur = bins.get(key) || { w: 0, h: 0 };
-      cur.w += w; cur.h += h * w;
-      bins.set(key, cur);
-    }
-    let best = null;
-    for (const v of bins.values()) if (!best || v.w > best.w) best = v;
-    if (!best || best.w <= 0) return null;
-    return { h: best.h / best.w };
-  } catch { return null; }
-}
-
-/** 背景：主色 → 深色渐变 + 同色系柔光；无封面时退回品牌紫。 */
-function paintBackground(ctx, pal) {
-  const h = pal ? pal.h : 268;
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, `hsl(${h.toFixed(1)}, 52%, 8%)`);
-  bg.addColorStop(0.55, `hsl(${((h + 18) % 360).toFixed(1)}, 46%, 13%)`);
-  bg.addColorStop(1, `hsl(${((h + 42) % 360).toFixed(1)}, 42%, 17%)`);
-  ctx.fillStyle = bg;
+/** 封面等比铺满画布、居中裁切，图片本身就是整张海报的背景。 */
+function paintBackground(ctx, cover) {
+  ctx.fillStyle = '#21152f';
   ctx.fillRect(0, 0, W, H);
+  if (cover) {
+    const scale = Math.max(W / cover.naturalWidth, H / cover.naturalHeight);
+    const width = cover.naturalWidth * scale, height = cover.naturalHeight * scale;
+    ctx.drawImage(cover, (W - width) / 2, (H - height) / 2, width, height);
+  } else {
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#7953a9');
+    bg.addColorStop(0.55, '#493064');
+    bg.addColorStop(1, '#21152f');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    const glow = ctx.createRadialGradient(820, 280, 0, 820, 280, 780);
+    glow.addColorStop(0, 'rgba(204,165,255,.38)');
+    glow.addColorStop(1, 'rgba(204,165,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,.22)';
+    ctx.font = '320px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('♪', W / 2, 650);
+    ctx.restore();
+  }
 
-  const g1 = ctx.createRadialGradient(880, 160, 0, 880, 160, 540);
-  g1.addColorStop(0, `hsla(${h.toFixed(1)}, 90%, 62%, .26)`);
-  g1.addColorStop(1, `hsla(${h.toFixed(1)}, 90%, 62%, 0)`);
-  ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
-
-  const g2 = ctx.createRadialGradient(140, 1320, 0, 140, 1320, 560);
-  g2.addColorStop(0, `hsla(${((h + 50) % 360).toFixed(1)}, 80%, 58%, .20)`);
-  g2.addColorStop(1, `hsla(${((h + 50) % 360).toFixed(1)}, 80%, 58%, 0)`);
-  ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+  // 上下遮罩与封面自然融合，亮色封面上也能读清品牌、标题和底部信息。
+  const top = ctx.createLinearGradient(0, 0, 0, 520);
+  top.addColorStop(0, 'rgba(8,9,15,.8)');
+  top.addColorStop(0.35, 'rgba(8,9,15,.7)');
+  top.addColorStop(1, 'rgba(8,9,15,0)');
+  ctx.fillStyle = top;
+  ctx.fillRect(0, 0, W, H);
+  const bottom = ctx.createLinearGradient(0, 0, 0, H);
+  bottom.addColorStop(0, 'rgba(8,9,15,0)');
+  bottom.addColorStop(0.34, 'rgba(8,9,15,0)');
+  bottom.addColorStop(0.56, 'rgba(8,9,15,.36)');
+  bottom.addColorStop(0.67, 'rgba(8,9,15,.82)');
+  bottom.addColorStop(1, 'rgba(8,9,15,.96)');
+  ctx.fillStyle = bottom;
+  ctx.fillRect(0, 0, W, H);
 }
 
 /** 画二维码（白底 + 4 模块静区），居中于 (cx, cy)，maxSide 为含静区的最大边长。 */
@@ -215,87 +201,75 @@ async function drawCard(meta, withCover) {
   cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
 
-  // 封面先加载：既用于绘制，也用于取色
-  const cover = withCover && meta.pic ? await loadCover(`${meta.pic}?param=800y800`) : null;
-  const pal = cover ? extractPalette(cover) : null;
-  paintBackground(ctx, pal);
+  // 保留原有查询参数；较大尺寸用于全幅海报，非 HTTP 图片地址保持原样。
+  let coverUrl = meta.pic;
+  if (withCover && coverUrl) {
+    try {
+      const url = new URL(coverUrl, location.href);
+      if (/^https?:$/.test(url.protocol)) {
+        url.searchParams.set('param', '1200y1200');
+        coverUrl = url.href;
+      }
+    } catch { /* 无效地址交给加载失败占位处理 */ }
+  }
+  const cover = withCover && coverUrl ? await loadCover(coverUrl) : null;
+  paintBackground(ctx, cover);
 
   // 品牌
-  const kind = kindOf(meta), ui = uiOf(meta);
+  const ui = uiOf(meta);
   ctx.textAlign = 'left';
   ctx.fillStyle = 'rgba(255,255,255,.94)';
   ctx.font = `700 42px ${FONT}`;
-  ctx.fillText('CurrentMusic', 90, 112);
-  ctx.fillStyle = 'rgba(255,255,255,.42)';
+  ctx.fillText('CurrentMusic', 80, 112);
+  ctx.fillStyle = 'rgba(255,255,255,.72)';
   ctx.font = `600 22px ${FONT}`;
-  ctx.fillText(ui.brand, 90, 152);
-
-  // 封面
-  const size = 620, x = (W - size) / 2, y = 180;
-  ctx.save();
-  roundRect(ctx, x, y, size, size, 32);
-  ctx.clip();
-  if (cover) {
-    ctx.drawImage(cover, x, y, size, size);
-  } else {
-    const cg = ctx.createLinearGradient(x, y, x + size, y + size);
-    cg.addColorStop(0, pal ? `hsl(${pal.h}, 60%, 48%)` : '#7a52c9');
-    cg.addColorStop(1, pal ? `hsl(${(pal.h + 40) % 360}, 50%, 26%)` : '#3a2456');
-    ctx.fillStyle = cg;
-    ctx.fillRect(x, y, size, size);
-    ctx.fillStyle = 'rgba(255,255,255,.26)';
-    ctx.font = '220px serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('♪', W / 2, y + size / 2 + 78);
-    ctx.textAlign = 'left';
-  }
-  ctx.restore();
+  ctx.fillText(ui.brand, 80, 152);
 
   // 主标题 / 副标题 / 补充信息
   ctx.fillStyle = '#ffffff';
-  ctx.font = `700 54px ${FONT}`;
-  const lines = wrapLines(ctx, meta.name || '', 900, 2);
-  let ty = 880;
-  lines.forEach(l => { ctx.fillText(l, 90, ty); ty += 70; });
+  ctx.font = `700 64px ${FONT}`;
+  const lines = wrapLines(ctx, meta.name || '', 920, 2);
+  let ty = 900;
+  lines.forEach(l => { ctx.fillText(l, 80, ty); ty += 78; });
 
   const sub = meta.sub || meta.artists || '';
   const sub2 = meta.sub2 || meta.album || '';
-  ctx.fillStyle = 'rgba(255,255,255,.74)';
+  ctx.fillStyle = 'rgba(255,255,255,.88)';
   ctx.font = `500 32px ${FONT}`;
-  if (sub) ctx.fillText(fitText(ctx, sub, 900), 90, ty + 6);
+  if (sub) ctx.fillText(fitText(ctx, sub, 920), 80, ty + 6);
   if (sub2) {
-    ctx.fillStyle = 'rgba(255,255,255,.46)';
+    ctx.fillStyle = 'rgba(255,255,255,.68)';
     ctx.font = `400 26px ${FONT}`;
-    ctx.fillText(fitText(ctx, sub2, 900), 90, ty + 48);
+    ctx.fillText(fitText(ctx, sub2, 920), 80, ty + 48);
   }
 
   // 分隔线
   ctx.strokeStyle = 'rgba(255,255,255,.16)';
   ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(90, 1090); ctx.lineTo(W - 90, 1090); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(80, 1150); ctx.lineTo(W - 80, 1150); ctx.stroke();
 
   // 左侧：文案与链接
   const shareUrl = entityUrl(meta);
-  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  ctx.fillStyle = 'rgba(255,255,255,.78)';
   ctx.font = `400 24px ${FONT}`;
-  ctx.fillText(ui.cta, 90, 1170);
+  ctx.fillText(ui.cta, 80, 1200);
   ctx.fillStyle = 'rgba(255,255,255,.85)';
   ctx.font = '500 22px ui-monospace,Menlo,monospace';
-  ctx.fillText(fitText(ctx, shareUrl.replace(/^https?:\/\//, ''), 610), 90, 1216);
-  ctx.fillStyle = 'rgba(255,255,255,.42)';
+  ctx.fillText(fitText(ctx, shareUrl.replace(/^https?:\/\//, ''), 610), 80, 1246);
+  ctx.fillStyle = 'rgba(255,255,255,.64)';
   ctx.font = `400 20px ${FONT}`;
-  ctx.fillText('扫码或访问链接', 90, 1256);
-  ctx.fillStyle = 'rgba(255,255,255,.52)';
+  ctx.fillText('扫码或访问链接', 80, 1286);
+  ctx.fillStyle = 'rgba(255,255,255,.64)';
   ctx.font = `400 19px ${FONT}`;
-  ctx.fillText(fitText(ctx, `也可打开 CurrentMusicX 搜索「${meta.name || ''}」${ui.verb}`, 610), 90, 1296);
+  ctx.fillText(fitText(ctx, `也可打开 CurrentMusicX 搜索「${meta.name || ''}」${ui.verb}`, 610), 80, 1326);
 
   // 右侧：二维码（含 4 模块静区，扫码可用）
-  drawQRCode(ctx, shareUrl, 860, 1250, 258);
+  drawQRCode(ctx, shareUrl, 880, 1260, 240);
 
   return cv;
 }
 
-/** 生成分享图（PNG dataURL）。封面失败或画布被污染时自动重画无封面版本。 */
+/** 生成分享图（JPEG dataURL）。封面失败或画布被污染时自动重画无封面版本。 */
 export async function makeShareImage(meta) {
   try {
     const cv = await drawCard(meta, true);
@@ -361,7 +335,7 @@ export function openShare(meta) {
       </div>
       <div class="cm-share-opts">
         <button class="cm-share-opt" data-k="img">
-          <span class="material-icons-outlined">image</span><b>分享图</b><i>实时生成卡片，可保存到相册</i>
+          <span class="material-icons-outlined">image</span><b>分享图</b><i>沉浸式封面海报，可保存到相册</i>
         </button>
         <button class="cm-share-opt" data-k="link">
           <span class="material-icons-outlined">link</span><b>分享链接</b><i>复制${ui.headline.replace('分享', '')}页面链接</i>
