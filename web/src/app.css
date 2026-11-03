@@ -186,10 +186,54 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
   position: fixed; bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-bottom), var(--safe-b, 0px))); left: 0; right: 0; z-index: 19;
   height: var(--cm-mini-h);
 }
-.cm-mini-prog { position: absolute; top: 0; left: 0; right: 0; height: 3px; z-index: 2; background: transparent; }
-.cm-mini-prog i { position: absolute; left: 0; top: 0; display: block; height: 100%; width: 0; background: var(--cm-primary); transition: width .3s linear; }
-/* 缓冲层压在进度层下面：一眼看出"已经缓存到哪"，弱网时心里有底 */
-.cm-mini-prog #miniBuf { background: color-mix(in srgb, var(--cm-primary) 32%, transparent); transition: width .5s linear; }
+.cm-mini-prog {
+  --mini-progress: 0%; position: absolute; top: -24px; left: 16px; right: 16px;
+  height: 32px; z-index: 2;
+}
+.cm-mini-track {
+  position: absolute; top: 24px; left: 0; right: 0; height: 4px; overflow: hidden;
+  border-radius: 999px; background: rgba(120,128,145,.18);
+}
+.cm-mini-track i {
+  position: absolute; top: 0; left: 0; display: block; width: 100%; height: 100%;
+  background: var(--cm-primary); transform: scaleX(0); transform-origin: left center;
+  transition: transform .22s linear;
+}
+/* 缓冲层和已播放层各自保留对比度；transform 平滑推进，避免每次更新重排。 */
+.cm-mini-track #miniBuf { opacity: .28; transition-duration: .4s; }
+.cm-mini-prog input {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0;
+  opacity: 0; cursor: pointer; touch-action: none;
+}
+.cm-mini-prog input:disabled { cursor: default; }
+.cm-mini-thumb {
+  position: absolute; left: var(--mini-progress); top: 26px; width: 10px; height: 10px;
+  box-sizing: border-box; border: 2px solid var(--surface, #fff); border-radius: 50%;
+  background: var(--cm-primary); box-shadow: 0 1px 4px rgba(0,0,0,.24);
+  transform: translate(-50%, -50%); opacity: 0; pointer-events: none;
+  transition: left .22s linear, opacity .15s ease;
+}
+.cm-mini-time {
+  position: absolute; right: 0; bottom: calc(100% + 2px); padding: 5px 9px; border-radius: 8px;
+  background: var(--label, #1d1b20); color: var(--bg, #fff); font-size: 11px; font-weight: 600;
+  white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.16); opacity: 0; pointer-events: none;
+}
+.cm-mini-prog:focus-within .cm-mini-thumb,
+.cm-mini-prog:focus-within .cm-mini-time,
+.cm-mini-prog.is-dragging .cm-mini-thumb,
+.cm-mini-prog.is-dragging .cm-mini-time { opacity: 1; }
+.cm-mini-prog:focus-within .cm-mini-track { outline: 2px solid var(--cm-primary); outline-offset: 3px; }
+.cm-mini-prog.is-dragging .cm-mini-track i,
+.cm-mini-prog.is-dragging .cm-mini-thumb { transition: none; }
+.cm-mini-prog.is-disabled .cm-mini-thumb,
+.cm-mini-prog.is-disabled .cm-mini-time { opacity: 0; }
+@media (hover: hover) and (pointer: fine) {
+  .cm-mini-prog:not(.is-disabled):hover .cm-mini-thumb,
+  .cm-mini-prog:not(.is-disabled):hover .cm-mini-time { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-mini-track i, .cm-mini-thumb { transition: none; }
+}
 .cm-mini-inner {
   display: flex; align-items: center; gap: 10px; height: 100%; padding: 0 12px;
   background: var(--mdui-color-surface-container-high, #ece6f0);
@@ -2732,7 +2776,7 @@ html[data-ui-preset="frost"].mdui-theme-dark {
   html[data-ui-preset="frost"].mdui-theme-dark .cm-mini-inner {
     box-shadow: var(--frs-edge), 0 10px 26px rgba(0, 0, 0, .5) !important;
   }
-  html[data-ui-preset="frost"] .cm-mini-prog { left: 24px; right: 24px; border-radius: 2px; }
+  html[data-ui-preset="frost"] .cm-mini-prog { left: 24px; right: 24px; }
   /* 关键：滚动区延伸到屏幕四边（默认是停在顶栏之下、底栏之上），
      这样内容才会**从胶囊下穿过**——否则胶囊背后只有纯色，折射没有可掰弯的东西。 */
   html[data-ui-preset="frost"] #out {

@@ -33,7 +33,7 @@
   .cm-mini-name { font-size: calc(12px * var(--cm-fs, 1)); }
   .cm-mini-sub { display: none; }
   .cm-mini .cm-song-pic, .cm-mini img { width: 32px; height: 32px; }
-  .cm-mini-prog { height: 2px; }
+  .cm-mini-track { height: 3px; }
   .cm-mini-btn .material-icons-outlined { font-size: 26px; }
 
   /* 卡片网格：封面与间距整体缩小 */

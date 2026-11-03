@@ -8,6 +8,7 @@ import { player, wave, on } from './player.js';
 import { openShare } from './share.js';
 import { castIconHTML, openCastDialog } from './cast.js';
 import { openAskAI, ensureAiBot } from './ask-ai.js';
+import { createMiniProgress } from './mini-progress.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
 // 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
@@ -44,38 +45,49 @@ function waveformHTML() {
 
 // ---------- 迷你条 ----------
 
+let miniProgress = null, miniMeta = null;
 function renderMini() {
   const el = document.getElementById('mini');
-  if (!player.meta) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  if (!player.meta) {
+    miniProgress = miniMeta = null;
+    el.innerHTML = ''; el.style.display = 'none'; return;
+  }
   el.style.display = '';
   const m = player.meta;
+  const sub = `${m.artists || ''}${player.urlInfo ? ' · ' + tierLabel(player.urlInfo.level) : player.loading ? ' · 解析音质中…' : ''}`;
+  // 播放/暂停和音质变化只更新内容，保留进度及正在操作的原生滑块。
+  if (miniMeta === m && miniProgress) {
+    el.querySelector('#miniPlay .material-icons-outlined').textContent = player.isPlaying() ? 'pause_circle' : 'play_circle';
+    el.querySelector('.cm-mini-name').textContent = m.name || '';
+    el.querySelector('.cm-mini-sub').textContent = sub;
+    miniProgress.update();
+    return;
+  }
+  miniMeta = m;
   el.innerHTML = `
-    <div class="cm-mini-prog"><i id="miniBuf"></i><i id="miniProg"></i></div>
+    <div class="cm-mini-prog"></div>
     <div class="cm-mini-inner">
       ${m.pic ? `<img src="${esc(m.pic)}">` : `<div class="cm-mini-ph"><span class="material-icons-outlined">music_note</span></div>`}
       <div class="cm-mini-text">
         <div class="cm-mini-name">${esc(m.name)}</div>
-        <div class="cm-mini-sub">${esc(m.artists)}${player.urlInfo ? ' · ' + tierLabel(player.urlInfo.level) : player.loading ? ' · 解析音质中…' : ''}</div>
+        <div class="cm-mini-sub">${esc(sub)}</div>
       </div>
       <span class="cm-mini-btn" id="miniPlay"><span class="material-icons-outlined">${player.isPlaying() ? 'pause_circle' : 'play_circle'}</span></span>
       <span class="cm-mini-btn" id="miniNext"><span class="material-icons-outlined">skip_next</span></span>
     </div>`;
+  miniProgress = createMiniProgress(el.querySelector('.cm-mini-prog'), player);
   el.querySelector('#miniPlay').onclick = e => { e.stopPropagation(); player.toggle(); };
   el.querySelector('#miniNext').onclick = e => { e.stopPropagation(); player.next(); };
   el.querySelector('.cm-mini-inner').onclick = () => openFull();
 }
 
 on('song', renderMini);
-on('state', renderMini);
 
 on('time', () => {
   // 进度线紧贴迷你播放条上缘。位置/总长一律走 player.posMs()/durMs()：
   // 投屏时它们来自设备上报，直接读 audio 会永远是 0（进度条与歌词卡住）。
   const pos = player.posMs(), dur = player.durMs();
-  const bar = document.getElementById('miniProg');
-  if (bar) bar.style.width = dur ? (pos / dur * 100) + '%' : '0%';
-  const mbuf = document.getElementById('miniBuf');
-  if (mbuf) mbuf.style.width = player.bufferPct() + '%';
+  if (miniProgress) miniProgress.update();
   const pbuf = document.getElementById('plBuf');
   if (pbuf) pbuf.style.width = player.bufferPct() + '%';
   const pfill = document.getElementById('plFill');
@@ -951,7 +963,7 @@ document.addEventListener('cm-colorscheme-mode', e => {
 on('buffer', () => {
   const pct = player.bufferPct() + '%';
   const b = document.getElementById('plBuf'); if (b) b.style.width = pct;
-  const mb = document.getElementById('miniBuf'); if (mb) mb.style.width = pct;
+  if (miniProgress) miniProgress.update();
 });
 // 卡顿提示：waiting/stalled 时显示「缓冲中…」，恢复或自愈成功即隐藏
 on('stalling', on => {
