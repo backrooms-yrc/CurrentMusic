@@ -118,7 +118,7 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
   to { transform: translateY(14%); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cm-page > *, #playerOverlay, .cm-song, .navItem .material-icons-outlined, .sk::after { animation: none !important; transition: none !important; }
+  .cm-page > *, #playerOverlay, #commentOverlay, .cm-song, .navItem .material-icons-outlined, .sk::after { animation: none !important; transition: none !important; }
 }
 
 /* ---------- 骨架屏（MD3 shape + shimmer） ---------- */
@@ -1035,6 +1035,8 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   background-color: #fef7ff;                     /* 实底色，不依赖主题变量（部分机型合成异常） */
   display: flex; flex-direction: column;
   isolation: isolate;                            /* 独立层叠上下文，杜绝与下层页面混叠 */
+  contain: layout paint;
+  will-change: transform, opacity;
   transform: translateZ(0);                       /* 强制独立合成层 */
   animation: cmSheetIn .25s cubic-bezier(0.05, 0.7, 0.1, 1);   /* 入场不透明度（透明入场在部分机型残影） */
 }
