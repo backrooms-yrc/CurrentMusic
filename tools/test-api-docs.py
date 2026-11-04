@@ -29,6 +29,8 @@ class DocumentationTests(unittest.TestCase):
         self.assertTrue(all('(?:' not in path and '\\d' not in path for method,path in found))
         for method,path in [('GET','/playlists/{id}'),('PUT','/playlists/{id}'),('DELETE','/playlists/{id}'),('POST','/playlists/{id}/tracks'),('DELETE','/playlists/{id}/tracks')]:
             self.assertIn((method,path),found)
+        for method, path in [('GET', '/search/history'), ('POST', '/search/history'), ('DELETE', '/search/history'), ('POST', '/search/history/import')]:
+            self.assertIn((method, path), found)
         fields=docs.params(found['POST','/playlists/{id}/tracks'])
         self.assertIn(('JSON body','songs'),fields)
 

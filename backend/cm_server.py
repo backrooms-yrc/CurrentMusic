@@ -3199,6 +3199,30 @@ def route(handler, method):
         handler.wfile.write(data)
         return
 
+    # ---- 账号级搜索历史 ----
+    if path == "/search/history" and method == "GET":
+        u = require_user(handler)
+        return jresp(handler, 200, {"history": cm_db.search_history(u["id"])}, cache_control="no-store")
+    if path == "/search/history" and method in ("POST", "DELETE"):
+        u = require_user(handler)
+        if not isinstance(body, dict):
+            raise ApiError(400, "请求体需为 JSON 对象")
+        action = "add" if method == "POST" else "remove" if "keyword" in body else "clear"
+        try:
+            history = cm_db.change_search_history(u["id"], action, body.get("keyword"))
+        except ValueError as e:
+            raise ApiError(400, str(e)) from None
+        return jresp(handler, 200, {"history": history}, cache_control="no-store")
+    if path == "/search/history/import" and method == "POST":
+        u = require_user(handler)
+        if not isinstance(body, dict):
+            raise ApiError(400, "请求体需为 JSON 对象")
+        try:
+            history = cm_db.change_search_history(u["id"], "import", body.get("keywords"))
+        except ValueError as e:
+            raise ApiError(400, str(e)) from None
+        return jresp(handler, 200, {"history": history}, cache_control="no-store")
+
     # ---- 元数据回填 ----
     if path == "/meta" and method == "POST":
         require_user(handler)

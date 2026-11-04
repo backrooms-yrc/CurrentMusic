@@ -345,6 +345,10 @@ export const api = {
   commentDelete: (ncmId, commentId) => call('DELETE', `/ncmbind/comment/${ncmId}`, { body: { commentId }, auth: true }),
 
   // NCM 音源
+  searchHistory: () => call('GET', '/search/history', { auth: true }),
+  addSearchHistory: keyword => call('POST', '/search/history', { body: { keyword }, auth: true }),
+  deleteSearchHistory: keyword => call('DELETE', '/search/history', { body: keyword === undefined ? {} : { keyword }, auth: true }),
+  importSearchHistory: keywords => call('POST', '/search/history/import', { body: { keywords }, auth: true }),
   // type 可指定 'song'/'artist'/'album'/'playlist'：只请求需要的类型。
   // 上游各类型耗时差异大（歌手曾达 6s+），而搜索页默认展示「单曲」，
   // 因此按类型分开取，首屏不必等其它类型。省略 type 则返回全部类型（旧行为）。

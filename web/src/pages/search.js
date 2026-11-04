@@ -16,8 +16,8 @@ import { esc, renderSongList, toast } from '../ui.js';
 import { player } from '../player.js';
 import { addToPlaylist } from '../player-ui.js';
 import { loadingMarkup, loadingCycle } from '../loading.js';
+import { searchHistory, recordSearch, removeSearch, clearSearchHistory, syncSearchHistory, watchSearchHistory } from '../search-history.js';
 
-const HIST_KEY = 'cm.searchHistory';
 const BATCH = 10;              // 每个类型每批取的条数（首屏与「显示更多」共用）
 const EASE = 'cubic-bezier(0.05, 0.7, 0.1, 1)';   // 与 app.css 里 cmtIn 同一曲线
 
@@ -29,12 +29,6 @@ const TABS = [
   { k: 'playlist', label: '歌单', arr: 'playlists' },
 ];
 const ARR = Object.fromEntries(TABS.map(t => [t.k, t.arr]));
-
-const hist = () => { try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { return []; } };
-const pushHist = kw => {
-  const h = [kw, ...hist().filter(x => x !== kw)].slice(0, 10);
-  localStorage.setItem(HIST_KEY, JSON.stringify(h));
-};
 
 // 搜索结果骨架屏：保留歌曲行结构，避免请求期间结果区跳空
 const searchResultSkeleton = (n = 6) => `<div class="cm-search-result-skeleton" aria-busy="true" aria-label="搜索结果加载中">
@@ -77,6 +71,7 @@ export async function render(el, params = []) {
   const sugBox = el.querySelector('#sugBox');
   const histBox = el.querySelector('#histBox');
   const resultBox = el.querySelector('#resultBox');
+  let historyVisible = true;
   const hotBox = document.createElement('div');
   histBox.after(hotBox);
 
@@ -134,23 +129,25 @@ export async function render(el, params = []) {
   }
 
   const renderHist = () => {
-    const h = hist();
+    const h = searchHistory();
     if (!h.length) { histBox.innerHTML = ''; renderHot(); return; }   // 无历史也要出热搜
     histBox.innerHTML = `<div class="cm-sec-head"><h2>搜索历史</h2><span class="cm-sec-more" id="clearHist">清空</span></div>
       <div class="cm-chips">${h.map(k =>
         `<span class="cm-hist"><span class="cm-hist-k" data-k="${esc(k)}">${esc(k)}</span><i class="cm-hist-x" data-x="${esc(k)}"><span class="material-icons-outlined">close</span></i></span>`).join('')}</div>`;
-    histBox.querySelector('#clearHist').onclick = () => { localStorage.removeItem(HIST_KEY); renderHist(); renderHot(); };
+    histBox.querySelector('#clearHist').onclick = () => { clearSearchHistory(); renderHist(); renderHot(); };
     histBox.querySelectorAll('.cm-hist-k').forEach(c => { c.onclick = () => { input.value = c.dataset.k; input.blur(); doSearch(c.dataset.k); }; });
     histBox.querySelectorAll('.cm-hist-x').forEach(x => {
       x.onclick = e => {
         e.stopPropagation();
-        localStorage.setItem(HIST_KEY, JSON.stringify(hist().filter(v => v !== x.dataset.x)));
+        removeSearch(x.dataset.x);
         renderHist();
       };
     });
     renderHot();
   };
+  watchSearchHistory(el, () => { if (historyVisible) renderHist(); });
   renderHist();
+  void syncSearchHistory();
 
   /* ---------- 一次搜索的状态 ---------- */
   let S = null, searchCycle = null;                // { kw, items, total, more, loaded, loading, cur }
@@ -410,7 +407,8 @@ export async function render(el, params = []) {
   async function doSearch(kw) {
     const my = ++seq;
     if (searchCycle) searchCycle.cancel();
-    pushHist(kw);
+    historyVisible = true;
+    recordSearch(kw);
     renderHist();
     hotBox.innerHTML = '';   // 有搜索内容后隐藏热搜
     resultBox.innerHTML = searchResultSkeleton(6);
@@ -466,6 +464,7 @@ export async function render(el, params = []) {
 
   // 输入不触发搜索：只有回车（或点击候选/热搜/历史词条这类明确动作）才发起请求
   input.addEventListener('input', () => {
+    historyVisible = !(input.value || '').trim();
     if (!(input.value || '').trim()) { seq++; if (searchCycle) searchCycle.cancel(); searchCycle = null; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; renderHist(); renderHot(); return; }
     // 输入中：候选词独占视野，历史/热搜让位（清空后由上面分支恢复）
     histBox.innerHTML = ''; hotBox.innerHTML = '';
