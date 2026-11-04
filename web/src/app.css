@@ -776,6 +776,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 }
 .pl-page { position: relative; z-index: 1; }
 .pl-page {
+  --pl-cover-size: min(68vw, 286px, 40vh);
   position: relative; height: 100%; display: flex; flex-direction: column; align-items: stretch;
   box-sizing: border-box;   /* content-box 下 100% 高+padding 会整页高出屏幕 */
   padding: 14px 22px calc(10px + var(--safe-bottom, 0px));   padding: 14px 22px calc(10px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))); color: #fff;
@@ -810,11 +811,11 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 
 /* Pad / 横屏 / 宽屏：左右双栏（封面控制台 + 歌词） */
 @media (min-width: 600px) {
+  .pl-page { --pl-cover-size: min(36vw, 320px); }
   .pl-body { flex-direction: row; align-items: center; gap: clamp(28px, 6vw, 72px); }
   .pl-left { flex: 0 0 auto; width: min(42vw, 420px); justify-content: center; }
   .pl-right { flex: 1; height: 100%; align-items: stretch; }
   .pl-cover-wrap { margin: 6px 0 16px; }
-  #plCover { width: min(36vw, 320px); height: min(36vw, 320px); }
   .pl-lyric { font-size: calc(16px * var(--cm-fs, 1)); line-height: 2.3; }
   .pl-transport { margin: 8px 0 14px; }
   .pl-transport .huge .material-icons-outlined { font-size: calc(68px * var(--cm-fs, 1)); }
@@ -866,7 +867,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-btn.on { color: var(--cm-primary, #d0bcff); }
 .pl-cover-wrap { margin: 10px 0 10px; flex: none; }
 #plCover {
-  width: min(68vw, 286px, 40vh); height: min(68vw, 286px, 40vh); border-radius: var(--pl-cover-radius, 20px); object-fit: cover;
+  width: var(--pl-cover-size); height: var(--pl-cover-size); border-radius: var(--pl-cover-radius, 20px); object-fit: cover;
   box-shadow: 0 12px 48px rgba(0,0,0,.45); background: rgba(255,255,255,.08);
 }
 .pl-info { text-align: center; max-width: 100%; }
@@ -934,12 +935,11 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
    这里把顶栏与主体收进同一个限宽容器并水平居中，两栏比例固定，
    封面随视口/高度放大到合理尺寸（不再永远 320px 顶在左上）。 */
 @media (min-width: 900px) {
-  .pl-page { padding-left: 40px; padding-right: 40px; }
+  .pl-page { --pl-cover-size: min(30vw, 380px, 46vh); padding-left: 40px; padding-right: 40px; }
   .pl-top,
   .pl-body { width: 100%; max-width: 1020px; margin-left: auto; margin-right: auto; }
   .pl-body { gap: clamp(48px, 8vw, 110px); align-items: center; }
   .pl-left { flex: 0 0 min(34vw, 390px); }
-  #plCover { width: min(30vw, 380px, 46vh); height: min(30vw, 380px, 46vh); }
   .pl-info { max-width: min(30vw, 380px, 46vh); }
   .pl-right { flex: 1 1 auto; min-width: 0; }
   .pl-lyric { max-width: 560px; }
@@ -4249,12 +4249,10 @@ html[data-ui-preset="cmx"] #playerOverlay { background: #111214 !important; }
 html[data-ui-preset="cmx"] .pl-bg {
   filter: blur(70px) brightness(.44) saturate(1.25) !important;
 }
-html[data-ui-preset="cmx"] .pl-page { padding-left: 20px; padding-right: 20px; }
+html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(74vw, 360px, 42vh); padding-left: 20px; padding-right: 20px; }
 html[data-ui-preset="cmx"] .pl-top { position: relative; }
 html[data-ui-preset="cmx"] .pl-cover-wrap { align-self: center; margin-top: 4px; margin-bottom: 18px; }
 html[data-ui-preset="cmx"] #plCover {
-  width: min(74vw, 360px, 42vh) !important;
-  height: min(74vw, 360px, 42vh) !important;
   border-radius: var(--pl-cover-radius, 20px);
   box-shadow: 0 20px 60px rgba(0, 0, 0, .35) !important;
   border: 1px solid rgba(255, 255, 255, .18);
@@ -4315,12 +4313,8 @@ html[data-ui-preset="cmx"] body.player-open #mini { visibility: hidden; }
 
 /* 手机矮屏（小屏/分屏）：压缩波形、收掉统计并缩小封面与走带，避免封面顶着控件溢出。 */
 @media (max-width: 599px) and (max-height: 700px) {
-  html[data-ui-preset="cmx"] .pl-page { padding-top: 8px; padding-bottom: 8px; }
+  html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(74vw, 34vh); padding-top: 8px; padding-bottom: 8px; }
   html[data-ui-preset="cmx"] .pl-body.view-cover .pl-cover-wrap { margin-top: 8px; margin-bottom: 12px; }
-  html[data-ui-preset="cmx"] #plCover {
-    width: min(74vw, 34vh) !important;
-    height: min(74vw, 34vh) !important;
-  }
   html[data-ui-preset="cmx"] .pl-name { font-size: calc(26px * var(--cm-fs, 1)); }
   html[data-ui-preset="cmx"] .pl-artist { font-size: calc(13px * var(--cm-fs, 1)); }
   html[data-ui-preset="cmx"] .pl-stats { display: none; }
@@ -4335,13 +4329,9 @@ html[data-ui-preset="cmx"] body.player-open #mini { visibility: hidden; }
 /* 横屏 / 矮屏：X 的封面+信息+操作总高超过可用高度时，原布局会上下被裁。
    这里压缩波形并隐藏统计、缩小封面/标题/走带，保证首屏完整看到封面、信息、进度与播放键。 */
 @media (min-width: 600px) and (max-height: 660px) {
-  html[data-ui-preset="cmx"] .pl-page { padding-top: 8px; padding-bottom: 8px; }
+  html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(30vw, 34vh); padding-top: 8px; padding-bottom: 8px; }
   html[data-ui-preset="cmx"] .pl-top { padding-top: 0; }
   html[data-ui-preset="cmx"] .pl-cover-wrap { margin: 0 0 8px; }
-  html[data-ui-preset="cmx"] #plCover {
-    width: min(30vw, 34vh) !important;
-    height: min(30vw, 34vh) !important;
-  }
   html[data-ui-preset="cmx"] .pl-name { font-size: calc(24px * var(--cm-fs, 1)); }
   html[data-ui-preset="cmx"] .pl-artist { font-size: calc(13px * var(--cm-fs, 1)); margin-top: 2px; }
   html[data-ui-preset="cmx"] .pl-stats { display: none; }
@@ -4352,6 +4342,43 @@ html[data-ui-preset="cmx"] body.player-open #mini { visibility: hidden; }
   html[data-ui-preset="cmx"] .pl-transport .huge .material-icons-outlined { font-size: calc(52px * var(--cm-fs, 1)); }
   html[data-ui-preset="cmx"] .pl-transport .pl-btn svg { width: 30px; height: 30px; }
   html[data-ui-preset="cmx"] .pl-transport .pl-btn.huge svg { width: 52px; height: 52px; }
+}
+
+/* 播放控制优先占位，封面只使用剩余高度；长标题、统计异步到达、字体放大或
+   浏览器工具栏改变高度时也由布局自动重算，不依赖特定设备的矮屏断点。 */
+.pl-top { flex-shrink: 0; }
+.pl-left { --pl-column-width: calc(100vw - 44px); height: 100%; min-height: 0; min-width: 0; justify-content: flex-start; }
+@media (min-width: 600px) { .pl-left { --pl-column-width: min(42vw, 420px); } }
+@media (min-width: 900px) { .pl-left { --pl-column-width: min(34vw, 390px); } }
+.pl-left > :not(.pl-cover-wrap) { flex-shrink: 0; }
+#playerOverlay .pl-cover-wrap {
+  flex: 1 1 var(--pl-cover-size); min-height: 0; width: 100%; max-width: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+#playerOverlay #plCover {
+  width: auto !important; height: 100% !important; aspect-ratio: 1;
+  max-height: min(var(--pl-cover-size), var(--pl-column-width)); max-width: 100%; box-sizing: border-box;
+}
+.pl-info { min-width: 0; box-sizing: border-box; }
+.pl-name {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; overflow-wrap: break-word;
+}
+.pl-artist, .pl-stats { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-stats > * { flex-shrink: 0; }
+.pl-ctrl { max-width: 100%; min-width: 0; gap: min(18px, 2vw); }
+html[data-ui-preset="cmx"] .pl-ctrl { gap: min(16px, 2vw); }
+.pl-ctrl .pl-btn { padding-left: min(6px, 1vw); padding-right: min(6px, 1vw); }
+@media (max-width: 599px) {
+  #playerOverlay .pl-body.view-lyric .pl-cover-wrap { display: none; }
+  .pl-body.view-lyric .pl-left { height: auto; }
+}
+/* 极端矮窗口仍可滚动访问所有操作，避免遮罩把控件永久裁掉。 */
+.pl-left { overflow-y: auto; overflow-x: hidden; }
+@media (max-height: 660px) {
+  .pl-stats { display: none; }
+  .pl-waveform { height: 26px; }
+  .pl-transport { margin-top: 4px; margin-bottom: 6px; }
 }
 
 /* 自动换行/窄屏保护：CMX 的大标题和封面不抢走播放控件高度 */

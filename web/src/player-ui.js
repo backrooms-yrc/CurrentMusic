@@ -519,7 +519,7 @@ async function openFull() {
             <img id="plCover" src="${esc(m.pic)}" onerror="this.style.visibility='hidden'">
           </div>
           <div class="pl-info">
-            <div class="pl-name">${esc(m.name)}</div>
+            <div class="pl-name" title="${esc(m.name)}">${esc(m.name)}</div>
             <div class="pl-artist" id="plArtist">${artistLineHTML(m)}</div>
             <div class="pl-stats" id="plStats"><mdui-linear-progress style="width:120px"></mdui-linear-progress></div>
           </div>
@@ -1052,7 +1052,7 @@ function updateSongInfo() {
   const cover = document.getElementById('plCover');
   if (cover) cover.src = m.pic || '';
   const name = ov.querySelector('.pl-name');
-  if (name) name.textContent = m.name;
+  if (name) { name.textContent = m.name; name.title = m.name || ''; }
   const artist = ov.querySelector('.pl-artist');
   if (artist) { artist.innerHTML = artistLineHTML(m); bindArtistLinks(artist); }
   const q = document.getElementById('plQuality');
