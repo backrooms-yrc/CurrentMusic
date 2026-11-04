@@ -2799,7 +2799,7 @@ html[data-ui-preset="frost"].mdui-theme-dark {
    包裹当前选中的 tab（图标 + 文字），切换时流动过去并在中途拉伸、落位回弹。
    默认皮肤不显示（display:none），仍用上面的 MD3 胶囊指示器。
    几何由 navdrop.js 写入 --nd-x/-w/-y/-h，本处只负责外观与过渡。 */
-#navDrop { display: none; }
+#navDrop, #navHover { display: none; }
 
 /* 水滴只在**手机形态的底栏**（≤899px）出现。
    ≥900px 时底栏是 MD3 的左侧纵向导航栏（88px 宽），而水滴的几何
@@ -4178,16 +4178,52 @@ html[data-ui-preset="cmx"] mdui-menu::part(panel) {
   }
   html[data-ui-preset="cmx"] #bottomNav {
     top: 16px; bottom: 16px; left: 12px; right: auto; width: 76px;
-    height: auto; padding: 14px 0;
+    height: auto; padding: 14px 6px; box-sizing: border-box;
+    gap: 8px; isolation: isolate;
     border: 1px solid var(--cmx-line) !important;
     border-radius: 26px;
-    background: var(--cmx-surface) !important;
-    box-shadow: 0 8px 30px rgba(16, 24, 40, .08) !important;
+    background: var(--cmx-glass-rail) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    backdrop-filter: blur(18px) saturate(160%);
+    box-shadow: var(--cmx-edge), 0 8px 30px rgba(16, 24, 40, .08) !important;
   }
-  html[data-ui-preset="cmx"].mdui-theme-dark #bottomNav { box-shadow: 0 8px 30px rgba(0, 0, 0, .45) !important; }
-  html[data-ui-preset="cmx"] .navItem { color: var(--cmx-fg2); }
-  html[data-ui-preset="cmx"] .navItem.cur { color: var(--cmx-blue); }
-  html[data-ui-preset="cmx"] .navItem.cur .nav-ic::before { background: var(--cmx-blue-soft); }
+  html[data-ui-preset="cmx"].mdui-theme-dark #bottomNav { box-shadow: var(--cmx-edge), 0 8px 30px rgba(0, 0, 0, .45) !important; }
+  html[data-ui-preset="cmx"] #bottomNav .navItem {
+    position: relative; z-index: 1; min-height: 64px; padding: 6px 0;
+    box-sizing: border-box; border-radius: 20px; gap: 3px; cursor: pointer;
+    color: var(--cmx-fg2); transition: color .18s ease, background-color .18s ease;
+  }
+  html[data-ui-preset="cmx"] #bottomNav .nav-ic { width: 44px; height: 28px; }
+  html[data-ui-preset="cmx"] #bottomNav .nav-ic::before { display: none; }
+  html[data-ui-preset="cmx"] #bottomNav .navItem.cur {
+    color: var(--cmx-blue); background: var(--cmx-blue-soft); font-weight: 700;
+  }
+  html[data-ui-preset="cmx"] #bottomNav .navItem:focus-visible {
+    outline: 2px solid var(--cmx-blue); outline-offset: -2px;
+  }
+  html[data-ui-preset="cmx"] #bottomNav .navItem:active { background: var(--cmx-blue-soft); }
+  html[data-ui-preset="cmx"] #navHover {
+    display: block; position: absolute; top: 0; left: 6px; right: 6px;
+    border-radius: 20px; pointer-events: none; z-index: 0; opacity: 0;
+    background: linear-gradient(145deg, rgba(var(--cmx-film), .7), rgba(var(--cmx-film), .2)), var(--cmx-blue-soft);
+    box-shadow: var(--cmx-edge), 0 3px 10px rgba(16, 24, 40, .10);
+    transform: translateY(var(--nh-y, 0px));
+    transition: transform .28s cubic-bezier(.2, .8, .2, 1), height .2s ease, opacity .14s ease;
+  }
+  html[data-ui-preset="cmx"] #navHover.no-anim { transition: none; }
+  @media (hover: hover) and (pointer: fine) {
+    html[data-ui-preset="cmx"] #bottomNav .navItem:hover { color: var(--cmx-blue); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html[data-ui-preset="cmx"] #navHover,
+    html[data-ui-preset="cmx"] #bottomNav .navItem { transition: none; }
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    html[data-ui-preset="cmx"] #bottomNav {
+      background: var(--cmx-surface) !important;
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+  }
   html[data-ui-preset="cmx"] #out {
     left: calc(100px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
     top: calc(66px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))));
@@ -4324,6 +4360,8 @@ html[data-ui-preset="cmx"] body.player-open #mini { visibility: hidden; }
 }
 
 /* Content-specific loading layouts; reuse MDUI surfaces in every theme. */
+.cm-search-loading { min-height: 80px; }
+.cm-search-loading .cm-loading-indicator { width: 48px; height: 48px; }
 .cm-skeleton { pointer-events: none; }
 .cm-skel-detail-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 12px; padding: 8px 0; }
 .cm-skel-artwork { width: 108px; height: 108px; flex: none; border-radius: 16px; }

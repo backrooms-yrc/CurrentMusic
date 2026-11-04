@@ -194,7 +194,11 @@ async function router({ refresh = false } = {}) {
   document.body.classList.toggle('cm-onboarding-active', needsWelcome() && /^#\/(welcome|two-factor|security-question)$/.test(routePath));
   document.getElementById('pageTitle').textContent = routePath === '#/user' && !auth.token ? '登录与注册' : matched.title;
   document.querySelectorAll('#bottomNav .navItem').forEach(a => {
-    a.classList.toggle('cur', a.getAttribute('href') === hash.split('/').slice(0, 2).join('/'));
+    const active = a.getAttribute('href') === routePath.split('/').slice(0, 2).join('/')
+      || (a.getAttribute('href') === '#/library' && /^#\/(pl|ncmpl)\//.test(routePath));
+    a.classList.toggle('cur', active);
+    if (active) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
   });
   if (!showPage) showPage = createPageMotion(out());
   await showPage(wrap => matched.page.render(wrap, params), navDirection === 'back', { refresh });

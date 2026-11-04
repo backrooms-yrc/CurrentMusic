@@ -392,15 +392,20 @@ const statusCache = new Map(); // ncm_id -> {liked, faved, count}
 
 async function fetchStatus(ids) {
   const need = ids.filter(i => !statusCache.has(i));
+  const token = auth.token;
   if (need.length) {
     try {
       const st = await api.songsStatus(need);
-      need.forEach(i => statusCache.set(i, {
-        liked: (st.liked || []).includes(i),
-        faved: (st.faved || []).includes(i),
-        // 展示口径统一为网易云红心数；旧服务端没有 ncmCounts 时回退本地计数
-        count: (st.ncmCounts || {})[i] ?? (st.counts || {})[i] ?? 0,
-      }));
+      // A late read must not restore another session or overwrite a completed like.
+      if (auth.token === token) need.forEach(i => {
+        if (statusCache.has(i)) return;
+        statusCache.set(i, {
+          liked: (st.liked || []).includes(i),
+          faved: (st.faved || []).includes(i),
+          // 展示口径统一为网易云红心数；旧服务端没有 ncmCounts 时回退本地计数
+          count: (st.ncmCounts || {})[i] ?? (st.counts || {})[i] ?? 0,
+        });
+      });
     } catch { /* 未登录等情况：保持默认 */ }
   }
   return ids.map(i => statusCache.get(i) || { liked: false, faved: false, count: 0 });
@@ -625,11 +630,11 @@ export function openLikeMenu(song, onChange) {
  * @param offset data-i 的起始下标——追加渲染时传已有条数，保证 data-i 始终是
  *               在**完整数组**里的绝对下标（点击行为依赖它）
  */
-export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride } = {}) {
-  const st = await fetchStatus(songs.map(s => s.ncm_id));
-  const bound = auth.token ? await ensureNcmBound() : false;
+export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride, cached = false } = {}) {
+  const st = cached ? songs.map(s => getStatus(s.ncm_id)) : await fetchStatus(songs.map(s => s.ncm_id));
+  const bound = auth.token ? (cached ? _ncmBoundToken === auth.token && _ncmBound === true : await ensureNcmBound()) : false;
   const source = sourceOverride || (settings.likeMode === 'local' || !bound ? 'local' : 'ncm');
-  if (auth.token && (source === 'ncm' || bound)) await ensureNcmLiked().catch(() => {});
+  if (!cached && auth.token && (source === 'ncm' || bound)) await ensureNcmLiked().catch(() => {});
   return `<div class="cm-songs">` + songs.map((s, i) => {
     const liked = source === 'ncm' ? isNcmLiked(s.ncm_id) : st[i].liked;
     const dot = bound && source === 'local' && isNcmLiked(s.ncm_id);
@@ -659,7 +664,7 @@ export async function songListHTML(songs, { removable = false, offset = 0, likeS
  * 渲染歌曲列表并绑定行为。
  * @param el    容器
  * @param songs 歌曲数组
- * @param opts  { onPlay(i), onRemove(i), from }
+ * @param opts  { onPlay(i), onRemove(i), from, deferStatus }
  *              from > 0 时进入**追加模式**：只把 songs[from..] 插到已有列表末尾，
  *              已有行原样保留（避免「显示更多」时整段重渲染导致已加载内容闪一下）。
  *              此时 songs 必须传**完整数组**——行上的 data-i 是完整数组的绝对下标，
@@ -674,7 +679,9 @@ export async function renderSongList(el, songs, opts = {}) {
   }
   const slice = songs.slice(from);
   if (!slice.length) return [];
-  const html = await songListHTML(slice, { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource });
+  const htmlOptions = { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource };
+  const token = auth.token, mode = settings.likeMode;
+  const html = await songListHTML(slice, { ...htmlOptions, cached: !!opts.deferStatus });
 
   let rows;
   const wrap = el.querySelector('.cm-songs');
@@ -713,6 +720,23 @@ export async function renderSongList(el, songs, opts = {}) {
       opts.onPlay && opts.onPlay(i);
     });
   });
+  if (opts.deferStatus) {
+    // Track data is already available. Slow status/binding/NetEase requests must not
+    // leave the playlist blank or block playback; enrich only these mounted rows.
+    const mounted = el.querySelector('.cm-songs');
+    songListHTML(slice, htmlOptions).then(html => {
+      if (auth.token !== token || settings.likeMode !== mode || el.querySelector('.cm-songs') !== mounted) return;
+      const tmp = document.createElement('div'); tmp.innerHTML = html;
+      const updated = tmp.querySelectorAll('.cm-song');
+      rows.forEach((row, i) => {
+        if (!mounted.contains(row)) return;
+        row.querySelector('.cm-song-like').replaceWith(updated[i].querySelector('.cm-song-like'));
+        row.querySelector('.cm-like-n')?.remove();
+        const count = updated[i].querySelector('.cm-like-n');
+        if (count) row.querySelector('.cm-song-sub').appendChild(count);
+      });
+    }).catch(() => {}); // Optional state may fail; the visible tracks remain usable.
+  }
   return rows;
 }
 
