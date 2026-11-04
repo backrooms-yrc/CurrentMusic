@@ -29,6 +29,7 @@ GROUPS = {
     'download': '客户端与资源', 'x': '客户端与资源', 'cast': '客户端与资源',
 }
 GUIDES = {
+    'song-insights-api': '歌曲音质、副歌与其他版本',
     'search-history-api': '账号搜索历史与多端同步',
     'search-lyrics-api': '歌词搜索与命中前后文',
     'search-catalog': '搜索地区与公开曲库补充',

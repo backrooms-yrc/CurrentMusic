@@ -27,6 +27,7 @@ import cm_decor
 import cm_lddc
 import cm_mail
 import cm_ncm
+import cm_songinfo
 import cm_binding_import
 import cm_ncm_gateway
 import cm_net
@@ -2445,6 +2446,9 @@ def route(handler, method):
             ("GET", "/ncm/search", "公开", "网易云搜索代理，透传 NGINX 提供的用户 RealIP 并按用户 IP 隔离缓存；单曲首屏可含 catalogSongs（公开专辑精确匹配，不计入上游分页）。type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；失败通过 lyricContextStatus 明示。详见 /api-docs/reference/guide-search-catalog/ 与 /api-docs/reference/guide-search-lyrics-api/"),
             ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败后调用 /song/url/match 并严格验证音频，匹配结果 level=matched；详见 /api-docs/reference/guide-playback-sources/）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
+            ("GET", "/song/qualities", "公开", "歌曲音质文件资料（含沉浸声变体；不保证可播放）；详见 /api-docs/reference/guide-song-insights-api/"),
+            ("GET", "/song/chorus", "公开", "副歌段落，startMs/endMs 均为毫秒；详见 /api-docs/reference/guide-song-insights-api/"),
+            ("GET", "/song/versions", "公开", "其他版本推荐，排除原曲；由用户选择播放；详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/share/song/{id}", "公开", "歌曲分享元数据（name/artists/album/pic/duration/url/text/image；无需登录）"),
             ("GET", "/share/song/{id}/image", "公开", "歌曲分享图（1080×1440 JPEG，封面取色 + 二维码）"),
             ("GET", "/share/playlist/{id}", "公开", "网易云歌单分享元数据（名称/创建者/曲目数/url/text/image）"),
@@ -4081,6 +4085,29 @@ def route(handler, method):
                 pass
         out = cm_ncm.lyric(ncm_id)
         cm_db.cache_set(key, json.dumps(out, ensure_ascii=False), cm_lddc.cache_ttl(out))
+        return jresp(handler, 200, out)
+
+    # 歌曲深度资料：公开元数据，按可信用户 IP 隔离，失败不写缓存。
+    if path in ("/song/qualities", "/song/chorus", "/song/versions") and method == "GET":
+        try:
+            ncm_id = int(q.get("id") or 0)
+        except (ValueError, TypeError):
+            raise ApiError(400, "id 必须为正整数")
+        if not 0 < ncm_id <= 2**63 - 1:
+            raise ApiError(400, "id 必须为正整数")
+        real_ip = cm_ncm_gateway.client_ip(handler)
+        ip_key = hashlib.sha256(real_ip.encode()).hexdigest()[:16]
+        key = f"songinfo:v1:{path}:{ncm_id}:{ip_key}"
+        cached = cm_db.cache_get(key)
+        if cached:
+            return jresp(handler, 200, json.loads(cached))
+        fetch = {"/song/qualities": cm_songinfo.qualities, "/song/chorus": cm_songinfo.chorus,
+                 "/song/versions": cm_songinfo.versions}[path]
+        try:
+            out = fetch(ncm_id, real_ip)
+        except cm_ncm.NcmError as e:
+            raise ApiError(502, str(e))
+        cm_db.cache_set(key, json.dumps(out, ensure_ascii=False), 600)
         return jresp(handler, 200, out)
 
     # ---- 歌曲百科（v1.28.4）----

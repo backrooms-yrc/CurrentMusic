@@ -19,6 +19,8 @@ class DocumentationTests(unittest.TestCase):
         tree = ast.parse((ROOT/'backend/cm_server.py').read_text())
         route = next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='route')
         found = docs.routes(tree)
+        for path in ('/song/qualities', '/song/chorus', '/song/versions'):
+            self.assertIn(('GET', path), found)
         for node in ast.walk(route):
             if not isinstance(node, ast.If): continue
             for path in docs.condition_values(node.test,'path'):
@@ -55,6 +57,7 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn('返回 403',(output/'netease-t3.md').read_text())
             self.assertNotIn('\n+  --header', ''.join(f.read_text() for f in output.glob('*.md')))
             self.assertTrue((output/'licenses/docsify-MIT.txt').is_file())
+            self.assertTrue((output/'guide-song-insights-api.md').is_file())
 
 
 if __name__=='__main__':unittest.main()

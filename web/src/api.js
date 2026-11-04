@@ -404,6 +404,9 @@ export const api = {
   roamingTrash: (id) => call('POST', '/roaming/trash', { body: { id }, auth: true }),
   /** 歌曲百科（服务端已把上游页级结构归一化成「章节 + 字段 + 正文」）。 */
   songWiki: (ncmId) => call('GET', `/song/wiki?id=${ncmId}`),
+  songQualities: (id) => call('GET', `/song/qualities?id=${encodeURIComponent(id)}`),
+  songChorus: (id) => call('GET', `/song/chorus?id=${encodeURIComponent(id)}`),
+  songVersions: (id) => call('GET', `/song/versions?id=${encodeURIComponent(id)}`),
 
   /** 首屏聚合：一次拿回 me/daily/bind/recent（服务端并行取好）。旧服务端没有该端点 → 调用方回退逐个请求。 */
   bootstrap: () => call('GET', '/bootstrap', { auth: true }),
