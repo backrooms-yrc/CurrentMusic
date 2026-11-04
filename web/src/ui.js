@@ -430,18 +430,67 @@ export async function ensureStatus(ncmId) {
 
 // ---------- 网易云红心状态（会话级缓存，来自绑定账号 likelist） ----------
 
-let _ncmLikedSet = null;
-
-export async function ensureNcmLiked() {
-  if (_ncmLikedSet === null) {
-    try { _ncmLikedSet = new Set((await api.ncmLikelist()).ids || []); }
-    catch { _ncmLikedSet = new Set(); }   // 未绑定/未同步：空集
-  }
-  return _ncmLikedSet;
+let _ncmLikedSet = null, _ncmLikedPromise = null, _ncmLikedToken = '', _ncmLikedAt = 0, _ncmLikedEpoch = 0;
+const _ncmLikeIntents = new Map();
+const ncmLikeId = id => Number(id);
+function ncmLikeSession() {
+  if (_ncmLikedToken !== auth.token) resetNcmLiked();
 }
-export const isNcmLiked = id => !!(_ncmLikedSet && _ncmLikedSet.has(id));
-export function setNcmLiked(id, on) { if (_ncmLikedSet) { on ? _ncmLikedSet.add(id) : _ncmLikedSet.delete(id); } }
-export function resetNcmLiked() { _ncmLikedSet = null; }
+
+export async function ensureNcmLiked(refresh = false) {
+  ncmLikeSession();
+  if (!auth.token) return new Set();
+  if (_ncmLikedPromise) return _ncmLikedPromise;
+  if (_ncmLikedSet !== null && !refresh && Date.now() - _ncmLikedAt < 60000) return _ncmLikedSet;
+  const token = auth.token;
+  const epoch = _ncmLikedEpoch;
+  const request = (async () => {
+    try {
+      const result = await api.ncmLikelist(refresh || _ncmLikedSet !== null);
+      if (auth.token !== token || _ncmLikedToken !== token || _ncmLikedEpoch !== epoch) return new Set();
+      const ids = new Set((result.ids || []).map(ncmLikeId));
+      for (const [id, intent] of _ncmLikeIntents) {
+        if (Date.now() - intent.at > 120000 || ids.has(id) === intent.on) _ncmLikeIntents.delete(id);
+        else intent.on ? ids.add(id) : ids.delete(id);
+      }
+      _ncmLikedSet = ids; _ncmLikedAt = Date.now();
+      return ids;
+    } catch { return _ncmLikedSet || new Set(); } // 失败不缓存为空，下一次可重试。
+  })();
+  _ncmLikedPromise = request;
+  try { return await request; }
+  finally { if (_ncmLikedPromise === request) _ncmLikedPromise = null; }
+}
+export const isNcmLiked = id => {
+  ncmLikeSession();
+  return !!(_ncmLikedSet && _ncmLikedSet.has(ncmLikeId(id)));
+};
+export function setNcmLiked(id, on) {
+  ncmLikeSession(); id = ncmLikeId(id);
+  if (!Number.isSafeInteger(id) || id <= 0) return;
+  if (!_ncmLikedSet) _ncmLikedSet = new Set();
+  on ? _ncmLikedSet.add(id) : _ncmLikedSet.delete(id);
+  _ncmLikeIntents.set(id, { on, at: Date.now() });
+  window.dispatchEvent(new CustomEvent('cm-likechange', { detail: { id, source: 'ncm' } }));
+}
+export function resetNcmLiked() {
+  _ncmLikedSet = _ncmLikedPromise = null;
+  _ncmLikedToken = auth.token; _ncmLikedAt = 0;
+  _ncmLikedEpoch++;
+  _ncmLikeIntents.clear();
+}
+window.addEventListener('cm-authchange', () => {
+  if (_ncmLikedToken !== auth.token) {
+    resetNcmLiked(); resetNcmBound(); statusCache.clear();
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !auth.token || _ncmLikedSet === null) return;
+  const token = auth.token;
+  ensureNcmLiked(true).then(() => {
+    if (auth.token === token) window.dispatchEvent(new CustomEvent('cm-likechange', { detail: { source: 'ncm' } }));
+  });
+});
 
 // ---------- 默认红心目标（绑定状态 + 设置） ----------
 
@@ -449,9 +498,14 @@ let _ncmBound = null, _ncmBoundToken = '';
 export async function ensureNcmBound() {
   if (!auth.token) return false;
   if (_ncmBound !== null && _ncmBoundToken === auth.token) return _ncmBound;
-  _ncmBoundToken = auth.token;
-  try { _ncmBound = !!(await api.bindStatus()).bound; }
-  catch { _ncmBound = null; _ncmBoundToken = ''; return false; }   // 网络失败下次重试
+  const token = auth.token;
+  _ncmBoundToken = token;
+  try {
+    const bound = !!(await api.bindStatus()).bound;
+    if (auth.token !== token || _ncmBoundToken !== token) return false;
+    _ncmBound = bound;
+  }
+  catch { if (_ncmBoundToken === token) resetNcmBound(); return false; }   // 网络失败下次重试
   return _ncmBound;
 }
 export function resetNcmBound() { _ncmBound = null; _ncmBoundToken = ''; }
@@ -482,7 +536,7 @@ export async function toggleLikeDefault(song, onChange, sourceOverride) {
     const on = isNcmLiked(song.ncm_id);
     try {
       const r = await api.ncmLike(song, !on);
-      setNcmLiked(song.ncm_id, !on);
+      setNcmLiked(song.ncm_id, typeof r?.liked === 'boolean' ? r.liked : !on);
       if (r && r.count != null && Number.isFinite(Number(r.count))) {
         setStatus(song.ncm_id, { count: Math.max(0, Number(r.count)) });
       } else {

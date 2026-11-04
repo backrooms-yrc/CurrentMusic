@@ -984,12 +984,13 @@ function bindArtistLinks(scope) {
 }
 
 /** 按「默认红心目标」同步播放页红心、网易云小圆点与红心数。 */
-async function syncPlayerLike(m) {
+let playerLikeRevision = 0;
+async function syncPlayerLike(m, refresh = true) {
   if (!m) return;
+  const revision = ++playerLikeRevision;
   try {
-    await ensureStatus(m.ncm_id).catch(() => {});   // 同时刷新本地状态与网易云红心数
     const s = await ensureLikeState(m);
-    if (!player.meta || player.meta.ncm_id !== m.ncm_id) return;
+    if (revision !== playerLikeRevision || !player.meta || player.meta.ncm_id !== m.ncm_id) return;
     const btn = document.getElementById('plLike');
     if (btn) {
       btn.classList.toggle('on', s.liked);
@@ -1000,8 +1001,23 @@ async function syncPlayerLike(m) {
     if (badge) badge.hidden = !(s.bound && s.source === 'local' && isNcmLiked(m.ncm_id));
     const stat = document.getElementById('plLikeStat');
     if (stat) stat.innerHTML = `<span class="mi">favorite</span> ${fmtCount(s.count || 0)} 红心`;
+    // 红心先更新；较慢的统计请求只补数量，不能用旧状态覆盖新的点击结果。
+    if (refresh) {
+      const latest = await ensureStatus(m.ncm_id);
+      if (revision === playerLikeRevision && player.meta?.ncm_id === m.ncm_id) {
+        const countNode = document.getElementById('plLikeStat');
+        if (countNode) countNode.innerHTML = `<span class="mi">favorite</span> ${fmtCount(latest.count || 0)} 红心`;
+        if (s.source === 'local' && btn?.isConnected) {
+          btn.classList.toggle('on', latest.liked);
+          btn.querySelector('.material-icons-outlined').textContent = latest.liked ? 'favorite' : 'favorite_border';
+        }
+      }
+    }
   } catch { /* 未绑定/网络失败：保留当前 UI */ }
 }
+window.addEventListener('cm-likechange', event => {
+  if (!event.detail?.id || Number(player.meta?.ncm_id) === event.detail.id) syncPlayerLike(player.meta, false);
+});
 
 function updateSongInfo() {
   const ov = overlay();

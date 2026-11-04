@@ -64,6 +64,7 @@ function resumeContext() {
 
 function unlockAudio(event) {
   if (!event.isTrusted) return;
+  if (document.hidden && typeof window.NativeApi === 'undefined') return;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   try {
@@ -82,7 +83,19 @@ function unlockAudio(event) {
   document.addEventListener(type, unlockAudio, { capture: true, passive: true });
 });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) wave.resume();
+  if (document.hidden) {
+    // 浏览器会挂起后台 Web Audio；提前切回独立媒体输出，声音不依赖图和定时器。
+    if (typeof window.NativeApi === 'undefined' && graphEl && player.wantPlaying) fallbackNoViz();
+  } else {
+    wave.resume();
+    if (player.wantPlaying && audio.paused && !audio.ended) {
+      resumeTries = 0;
+      scheduleResume();
+    }
+  }
+});
+window.addEventListener('pageshow', () => {
+  if (player.wantPlaying && audio.paused && !audio.ended) { resumeTries = 0; scheduleResume(); }
 });
 
 // 音频图看门狗：**接了图之后声音只从图输出**——上下文一旦不在 running
@@ -109,6 +122,7 @@ function watchGraph() {
 function disposeAudio(old) {
   try { old.pause(); } catch (e) { /* 忽略 */ }
   try { old.removeAttribute('src'); old.src = ''; old.load(); } catch (e) { /* 忽略 */ }
+  old.remove();
 }
 
 function teardownGraph({ keepContext = false } = {}) {
@@ -172,13 +186,18 @@ function fallbackNoViz() {
   if (vizDisabled && !graphEl) return;
   vizDisabled = true;
   const pos = audio.currentTime || 0;
-  const wasPlaying = !audio.paused;
+  const wasPlaying = player.wantPlaying && !audio.ended;
   const url = audio.src;
   const cors = audio.crossOrigin;
+  const old = audio;
+  const volume = old.volume, muted = old.muted, rate = old.playbackRate;
   teardownGraph();
-  disposeAudio(audio);
   const fresh = makeAudio();
   audio = fresh;
+  // 先切换当前元素，再清理旧元素，避免旧 pause/error 事件干扰新播放态。
+  disposeAudio(old);
+  fresh.volume = volume; fresh.muted = muted;
+  fresh.defaultPlaybackRate = rate; fresh.playbackRate = rate;
   fresh.crossOrigin = cors;                 // 下次真实手势仍可恢复安全音源的频谱
   if (url) {
     fresh.src = url;                       // 新元素直出，不再经过图
@@ -218,6 +237,12 @@ function loadUrl(url, pos) {
 function makeAudio() {
   const a = new Audio();
   a.preload = 'auto';
+  a.setAttribute('playsinline', '');
+  a.setAttribute('aria-hidden', 'true');
+  a.style.display = 'none';
+  const attach = () => { if (!a.isConnected) document.body.appendChild(a); };
+  if (document.body) attach();
+  else document.addEventListener('DOMContentLoaded', attach, { once: true });
   bindAudio(a);
   return a;
 }
@@ -862,8 +887,8 @@ export const player = {
         album: this.meta.album,
         artwork: this.meta.pic ? [{ src: this.meta.pic, sizes: '300x300' }] : [],
       });
-      navigator.mediaSession.setActionHandler('play', () => audio.play());
-      navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+      navigator.mediaSession.setActionHandler('play', () => this.play());
+      navigator.mediaSession.setActionHandler('pause', () => this.pause());
       navigator.mediaSession.setActionHandler('previoustrack', () => this.prev());
       navigator.mediaSession.setActionHandler('nexttrack', () => this.next());
     } catch { /* 部分内核不支持 */ }
@@ -875,6 +900,9 @@ export const player = {
     if (b && b.mediaState) {
       try { b.mediaState(!audio.paused, Math.round(audio.currentTime * 1000)); } catch { /* 忽略 */ }
     }
+    try {
+      if (navigator.mediaSession) navigator.mediaSession.playbackState = this.isPlaying() ? 'playing' : 'paused';
+    } catch { /* 部分内核不支持 */ }
   },
 
   get audio() { return audio; },
@@ -1173,6 +1201,9 @@ export function stopPlayback() {
 
 // 调试/测试入口
 window.__cmPlayer = { get audio() { return audio; }, player, wave };
+
+// 支持 Audio Session 的浏览器显式声明持续媒体播放，而非可被后台挂起的环境音。
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* 不支持时使用媒体元素 */ }
 
 // MDUI 主色（品牌紫）
 if (mdui.setColorScheme) mdui.setColorScheme('#6750A4');

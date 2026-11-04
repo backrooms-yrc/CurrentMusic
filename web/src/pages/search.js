@@ -161,8 +161,15 @@ export async function render(el, params = []) {
   async function load(t, offset) {
     const d = await api.search(S.kw, offset, BATCH, t);
     const got = d[ARR[t]] || [];
-    S.items[t] = offset ? (S.items[t] || []).concat(got) : got;
-    S.total[t] = (d.totals && d.totals[t]) || S.items[t].length;
+    S.offsets ||= {};
+    S.offsets[t] = offset + got.length; // 补充的专辑曲目不消耗上游分页位置。
+    if (t === 'song') {
+      if (!offset) S.catalogSongs = d.catalogSongs || [];
+      const all = offset ? (S.items[t] || []).concat(got) : (S.catalogSongs || []).concat(got);
+      const seen = new Set();
+      S.items[t] = all.filter(s => { const id = String(s.ncm_id); if (seen.has(id)) return false; seen.add(id); return true; });
+    } else S.items[t] = offset ? (S.items[t] || []).concat(got) : got;
+    S.total[t] = (d.totals?.[t] ?? S.offsets[t]) + (t === 'song' ? (S.catalogSongs || []).length : 0);
     S.more[t] = !!(d.hasMore && d.hasMore[t]);
     S.loaded[t] = true;
     return got.length;
@@ -233,7 +240,7 @@ export async function render(el, params = []) {
       const my = seq;
       const before = loadedCount(t);           // 追加前的条数 = 本次渲染的起点
       try {
-        await load(t, before);
+        await load(t, S.offsets?.[t] ?? before);
         if (my !== seq) return;
         renderTabs();
         renderPanel(before, { items: true });  // 只画新增的那一批

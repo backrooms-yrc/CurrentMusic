@@ -1622,6 +1622,9 @@ def _ncm_forward(handler, method, path, q, body):
                      sorted(k for k in q if k != "confirm"))
 
     params = cm_ncm_gateway.normalize_params(path, q, method)
+    # 搜索结果可能因地区不同而不同；先注入可信 IP，再计算隔离缓存键。
+    if cm_ncm_gateway.is_search_path(upstream):
+        params["realIP"] = cm_ncm_gateway.client_ip(handler)
     ck = None
     if ttl > 0 and method == "GET" and tier == cm_ncm_registry.T0:
         ck = cm_ncm_gateway.cache_key(upstream, params)
@@ -1634,7 +1637,7 @@ def _ncm_forward(handler, method, path, q, body):
     # 媒体地址族：把**调用方 IP** 告诉上游（/song/url/v1 的文档参数 realIP，
     # 上游据此选离用户近的 CDN 边缘；直链本身不绑 IP，实测异地 IP 也能取）。
     # 注意：realIP 在 RESERVED_PARAMS 里被剥掉，这里注入的是服务端取到的真实 IP，
-    # 调用方伪造不了；且必须在算缓存键**之后**注入，避免缓存按 IP 碎片化。
+    # 调用方伪造不了；搜索已在缓存键计算前注入，其余接口保留原有顺序。
     if cm_ncm_gateway.should_forward_real_ip(upstream, method, tier):
         params["realIP"] = cm_ncm_gateway.client_ip(handler)
 
@@ -1667,6 +1670,49 @@ def _ncm_forward(handler, method, path, q, body):
         cm_db.cache_set(ck, json.dumps(out, ensure_ascii=False), ttl)
     jresp(handler, 200, out)
     return True
+
+
+_ncm_like_pending_lock = threading.Lock()
+
+
+def _ncm_like_pending_key(uid, binding):
+    return f"nlikes-pending:{uid}:{binding['ncm_uid']}"
+
+
+def _remember_ncm_like(uid, binding, ncm_id, liked):
+    with _ncm_like_pending_lock:
+        key = _ncm_like_pending_key(uid, binding)
+        pending = json.loads(cm_db.cache_get(key) or "{}")
+        pending[str(ncm_id)] = {"on": liked, "at": time.time()}
+        cm_db.cache_set(key, json.dumps(pending), 120)
+        cm_db.cache_delete(f"nlikes:{uid}:{binding['ncm_uid']}")
+
+
+def _ncm_liked_ids(uid, binding, refresh=False):
+    """保留刚写入的红心意图，避免网易云最终一致性延迟让 UI 回退。"""
+    key = f"nlikes:{uid}:{binding['ncm_uid']}"
+    raw = None if refresh else cm_db.cache_get(key)
+    ids = set(json.loads(raw) if raw else cm_ncm.likelist(binding['cookie'], binding['ncm_uid']))
+    with _ncm_like_pending_lock:
+        pkey = _ncm_like_pending_key(uid, binding)
+        pending = json.loads(cm_db.cache_get(pkey) or "{}")
+        result = set(ids)
+        for ident, intent in list(pending.items()):
+            nid = int(ident)
+            if time.time() - intent['at'] > 120 or (nid in ids) == intent['on']:
+                del pending[ident]
+            elif intent['on']:
+                result.add(nid)
+            else:
+                result.discard(nid)
+        if pending:
+            cm_db.cache_set(pkey, json.dumps(pending), 120)
+        else:
+            cm_db.cache_delete(pkey)
+        if not raw:
+            # 尚未收敛时尽快重查，不把旧的上游列表冻结十分钟。
+            cm_db.cache_set(key, json.dumps(sorted(ids)), 10 if pending else 600)
+        return sorted(result)
 
 
 def _ncm_like_counts(ids, refresh=False):
@@ -2360,8 +2406,9 @@ def route(handler, method):
             ("GET", "/likes/count", "公开", "批量点赞数：counts 本地、ncmCounts 网易云红心数"),
             ("POST", "/likes/{ncmId}", "Bearer", "CurrentMusic 自建红心 toggle {meta}，返回 {on,count}（本地计数）"),
             ("POST", "/ncmbind/like/{ncmId}", "Bearer", "网易云红心/取消红心 {like, meta}，返回 {liked,count}（网易云红心数）；写操作透传可信 RealIP"),
+            ("GET", "/ncmbind/likelist", "Bearer", "绑定账号红心列表 {ids}；refresh=1 强制同步，短期合并已成功写入但上游尚未收敛的红心意图"),
             ("GET", "/daily", "可选登录", "每日推荐"),
-            ("GET", "/ncm/search", "公开", "网易云搜索代理；type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；服务端等待并自动重试补全；失败通过 lyricContextStatus 明示，原命中单句仅在 lyricMatch。详见 /api-docs/reference/guide-search-lyrics-api/"),
+            ("GET", "/ncm/search", "公开", "网易云搜索代理，透传 NGINX 提供的用户 RealIP 并按用户 IP 隔离缓存；单曲首屏可含 catalogSongs（公开专辑精确匹配，不计入上游分页）。type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；失败通过 lyricContextStatus 明示。详见 /api-docs/reference/guide-search-catalog/ 与 /api-docs/reference/guide-search-lyrics-api/"),
             ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；返回 host 与耗时诊断）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
             ("GET", "/share/song/{id}", "公开", "歌曲分享元数据（name/artists/album/pic/duration/url/text/image；无需登录）"),
@@ -3441,21 +3488,16 @@ def route(handler, method):
         return jresp(handler, 200, sync_ncm_playlists(u["id"]))
 
     if path == "/ncmbind/likelist" and method == "GET":
-        """绑定账号的网易云红心 id 列表（10 分钟缓存），供喜欢菜单显示状态。
+        """绑定账号的网易云红心 id 列表；支持 refresh=1，并合并尚未收敛的写入意图。
         未绑定/未同步时返回空集（200），避免前端噪音。"""
         u = require_user(handler)
         b = cm_db.get_binding(u["id"])
         if not b or not b["ncm_uid"]:
             return jresp(handler, 200, {"ids": []})
-        key = f"nlikes:{u['id']}"
-        cached = cm_db.cache_get(key)
-        if cached:
-            return jresp(handler, 200, {"ids": json.loads(cached)})
         try:
-            ids = cm_ncm.likelist(b["cookie"], b["ncm_uid"])
+            ids = _ncm_liked_ids(u['id'], b, refresh=q.get('refresh') in ('1', 'true'))
         except cm_ncm.NcmError as e:
             raise ApiError(502, f"获取网易云红心列表失败: {e}")
-        cm_db.cache_set(key, json.dumps(ids), 600)
         return jresp(handler, 200, {"ids": ids})
 
     m = re.fullmatch(r"/ncmbind/like/(\d+)", path)
@@ -3474,7 +3516,7 @@ def route(handler, method):
                              real_ip=cm_ncm_gateway.client_ip(handler))
         except cm_ncm.NcmError as e:
             raise ApiError(502, str(e))
-        cm_db.cache_set(f"nlikes:{u['id']}", "[]", 0)  # expires=0 → 立即失效，下次重新拉取
+        _remember_ncm_like(u['id'], b, ncm_id, like)
         counts = _ncm_like_counts([ncm_id], refresh=True)
         if b["ncm_liked_pl_id"]:
             pid = cm_db.find_ncm_playlist(u["id"], b["ncm_liked_pl_id"])
@@ -3633,22 +3675,30 @@ def route(handler, method):
             raise ApiError(400, "歌词搜索请单独指定 type=lyric")
         limit = _int("limit", 30, 1, 50)
         offset = _int("offset", 0, 0, 1000)
+        real_ip = cm_ncm_gateway.client_ip(handler)
+        ip_key = hashlib.sha256(real_ip.encode()).hexdigest()[:16]
+        import cm_search_catalog
+        catalog_revision = cm_search_catalog.revision()
 
         if not tsel:
             # 兼容旧调用：一次取回全部类型，歌手/专辑/歌单沿用较小的条数
-            ckey = f"srch2b:{keywords}:{limit}"
-            build = lambda: cm_ncm.search_multi(keywords, limit)   # noqa: E731
+            ckey = f"srch-ip:v1:{ip_key}:{catalog_revision}:all:{keywords}:{limit}"
+            build = lambda: cm_ncm.search_multi(keywords, limit, real_ip=real_ip)   # noqa: E731
         else:
             # 缓存键必须含「类型 + 偏移 + 条数」：旧键 srch2:<kw> 不含这些，
             # 一旦分页就会互相覆盖（同一关键词翻第 2 页会拿到第 1 页的缓存）。
             prefix = "srch-lyric:v2" if tsel == ["lyric"] else "srch3"
-            ckey = f"{prefix}:{keywords}:{','.join(tsel)}:{offset}:{limit}"
-            build = lambda: cm_ncm.search_types(keywords, tuple(tsel), limit=limit, offset=offset)   # noqa: E731
+            ckey = f"srch-ip:v1:{ip_key}:{catalog_revision}:{prefix}:{keywords}:{','.join(tsel)}:{offset}:{limit}"
+            build = lambda: cm_ncm.search_types(keywords, tuple(tsel), limit=limit, offset=offset, real_ip=real_ip)   # noqa: E731
 
         cached = cm_db.cache_get(ckey)
         if cached:
             return jresp(handler, 200, json.loads(cached))
-        d = build()
+        d = dict(build())
+        if offset == 0 and (not tsel or 'song' in tsel):
+            matches = cm_search_catalog.find(keywords, exclude=(s.get('ncm_id') for s in d.get('songs', [])))
+            if matches:
+                d['catalogSongs'] = matches
         # Incomplete pages must not freeze a temporary lookup failure; a retry sees fresh state.
         partial = tsel == ["lyric"] and any(not s.get("lyricContextComplete") for s in d.get("songs", []))
         if not partial:

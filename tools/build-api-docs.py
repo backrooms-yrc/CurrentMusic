@@ -30,6 +30,7 @@ GROUPS = {
 }
 GUIDES = {
     'search-lyrics-api': '歌词搜索与命中前后文',
+    'search-catalog': '搜索地区与公开曲库补充',
     'passkeys-api': '通行密钥登录与绑定',
     'two-factor-api': '登录两步验证', 'passport-api': '通行证完整接入', 'password-api': '密码找回与修改', 'lyrics-api': '歌词与逐字轴',
     'private-roaming-api': '私人漫游', 'play-history-sync': '网易云听歌历史同步',

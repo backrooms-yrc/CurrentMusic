@@ -138,7 +138,7 @@ def call(path, params=None, timeout=15.0, retries=1, with_cookie=True, cookie=No
     """GET 请求 api-enhanced；默认带服务器 SVIP cookie，可显式换绑定的用户 cookie。
 
     real_ip：仅由服务端从可信请求头解析后传入（客户端参数里的 realIP 会被网关剥离），
-    用于媒体地址与账号写操作，让上游按用户真实网络位置选边缘/做风控。
+    用于搜索、媒体地址与账号写操作，让上游按用户真实网络位置检索/选边缘/做风控。
     """
     q = dict(params or {})
     if real_ip:
@@ -289,8 +289,8 @@ def _norm_song(s, pop=None):
     }
 
 
-def search(keywords, limit=30, offset=0):
-    d = call("/cloudsearch", {"keywords": keywords, "limit": limit, "offset": offset, "type": 1})
+def search(keywords, limit=30, offset=0, real_ip=None):
+    d = call("/cloudsearch", {"keywords": keywords, "limit": limit, "offset": offset, "type": 1}, real_ip=real_ip)
     songs = (((d or {}).get("result") or {}).get("songs")) or []
     return [_norm_song(s) for s in songs]
 
@@ -338,7 +338,7 @@ _NORMALIZERS = {"song": _norm_song, "lyric": _norm_song, "artist": _norm_artist,
                 "album": _norm_album, "playlist": _norm_playlist}
 
 
-def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0):
+def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0, real_ip=None):
     """按需搜索指定类型（并行请求上游），返回结果 + 各类型总数 + 是否还有下一页。
 
     **为什么要「按需」**：实测上游各类型耗时差异极大——
@@ -357,7 +357,7 @@ def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0):
     with ThreadPoolExecutor(max_workers=len(tsel)) as ex:
         futs = {t: ex.submit(call, "/cloudsearch", {
             "keywords": keywords, "limit": limit, "offset": offset,
-            "type": _SEARCH_TYPES[t][0]}) for t in tsel}
+            "type": _SEARCH_TYPES[t][0]}, real_ip=real_ip) for t in tsel}
         raws = {t: (f.result() or {}) for t, f in futs.items()}
 
     out, totals, has_more = {}, {}, {}
@@ -378,7 +378,7 @@ def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0):
     return out
 
 
-def search_multi(keywords, song_limit=30, aux_limit=6):
+def search_multi(keywords, song_limit=30, aux_limit=6, real_ip=None):
     """一次取回全部类型（歌手/专辑/歌单用较小的 aux 条数）。
 
     供不关心分页的调用方使用；搜索页改用 search_types 按需取。
@@ -387,13 +387,13 @@ def search_multi(keywords, song_limit=30, aux_limit=6):
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=4) as ex:
         f_song = ex.submit(call, "/cloudsearch",
-                           {"keywords": keywords, "limit": song_limit, "offset": 0, "type": 1})
+                           {"keywords": keywords, "limit": song_limit, "offset": 0, "type": 1}, real_ip=real_ip)
         f_art = ex.submit(call, "/cloudsearch",
-                          {"keywords": keywords, "limit": aux_limit, "offset": 0, "type": 100})
+                          {"keywords": keywords, "limit": aux_limit, "offset": 0, "type": 100}, real_ip=real_ip)
         f_alb = ex.submit(call, "/cloudsearch",
-                          {"keywords": keywords, "limit": aux_limit, "offset": 0, "type": 10})
+                          {"keywords": keywords, "limit": aux_limit, "offset": 0, "type": 10}, real_ip=real_ip)
         f_pl = ex.submit(call, "/cloudsearch",
-                         {"keywords": keywords, "limit": 12, "offset": 0, "type": 1000})
+                         {"keywords": keywords, "limit": 12, "offset": 0, "type": 1000}, real_ip=real_ip)
         d_song, d_art, d_alb, d_pl = f_song.result(), f_art.result(), f_alb.result(), f_pl.result()
     return {
         "songs": [_norm_song(s) for s in

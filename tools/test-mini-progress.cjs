@@ -12,6 +12,9 @@ const assets = buildSync({ stdin: { resolveDir: root, contents: `
   import './web/src/watch.css';
   import { initPlayerUI } from './web/src/player-ui.js';
   export { player, tick, notifyState, setClockSource } from './web/src/player.js';
+  export { api, auth, settings } from './web/src/api.js';
+  export { ensureNcmLiked, isNcmLiked, setNcmLiked, resetNcmLiked, resetNcmBound } from './web/src/ui.js';
+  export { render as renderSearch } from './web/src/pages/search.js';
   initPlayerUI();
 ` }, bundle: true, format: 'iife', globalName: 'MiniTest', write: false,
   outfile: 'fixture.js', loader: { '.png': 'dataurl', '.svg': 'text', '.woff2': 'file' }, logLevel: 'silent' }).outputFiles;
@@ -22,11 +25,12 @@ wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
 wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32);
 wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
 
-async function fixture(browser, width) {
+async function fixture(browser, width, options = {}) {
   const context = await browser.newContext({ viewport: { width, height: width === 240 ? 240 : 900 },
     hasTouch: width < 900, isMobile: width < 900, reducedMotion: width === 240 ? 'reduce' : 'no-preference' });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
+  if (options.initScript) await page.addInitScript(options.initScript);
   await page.route('**/*', route => {
     const name = new URL(route.request().url()).pathname.split('/').pop();
     if (name === 'tone.wav') {
