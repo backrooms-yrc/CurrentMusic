@@ -693,7 +693,8 @@ def best_level(ncm_id, real_ip=None, max_br=0):
     「先探测档位、再打一次接口取同一首地址」的第二次上游往返（实测 2.81s → 1.4s）。
     """
     max_br = cm_stream.quantize_max_br(max_br)
-    key = f"blevel:{int(ncm_id)}:{max_br}"
+    ip_key = hashlib.sha256((real_ip or '').encode()).hexdigest()[:16]
+    key = f"blevel-ip:v1:{int(ncm_id)}:{max_br}:{ip_key}"
     cached = cm_db.cache_get(key)
     if cached:
         return cached.strip('"'), None
@@ -792,6 +793,39 @@ def _remember_url_error(key, exc):
 
 
 def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
+                     max_br=0, refresh=False, alts=False, want_host=""):
+    """官方音源优先；失败后仅下发经过严格音频校验的灰色曲目匹配结果。"""
+    started = time.time()
+    ip_key = hashlib.sha256((real_ip or '').encode()).hexdigest()[:16]
+    source = os.environ.get('CM_NCM_MATCH_SOURCE', '').strip()
+    key = f"smatch:v1:{ncm_id}:{ip_key}:{source}"
+    cached = None if refresh else cm_db.cache_get(key)
+    if cached:
+        out = json.loads(cached)
+        from_cache = True
+    else:
+        try:
+            return _resolve_official_play_url(ncm_id, level, immerse, real_ip, max_br, refresh, alts, want_host)
+        except cm_ncm.NcmError:
+            pass
+
+        def match():
+            result = cm_ncm.song_url_match(ncm_id, real_ip=real_ip)
+            result = dict(result, host=cm_stream.host_of(result['url']), hosts=[], switched=False,
+                          expireAt=int((time.time() + 120) * 1000))
+            cm_db.cache_set(key, json.dumps(result, ensure_ascii=False), 120)
+            return result
+
+        try:
+            out = dict(_resolve_flight.do(key, match, timeout=10.0))
+        except cm_ncm.NcmError:
+            raise cm_ncm.NcmError("官方音源未取得可用地址，灰色曲目匹配也未取得可验证的音频，请稍后重试") from None
+        from_cache = False
+    out.update(fromCache=from_cache, resolvedMs=int((time.time() - started) * 1000), requestedLevel=level)
+    return out
+
+
+def _resolve_official_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
                      max_br=0, refresh=False, alts=False, want_host=""):
     """解析播放地址，返回可直接下发的响应 dict。
 
@@ -1622,8 +1656,8 @@ def _ncm_forward(handler, method, path, q, body):
                      sorted(k for k in q if k != "confirm"))
 
     params = cm_ncm_gateway.normalize_params(path, q, method)
-    # 搜索结果可能因地区不同而不同；先注入可信 IP，再计算隔离缓存键。
-    if cm_ncm_gateway.is_search_path(upstream):
+    # 搜索与音源都受用户网络位置影响；先注入可信 IP，再计算隔离缓存键。
+    if cm_ncm_gateway.is_search_path(upstream) or cm_ncm_gateway.is_media_url_path(upstream):
         params["realIP"] = cm_ncm_gateway.client_ip(handler)
     ck = None
     if ttl > 0 and method == "GET" and tier == cm_ncm_registry.T0:
@@ -1637,7 +1671,7 @@ def _ncm_forward(handler, method, path, q, body):
     # 媒体地址族：把**调用方 IP** 告诉上游（/song/url/v1 的文档参数 realIP，
     # 上游据此选离用户近的 CDN 边缘；直链本身不绑 IP，实测异地 IP 也能取）。
     # 注意：realIP 在 RESERVED_PARAMS 里被剥掉，这里注入的是服务端取到的真实 IP，
-    # 调用方伪造不了；搜索已在缓存键计算前注入，其余接口保留原有顺序。
+    # 调用方伪造不了；搜索与音源已在缓存键计算前注入，账号写操作不缓存。
     if cm_ncm_gateway.should_forward_real_ip(upstream, method, tier):
         params["realIP"] = cm_ncm_gateway.client_ip(handler)
 
@@ -2409,7 +2443,7 @@ def route(handler, method):
             ("GET", "/ncmbind/likelist", "Bearer", "绑定账号红心列表 {ids}；refresh=1 强制同步，短期合并已成功写入但上游尚未收敛的红心意图"),
             ("GET", "/daily", "可选登录", "每日推荐"),
             ("GET", "/ncm/search", "公开", "网易云搜索代理，透传 NGINX 提供的用户 RealIP 并按用户 IP 隔离缓存；单曲首屏可含 catalogSongs（公开专辑精确匹配，不计入上游分页）。type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；失败通过 lyricContextStatus 明示。详见 /api-docs/reference/guide-search-catalog/ 与 /api-docs/reference/guide-search-lyrics-api/"),
-            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；返回 host 与耗时诊断）"),
+            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败后调用 /song/url/match 并严格验证音频，匹配结果 level=matched；详见 /api-docs/reference/guide-playback-sources/）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
             ("GET", "/share/song/{id}", "公开", "歌曲分享元数据（name/artists/album/pic/duration/url/text/image；无需登录）"),
             ("GET", "/share/song/{id}/image", "公开", "歌曲分享图（1080×1440 JPEG，封面取色 + 二维码）"),

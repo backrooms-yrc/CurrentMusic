@@ -70,6 +70,7 @@ python3 backend/cm_server.py
 | `CM_DEFAULT_HOST` | `localhost` | 请求缺少 Host 头时用于生成链接 |
 | `CM_NCM_BASE` | `http://127.0.0.1:3001` | NCM API 基址 |
 | `CM_NCM_COOKIE` | `<CM_DATA_DIR>/ncm-cookie` | 网易云 cookie 文件 |
+| `CM_NCM_MATCH_SOURCE` | 空（上游自动选择） | 官方取址失败后的单个匹配音源；须由上游支持，见 [播放音源说明](../docs/playback-sources.md) |
 | `CM_SEARCH_CATALOG` | `<CM_DATA_DIR>/search-catalog.json` | 可选的公开专辑曲目索引；仅含元数据，不含用户资料或音频 |
 | `CM_AI_KEY` | 空 | DeepSeek API key；空则 AI 降级 |
 | `CM_AI_BASE` | `https://api.deepseek.com/v1` | 模型 API |

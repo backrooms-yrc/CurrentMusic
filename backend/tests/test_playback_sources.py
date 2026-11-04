@@ -1,0 +1,119 @@
+"""Client IP isolation and verified grey-track fallback; never uses production data."""
+import io
+import sys
+import unittest
+from pathlib import Path
+from unittest import mock
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import cm_db
+import cm_ncm
+import cm_server
+import test_password_reset as harness
+
+IP_A, IP_B = '198.51.100.21', '198.51.100.22'
+MATCHED = {'url': 'https://audio.example.test/song.mp3', 'level': 'matched', 'source': 'netease-match',
+           'type': 'mp3', 'br': 0, 'size': 200000, 'sr': 0, 'bits': 0, 'ch': 0}
+
+
+class PlaybackSourceTests(unittest.TestCase):
+    setUp = harness.TestPasswordReset.setUp
+    _cleanup = harness.TestPasswordReset._cleanup
+    call = harness.TestPasswordReset.call
+
+    def token(self):
+        return cm_db.issue_token(cm_db.create_user('audio-fixture', 'fixture-password', 'Fixture'))
+
+    def test_official_song_url_keeps_user_realip(self):
+        response = {'data': [{'url': 'https://audio.example.test/song.flac', 'level': 'lossless'}]}
+        with mock.patch.object(cm_ncm, '_bounded_call', return_value=response) as upstream:
+            cm_ncm.song_url(1, real_ip=IP_A, probe=False)
+        self.assertEqual(upstream.call_args.args[1]['realIP'], IP_A)
+
+    def test_match_forwards_realip_without_cookie_and_reports_verified_quality(self):
+        with mock.patch.dict('os.environ', {'CM_NCM_MATCH_SOURCE': 'fixture'}), \
+             mock.patch.object(cm_ncm, '_ts', return_value=123), \
+             mock.patch.object(cm_ncm, '_bounded_call', return_value={'data': MATCHED['url']}) as upstream, \
+             mock.patch.object(cm_ncm, 'probe_audio', return_value=(True, {'type': 'mp3', 'size': 200000})) as probe:
+            result = cm_ncm.song_url_match(1, real_ip=IP_A)
+        self.assertEqual(result, {**MATCHED, 'md5': ''})
+        self.assertEqual(upstream.call_args.args[:2], ('/song/url/match', {'id': 1, 'source': 'fixture', 'timestamp': 123}))
+        self.assertEqual(upstream.call_args.kwargs['real_ip'], IP_A)
+        self.assertFalse(upstream.call_args.kwargs['with_cookie'])
+        probe.assert_called_once_with(MATCHED['url'], timeout=2.5, strict=True)
+
+    def test_match_rejects_missing_addresses_and_html(self):
+        with mock.patch.object(cm_ncm, '_bounded_call') as upstream, \
+             mock.patch.object(cm_ncm, 'probe_audio', return_value=(False, {})):
+            for response in ({'data': []}, {'data': 'file:///etc/passwd'}, {'data': 'https://audio.example.test/error.html'}):
+                upstream.return_value = response
+                with self.subTest(response=response), self.assertRaises(cm_ncm.NcmError):
+                    cm_ncm.song_url_match(1, real_ip=IP_A)
+
+    def test_strict_probe_rejects_errors_and_timeouts_and_reads_real_file_headers(self):
+        def response(body):
+            stream = io.BytesIO(body)
+            stream.status = 206
+            stream.headers = {'Content-Range': 'bytes 0-2047/200000'}
+            return stream
+        with mock.patch.object(cm_ncm.urllib.request, 'urlopen', return_value=response(b'<!DOCTYPE html>' * 150)):
+            self.assertFalse(cm_ncm._probe_audio_once(MATCHED['url'], 1, strict=True)[0])
+        with mock.patch.object(cm_ncm.urllib.request, 'urlopen', return_value=response(b'ID3' + b'\0' * 2045)):
+            self.assertEqual(cm_ncm._probe_audio_once(MATCHED['url'], 1, strict=True), (True, {'type': 'mp3', 'size': 200000}))
+        with mock.patch.object(cm_ncm.urllib.request, 'urlopen', side_effect=TimeoutError):
+            self.assertFalse(cm_ncm._probe_audio_once(MATCHED['url'], 1, strict=True)[0])
+            self.assertTrue(cm_ncm._probe_audio_once(MATCHED['url'], 1)[0])
+        with mock.patch.object(cm_ncm, '_run_with_wall_clock', return_value=None):
+            self.assertEqual(cm_ncm.probe_audio(MATCHED['url'], strict=True), (False, {}))
+
+    def test_route_uses_trusted_ip_for_fallback_and_isolates_cache_and_refresh(self):
+        token = self.token()
+        with mock.patch.object(cm_server, '_resolve_official_play_url', side_effect=cm_ncm.NcmError('no official URL')), \
+             mock.patch.object(cm_ncm, 'song_url_match', return_value=MATCHED) as match:
+            route = '/ncm/song/url?id=1&realIP=203.0.113.99'
+            status, first = self.call('GET', route, token=token, ip=IP_A)
+            self.assertEqual(status, 200)
+            self.assertFalse(first['fromCache'])
+            self.assertEqual(first['level'], 'matched')
+            self.assertEqual(first['hosts'], [])
+            self.assertEqual(self.call('GET', route, token=token, ip=IP_A)[1]['fromCache'], True)
+            self.call('GET', route, token=token, ip=IP_B)
+            self.call('GET', route + '&refresh=1', token=token, ip=IP_A)
+            self.assertEqual([c.kwargs['real_ip'] for c in match.call_args_list], [IP_A, IP_B, IP_A])
+
+    def test_official_success_never_calls_match(self):
+        with mock.patch.object(cm_server, '_resolve_official_play_url', return_value={'url': 'official'}) as official, \
+             mock.patch.object(cm_ncm, 'song_url_match') as match:
+            self.assertEqual(cm_server.resolve_play_url(1, real_ip=IP_A), {'url': 'official'})
+            official.assert_called_once()
+            match.assert_not_called()
+
+    def test_match_failure_is_retryable_and_not_cached(self):
+        with mock.patch.object(cm_server, '_resolve_official_play_url', side_effect=cm_ncm.NcmError('no URL')), \
+             mock.patch.object(cm_ncm, 'song_url_match', side_effect=cm_ncm.NcmError('temporary')) as match:
+            for _ in range(2):
+                with self.assertRaisesRegex(cm_ncm.NcmError, '请稍后重试'):
+                    cm_server.resolve_play_url(1, real_ip=IP_A)
+            self.assertEqual(match.call_count, 2)
+
+    def test_best_level_cache_is_scoped_to_client_ip(self):
+        result = {'url': 'https://audio.example.test/song.flac', 'level': 'lossless', 'type': 'flac', 'br': 900000}
+        with mock.patch.object(cm_ncm, 'song_url', return_value=result) as upstream, \
+             mock.patch.object(cm_ncm, 'probe_audio', return_value=(True, {})):
+            self.assertIsNotNone(cm_server.best_level(1, real_ip=IP_A)[1])
+            self.assertIsNone(cm_server.best_level(1, real_ip=IP_A)[1])
+            self.assertIsNotNone(cm_server.best_level(1, real_ip=IP_B)[1])
+            self.assertEqual(upstream.call_count, 8)
+            self.assertEqual({c.kwargs['real_ip'] for c in upstream.call_args_list}, {IP_A, IP_B})
+
+    def test_generic_media_cache_also_keeps_trusted_user_ip(self):
+        token = self.token()
+        with mock.patch.object(cm_ncm, 'call', return_value={'code': 200, 'data': []}) as upstream:
+            for ip in (IP_A, IP_A, IP_B):
+                self.assertEqual(self.call('GET', '/ncm/song/url/v1?id=1&level=exhigh&realIP=203.0.113.99', token=token, ip=ip)[0], 200)
+            self.assertEqual([c.args[1]['realIP'] for c in upstream.call_args_list], [IP_A, IP_B])
+
+    def test_guest_cannot_trigger_fallback(self):
+        with mock.patch.object(cm_ncm, 'song_url_match') as match:
+            self.assertEqual(self.call('GET', '/ncm/song/url?id=1')[0], 401)
+            match.assert_not_called()
