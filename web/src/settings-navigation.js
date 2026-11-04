@@ -26,7 +26,7 @@ const CATEGORIES = [
   ] },
 ];
 const ALIASES = {
-  theme: '夜间 白天 深色 浅色 系统 dark light', scheme: '颜色 动态取色 color', uiPreset: '皮肤 Material MD3 CMX CurrentMusicX',
+  theme: '夜间 白天 深色 浅色 系统 dark light', scheme: '颜色 动态取色 color', uiPreset: '皮肤 Material MD3 CMX CurrentMusicX 翱翔鸟 Music Apple',
   fontScale: '字号 大字 文字 font', bgImage: '壁纸 图片 wallpaper', glassFx: '模糊 透明 毛玻璃 blur',
   coverShape: '圆形 方形 专辑', waveStyle: '可视化 频谱 波形', waveTilt: '高频 补偿 频谱',
   network: 'CDN 音源 自动 测速 可用性 测试 镜像 LeiZ 网易云 线路',

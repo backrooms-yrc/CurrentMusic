@@ -41,7 +41,7 @@
       var p = localStorage.getItem('cm.uiPreset');
       // 默认皮肤 = CurrentMusicX 风格（v1.28.74 起）：未选择过 → cmx；
       // 显式选了 Material 3 → 不打属性（基础样式）；其余按所存值。
-      if (p === 'frost' || p === 'glass' || p === 'cmx') document.documentElement.setAttribute('data-ui-preset', p);
+      if (p === 'frost' || p === 'glass' || p === 'cmx' || p === 'soaringbird') document.documentElement.setAttribute('data-ui-preset', p);
       else if (p !== 'md3') document.documentElement.setAttribute('data-ui-preset', 'cmx');
       // 个性化（背景图 / 玻璃效果值）也要在样式表之前打上，否则会先闪一帧默认底色
       var bg = localStorage.getItem('cm.bgImage');
@@ -52,7 +52,7 @@
       if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
-  <link rel="stylesheet" href="app.css?v=1139ac9614">
+  <link rel="stylesheet" href="app.css?v=ca1dd40a31">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
     #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; inset: 0; z-index: 10000; display: flex;
@@ -210,6 +210,6 @@
       }, 9000);
     })();
   </script>
-  <script src="app.js?v=1139ac9614"></script>
+  <script src="app.js?v=ca1dd40a31"></script>
 </body>
 </html>

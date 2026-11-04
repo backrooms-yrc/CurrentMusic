@@ -33,6 +33,11 @@ function amPlayIcon() {
 // 原始方括号。这里映射为语义等价的通用 emoji（选用 Chrome58 即可渲染的早期码位）。
 
 const overlay = () => document.getElementById('playerOverlay');
+
+// 主题「翱翔鸟Music」= 移植自独立项目 soaringbird-music 的 Apple Music 风格皮肤。
+// 所有该主题的样式都限定在 html[data-ui-preset="soaringbird"] 之下，其余皮肤不受影响。
+const isSoaringBirdTheme = () =>
+  document.documentElement.getAttribute('data-ui-preset') === 'soaringbird';
 let closeTimer = 0;
 
 // 播放页波形：由**真实音频频谱**驱动（见 waveform.js），占位只有一张 canvas。
@@ -216,7 +221,11 @@ function setPlayerView(v) {
   playerView = v;
   try { sessionStorage.setItem('cm.playerView', v); } catch { /* 隐私模式 */ }
   const bodyEl = document.querySelector('.pl-body');
-  if (bodyEl) bodyEl.className = `pl-body view-${v}`;
+  if (bodyEl) {
+    // 保留主题自定义的附加类（如翱翔鸟Music 的 sb-grid），只替换视图类
+    const extra = Array.from(bodyEl.classList).filter(c => c !== 'pl-body' && !c.startsWith('view-')).join(' ');
+    bodyEl.className = ('pl-body ' + extra + ' view-' + v).replace(/\s+/g, ' ').trim();
+  }
   if (v === 'lyric') {
     // 视图尺寸变化后：重算垫片并让当前行重新居中
     requestAnimationFrame(() => {
@@ -250,7 +259,7 @@ function renderLyric() {
       const body = karaokeOK
         ? `<div class="lyr">${l.w.map(([wt, tx]) => `<span class="ch" data-t="${wt}">${esc(tx)}</span>`).join('')}</div>`
         : `<div>${esc(main)}</div>`;
-      return `<div class="pl-lyric-line" data-i="${i}">${body}${sub ? `<div class="pl-lyric-trans">${esc(sub)}</div>` : ''}</div>`;
+      return `<div class="pl-lyric-line" data-i="${i}" style="--i:${i}">${body}${sub ? `<div class="pl-lyric-trans">${esc(sub)}</div>` : ''}</div>`;
     }).join('') +
     `<div class="pl-lyric-pad" id="padBot"></div>`;
   box.querySelectorAll('.pl-lyric-line').forEach(el => {
@@ -273,6 +282,15 @@ function renderLyric() {
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt =>
       el.addEventListener(evt, () => { if (lp) { clearTimeout(lp); lp = null; } }));
   });
+  // 重建后恢复当前行标记（syncLyric 在行号未变时会提前返回）
+  if (isSoaringBirdTheme() && curLyricIdx >= 0) {
+    box.style.setProperty('--active-i', curLyricIdx);
+    box.querySelectorAll('.pl-lyric-line').forEach(el => {
+      const idx = +el.dataset.i;
+      el.classList.toggle('cur', idx === curLyricIdx);
+      el.classList.toggle('is-past', idx < curLyricIdx);
+    });
+  }
   layoutLyricPads();
   // 只在真实用户输入时暂停自动跟随 3 秒。
   // 不要用 onscroll + 标志位判定——scrollTo 的平滑动画也会触发 scroll 事件，
@@ -356,6 +374,7 @@ function fireKaraoke() {
   const t = performance.now();
   if (t - karaokeTick < 33) return;
   karaokeTick = t;
+  const sbTheme = isSoaringBirdTheme();
 
   for (let k = 0; k < spans.length && k < w.length; k++) {
     const start = w[k][0];
@@ -367,6 +386,12 @@ function fireKaraoke() {
     if (q === karaokeVals[k]) continue;
     karaokeVals[k] = q;
     spans[k].style.setProperty('--p', q.toFixed(2));
+    if (sbTheme) {
+      // 翱翔鸟Music：Apple Music 用 --cp（0-100）驱动羽化扫光，并标记已唱/正在唱
+      spans[k].style.setProperty('--cp', String(Math.round(q * 100)));
+      spans[k].classList.toggle('is-sung', q >= 1);
+      spans[k].classList.toggle('is-current', q > 0 && q < 1);
+    }
     const sweeping = q > 0 && q < 1;
     if (spans[k].classList.contains('sweep') !== sweeping) spans[k].classList.toggle('sweep', sweeping);
   }
@@ -460,7 +485,17 @@ function syncLyric() {
   }
   const box = document.getElementById('plLyric');
   if (!box || !changed) return;
-  box.querySelectorAll('.pl-lyric-line').forEach(el => el.classList.toggle('cur', +el.dataset.i === i));
+  // 翱翔鸟Music 主题：纵深/停位交给 CSS（父级只更新 --active-i），并补 past 状态
+  if (isSoaringBirdTheme()) {
+    box.style.setProperty('--active-i', i);
+    box.querySelectorAll('.pl-lyric-line').forEach(el => {
+      const idx = +el.dataset.i;
+      el.classList.toggle('cur', idx === i);
+      el.classList.toggle('is-past', idx < i);
+    });
+  } else {
+    box.querySelectorAll('.pl-lyric-line').forEach(el => el.classList.toggle('cur', +el.dataset.i === i));
+  }
   karaokeSpans = null;
   const cur = box.querySelector(`.pl-lyric-line[data-i="${i}"]`);
   if (!cur) return;
@@ -479,16 +514,71 @@ async function openFull() {
   ov.classList.remove('closing');
   ov.hidden = false;
   document.body.classList.add('player-open');
-  ov.innerHTML = `
-    <div class="pl-bg" id="plBg" style="${m.pic ? `background-image:linear-gradient(rgba(24,22,30,.45),rgba(24,22,30,.62)),url('${esc(m.pic)}')` : ''}"></div>
+  // 主题「翱翔鸟Music」：全屏播放页 = 翱翔鸟 Music 的 Apple Music 歌词页布局。
+  // 只替换这一主题下的结构与样式，其它皮肤维持原有 DOM 与 CSS 不变。
+  const sb = isSoaringBirdTheme();
+  const bgStyle = m.pic ? `background-image:linear-gradient(rgba(24,22,30,.45),rgba(24,22,30,.62)),url('${esc(m.pic)}')` : '';
+  const plAi = `<span class="pl-ai-btn" id="plAskAi" title="问 CurrentMusicAI"><span class="pl-ai-ava material-icons-outlined">auto_awesome</span><b>问AI</b></span>`;
+  const plActions = `${plAi}${castIconHTML()}<span class="pl-btn" id="plMore" title="更多（歌词/背景/下载）"><span class="material-icons-outlined">more_vert</span></span>`;
+  const plCtrlIcons = `
+            <span class="pl-btn ${st.liked ? 'on' : ''}" id="plLike" title="选择收录到哪个我喜欢"><span class="material-icons-outlined">${st.liked ? 'favorite' : 'favorite_border'}</span><i class="cm-ncmdot" id="plNcmBadge" hidden></i></span>
+            <span class="pl-btn" id="plAdd"><span class="material-icons-outlined">playlist_add</span></span>
+            <span class="pl-btn" id="plComments" title="评论区"><span class="material-icons-outlined">forum</span></span>
+            <span class="pl-btn ${player.playMode !== 'order' ? 'on' : ''}" id="plMode" title="${PLAY_MODES.find(x => x.key === player.playMode).label}"><span class="material-icons-outlined">${PLAY_MODES.find(x => x.key === player.playMode).icon}</span></span>
+            <span class="pl-btn ${player.heartMode ? 'on' : ''}" id="plHeart" title="${player.heartMode ? '心动模式已开启：队列快见底自动续播（点击关闭）' : '心动模式：以当前曲目为种子持续智能续播（点击开启）'}"><span class="material-icons-outlined">auto_awesome</span></span>
+            <span class="pl-btn" id="plQueue" title="当前播放列表"><span class="material-icons-outlined">queue_music</span></span>`;
+  const plStall = `<div class="pl-stall" id="plStall" hidden>
+              <mdui-circular-progress style="width:13px;height:13px"></mdui-circular-progress>
+              <span id="plStallText">缓冲中…</span>
+            </div>`;
+
+  ov.innerHTML = sb ? `
+    <div class="pl-bg sb-backdrop" id="plBg" style="${bgStyle}">
+      <span class="sb-fluid"><span class="sb-blob sb-blob--1"></span><span class="sb-blob sb-blob--2"></span><span class="sb-blob sb-blob--3"></span><span class="sb-blob sb-blob--4"></span></span>
+    </div>
+    <span class="pl-btn sb-close" id="plClose" title="收起"><span class="material-icons-outlined">keyboard_arrow_down</span></span>
+    <span class="pl-topact sb-acts">${plActions}</span>
+    <div class="pl-body view-${playerView} sb-grid">
+      <div class="pl-left sb-left">
+        <div class="pl-cover-wrap sb-artwork" id="plCoverWrap" title="点击查看歌词">
+          <span class="sb-artwork-glow" aria-hidden="true">${m.pic ? `<img src="${esc(m.pic)}" alt="">` : ''}</span>
+          <img id="plCover" src="${esc(m.pic)}" onerror="this.style.visibility='hidden'">
+        </div>
+        <div class="pl-info sb-meta">
+          <div class="pl-name">${esc(m.name)}</div>
+          <div class="pl-artist" id="plArtist">${artistLineHTML(m)}</div>
+          <div class="pl-stats" id="plStats"><mdui-linear-progress style="width:120px"></mdui-linear-progress></div>
+        </div>
+        <div class="pl-ctrl sb-ctrl">${plCtrlIcons}</div>
+        <div class="pl-progress-stack sb-progress">
+          ${waveformHTML()}
+          <div class="pl-seek sb-scrubber">
+            <div class="pl-seekbar" id="plSeekbar"></div>
+            <div class="sb-times">
+              <span id="plCur">0:00</span>
+              <div class="pl-quality" id="plQuality">${player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality)}</div>
+              <span id="plDur">0:00</span>
+            </div>
+            ${plStall}
+          </div>
+        </div>
+        <div class="pl-transport sb-controls">
+          <span class="pl-btn big" id="plPrev" title="上一首">${AM_ICON.prev}</span>
+          <span class="pl-btn huge" id="plPlay" title="播放/暂停">${amPlayIcon()}</span>
+          <span class="pl-btn big" id="plNext" title="下一首">${AM_ICON.next}</span>
+        </div>
+      </div>
+      <div class="pl-right sb-lyriccol">
+        <div class="pl-lyric" id="plLyric"></div>
+      </div>
+    </div>` : `
+    <div class="pl-bg" id="plBg" style="${bgStyle}"></div>
     <div class="pl-page">
       <div class="pl-top">
         <span class="pl-btn" id="plClose"><span class="material-icons-outlined">keyboard_arrow_down</span></span>
         <div class="pl-quality" id="plQuality">${player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality)}</div>
         <span class="pl-topact">
-          <span class="pl-ai-btn" id="plAskAi" title="问 CurrentMusicAI"><span class="pl-ai-ava material-icons-outlined">auto_awesome</span><b>问AI</b></span>
-          ${castIconHTML()}
-          <span class="pl-btn" id="plMore" title="更多（歌词/背景/下载）"><span class="material-icons-outlined">more_vert</span></span>
+          ${plActions}
         </span>
       </div>
       <div class="pl-body view-${playerView}">
@@ -501,14 +591,7 @@ async function openFull() {
             <div class="pl-artist" id="plArtist">${artistLineHTML(m)}</div>
             <div class="pl-stats" id="plStats"><mdui-linear-progress style="width:120px"></mdui-linear-progress></div>
           </div>
-          <div class="pl-ctrl">
-            <span class="pl-btn ${st.liked ? 'on' : ''}" id="plLike" title="选择收录到哪个我喜欢"><span class="material-icons-outlined">${st.liked ? 'favorite' : 'favorite_border'}</span><i class="cm-ncmdot" id="plNcmBadge" hidden></i></span>
-            <span class="pl-btn" id="plAdd"><span class="material-icons-outlined">playlist_add</span></span>
-            <span class="pl-btn" id="plComments" title="评论区"><span class="material-icons-outlined">forum</span></span>
-            <span class="pl-btn ${player.playMode !== 'order' ? 'on' : ''}" id="plMode" title="${PLAY_MODES.find(x => x.key === player.playMode).label}"><span class="material-icons-outlined">${PLAY_MODES.find(x => x.key === player.playMode).icon}</span></span>
-            <span class="pl-btn ${player.heartMode ? 'on' : ''}" id="plHeart" title="${player.heartMode ? '心动模式已开启：队列快见底自动续播（点击关闭）' : '心动模式：以当前曲目为种子持续智能续播（点击开启）'}"><span class="material-icons-outlined">auto_awesome</span></span>
-            <span class="pl-btn" id="plQueue" title="当前播放列表"><span class="material-icons-outlined">queue_music</span></span>
-          </div>
+          <div class="pl-ctrl">${plCtrlIcons}</div>
           <div class="pl-progress-stack">
             ${waveformHTML()}
             <div class="pl-seek">
@@ -516,10 +599,7 @@ async function openFull() {
               <div class="pl-seekbar" id="plSeekbar"></div>
               <span id="plDur">0:00</span>
             </div>
-            <div class="pl-stall" id="plStall" hidden>
-              <mdui-circular-progress style="width:13px;height:13px"></mdui-circular-progress>
-              <span id="plStallText">缓冲中…</span>
-            </div>
+            ${plStall}
           </div>
           <div class="pl-transport">
             <span class="pl-btn big" id="plPrev" title="上一首">${AM_ICON.prev}</span>
@@ -545,8 +625,9 @@ async function openFull() {
   bindArtistLinks(ov);
 
   // 窄屏：点击封面/周围空白 ↔ 整屏歌词 双视图切换（≥600px 双栏不参与）
+  // 翱翔鸟Music 主题沿用 Apple 的单列「封面在上、歌词在下」长页，不再需要视图切换。
   const bodyEl = ov.querySelector('.pl-body');
-  bodyEl.addEventListener('click', e => {
+  if (!sb) bodyEl.addEventListener('click', e => {
     if (window.matchMedia('(min-width: 600px)').matches) return;
     if (e.target.closest('.pl-ctrl, .pl-progress-stack, .pl-transport')) return;      // 控制区不触发
     if (e.target.closest('.pl-lyric-line')) return;                          // 歌词行点击=跳播
@@ -913,6 +994,17 @@ async function applyPlayerBg() {
     el.className = 'pl-bg';
     el.style.backgroundImage = player.meta.pic
       ? `linear-gradient(rgba(24,22,30,.45),rgba(24,22,30,.62)),url('${esc(player.meta.pic)}')` : '';
+    if (isSoaringBirdTheme() && player.meta.pic) {
+      // 翱翔鸟Music 的流体背景：用封面主色给 4 个色团上色
+      const m = player.meta;
+      coverColors(m.pic).then(cs => {
+        if (!cs || !player.meta || player.meta.pic !== m.pic) return;
+        el.style.setProperty('--c1', cs.primary);
+        el.style.setProperty('--c2', cs.deep);
+        el.style.setProperty('--c3', cs.dark);
+        el.style.setProperty('--c4', cs.accent || cs.deep);
+      }).catch(() => {});
+    }
     return;
   }
   el.className = 'pl-bg grad';
@@ -1009,6 +1101,8 @@ function updateSongInfo() {
   if (!ov || ov.hidden || !m) return;
   const cover = document.getElementById('plCover');
   if (cover) cover.src = m.pic || '';
+  const glow = ov.querySelector('.sb-artwork-glow img');
+  if (glow) glow.src = m.pic || '';
   const name = ov.querySelector('.pl-name');
   if (name) name.textContent = m.name;
   const artist = ov.querySelector('.pl-artist');
@@ -1153,4 +1247,9 @@ export async function addToPlaylist(songs) {
 export function initPlayerUI() {
   renderMini();
   applyDynamicScheme();   // 启动即随上次播放的封面取色（配色为 dynamic 时）
+  // 切换皮肤时若播放页正开着：按新主题重建一次结构与背景（其它皮肤走原模板，等价于原样重开）
+  document.addEventListener('cm-uipreset', () => {
+    const ov = overlay();
+    if (ov && !ov.hidden) openFull();
+  });
 }
