@@ -5,6 +5,7 @@
 """
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -669,7 +670,7 @@ def song_url_match(ncm_id, real_ip=None):
     source = os.environ.get("CM_NCM_MATCH_SOURCE", "").strip()
     if source:
         params["source"] = source
-    data = _bounded_call("/song/url/match", params, 6.0, retries=0,
+    data = _bounded_call("/song/url/match", params, 20.0, retries=0,
                          with_cookie=False, real_ip=real_ip)
     data = data if isinstance(data, dict) else {}
     url = data.get("proxyUrl") or data.get("data")
@@ -680,13 +681,23 @@ def song_url_match(ncm_id, real_ip=None):
         valid = False
     if not valid:
         raise NcmError("灰色曲目匹配未返回音频地址，请稍后重试")
+    info = data.get('matchInfo')
+    info = info if isinstance(info, dict) else {}
+    expected = info.get('expectedDurationMs') or 0
+    duration = info.get('durationMs') or 0
+    if (info.get('validated') is not True or info.get('validationVersion') != 1 or info.get('url') != url
+            or type(expected) not in (int, float) or type(duration) not in (int, float)
+            or not math.isfinite(expected) or not math.isfinite(duration) or expected <= 0 or duration <= 0
+            or abs(duration - expected) > max(2000, min(10000, expected * .03))):
+        raise NcmError("灰色曲目匹配未通过完整时长校验，请检查上游匹配器部署后重试")
     url = _https(url)
     ok, spec = probe_audio(url, timeout=2.5, strict=True)
     if not ok:
         raise NcmError("灰色曲目匹配未取得可验证的音频（错误页或网络不可用），请稍后重试")
-    return {"url": url, "br": 0, "type": spec.get("type") or "", "size": spec.get("size") or 0,
+    return {"url": url, "br": info.get('br') or 0, "type": info.get('type') or spec.get("type") or "", "size": info.get('size') or spec.get("size") or 0,
             "level": "matched", "source": "netease-match", "md5": "",
-            "sr": spec.get("sr") or 0, "bits": spec.get("bits") or 0, "ch": spec.get("ch") or 0}
+            "durationMs": duration, "expectedDurationMs": expected, "matchSource": info.get('source') or '',
+            "sr": info.get('sr') or spec.get("sr") or 0, "bits": info.get('bits') or spec.get("bits") or 0, "ch": info.get('ch') or spec.get("ch") or 0}
 
 
 _LRC_TAG = re.compile(r"\[(\d+):(\d+)(?:[.:](\d+))?\]")

@@ -798,7 +798,7 @@ def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
     started = time.time()
     ip_key = hashlib.sha256((real_ip or '').encode()).hexdigest()[:16]
     source = os.environ.get('CM_NCM_MATCH_SOURCE', '').strip()
-    key = f"smatch:v1:{ncm_id}:{ip_key}:{source}"
+    key = f"smatch:v2:{ncm_id}:{ip_key}:{source}"
     cached = None if refresh else cm_db.cache_get(key)
     if cached:
         out = json.loads(cached)
@@ -817,7 +817,7 @@ def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
             return result
 
         try:
-            out = dict(_resolve_flight.do(key, match, timeout=10.0))
+            out = dict(_resolve_flight.do(key, match, timeout=24.0))
         except cm_ncm.NcmError:
             raise cm_ncm.NcmError("官方音源未取得可用地址，灰色曲目匹配也未取得可验证的音频，请稍后重试") from None
         from_cache = False

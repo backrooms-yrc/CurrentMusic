@@ -66,6 +66,17 @@ be imported without installing the Qt GUI stack.
 - NetEaseCloudMusicApiEnhanced / api-enhanced (MIT) is deployed separately;
   its backend source and account cookies are not bundled here. The license for
   documentation excerpts is retained in `api-docs/licenses/ncm-api-MIT.txt`.
+- @neteasecloudmusicapienhanced/unblockmusic-utils 0.4.4 (MIT),
+  https://github.com/NeteaseCloudMusicApiEnhanced/UnblockNeteaseMusic-utils,
+  and @unblockneteasemusic/server 0.28.0 (LGPL-3.0-only),
+  https://github.com/UnblockNeteaseMusic/server, remain dependencies of that separate
+  upstream deployment. The CurrentMusic matcher hooks contain independently written
+  validation/adapter code; upstream dependency source and binaries are not distributed here.
+- FFmpeg / ffprobe, https://ffmpeg.org/legal.html, is invoked as a separate system
+  process to inspect matched audio. Its license depends on the system build: the
+  validated Debian 5.1.9 build enables GPL components and reports GPL-2.0-or-later.
+  No FFmpeg binary or source is bundled by this repository; redistribution of a
+  system image must preserve the applicable FFmpeg and dependency licenses.
 - CurrentMusic branding in `assets/brand/` was generated for this project;
   provenance is recorded in its README. Third-party decoration metadata does
   not grant rights to the images referenced by it. User uploads, avatars,

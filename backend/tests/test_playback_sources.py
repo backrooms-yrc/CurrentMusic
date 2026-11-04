@@ -14,6 +14,8 @@ import test_password_reset as harness
 IP_A, IP_B = '198.51.100.21', '198.51.100.22'
 MATCHED = {'url': 'https://audio.example.test/song.mp3', 'level': 'matched', 'source': 'netease-match',
            'type': 'mp3', 'br': 0, 'size': 200000, 'sr': 0, 'bits': 0, 'ch': 0}
+VERIFIED = {'url': MATCHED['url'], 'validated': True, 'validationVersion': 1, 'type': 'mp3', 'size': 200000,
+            'durationMs': 299000, 'expectedDurationMs': 299000, 'source': 'fixture'}
 
 
 class PlaybackSourceTests(unittest.TestCase):
@@ -33,10 +35,10 @@ class PlaybackSourceTests(unittest.TestCase):
     def test_match_forwards_realip_without_cookie_and_reports_verified_quality(self):
         with mock.patch.dict('os.environ', {'CM_NCM_MATCH_SOURCE': 'fixture'}), \
              mock.patch.object(cm_ncm, '_ts', return_value=123), \
-             mock.patch.object(cm_ncm, '_bounded_call', return_value={'data': MATCHED['url']}) as upstream, \
+             mock.patch.object(cm_ncm, '_bounded_call', return_value={'data': MATCHED['url'], 'matchInfo': VERIFIED}) as upstream, \
              mock.patch.object(cm_ncm, 'probe_audio', return_value=(True, {'type': 'mp3', 'size': 200000})) as probe:
             result = cm_ncm.song_url_match(1, real_ip=IP_A)
-        self.assertEqual(result, {**MATCHED, 'md5': ''})
+        self.assertEqual(result, {**MATCHED, 'md5': '', 'durationMs': 299000, 'expectedDurationMs': 299000, 'matchSource': 'fixture'})
         self.assertEqual(upstream.call_args.args[:2], ('/song/url/match', {'id': 1, 'source': 'fixture', 'timestamp': 123}))
         self.assertEqual(upstream.call_args.kwargs['real_ip'], IP_A)
         self.assertFalse(upstream.call_args.kwargs['with_cookie'])
@@ -49,6 +51,14 @@ class PlaybackSourceTests(unittest.TestCase):
                 upstream.return_value = response
                 with self.subTest(response=response), self.assertRaises(cm_ncm.NcmError):
                     cm_ncm.song_url_match(1, real_ip=IP_A)
+
+    def test_match_rejects_unverified_and_short_audio_before_caching(self):
+        with mock.patch.object(cm_ncm, '_bounded_call') as upstream, mock.patch.object(cm_ncm, 'probe_audio') as probe:
+            for info in ({}, 'invalid', {**VERIFIED, 'durationMs': float('nan')}, {**VERIFIED, 'durationMs': -1, 'expectedDurationMs': 1}, {**VERIFIED, 'durationMs': 2610}, {**VERIFIED, 'validated': False}, {**VERIFIED, 'url': 'https://other.example.test/music.mp3'}):
+                upstream.return_value = {'data': MATCHED['url'], 'matchInfo': info}
+                with self.subTest(info=info), self.assertRaisesRegex(cm_ncm.NcmError, '时长校验'):
+                    cm_ncm.song_url_match(1, real_ip=IP_A)
+            probe.assert_not_called()
 
     def test_strict_probe_rejects_errors_and_timeouts_and_reads_real_file_headers(self):
         def response(body):
