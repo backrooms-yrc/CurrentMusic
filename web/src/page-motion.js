@@ -4,9 +4,9 @@ const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matc
 export function createPageMotion(container) {
   let generation = 0, exit = null, observer = null, indicator = null, cycle = null;
   const animations = new Set();
-  function animate(node, frames, duration) {
+  function animate(node, frames, duration, easing = 'cubic-bezier(.2,0,0,1)') {
     if (reduced() || !node.animate) return null;
-    const raw = node.animate(frames, { duration, easing: 'cubic-bezier(.2,0,0,1)' });
+    const raw = node.animate(frames, { duration, easing });
     let settle;
     const done = new Promise(resolve => { settle = resolve; });
     const animation = { done, cancel() { raw.cancel(); finish(); } };
@@ -25,10 +25,18 @@ export function createPageMotion(container) {
     animations.forEach(a => a.cancel()); animations.clear();
     if (exit) { exit.cancel(); exit = null; }
     const old = container.firstElementChild;
+    const isAimoNow = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
     if (old) {
       old.style.pointerEvents = 'none';
-      exit = animate(old, [{ opacity: 1, transform: 'none' },
-        { opacity: 0, transform: `translateX(${back ? 8 : -8}px)` }], 100);
+      if (isAimoNow) {
+        exit = animate(old, [
+          { opacity: 1, transform: 'none' },
+          { opacity: 0, transform: `translateY(${back ? 4 : -4}px)` }
+        ], 90, 'cubic-bezier(.22, 1, .36, 1)');
+      } else {
+        exit = animate(old, [{ opacity: 1, transform: 'none' },
+          { opacity: 0, transform: `translateX(${back ? 8 : -8}px)` }], 100);
+      }
       if (exit) await exit.done;
       if (own !== generation) return;
       exit = null;
@@ -37,6 +45,7 @@ export function createPageMotion(container) {
     wrap.className = 'cm-page cm-route-page' + (back ? ' cm-page-back' : '');
     container.replaceChildren(wrap);
     container.scrollTop = 0;
+    const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
     // Fade in asynchronously inserted content, including in-page tab/filter changes.
     observer = new MutationObserver(records => {
       if (own !== generation || !wrap.isConnected) return;
@@ -48,7 +57,7 @@ export function createPageMotion(container) {
       }
       targets.forEach(node => {
         // Opacity only: nested panels can contain fixed dialogs and sticky controls.
-        animate(node, [{ opacity: .35 }, { opacity: 1 }], 220);
+        animate(node, [{ opacity: .35 }, { opacity: 1 }], 220, isAimo ? 'cubic-bezier(.22, 1, .36, 1)' : 'cubic-bezier(.2,0,0,1)');
       });
     });
     observer.observe(wrap, { childList: true, subtree: true });
@@ -56,7 +65,6 @@ export function createPageMotion(container) {
     try { result = render(wrap); }
     catch (error) { result = Promise.reject(error); }
     enhanceLoading(wrap);
-    const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
     const hasSkeleton = !!wrap.querySelector('.sk, .cm-skeleton, .cm-search-result-skeleton');
     let ownIndicator = null, ownCycle = null;
     if (isAimo) {
@@ -83,8 +91,15 @@ export function createPageMotion(container) {
         wrap.setAttribute('inert', ''); wrap.setAttribute('aria-hidden', 'true');
       }
     }
-    animate(wrap, [{ opacity: 0, transform: back ? 'translateX(-14px)' : 'translateY(12px)' },
-      { opacity: 1, transform: 'none' }], back ? 240 : 280);
+    if (isAimo) {
+      animate(wrap, [
+        { opacity: 0, transform: `translateY(${back ? -8 : 8}px)` },
+        { opacity: 1, transform: 'none' }
+      ], 220, 'cubic-bezier(.22, 1, .36, 1)');
+    } else {
+      animate(wrap, [{ opacity: 0, transform: back ? 'translateX(-14px)' : 'translateY(12px)' },
+        { opacity: 1, transform: 'none' }], back ? 240 : 280);
+    }
     try { await result; }
     catch (error) {
       if (own !== generation || !wrap.isConnected) return;

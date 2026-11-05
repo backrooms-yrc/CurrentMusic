@@ -27,6 +27,7 @@ import { initGlass } from './glass.js';
 import { initAnnouncements } from './announce.js';
 import { initNavDrop } from './navdrop.js';
 import { initTopAccount } from './top-account.js';
+import { autoEnhanceAimoSegmented } from './aimo-segmented.js';
 
 // 手表小屏兜底：watch.css 用 mdui-dialog::part(panel) 压掉面板自带 min-width:280px，
 // 但 ::part() 需要 Chrome 73+；老 WebView（构建目标 chrome58）上该规则失效，
@@ -259,6 +260,7 @@ function boot() {
   applyCustomize();          // 个性化：自定义背景图 + 玻璃效果值（写到 <html> 内联）
   initGlass();               // 液体玻璃折射（frost/cmx 皮肤 + 支持的内核）
   initNavDrop();             // 底栏液态玻璃「水滴」指示器（frost/cmx 皮肤）
+  autoEnhanceAimoSegmented();// Aimo 风格分段滑动/拖拽选择器增强
   // 一次性强制重置（逻辑在 index.html 的行内脚本里，必须早于首帧）：
   // 这次是全员切换到 CurrentMusicX 风格，人人都提示一句怎么改回。
   if (window.__cmRecReset) toast('界面风格已切换为「CurrentMusicX 风格」，可在 设置 → 外观 改回');
