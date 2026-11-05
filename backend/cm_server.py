@@ -2411,7 +2411,7 @@ def route(handler, method):
             ("GET", "/levels/rules", "公开", "活跃积分、等级门槛与试炼规则"),
             ("GET", "/levels/progress", "Bearer", "当前积分、等级及今日各途径计分次数"),
             ("GET", "/levels/trial", "Bearer", "Lv.6 试炼题目（无答案）"),
-            ("POST", "/levels/trial", "Bearer", "提交 10 道试炼答案 {answers}；达到及格线升至 Lv.6 Plus"),
+            ("POST", "/levels/trial", "Bearer", "提交 50 道试炼答案 {answers}；每题 2 分，60 分及格后升至 Lv.6 Plus"),
             ("GET", "/ncmbind", "Bearer", "网易云绑定状态（bound/profile/stale/lastSync）"),
             ("GET", "/ncmbind/session", "Bearer", "**第三方客户端用**：一次返回 bound/valid/profile/note（不暴露 cookie，登录态由服务端代理）"),
             ("POST", "/ncmbind/import", "Bearer", "同步本机网易云登录至当前账号；服务端验证身份，不返回 cookie；详见第三方登录态同步专题"),

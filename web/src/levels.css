@@ -82,11 +82,15 @@
   padding: 16px; border: 1px solid var(--level-line); border-radius: 16px; background: var(--level-fill);
 }
 .cm-trial-progress > div { display: flex; justify-content: space-between; margin-bottom: 8px; }
-.cm-trial-steps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.cm-trial-steps button, .cm-level-button {
+.cm-trial-steps, .cm-trial-ranges { display: grid; gap: 6px; margin-top: 12px; }
+.cm-trial-ranges { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.cm-trial-steps { grid-template-columns: repeat(10, minmax(0, 1fr)); }
+.cm-trial-steps button, .cm-trial-ranges button, .cm-level-button {
   font: inherit; color: inherit; border: 1px solid var(--level-line); background: transparent; cursor: pointer;
 }
-.cm-trial-steps button { min-width: 36px; min-height: 40px; border-radius: 10px; }
+.cm-trial-steps button, .cm-trial-ranges button { min-width: 0; min-height: 40px; padding: 2px; border-radius: 10px; }
+.cm-trial-ranges button { font-size: .8em; }
+.cm-trial-ranges button[aria-pressed="true"] { background: var(--level-line); border-color: var(--cm-primary); font-weight: 700; }
 .cm-trial-steps button.is-answered { background: var(--level-line); font-weight: 700; }
 .cm-trial-steps button[aria-current] { outline: 2px solid var(--cm-primary); outline-offset: -2px; }
 .cm-trial-question { min-width: 0; padding: 0; border: 0; margin: 23px 0 12px; }
@@ -159,6 +163,7 @@
 .cm-level-choice .cm-level-badge { width: 34px; height: 34px; }
 
 @media (max-width: 600px) {
+  .cm-trial-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .cm-point-sources { grid-template-columns: minmax(0, 1fr); }
   .cm-level-hero { padding: 18px 14px; gap: 8px; }
   .cm-level-hero h2 { font-size: 1.45em; }

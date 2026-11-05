@@ -3,6 +3,7 @@ import { esc } from '../ui.js';
 import { levelBadge } from '../level-badges.js';
 
 const number = new Intl.NumberFormat('zh-CN');
+const QUESTIONS_PER_GROUP = 10;
 const icon = name => `<span class="material-icons-outlined" aria-hidden="true">${name}</span>`;
 const SOURCE_COPY = {
   visit: ['today', '每日登录访问', () => '每天首次使用有效会话访问'],
@@ -126,13 +127,17 @@ async function renderTrial(el) {
   }
   const { trial } = rules;
   const answers = Array(questions.length).fill(null);
+  const groups = Array.from({ length: Math.ceil(questions.length / QUESTIONS_PER_GROUP) }, (_, i) => {
+    const start = i * QUESTIONS_PER_GROUP;
+    return { start, end: Math.min(start + QUESTIONS_PER_GROUP, questions.length) };
+  });
   let current = 0;
   el.innerHTML = `<section class="cm-level-page cm-trial-page">
     <header class="cm-level-hero">
       <div>
         <span class="cm-level-eyebrow">CURRENTMUSIC · 终阶挑战</span>
         <h2>通过试炼</h2>
-        <p class="cm-trial-meta"><span>${esc(trial.questionCount)} 道单选题</span>
+        <p class="cm-trial-meta"><span>${questions.length} 道单选题</span>
           <span>满分 ${esc(trial.maxScore)}</span><span>${esc(trial.passScore)} 分及格</span></p>
       </div>
       <div class="cm-level-hero-badge">${levelBadge(trial.plusLevel)}</div>
@@ -141,8 +146,13 @@ async function renderTrial(el) {
       <div class="cm-trial-progress">
         <div><b>作答进度</b><span id="trialCount" aria-live="polite"></span></div>
         <progress max="${questions.length}" value="0" aria-label="作答进度"></progress>
-        <nav class="cm-trial-steps" aria-label="跳转到题目">
-          ${questions.map((_, i) => `<button type="button" data-question="${i}">${i + 1}</button>`).join('')}
+        <nav aria-label="跳转到题目">
+          ${groups.length > 1 ? `<div class="cm-trial-ranges">
+            ${groups.map(({ start, end }) => `<button type="button" data-range="${start}" aria-label="第 ${start + 1} 到 ${end} 题">${start + 1}–${end}</button>`).join('')}
+          </div>` : ''}
+          ${groups.map(({ start, end }) => `<div class="cm-trial-steps" data-group="${start}" ${start ? 'hidden' : ''}>
+            ${questions.slice(start, end).map((_, i) => `<button type="button" data-question="${start + i}">${start + i + 1}</button>`).join('')}
+          </div>`).join('')}
         </nav>
       </div>
       <fieldset class="cm-trial-question"></fieldset>
@@ -157,6 +167,8 @@ async function renderTrial(el) {
   const form = el.querySelector('form');
   const field = form.querySelector('fieldset');
   const steps = Array.from(form.querySelectorAll('[data-question]'));
+  const ranges = Array.from(form.querySelectorAll('[data-range]'));
+  const panels = Array.from(form.querySelectorAll('[data-group]'));
   const prev = form.querySelector('#trialPrev');
   const next = form.querySelector('#trialNext');
   const submit = form.querySelector('#trialSubmit');
@@ -168,6 +180,9 @@ async function renderTrial(el) {
     const answered = answers.filter(answer => answer !== null).length;
     count.textContent = `已答 ${answered} / ${questions.length}`;
     bar.value = answered;
+    const activeGroup = Math.floor(current / QUESTIONS_PER_GROUP);
+    ranges.forEach((range, i) => range.setAttribute('aria-pressed', String(i === activeGroup)));
+    panels.forEach((panel, i) => { panel.hidden = i !== activeGroup; });
     steps.forEach((step, i) => {
       const done = answers[i] !== null;
       step.setAttribute('aria-label', `第 ${i + 1} 题，${done ? '已答' : '未答'}`);
@@ -196,6 +211,7 @@ async function renderTrial(el) {
 
   prev.onclick = () => showQuestion(current - 1);
   next.onclick = () => showQuestion(current + 1);
+  ranges.forEach(range => { range.onclick = () => showQuestion(Number(range.dataset.range)); });
   steps.forEach((step, i) => { step.onclick = () => showQuestion(i); });
   field.onchange = event => {
     answers[current] = Number(event.target.value);

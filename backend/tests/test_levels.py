@@ -60,16 +60,25 @@ class UserLevelsTest(unittest.TestCase):
         token = cm_db.issue_token(admin)
         self.assertEqual(self.request("POST", path, {"level": 6, "points": True}, token)[0], 400)
         self.assertEqual(self.request("POST", path, {"level": 6, "points": 1000}, token)[0], 200)
+        _, rules = self.request("GET", "/levels/rules")
+        self.assertEqual((rules["trial"]["questionCount"], rules["trial"]["maxScore"], rules["trial"]["passScore"]),
+                         (50, 100, 60))
         _, data = self.request("GET", "/levels/trial", token=self.token)
-        self.assertEqual(len(data["questions"]), 10)
-        self.assertEqual(set(data["questions"][0]), {"prompt", "options"})
+        self.assertEqual(len(data["questions"]), 50)
+        self.assertEqual(len({q["prompt"] for q in data["questions"]}), 50)
+        for q in data["questions"]:
+            self.assertEqual(set(q), {"prompt", "options"})
+            self.assertEqual(len(q["options"]), 4)
+            self.assertEqual(len(set(q["options"])), 4)
         answers = [correct for _, _, correct in cm_levels.QUESTIONS]
-        self.assertEqual(self.request("POST", "/levels/trial", {"answers": [False] * 10}, self.token)[0], 400)
-        wrong = [(i + 1) % 3 for i in answers]
-        status, grade = self.request("POST", "/levels/trial", {"answers": answers[:5] + wrong[5:]}, self.token)
-        self.assertEqual((status, grade), (200, {"score": 50, "passed": False, "level": 6}))
+        self.assertEqual(cm_levels.trial_score(answers), 100)
+        for invalid in (answers[:10], [False] * 50, answers[:-1] + [4]):
+            self.assertEqual(self.request("POST", "/levels/trial", {"answers": invalid}, self.token)[0], 400)
+        wrong = [(i + 1) % 4 for i in answers]
+        status, grade = self.request("POST", "/levels/trial", {"answers": answers[:29] + wrong[29:]}, self.token)
+        self.assertEqual((status, grade), (200, {"score": 58, "passed": False, "level": 6}))
         for _ in range(2):
-            status, grade = self.request("POST", "/levels/trial", {"answers": answers[:6] + wrong[6:]}, self.token)
+            status, grade = self.request("POST", "/levels/trial", {"answers": answers[:30] + wrong[30:]}, self.token)
             self.assertEqual((status, grade), (200, {"score": 60, "passed": True, "level": 7}))
         self.assertEqual(self.request("GET", "/levels/trial", token=self.token)[0], 409)
         _, me = self.request("GET", "/auth/me", token=self.token)
