@@ -45,9 +45,8 @@ let closeTimer = 0;
 let lpScrollRaf = 0;
 let soarScrollRaf = 0;
 let soarRolling = false;     // 歌词正在做换行滚动：此期间不写逐字进度
-let soarScrollY = 0;         // 歌词轨道的当前位移（px，正值向上）
-let lpScrollAnim = null;     // 换行滚动的 WAAPI 动画（可中断续接）
-let lpAnimMeta = null;       // { start, target } —— 不依赖 getComputedStyle 取当前位置
+let soarScrollY = 0;         // 歌词整段的当前纵向位移（px，正值向上）
+let soarScrollTimer = 0;     // 手动拖动后短暂禁用过渡的计时器
 let soarManualTimer = 0;     // 手动滑动后取消模糊的计时器
 
 // Apple 风格的小图标（shuffle / repeat / translate / 汉堡菜单）
@@ -423,9 +422,11 @@ function renderLyric() {
       }).join('') + `<div class="lp-lyrics__end" aria-hidden="true">&nbsp;</div>` +
       `</div>`;
     soarScrollY = 0;
-    if (lpScrollAnim) { try { lpScrollAnim.cancel(); } catch { /* 忽略 */ } lpScrollAnim = null; }
-    lpAnimMeta = null;
-    box.classList.remove('is-manual');
+    box.classList.remove('is-manual', 'is-scrolling');
+    // 首帧先禁用过渡：初始定位不应产生一次「大滚动」动画
+    box.classList.add('is-scrolling');
+    clearTimeout(soarScrollTimer);
+    soarScrollTimer = setTimeout(() => box.classList.remove('is-scrolling'), 300);
     const track = box.querySelector('.lp-lyrics__track');
     if (track) track.style.transform = 'translate3d(0,0,0)';
   } else {
@@ -878,32 +879,12 @@ function soarTrack(box) {
 }
 
 function soarApplyScroll(box, y) {
-  const track = soarTrack(box);
-  if (!track) return;
+  const lines = box.querySelectorAll('.lp-lyric');
+  if (!lines.length) return;
   soarScrollY = y;
-  track.style.transform = `translate3d(0,${-y}px,0)`;
-}
-
-/** 轨道当前**视觉**位移：优先用动画的 timing.progress，避免部分内核
-    getComputedStyle 在 WAAPI 播放期间只返回底层值（会导致续接时跳回旧位置 → 硬切）。 */
-function soarCurrentY(box) {
-  if (lpScrollAnim && lpAnimMeta) {
-    try {
-      const p = lpScrollAnim.effect.getComputedTiming().progress;
-      if (p != null && isFinite(p)) {
-        return lpAnimMeta.start + (lpAnimMeta.target - lpAnimMeta.start) * p;
-      }
-    } catch { /* 忽略 */ }
-    return lpAnimMeta.target;
-  }
-  const track = soarTrack(box);
-  if (!track) return soarScrollY;
-  const t = getComputedStyle(track).transform;
-  if (!t || t === 'none') return soarScrollY;
-  const nums = t.replace(/^matrix(3d)?\(|\)$/g, '').split(',').map(Number);
-  if (!nums.length || nums.some(n => !isFinite(n))) return soarScrollY;
-  const y = nums.length === 16 ? nums[13] : nums[5];
-  return -y;
+  // 位移直接写到每一行：它与逐行的 --sd 延时共用同一个 transform 过渡，
+  // 换行时就是「整段歌词按行依次上移」，而不是轨道先大位移、各行再补小延时。
+  for (const el of lines) el.style.setProperty('--ly-shift', `${-y}px`);
 }
 
 function soarScrollMax(box) {
@@ -914,77 +895,35 @@ function soarScrollMax(box) {
 
 function lpScrollToArtwork(box, el) {
   const track = soarTrack(box);
-  if (!track) return;
+  if (!track || !el) return;
   const max = soarScrollMax(box);
   if (max < 2) return;               // 歌词比面板短：没有可滚动的余量
   const boxTop = box.getBoundingClientRect().top;
   const art = document.querySelector('#playerOverlay .lp-artwork');
-  // 只有双栏布局才对齐「封面中线」；≤980 是单列，封面在歌词上方，
-  // 按封面中线算 anchor 会得到负值并把歌词顶到最底，改为在歌词面板内居中。
+  // 只有双栏布局才对齐「封面中线」；≤980 是单列，按封面中线算会得到负值，
+  // 改为在歌词面板内居中。
   let anchor = box.clientHeight / 2;
   if (art && window.innerWidth > 980) {
     const ar = art.getBoundingClientRect();
     anchor = (ar.top + ar.height / 2) - boxTop;
-    // 防御：封面还在入场动画/被其他层遮挡时可能量到异常值，退回面板居中
+    // 防御：封面还在入场动画/被遮挡时可能量到异常值，退回面板居中
     if (!(anchor >= 0 && anchor <= box.clientHeight * 1.5)) anchor = box.clientHeight / 2;
   }
-  // 用 offsetTop（布局坐标）而非 getBoundingClientRect：后者会把该行正在进行的
-  // CSS translateY 也算进测量值，每次换行都会偏一点，滚到后面就是明显错位。
+  // offsetTop 是布局坐标：轨道本身不再有 transform，测出来就是原始位置
   const target = Math.min(max, Math.max(0, el.offsetTop - anchor + el.clientHeight / 2));
-  // 先读上一段的视觉位置（WAAPI 动画进行中也能读到当前帧），再取消，
-  // 这样连续换行时从「当前位置」接着滑，而不是跳回旧目标（硬切感来源）。
-  const start = soarCurrentY(box);
-  if (lpScrollAnim) { try { lpScrollAnim.cancel(); } catch { /* 忽略 */ } lpScrollAnim = null; }
-  lpAnimMeta = null;
-  const delta = target - start;
-  if (Math.abs(delta) < 1) {
-    track.style.transition = 'none';
-    track.style.transform = `translate3d(0,${-target}px,0)`;
-    soarScrollY = target;
-    return;
-  }
-  // 用 WAAPI 而不是 CSS transition：起止值明确、可中断续接、走合成层，
-  // 不会出现「换行那一帧直接跳到新位置」的硬切。
-  // 平滑的 ease-in-out（expo-out 起步速度最大，换行会像「先弹一下再滑」）
-  const dur = Math.min(950, 560 + Math.abs(delta) * 0.5);
-  track.style.transition = 'none';
-  // 先把底层值放回起点，再挂动画：否则会有一帧先跳到目标位置，看起来就是「硬切」。
-  track.style.transform = `translate3d(0,${-start}px,0)`;
-  soarScrollY = target;
-  if (typeof track.animate !== 'function') {
-    track.style.transform = `translate3d(0,${-target}px,0)`;
-    return;
-  }
-  const anim = track.animate(
-    [
-      { transform: `translate3d(0,${-start}px,0)` },
-      { transform: `translate3d(0,${-target}px,0)` },
-    ],
-    { duration: dur, easing: 'cubic-bezier(.4, 0, .2, 1)', fill: 'both' }
-  );
-  lpScrollAnim = anim;
-  lpAnimMeta = { start, target };
-  anim.onfinish = () => {
-    if (lpScrollAnim !== anim) return;
-    lpScrollAnim = null;
-    lpAnimMeta = null;
-    // 先写底层目标值，再撤掉动画：撤掉时不会回跳到起点
-    track.style.transform = `translate3d(0,${-target}px,0)`;
-    try { anim.cancel(); } catch { /* 忽略 */ }
-  };
+  soarApplyScroll(box, target);
 }
 
-/** 用户滚轮 / 手指拖动歌词：直接改轨道位移，3 秒内不自动跟随；期间取消模糊便于阅读/点选。 */
+/** 用户滚轮 / 手指拖动歌词：直接写位移，3 秒内不自动跟随；期间取消模糊便于阅读/点选。 */
 function soarManualScroll(box, dy) {
   const track = soarTrack(box);
   if (!track) return;
   const max = soarScrollMax(box);
-  // 若自动滚动还在进行，从当前视觉位置开始拖动，避免「跳一下」
-  const cur = soarCurrentY(box);
-  if (lpScrollAnim) { try { lpScrollAnim.cancel(); } catch { /* 忽略 */ } lpScrollAnim = null; }
-  lpAnimMeta = null;
-  const y = Math.min(max, Math.max(0, cur + dy));
-  track.style.transition = 'none';
+  const y = Math.min(max, Math.max(0, soarScrollY + dy));
+  // 拖动期间临时关掉行过渡（松手后恢复），保证 1:1 跟手
+  box.classList.add('is-scrolling');
+  clearTimeout(soarScrollTimer);
+  soarScrollTimer = setTimeout(() => box.classList.remove('is-scrolling'), 180);
   soarApplyScroll(box, y);
   userScrollUntil = Date.now() + 3000;
   box.classList.add('is-manual');

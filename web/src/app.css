@@ -4559,7 +4559,7 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn svg { width: 18px
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn { right: 70px; }
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn.is-on,
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn.is-on svg {
-  color: var(--accent, #fa233b) !important;
+  color: #fff !important;
   border-color: hsla(0, 0%, 100%, .3);
 }
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn:active { background: none; }
@@ -4841,10 +4841,13 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric {
   filter: blur(calc(min(var(--adist), 7) * .8px));
   /* 没有 mask 后，用更深的距离透明度让上下边缘自然淡出（7 行 ≈ 0） */
   opacity: calc(1 - min(var(--adist), 7) * .14);
-  transform: translateY(calc(
+  /* --ly-shift 是整段歌词的纵向滚动量：直接施加在**每一行**上，
+     让滚动与逐行错落共用同一个 transform 过渡，而不是「整条轨道先大位移、再叠小延时」。 */
+  transform: translate3d(0, calc(
+    var(--ly-shift, 0px) +
     min(var(--down), 1) * 26px + min(max(var(--down) - 1, 0), 5) * 14px
     - min(var(--up), 1) * 20px - min(max(var(--up) - 1, 0), 5) * 10px
-  ));
+  ), 0);
   /* 逐行延时写在 --sd 上（JS 只切这个变量，不重写 transition 简写，
      避免换行时把正在进行的动画取消重来 → “卡一下”）。 */
   transition:
@@ -4852,6 +4855,8 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric {
     opacity .5s cubic-bezier(.4, 0, .2, 1) var(--sd, 0ms),
     color .4s linear 0ms;
 }
+/* 手动拖动期间禁用过渡，保证跟手 1:1；松手后恢复，不影响下一次换行 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics.is-scrolling .lp-lyric { transition: none; }
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric:hover { color: rgba(255, 255, 255, .78); }
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric.is-past { color: rgba(255, 255, 255, .22); }
 /* 当前行：纯白（位移由 --off=0 自然归零，不再额外 scale，避免换行时缩放抖动） */
