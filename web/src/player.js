@@ -354,6 +354,7 @@ function emit(evt, data) { (listeners[evt] || []).forEach(fn => fn(data)); }
 /** 供外部触发一次时间刷新（投屏时本机没有 timeupdate，由投屏侧按帧驱动）。 */
 // 页面被隐藏/切走（切后台、锁屏、关闭标签）时立即结账：不依赖 timeupdate 继续触发
 document.addEventListener('visibilitychange', () => { if (document.hidden) flushListen(); });
+window.addEventListener('pagehide', event => flushListen(!event.persisted));
 
 export function tick() {
   accumulateCast();              // 投屏：本机 audio 不前进，按设备播放态用墙钟累计
@@ -602,10 +603,10 @@ export const player = {
       promptLogin();
       return;
     }
-    flushListen();                 // 上一首结账（此刻 meta 还是旧的那首）
-    lastTickT = -1;                // 新歌重置基准，避免把两首之间的间隔算进去
+    flushListen(true);             // 结算上一首，包括尚未上报的尾段
+    const request = this._playRequest = {};
     this.index = i;
-    this.meta = this.queue[i];
+    const meta = this.meta = this.queue[i];
     this.urlInfo = null;
     // 切到别的歌：预取元素的下载立即停（若预取目标恰好是本首，留着给消费处复用）
     if (this._prefetch && String(this._prefetch.id) !== String(this.meta.ncm_id)) this._discardPrefetch();
@@ -634,15 +635,16 @@ export const player = {
       } else {
         const _pl2 = effectiveLevel();
         try {
-          info = await resolveSongUrl(this.meta, _pl2.level, _pl2.immerse);
+          info = await resolveSongUrl(meta, _pl2.level, _pl2.immerse);
         } catch (e) {
           if (_pl2.level !== settings.quality) {
             toast('该音效当前不可用，已回退普通音质');
-            info = await resolveSongUrl(this.meta, settings.quality);
+            info = await resolveSongUrl(meta, settings.quality);
           } else throw e;
         }
       }
     } catch (e) {
+      if (this._playRequest !== request) return;
       this.loading = false;
       if (e && e.status === 401) {         // 登录失效/未登录：提示登录，不当作播放失败跳歌
         this.wantPlaying = false;
@@ -668,7 +670,7 @@ export const player = {
       if (this.queue.length > 1) setTimeout(() => this.next(true), 800);
       return;
     }
-    if (!this.meta || this.queue[this.index] !== this.meta) return; // 已切歌
+    if (this._playRequest !== request || this.queue[this.index] !== meta) return; // 已切歌
     this.urlInfo = info;
     this.loading = false;
     warnHiRes(info);               // 192kHz/多声道档位：提示设备兼容性
@@ -696,51 +698,37 @@ export const player = {
     });
     emit('song');
     emit('state');
-    this._scrobbled = null;
     this.report();
     this.persist();
     this.updateMediaSession();
     this._heartEnsure();            // 队列快见底就提前续（心动模式）
   },
 
-  async report() {
+  report() {
     if (!auth.token || !this.meta) return;
-    try { await api.recordPlay(this.meta); } catch { /* 静默 */ }
-    // 听歌打卡（/scrobble）延后到「听够一半或 30 秒」再发，避免只点一下就污染网易云历史
-    this._scrobblePending = { id: this.meta.ncm_id, at: Date.now() };
+    lastTickT = -1;
+    lastCastAt = 0;
+    lastFlushAt = Date.now();
+    listenSession = {
+      id: this.meta.ncm_id, token: auth.token, totalMs: 0, sentMs: 0, relaySent: false,
+      start: api.recordPlay(this.meta).catch(() => null),
+    };
   },
 
-  /** 听歌打卡：达到阈值后每首只报一次；未绑定网易云时静默跳过（401）。
-   *  优先用新版 /scrobble/v1（字段更全，能带上歌曲名/歌手/码率），失败回退旧版。 */
-  async scrobble() {
-    const pend = this._scrobblePending;
-    if (!pend || !auth.token) return;
-    if (this._scrobbled === pend.id) return;
-    const m = this.meta || {};
-    const sec = Math.floor(this.posMs() / 1000);
-    const src = (this.queue && this.queue[this.index] && this.queue[this.index].source_pl_id) || 0;
-    try {
-      await api.ncm('/scrobble/v1', {
-        id: pend.id, sourceid: src || 0, time: sec, source: 'list',
-        name: m.name || '', artist: m.artists || '',
-        bitrate: 320000, level: 'exhigh', total: Math.floor((m.duration || 0) / 1000),
-        confirm: 1,
-      });
-      this._scrobbled = pend.id;
-    } catch {
-      try {
-        await api.ncm('/scrobble', { id: pend.id, sourceid: src || 0, time: sec, confirm: 1 });
-        this._scrobbled = pend.id;
-      } catch { /* 未绑定/风控：不打扰用户 */ }
-    }
-    // 播放状态上报（网易云「一起听」链路；失败无副作用）
+  /** 网易云「一起听」播放状态，与结束时的时长同步独立。 */
+  async reportNcmState() {
+    const session = listenSession;
+    const threshold = Math.min(30000, this.durMs() / 2 || 30000);
+    if (!session || session.token !== auth.token || session.relaySent || session.totalMs < threshold) return;
+    session.relaySent = true;
     try {
       if (!this._relaySession) {
         this._relaySession = Array.from({ length: 12 },
           () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
       }
       await api.ncm('/relay/play/state/submit', {
-        id: pend.id, sessionId: this._relaySession, progress: sec, playMode: 'list_loop', type: 'song', confirm: 1,
+        id: session.id, sessionId: this._relaySession, progress: Math.floor(this.posMs() / 1000),
+        playMode: 'list_loop', type: 'song', confirm: 1,
       });
     } catch { /* 忽略 */ }
   },
@@ -777,6 +765,8 @@ export const player = {
     if (!this.queue.length) return;
     if (this.playMode === 'one' && auto) {
       if (clock()) { this.playAt(this.index); return; }   // 投屏中：重投同一首（不本地播放）
+      flushListen(true);
+      this.report();
       audio.currentTime = 0; audio.play(); return;
     }
     let i = this.index;
@@ -901,18 +891,18 @@ export const player = {
 //   · timeupdate 按 currentTime 的前进量累加；暂停、拖动、后台挂起都不计
 //   · 每 30s 冲一次增量；切歌 / 暂停 / 播放结束 / 页面隐藏时补冲，避免丢时长
 //   · 投屏时本机 audio 不前进，改由 tick()（投屏侧驱动）按设备播放态用墙钟累计
-let listenedMs = 0;          // 待上报的毫秒增量
+let listenSession = null;    // 每次播放独立累计，切歌后的响应只修改原播放
 let lastTickT = -1;          // 上次 timeupdate 的 currentTime（秒）
 let lastFlushAt = 0;
 let lastCastAt = 0;
 
 function accumulateLocal(el) {
-  if (el.paused || el.seeking) { lastTickT = el.currentTime; return; }
+  if ((el.paused && !el.ended) || el.seeking) { lastTickT = el.currentTime; return; }
   const t = el.currentTime;
-  if (lastTickT >= 0 && t > lastTickT) {
+  if (listenSession && lastTickT >= 0 && t > lastTickT) {
     const d = (t - lastTickT) * 1000;
     // 单次跳变过大（后台被挂起后恢复、时钟抖动）不计，否则会凭空多出时长
-    if (d > 0 && d <= 3000) listenedMs += d;
+    if (d <= 3000) listenSession.totalMs += d;
   }
   lastTickT = t;
 }
@@ -920,20 +910,29 @@ function accumulateLocal(el) {
 function accumulateCast() {
   const c = clock();
   const now = Date.now();
-  if (c && c.playing) {
+  if (listenSession && c && c.playing) {
     const d = now - lastCastAt;
-    if (lastCastAt && d > 0 && d <= 5000) listenedMs += d;
+    if (lastCastAt && d > 0 && d <= 5000) listenSession.totalMs += d;
   }
   lastCastAt = now;
 }
 
-/** 把增量上报给后端；失败则留着下次一起报（不丢时长）。不足 1s 不值得发。 */
-async function flushListen() {
-  const id = player.meta && player.meta.ncm_id;
-  const ms = Math.round(listenedMs);
-  if (!id || ms < 1000 || !auth.token) return;
-  listenedMs = 0;
-  try { await api.addListenMs(id, ms); } catch { listenedMs += ms; }
+/** 发送本次播放的累计毫秒数。结束请求带上全量，即使上一笔进度还在路上也能结算。 */
+async function flushListen(finished = false) {
+  const session = listenSession;
+  if (finished) listenSession = null;
+  if (!session || session.token !== auth.token) return;
+  const totalMs = Math.round(session.totalMs);
+  const previousMs = session.sentMs;
+  if (finished ? !totalMs : totalMs - previousMs < 1000) return;
+  session.sentMs = totalMs;
+  const started = await session.start;
+  if (!started || session.token !== auth.token) return;
+  const playId = started.playId;
+  const body = playId ? { playId, totalMs, finished } : { ms: totalMs - previousMs };
+  if (!playId && body.ms <= 0) return;
+  try { await api.reportListen(session.id, body); }
+  catch { if (session.sentMs === totalMs) session.sentMs = previousMs; }
 }
 
 /** 30s 一次的节流冲（本地以 timeupdate 驱动、投屏以 tick 驱动，都不需要定时器）。 */
@@ -1046,7 +1045,8 @@ let errStreak = 0;
 function bindAudio(el) {
   el.addEventListener('ended', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
-  flushListen();
+  accumulateLocal(el);
+  flushListen(true);
   player.next(true);
 });
   el.addEventListener('timeupdate', () => {
@@ -1069,9 +1069,7 @@ function bindAudio(el) {
     if (!el.seeking && sec !== lastMediaPushSec && sec % 5 === 0) {
       lastMediaPushSec = sec;
       player.pushMediaState();
-      // 打卡阈值：听过 30s，或已过曲目一半
-      const half = isFinite(el.duration) && el.duration > 0 ? el.duration / 2 : Infinity;
-      if (sec >= 30 || sec >= half) player.scrobble();
+      player.reportNcmState();
     }
   });
   el.addEventListener('waiting', () => {
@@ -1095,6 +1093,8 @@ function bindAudio(el) {
   });
   el.addEventListener('play', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    if (!listenSession && player.urlInfo && !player.loading) player.report();
+    lastTickT = el.currentTime;
     wave.resume();                     // 用户手势后恢复音频上下文
     watchGraph();                      // 后台/系统挂起上下文时兜底（否则会没声音）
     player.wantPlaying = true;
@@ -1179,6 +1179,7 @@ function keepAlive(on) {
 
 /** 真正停止播放（队列播完且不循环 / 清空队列）：释放前台服务与唤醒锁。 */
 export function stopPlayback() {
+  flushListen(true);
   player.wantPlaying = false;
   clearTimeout(resumeTimer);
   keepAlive(false);

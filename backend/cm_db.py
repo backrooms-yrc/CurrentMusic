@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS plays (
   -- 本次实际收听毫秒数（由前端按真实播放推进累计上报）。
   -- 旧库补列时用「相邻播放间隔（上限为曲目时长）」重建历史值，见 init() 的迁移段。
   ms INTEGER DEFAULT 0,
-  -- 是否已把这次播放（满 60 秒后）写入用户绑定的网易云听歌记录。
+  -- 领取网易云同步后置 1，失败时放回。
   ncm_synced INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS email_codes (
@@ -1702,9 +1702,10 @@ def record_play(uid, ncm_id):
     """
     conn = connect()
     try:
-        conn.execute("INSERT INTO plays(user_id,ncm_id,played_at,ms) VALUES(?,?,?,0)",
-                     (uid, ncm_id, int(time.time())))
+        cur = conn.execute("INSERT INTO plays(user_id,ncm_id,played_at,ms) VALUES(?,?,?,0)",
+                           (uid, ncm_id, int(time.time())))
         conn.commit()
+        return cur.lastrowid
     finally:
         conn.close()
 
@@ -1738,19 +1739,38 @@ def add_play_ms(uid, ncm_id, ms):
         conn.close()
 
 
-def play_sync_candidate(uid, ncm_id, min_ms=60_000):
-    """原子地取一次「满 60 秒且尚未同步网易云」的播放，并标记为已领取。
-
-    返回 ``{"rowid": ..., "ms": ...}``；没有可同步记录时返回 ``None``。
-    领取后若网络上报失败，调用方必须用 :func:`reset_play_sync` 放回重试。
-    """
+def update_play_total(uid, ncm_id, play_id, ms):
+    """写入指定播放的累计时长，允许进度与结束请求重试或乱序抵达。"""
     conn = connect()
     try:
+        cur = conn.execute(
+            "UPDATE plays SET ms = MAX(COALESCE(ms,0), ?) WHERE rowid=? AND user_id=? AND ncm_id=?",
+            (min(ms, 24 * 60 * 60 * 1000), play_id, uid, ncm_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def play_sync_candidate(uid, ncm_id, min_ms=60_000, *, play_id=None):
+    """原子领取达到收听门槛且尚未同步的播放。旧客户端沿用 60 秒门槛。"""
+    conn = connect()
+    try:
+        where = "AND p.rowid=?" if play_id is not None else ""
+        args = (uid, ncm_id, play_id) if play_id is not None else (uid, ncm_id)
         row = conn.execute(
-            "SELECT rowid, ms, COALESCE(ncm_synced,0) synced FROM plays"
-            " WHERE user_id=? AND ncm_id=? ORDER BY played_at DESC, rowid DESC LIMIT 1",
-            (int(uid), int(ncm_id))).fetchone()
-        if not row or int(row["ms"] or 0) < int(min_ms) or row["synced"]:
+            "SELECT p.rowid, p.ms, COALESCE(p.ncm_synced,0) synced, s.name, s.artists, s.duration"
+            " FROM plays p LEFT JOIN songs s ON s.ncm_id=p.ncm_id"
+            f" WHERE p.user_id=? AND p.ncm_id=? {where} ORDER BY p.played_at DESC, p.rowid DESC LIMIT 1",
+            args,
+        ).fetchone()
+        if not row or row["synced"]:
+            return None
+        if min_ms is None:
+            duration = row["duration"] or 0
+            min_ms = min(30_000, max(1000, duration // 2)) if duration > 0 else 30_000
+        if (row["ms"] or 0) < min_ms:
             return None
         cur = conn.execute(
             "UPDATE plays SET ncm_synced=1 WHERE rowid=? AND COALESCE(ncm_synced,0)=0",
@@ -1758,7 +1778,7 @@ def play_sync_candidate(uid, ncm_id, min_ms=60_000):
         conn.commit()
         if not cur.rowcount:
             return None
-        return {"rowid": int(row["rowid"]), "ms": int(row["ms"] or 0)}
+        return dict(row)
     finally:
         conn.close()
 

@@ -216,13 +216,34 @@ def weblog(cookie, events, timeout=10.0, real_ip=None):
     }, cookie=cookie, timeout=timeout, real_ip=real_ip)
 
 
-def scrobble(cookie, ncm_id, seconds, source_id="0", timeout=15.0, real_ip=None):
-    """写入一次合格的网易云听歌记录（startplay + play，API-enhanced 的 eapi 通道）。"""
-    return call("/scrobble", {
+def scrobble(cookie, ncm_id, seconds, *, total=0, name="", artist="", real_ip=None):
+    """通过桌面客户端 PLV/PLD 上报一次播放，旧上游缺少新版端点时回退。"""
+    params = {
         "id": int(ncm_id),
-        "time": max(1, int(seconds or 60)),
-        "sourceid": str(source_id or "0"),
-    }, cookie=cookie, timeout=timeout, real_ip=real_ip)
+        "time": int(seconds),
+        "total": int(total) if total > 0 else int(seconds),
+        "name": name,
+        "artist": artist,
+    }
+    try:
+        # 上游依次上传 PLV 与 PLD，每次超时 15 秒。
+        result = post_json("/scrobble/v1", params, cookie=cookie, timeout=32.0, real_ip=real_ip)
+    except NcmError as e:
+        if e.status_code != 404:
+            raise
+        result = post_json("/scrobble", {"id": params["id"], "time": params["time"], "sourceid": "0"},
+                           cookie=cookie, timeout=20.0, real_ip=real_ip)
+        details = result.get("details") if isinstance(result, dict) else None
+        play = details.get("play") if isinstance(details, dict) else None
+        if isinstance(play, dict) and play.get("code") == 200:
+            return
+        raise NcmError("网易云旧版听歌打卡未确认 play") from None
+    details = (result.get("details") or {}) if isinstance(result, dict) else {}
+    if (isinstance(result, dict) and result.get("code") == 200 and isinstance(details, dict)
+            and all(isinstance(details.get(key), dict) and details[key].get("fileName") for key in ("plv", "pld"))):
+        return
+    raise NcmError("网易云新版听歌打卡未确认 PLV/PLD",
+                   status_code=result.get("code") if isinstance(result, dict) else None)
 
 
 def call_multipart(path, params=None, field="file", filename="upload.bin",

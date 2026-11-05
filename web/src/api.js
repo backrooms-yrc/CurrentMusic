@@ -112,7 +112,7 @@ window.__cmHttpDone = function (id, status, body) {
   else p.reject(Object.assign(new Error((data && data.error) || `HTTP ${status}`), { status }));
 };
 
-async function rawRequest(method, url, headers, bodyStr) {
+async function rawRequest(method, url, headers, bodyStr, keepalive = false) {
   if (bridged) {
     return new Promise((resolve, reject) => {
       const id = 'r' + (++seq);
@@ -121,7 +121,7 @@ async function rawRequest(method, url, headers, bodyStr) {
     });
   }
   const requestHeaders = { ...(bodyStr ? { 'Content-Type': 'application/json' } : {}), ...(headers || {}) };
-  const r = await fetch(url, { method, headers: requestHeaders, body: bodyStr || undefined });
+  const r = await fetch(url, { method, headers: requestHeaders, body: bodyStr || undefined, keepalive });
   let data = null;
   try { data = await r.json(); } catch { /* 空体 */ }
   if (r.ok) return data;
@@ -131,7 +131,7 @@ async function rawRequest(method, url, headers, bodyStr) {
 let onAuthExpired = null;
 export function setAuthExpiredHandler(fn) { onAuthExpired = fn; }
 
-export async function call(method, path, { body, auth: needAuth = false } = {}) {
+export async function call(method, path, { body, auth: needAuth = false, keepalive = false } = {}) {
   const headers = {};
   // 记录“请求发出时是否带过 token”：只有带过 token 的 401 才是会话失效；
   // 游客（本来就没登录）的 401 交给播放等入口自行引导登录，不能报“登录已失效”。
@@ -139,7 +139,7 @@ export async function call(method, path, { body, auth: needAuth = false } = {}) 
   if (hadToken) headers.Authorization = 'Bearer ' + auth.token;
   const bodyStr = body !== undefined ? JSON.stringify(body) : '';
   try {
-    return await rawRequest(method, settings.base + path, headers, bodyStr);
+    return await rawRequest(method, settings.base + path, headers, bodyStr, keepalive);
   } catch (e) {
     // 401 有两种来源：项目会话失效（该提示重新登录）与「尚未绑定网易云」（该引导去绑定）。
     // 后者按状态码一律当成会话失效会误报「登录已失效」，所以按文案区分。
@@ -302,9 +302,7 @@ export const api = {
   // 元数据/历史
   pushMeta: (songs) => call('POST', '/meta', { body: { songs }, auth: true }),
   recordPlay: (meta) => call('POST', `/plays/${meta.ncm_id}`, { body: meta, auth: true }),
-  // 上报**实际收听毫秒**（增量）。带 ms 时后端累加到这首歌最近一次播放记录上，
-  // 不再用"点开就记整首时长"的旧口径（见 cm_db.listen_ms）。
-  addListenMs: (ncmId, ms) => call('POST', `/plays/${ncmId}`, { body: { ms }, auth: true }),
+  reportListen: (ncmId, body) => call('POST', `/plays/${ncmId}`, { body, auth: true, keepalive: true }),
   recentPlays: (limit = 50) => call('GET', `/plays/recent?limit=${limit}`, { auth: true }),
 
   // 用户广场 / 公开主页（公开端点）

@@ -567,37 +567,28 @@ def _roaming_songs(cookie, mode, sub_mode, limit, exclude_ids, real_ip=None):
     return out[:int(limit)]
 
 
-def _ncm_listen_event(ncm_id, action, seconds=None):
-    """构造网易云 /api/feedback/weblog 的听歌事件（与 CurrentMusicX 同口径）。"""
-    payload = {
+def _ncm_startplay_event(ncm_id):
+    return {"action": "startplay", "json": {
         "id": int(ncm_id), "type": "song", "mainsite": "1", "mainsiteWeb": "1",
         "source": "list", "sourceId": "0", "content": "id=0",
-    }
-    if action == "play":
-        payload.update({
-            "download": 0, "end": "playend", "time": max(1, int(seconds or 60)),
-            "wifi": 0,
-        })
-    return {"action": action, "json": payload}
+    }}
 
 
-def _spawn_ncm_listen(cookie, ncm_id, action, seconds=None, rowid=None, real_ip=None):
+def _spawn_ncm_listen(cookie, ncm_id, real_ip, play=None):
     """异步写用户绑定网易云账号的听歌历史；失败只回滚同步标记，不影响本地播放。"""
     def run():
         try:
-            if action == "play":
-                # startplay 已在开始播放时尽力写过；这里用 API-enhanced 的 /scrobble
-                # （eapi 通道，startplay+play）确保进入网易云听歌记录/排行。
-                result = cm_ncm.scrobble(cookie, ncm_id, seconds, timeout=15.0, real_ip=real_ip)
-                if isinstance(result, dict) and result.get("code") not in (None, 200):
-                    raise RuntimeError(f"NCM scrobble code={result.get('code')}")
+            if play is not None:
+                cm_ncm.scrobble(cookie, ncm_id, play["ms"] // 1000,
+                                total=((play["duration"] or 0) + 999) // 1000,
+                                name=play["name"] or "", artist=play["artists"] or "", real_ip=real_ip)
             else:
-                cm_ncm.weblog(cookie, [_ncm_listen_event(ncm_id, action, seconds)],
-                              timeout=10.0, real_ip=real_ip)
+                cm_ncm.weblog(cookie, [_ncm_startplay_event(ncm_id)], real_ip=real_ip)
         except Exception as e:  # noqa: BLE001 外部账号同步不能阻断播放
-            if rowid:
-                cm_db.reset_play_sync(rowid)
-            log.info("网易云听歌同步失败 song=%s action=%s: %s", ncm_id, action, e)
+            if play is not None:
+                cm_db.reset_play_sync(play["rowid"])
+            log.info("网易云听歌同步失败 song=%s action=%s error=%s status=%s", ncm_id,
+                     "play" if play is not None else "startplay", type(e).__name__, getattr(e, "status_code", None))
     threading.Thread(target=run, name="ncm-listen-sync", daemon=True).start()
 
 
@@ -2441,7 +2432,7 @@ def route(handler, method):
             ("POST", "/posts", "Bearer", "发布动态"),
             ("POST", "/posts/{id}/like", "Bearer", "点赞动态"),
             ("GET", "/plays/recent", "Bearer", "最近播放"),
-            ("POST", "/plays/{ncmId}", "Bearer", "记录播放与收听时长；已绑定网易云时异步同步听歌历史（startplay + 满60s 写 play）"),
+            ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId；上报 {playId,totalMs,finished}，结束时同步网易云实际收听时长；兼容旧版 ms 增量"),
             ("GET", "/songs/status", "可选登录", "歌曲列表状态：liked/faved 为本地状态，counts 为本地计数，ncmCounts 为网易云红心数"),
             ("GET", "/likes/count", "公开", "批量点赞数：counts 本地、ncmCounts 网易云红心数"),
             ("POST", "/likes/{ncmId}", "Bearer", "CurrentMusic 自建红心 toggle {meta}，返回 {on,count}（本地计数）"),
@@ -3605,13 +3596,24 @@ def route(handler, method):
     if m and method == "POST":
         u = require_user(handler)
         ncm_id = int(m.group(1))
+        if not isinstance(body, dict):
+            raise ApiError(400, "播放上报需要 JSON 对象")
         binding = cm_db.get_binding(u["id"])
         sync_cookie = (binding or {}).get("cookie") if binding else ""
         real_ip = cm_ncm_gateway.client_ip(handler)
-        # 两种语义：
-        #   不带 ms（或 ms<=0）→ 记一次「开始播放」（插入新记录，ms 从 0 起）
-        #   带 ms>0            → 把这段**真实收听毫秒**累加到这首歌最近一次播放记录上
-        # 前端每 30s 冲一次增量，并在切歌/暂停/隐藏页面时补冲，避免丢时长或算进暂停时间。
+        if "playId" in (body or {}):
+            play_id, total_ms = body["playId"], body.get("totalMs")
+            if (type(play_id) is not int or not 0 < play_id < 2**63
+                    or type(total_ms) is not int or total_ms < 0):
+                raise ApiError(400, "playId 或 totalMs 无效")
+            if not cm_db.update_play_total(u["id"], ncm_id, play_id, total_ms):
+                raise ApiError(404, "播放记录不存在")
+            if sync_cookie and body.get("finished") is True:
+                play = cm_db.play_sync_candidate(u["id"], ncm_id, min_ms=None, play_id=play_id)
+                if play:
+                    _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, play)
+            return jresp(handler, 200, {"ok": True})
+        # 旧客户端：正数 ms 仍累加到最近一次同曲播放并在满 60 秒时同步。
         ms = 0
         try:
             ms = int((body or {}).get("ms") or 0)
@@ -3619,21 +3621,17 @@ def route(handler, method):
             ms = 0
         if ms > 0:
             added = cm_db.add_play_ms(u["id"], ncm_id, ms)
-            # 满 60 秒才向用户自己的网易云账号提交一次合格播放；
-            # 先原子领取再异步上报，失败由线程放回等下次增量重试。
             if added and sync_cookie:
-                cand = cm_db.play_sync_candidate(u["id"], ncm_id)
-                if cand:
-                    _spawn_ncm_listen(sync_cookie, ncm_id, "play",
-                                      seconds=cand["ms"] // 1000, rowid=cand["rowid"],
-                                      real_ip=real_ip)
+                play = cm_db.play_sync_candidate(u["id"], ncm_id)
+                if play:
+                    _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, play)
             return jresp(handler, 200, {"ok": True, "added": added})
         cm_db.upsert_song(norm_meta({**(body or {}), "ncm_id": ncm_id}))
-        cm_db.record_play(u["id"], ncm_id)
+        play_id = cm_db.record_play(u["id"], ncm_id)
         if sync_cookie:
             # 开始播放即写 startplay，让网易云「最近播放」实时出现。
-            _spawn_ncm_listen(sync_cookie, ncm_id, "startplay", real_ip=real_ip)
-        return jresp(handler, 200, {"ok": True})
+            _spawn_ncm_listen(sync_cookie, ncm_id, real_ip)
+        return jresp(handler, 200, {"ok": True, "playId": play_id})
 
     if path == "/plays/recent" and method == "GET":
         u = require_user(handler)

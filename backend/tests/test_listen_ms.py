@@ -15,10 +15,12 @@
 from __future__ import annotations
 
 import os
+import json
 import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 # cm_db 在 import 时读取 CM_DB，必须先设好环境变量再导入
 _TMP = tempfile.mkdtemp(prefix="cm-listen-")
@@ -27,6 +29,9 @@ os.environ["CM_DB"] = os.path.join(_TMP, "cm.db")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import cm_db  # noqa: E402
+import cm_ncm  # noqa: E402
+import cm_server  # noqa: E402
+from backend.tests.test_password_reset import _Handler  # noqa: E402
 
 SONG_MS = 300_000          # 5 分钟的歌
 
@@ -74,6 +79,30 @@ class ListenMsBase(unittest.TestCase):
 
 
 class TestRealListening(ListenMsBase):
+    def test_finished_report_uses_its_own_full_playback(self):
+        token = cm_db.issue_token(self.uid)
+        cm_db.save_binding(self.uid, "test-binding", 42)
+
+        def post(body):
+            handler = _Handler("POST", "/plays/1", body, token=token)
+            cm_server.route(handler, "POST")
+            self.assertEqual(handler.status, 200)
+            return json.loads(handler.wfile.getvalue())
+
+        with mock.patch.object(cm_server, "_spawn_ncm_listen") as spawn:
+            first = post({"name": "歌曲", "artists": "歌手", "duration": SONG_MS})["playId"]
+            post({"playId": first, "totalMs": 65_000, "finished": False})
+            second = post({"name": "歌曲", "duration": SONG_MS})["playId"]
+            self.assertEqual(spawn.call_count, 2, "progress should not scrobble early")
+            for total in (202_000, 60_000, 202_000):
+                post({"playId": first, "totalMs": total, "finished": True})
+            self.assertEqual(self.ms(), 202_000)
+            self.assertEqual(spawn.call_count, 3)
+            cookie, song, _, play = spawn.call_args.args
+            self.assertEqual((cookie, song, play["rowid"], play["ms"]), ("test-binding", 1, first, 202_000))
+            self.assertNotEqual(first, second)
+            self.assertFalse(cm_db.update_play_total(self.uid + 1, 1, first, 999_000))
+
     def test_skip_counts_only_real_time(self):
         """点开就切走：只记真实听的那点时间，绝不按整首计。"""
         cm_db.record_play(self.uid, 1)
@@ -168,6 +197,29 @@ class TestLegacyBackfill(ListenMsBase):
         first = self.ms()
         cm_db.init()                                    # 再跑一次不应重复处理
         self.assertEqual(self.ms(), first)
+
+
+class TestScrobbleProtocol(unittest.TestCase):
+    def test_ncbl_requires_both_upload_receipts(self):
+        details = {"plv": {"fileName": "p.ncbl"}, "pld": {"fileName": "d.ncbl"}}
+        with mock.patch.object(cm_ncm, "post_json", return_value={"code": 200, "details": details}) as post:
+            cm_ncm.scrobble("test-binding", 1, 125, total=180, name="歌曲", artist="歌手", real_ip="192.0.2.5")
+            post.assert_called_once_with(
+                "/scrobble/v1", {"id": 1, "time": 125, "total": 180, "name": "歌曲", "artist": "歌手"},
+                cookie="test-binding", timeout=32.0, real_ip="192.0.2.5",
+            )
+            post.reset_mock()
+            post.return_value = {"code": 200, "details": {"plv": details["plv"]}}
+            with self.assertRaises(cm_ncm.NcmError):
+                cm_ncm.scrobble("test-binding", 1, 125)
+            self.assertEqual(post.call_count, 1)
+
+    def test_legacy_fallback_checks_nested_play_result(self):
+        missing = cm_ncm.NcmError("not found", status_code=404)
+        with mock.patch.object(cm_ncm, "post_json", side_effect=[missing, {"code": 200, "details": {"play": {"code": 401}}}]) as post:
+            with self.assertRaises(cm_ncm.NcmError):
+                cm_ncm.scrobble("test-binding", 1, 125)
+            self.assertEqual([call.args[0] for call in post.call_args_list], ["/scrobble/v1", "/scrobble"])
 
 
 if __name__ == "__main__":
