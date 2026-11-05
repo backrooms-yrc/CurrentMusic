@@ -368,6 +368,21 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 .cm-song:active { background: color-mix(in srgb, var(--cm-primary) 10%, transparent); }
 .cm-song-pic { width: 48px; height: 48px; border-radius: 12px; object-fit: cover; flex: none; background: var(--mdui-color-surface-container-highest, #e6e0e9); }
 .cm-song-pic.ph { display: flex; align-items: center; justify-content: center; opacity: .5; }
+.cm-song-cover { position: relative; flex: none; }
+.cm-song-cover > img { display: block; }
+.cm-song-loading {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; color: #fff; background: rgba(0, 0, 0, .65); pointer-events: none;
+}
+.cm-play-spinner {
+  display: inline-block; width: 1em; height: 1em; box-sizing: border-box; border: 2px solid currentColor;
+  border-right-color: transparent; border-radius: 50%; vertical-align: middle; animation: cm-play-spin .7s linear infinite;
+}
+.cm-mini-btn .cm-play-spinner { width: 24px; height: 24px; color: var(--cm-primary); }
+@keyframes cm-play-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cm-play-spinner { animation: none; } }
+.cm-song-lyric { display: grid; gap: 2px; margin-top: 6px; font-size: var(--ios-footnote); color: var(--label-2); }
+.cm-song-lyric mark { background: none; color: var(--cm-primary); font-weight: 650; }
 .cm-song-main { flex: 1; min-width: 0; }
 .cm-song-name { font-size: var(--ios-body); font-weight: 500; letter-spacing: var(--track-snug); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cm-song-sub { display: flex; gap: 8px; font-size: var(--ios-footnote); color: var(--label-2); margin-top: 2px; white-space: nowrap; overflow: hidden; }
@@ -1110,6 +1125,30 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 
 /* 搜索（MD3 search bar：stadium 形态） */
 .cm-search-bar { margin-bottom: 6px; }
+.cm-search-submit { display: flex; align-items: center; gap: 8px; }
+.cm-search-submit > :first-child { flex: 1; min-width: 0; }
+.cm-search-go {
+  flex: none; min-height: 44px; padding: 0 15px; border: 0; border-radius: 24px; cursor: pointer;
+  font: inherit; color: rgb(var(--mdui-color-on-primary, 255, 255, 255)); background: var(--cm-primary);
+}
+.cm-search-go:disabled { opacity: .5; cursor: default; }
+.cm-search-local { padding: 12px 0; }
+.cm-search-local summary { cursor: pointer; color: var(--cm-primary); }
+.cm-search-match-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: end; gap: 8px;
+  padding: 10px 0;
+}
+.cm-search-match-form input {
+  display: block; box-sizing: border-box; width: 100%; padding: 7px 9px; margin-top: 4px; border-radius: 9px;
+  border: 1px solid rgba(127, 127, 127, .5); background: transparent; color: inherit; font: inherit; font-size: 16px;
+}
+.cm-search-links { display: grid; gap: 4px; }
+.cm-search-links a {
+  display: flex; align-items: baseline; gap: 10px; padding: 12px 10px; border-radius: 12px;
+  background: rgba(127, 127, 127, .08); color: inherit; text-decoration: none;
+}
+.cm-search-links small { color: var(--cm-primary); white-space: nowrap; }
+.cm-search-submit + #sugBox .cm-sug-item:focus-visible { outline-offset: -2px; }
 /* 输入框字号锁 16px：iOS16+ Safari 聚焦字号 <16px 的输入框会强制整页放大
    （user-scalable=no 从 iOS 10 起被 Safari 忽略，拦不住）。MDUI 默认即 16，
    这里显式锁死，防全局字号缩放把输入框拖到 16px 以下 */
@@ -1340,6 +1379,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .cm-hot:active { filter: brightness(.96); }
+button.cm-hot { border: 0; color: inherit; font-family: inherit; }
 .cm-hot b { color: var(--cm-primary); font-size: calc(11px * var(--cm-fs, 1)); }
 
 /* 实心图标（评论点赞等：同字形切到 Filled 字族，无需额外字形名） */
@@ -1858,6 +1898,10 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   content: ''; position: absolute; left: 12%; right: 12%; bottom: -1px; height: 3px;
   border-radius: 3px 3px 0 0; background: var(--cm-primary);
   animation: cmTabIn .22s cubic-bezier(0.05, 0.7, 0.1, 1);
+}
+@media (max-width: 480px) {
+  .cm-srchtabs { flex-wrap: wrap; }
+  .cm-srchtab { min-width: 48px; padding-right: 5px; padding-left: 5px; }
 }
 @keyframes cmTabIn { from { transform: scaleX(.3); opacity: .4; } to { transform: none; opacity: 1; } }
 
@@ -4763,13 +4807,6 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl:active { opacity: .55;
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl--side { color: hsla(0, 0%, 100%, .55); }
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl--side:hover { color: hsla(0, 0%, 100%, .9); }
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl--side.is-on { color: var(--accent-hover); }
-html[data-ui-preset="soaringbird"] #playerOverlay .play-loading {
-  display: block; width: 16px; height: 16px; border-radius: 50%;
-  border: 2px solid hsla(0, 0%, 100%, .28); border-top-color: #fff;
-  animation: sbLpSpin .8s linear infinite;
-}
-@keyframes sbLpSpin { to { transform: rotate(360deg); } }
-
 /* ---- 音量（参考 .lp-volume） ---- */
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume {
   position: relative; width: 100%; align-self: end;

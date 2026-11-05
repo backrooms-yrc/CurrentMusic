@@ -3,7 +3,7 @@ import { mdui } from './md.js';
 import { createWaveform, WAVE_STYLE } from './waveform.js';
 import { waveStyle, waveTilt } from './customize.js';
 import { api, auth, settings } from './api.js';
-import { esc, toast, fmtDur, fmtCount, tierLabel, QUALITY_TIERS, getStatus, ensureStatus, isNcmLiked, ensureLikeState, toggleLikeDefault, dismissToasts, avatarHTML, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme } from './ui.js';
+import { esc, toast, fmtDur, fmtCount, tierLabel, QUALITY_TIERS, getStatus, ensureStatus, isNcmLiked, ensureLikeState, toggleLikeDefault, dismissToasts, avatarHTML, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme, setSongLoading } from './ui.js';
 import { player, wave, on } from './player.js';
 import { openShare } from './share.js';
 import { castIconHTML, openCastDialog } from './cast.js';
@@ -20,13 +20,18 @@ const AM_ICON = {
   prev: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="5" y="5" width="2.1" height="14" rx="1.05" stroke="none"/><path d="M19 5.6v12.8L9.6 12z"/></svg>',
   next: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="16.9" y="5" width="2.1" height="14" rx="1.05" stroke="none"/><path d="M5 5.6v12.8L14.4 12z"/></svg>',
 };
-/** 播放键内容：加载中仍用 Material 的沙漏（瞬态提示，不属于走带图标集） */
+const playSpinner = '<span class="cm-play-spinner" role="status" aria-label="正在准备播放"></span>';
+
 function amPlayIcon() {
-  return player.loading
-    ? '<span class="material-icons-outlined">hourglass_empty</span>'
+  return player.playPending
+    ? playSpinner
     : (player.isPlaying() ? AM_ICON.pause : AM_ICON.play);
 }
 
+function miniPlayIcon() {
+  return player.playPending ? playSpinner
+    : `<span class="material-icons-outlined">${player.isPlaying() ? 'pause_circle' : 'play_circle'}</span>`;
+}
 
 // ---------- 网易云评论表情：方括号码 → emoji ----------
 // NCM 客户端表情在接口里是纯文本码（如 [爱心]/[呲牙]），网页端直接显示会看到
@@ -59,12 +64,6 @@ const SB_ICON = {
   starFill: '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="m12 3.6 2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.6l-5.1 2.7.97-5.68L3.75 9.6l5.7-.83z"/></svg>',
   speaker: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3l4-3.2v11.4l-4-3.2H4z"/><path d="M14.4 9.2a4 4 0 0 1 0 5.6M16.8 7a7.2 7.2 0 0 1 0 10"/></svg>',
 };
-
-function sbPlayIcon() {
-  return player.loading
-    ? '<span class="play-loading" aria-hidden="true"></span>'
-    : (player.isPlaying() ? AM_ICON.pause : AM_ICON.play);
-}
 
 // 滑块属于翱翔鸟主题。离开时恢复进入主题前的媒体音量。
 let volumeBeforeSoaringBird = null;
@@ -153,18 +152,20 @@ function renderMini() {
   }
   el.style.display = '';
   const m = player.meta;
-  const sub = `${m.artists || ''}${player.urlInfo ? ' · ' + tierLabel(player.urlInfo.level) : player.loading ? ' · 解析音质中…' : ''}`;
+  const status = player.loading ? '正在查找音源…' : player.starting ? '正在缓冲…'
+    : player.urlInfo ? tierLabel(player.urlInfo.level) : '';
+  const sub = [m.artists, status].filter(Boolean).join(' · ');
   // 播放/暂停和音质变化只更新内容，保留进度及正在操作的原生滑块。
   if (miniMeta === m && miniProgress) {
     const playBtn = el.querySelector('#miniPlay');
     if (sb) {
-      if (playBtn) playBtn.innerHTML = sbPlayIcon();
+      if (playBtn) playBtn.innerHTML = amPlayIcon();
       const shuffle = el.querySelector('#miniShuffle');
       const repeat = el.querySelector('#miniRepeat');
       if (shuffle) shuffle.classList.toggle('is-on', player.playMode === 'shuffle');
       if (repeat) repeat.classList.toggle('is-on', player.playMode === 'one');
     } else if (playBtn) {
-      playBtn.querySelector('.material-icons-outlined').textContent = player.isPlaying() ? 'pause_circle' : 'play_circle';
+      playBtn.innerHTML = miniPlayIcon();
     }
     el.querySelector('.cm-mini-name').textContent = m.name || '';
     el.querySelector('.cm-mini-sub').textContent = sub;
@@ -179,7 +180,7 @@ function renderMini() {
         <div class="sb-pb__controls">
           <button type="button" class="sb-pb__ctrl sb-pb__ctrl--side${player.playMode === 'shuffle' ? ' is-on' : ''}" id="miniShuffle" aria-label="随机播放">${SB_ICON.shuffle}</button>
           <button type="button" class="sb-pb__ctrl" id="miniPrev" aria-label="上一首">${AM_ICON.prev}</button>
-          <button type="button" class="sb-pb__ctrl sb-pb__ctrl--play" id="miniPlay" aria-label="播放/暂停">${sbPlayIcon()}</button>
+          <button type="button" class="sb-pb__ctrl sb-pb__ctrl--play" id="miniPlay" aria-label="播放/暂停">${amPlayIcon()}</button>
           <button type="button" class="sb-pb__ctrl" id="miniNext" aria-label="下一首">${AM_ICON.next}</button>
           <button type="button" class="sb-pb__ctrl sb-pb__ctrl--side${player.playMode === 'one' ? ' is-on' : ''}" id="miniRepeat" aria-label="单曲循环">${SB_ICON.repeat}</button>
         </div>
@@ -231,7 +232,7 @@ function renderMini() {
         <div class="cm-mini-name">${esc(m.name)}</div>
         <div class="cm-mini-sub">${esc(sub)}</div>
       </div>
-      <span class="cm-mini-btn" id="miniPlay"><span class="material-icons-outlined">${player.isPlaying() ? 'pause_circle' : 'play_circle'}</span></span>
+      <span class="cm-mini-btn" id="miniPlay">${miniPlayIcon()}</span>
       <span class="cm-mini-btn" id="miniNext"><span class="material-icons-outlined">skip_next</span></span>
     </div>`;
   miniProgress = createMiniProgress(el.querySelector('.cm-mini-prog'), player);
@@ -1044,7 +1045,7 @@ async function openFull() {
           <div class="lp-controls">
             <button type="button" class="lp-ctl lp-ctl--side ${player.playMode === 'shuffle' ? 'is-on' : ''}" id="plShuffle" aria-label="随机播放">${SB_ICON.shuffle}</button>
             <button type="button" class="lp-ctl" id="plPrev" aria-label="上一首">${AM_ICON.prev}</button>
-            <button type="button" class="lp-ctl lp-ctl--play" id="plPlay" aria-label="播放/暂停">${sbPlayIcon()}</button>
+            <button type="button" class="lp-ctl lp-ctl--play" id="plPlay" aria-label="播放/暂停">${amPlayIcon()}</button>
             <button type="button" class="lp-ctl" id="plNext" aria-label="下一首">${AM_ICON.next}</button>
             <button type="button" class="lp-ctl lp-ctl--side ${player.playMode === 'one' ? 'is-on' : ''}" id="plRepeat" aria-label="单曲循环">${SB_ICON.repeat}</button>
           </div>
@@ -1778,9 +1779,10 @@ on('song', () => {
   fireKaraoke();
 });
 on('state', () => {
+  setSongLoading(player.playPending ? player.meta?.ncm_id : null);
   if (!player.isPlaying()) stopKaraoke(); else startKaraoke();
   const b = document.getElementById('plPlay');
-  if (b) b.innerHTML = isSoaringBirdTheme() ? sbPlayIcon() : amPlayIcon();
+  if (b) b.innerHTML = amPlayIcon();
   if (waveCtl) waveCtl.setPlaying(player.isPlaying());
   if (fullProgress) fullProgress.update();
   renderMini();

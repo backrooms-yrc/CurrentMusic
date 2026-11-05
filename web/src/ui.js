@@ -631,7 +631,7 @@ export function openLikeMenu(song, onChange) {
  * @param offset data-i 的起始下标——追加渲染时传已有条数，保证 data-i 始终是
  *               在**完整数组**里的绝对下标（点击行为依赖它）
  */
-export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride, cached = false } = {}) {
+export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride, cached = false, showLyric = false } = {}) {
   const st = cached ? songs.map(s => getStatus(s.ncm_id)) : await fetchStatus(songs.map(s => s.ncm_id));
   const bound = auth.token ? (cached ? _ncmBoundToken === auth.token && _ncmBound === true : await ensureNcmBound()) : false;
   const source = sourceOverride || (settings.likeMode === 'local' || !bound ? 'local' : 'ncm');
@@ -640,8 +640,11 @@ export async function songListHTML(songs, { removable = false, offset = 0, likeS
     const liked = source === 'ncm' ? isNcmLiked(s.ncm_id) : st[i].liked;
     const dot = bound && source === 'local' && isNcmLiked(s.ncm_id);
     return `
-    <div class="cm-song" data-i="${offset + i}">
-      ${s.pic ? `<img class="cm-song-pic" src="${esc(s.pic)}" loading="lazy">` : `<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>`}
+    <div class="cm-song" data-i="${offset + i}" data-song-id="${esc(s.ncm_id)}">
+      <div class="cm-song-cover">
+        ${s.pic ? `<img class="cm-song-pic" src="${esc(s.pic)}" loading="lazy">` : `<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>`}
+        <span class="cm-song-loading" role="status" aria-label="正在准备播放" hidden><span class="cm-play-spinner" aria-hidden="true"></span></span>
+      </div>
       <div class="cm-song-main">
         <div class="cm-song-name">${esc(s.name)}</div>
         <div class="cm-song-sub">
@@ -649,6 +652,9 @@ export async function songListHTML(songs, { removable = false, offset = 0, likeS
           ${s.pop ? `<span class="cm-pop" title="网易云热度"><span class="mi">local_fire_department</span>${s.pop}</span>` : ''}
           ${st[i].count ? `<span class="cm-like-n" title="网易云红心数"><span class="mi">favorite</span>${fmtCount(st[i].count)}</span>` : ''}
         </div>
+        ${showLyric ? `<div class="cm-song-lyric">${s.lyricContext?.length
+          ? s.lyricContext.map(line => line.matched ? `<mark>${esc(line.txt)}</mark>` : `<span>${esc(line.txt)}</span>`).join('')
+          : `<span>${esc(s.lyric || s.lyricMatch || '')}</span>`}</div>` : ''}
       </div>
       ${s.mv ? `<span class="cm-song-mv" data-act="mv" data-i="${offset + i}" title="播放 MV"><span class="material-icons-outlined">smart_display</span></span>` : ''}
       <span class="cm-song-dur">${fmtDur(s.duration)}</span>
@@ -680,7 +686,7 @@ export async function renderSongList(el, songs, opts = {}) {
   }
   const slice = songs.slice(from);
   if (!slice.length) return [];
-  const htmlOptions = { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource };
+  const htmlOptions = { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource, showLyric: !!opts.showLyric };
   const token = auth.token, mode = settings.likeMode;
   const html = await songListHTML(slice, { ...htmlOptions, cached: !!opts.deferStatus });
 
@@ -699,6 +705,7 @@ export async function renderSongList(el, songs, opts = {}) {
   }
 
   rows.forEach(row => {
+    syncSongLoading(row);
     const i = +row.dataset.i;
     row.addEventListener('click', async e => {
       const act = e.target.closest('[data-act]');
@@ -739,6 +746,18 @@ export async function renderSongList(el, songs, opts = {}) {
     }).catch(() => {}); // Optional state may fail; the visible tracks remain usable.
   }
   return rows;
+}
+
+let pendingSongId = '';
+function syncSongLoading(row) {
+  row.querySelector('.cm-song-loading').hidden = row.dataset.songId !== pendingSongId;
+}
+
+export function setSongLoading(id) {
+  const next = id == null ? '' : String(id);
+  if (next === pendingSongId) return;
+  pendingSongId = next;
+  document.querySelectorAll('.cm-song[data-song-id]').forEach(syncSongLoading);
 }
 
 // ---------- 对话框 ----------

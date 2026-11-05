@@ -405,6 +405,8 @@ export const player = {
       : localStorage.getItem('cm.loop') === 'none' ? 'order' : 'list';
   })(),
   loading: false,
+  starting: false,
+  get playPending() { return this.loading || this.starting; },
 
   // ---------- 心动模式（/playmode/intelligence/list）----------
   // 与上面「播放模式四合一」正交：那四个管**队列怎么轮**，这个管**队列怎么续**。
@@ -587,15 +589,18 @@ export const player = {
     return true;
   },
 
-  playList(songs, startIndex = 0) {
-    this.queue = songs.filter(Boolean).slice();
-    if (this.playMode === 'shuffle' && startIndex === 0) startIndex = Math.floor(Math.random() * this.queue.length);
+  playList(songs, startIndex = 0, { shuffleStart = true } = {}) {
+    const queue = songs.filter(Boolean);
+    if (this.playPending && queue[startIndex] && String(queue[startIndex].ncm_id) === String(this.meta?.ncm_id)) return;
+    if (shuffleStart && this.playMode === 'shuffle' && startIndex === 0) startIndex = Math.floor(Math.random() * queue.length);
+    if (!queue[startIndex] || (this.playPending && queue[startIndex] === this.meta)) return;
+    this.queue = queue;
     this.playAt(startIndex);
     this.persist();
   },
 
   async playAt(i) {
-    if (i < 0 || i >= this.queue.length) return;
+    if (i < 0 || i >= this.queue.length || (this.playPending && this.queue[i] === this.meta)) return;
     if (!auth.token) {                     // 游客：弹登录提示，不解析音源
       this.loading = false;
       this.wantPlaying = false;
@@ -608,9 +613,11 @@ export const player = {
     this.index = i;
     const meta = this.meta = this.queue[i];
     this.urlInfo = null;
+    this.starting = false;
     // 切到别的歌：预取元素的下载立即停（若预取目标恰好是本首，留着给消费处复用）
     if (this._prefetch && String(this._prefetch.id) !== String(this.meta.ncm_id)) this._discardPrefetch();
     this.loading = true;
+    clearStallWatch();
     emit('song');
     emit('state');
     if (clock()) {
@@ -621,6 +628,7 @@ export const player = {
       this.persist();
       this.updateMediaSession();
       this._heartEnsure();          // 投屏中同样要续队列
+      emit('state');
       return;
     }
     let info;
@@ -656,6 +664,7 @@ export const player = {
       }
       toast(`「${this.meta.name}」${e.message || '播放失败'}`);
       emit('song');
+      emit('state');
       // 解析失败与 audio error 是两条失败路径，都要计入熔断
       // （否则整队解析失败时仍会「失败→换下一首→再失败」无限循环）
       errStreak++;
@@ -667,12 +676,15 @@ export const player = {
       }
       if (e.noAutoNext) { this.wantPlaying = false; emit('state'); return; }
       // 自动跳下一首（避免队列卡死）
-      if (this.queue.length > 1) setTimeout(() => this.next(true), 800);
+      if (this.queue.length > 1) setTimeout(() => {
+        if (this._playRequest === request) this.next(true);
+      }, 800);
       return;
     }
     if (this._playRequest !== request || this.queue[this.index] !== meta) return; // 已切歌
     this.urlInfo = info;
     this.loading = false;
+    this.starting = true;
     warnHiRes(info);               // 192kHz/多声道档位：提示设备兼容性
     // 线路优选：本会话首次遇到该族 → 后台实测（与起播缓冲并行，不添延迟）；
     // 已锁定（第 2 首起）→ 直接装载到最优线
@@ -685,16 +697,26 @@ export const player = {
     emit('stalling', true);
     const cur = info;
     waitAhead(startTarget(), 8).then(async () => {
-      if (this.urlInfo !== cur) return;      // 已切歌：别动新歌的缓冲中状态
+      if (this._playRequest !== request || this.urlInfo !== cur || !this.starting) return;
       const swap2 = swapLine(cur);           // 预缓冲期间探测完成：起播前就换到最优线
       if (swap2) {
         cur.url = swap2;
         loadUrl(swap2, 0);
         await waitAhead(startTarget(), 8);
-        if (this.urlInfo !== cur) return;
+        if (this._playRequest !== request || this.urlInfo !== cur || !this.starting) return;
       }
       emit('stalling', false);
-      if (this.wantPlaying) audio.play().catch(() => toast('点击播放键开始播放'));
+      if (this.wantPlaying) {
+        const currentAudio = audio;
+        currentAudio.play().catch(() => {
+          if (this._playRequest !== request || audio !== currentAudio || !this.starting) return;
+          if (currentAudio.error) return; // 音频错误由 error 处理器接管，包括 CORS 回退。
+          this.starting = false;
+          this.wantPlaying = false;
+          emit('state');
+          toast('点击播放键开始播放');
+        });
+      }
     });
     emit('song');
     emit('state');
@@ -738,6 +760,7 @@ export const player = {
   wantPlaying: false,
 
   play() {
+    if (this.playPending) return;
     if (!auth.token && !this.urlInfo) { promptLogin(); return; }
     if (!this.urlInfo) {
       // urlInfo 不持久化：重启后 restore() 只恢复了队列与元数据。
@@ -754,10 +777,18 @@ export const player = {
 
   pause() {
     this.wantPlaying = false;
+    if (this.playPending) {
+      this._playRequest = null;
+      this.loading = false;
+      this.starting = false;
+      emit('stalling', false);
+      emit('state');
+    }
     audio.pause();
   },
 
   toggle() {
+    if (this.playPending) return;
     if (this.audio.paused) this.play(); else this.pause();
   },
 
@@ -816,12 +847,15 @@ export const player = {
   },
 
   async changeQuality(level) {
+    if (this.playPending) { toast('歌曲正在准备，请稍后切换音质'); return; }
     settings.quality = level;
     if (!this.meta) return;
+    const request = this._playRequest;
     const at = audio.currentTime;
     const wasPlaying = !audio.paused;
     try {
       const info = await resolveSongUrl(this.meta, level);
+      if (this._playRequest !== request) return;
       const betterQ = swapLine(info);        // 换档也落在锁定的最优线上
       if (betterQ) info.url = betterQ;
       this.urlInfo = info;
@@ -995,7 +1029,8 @@ function clearStallWatch() {
 
 /** 卡顿自愈：重新解析地址并在**原位置**续播（比"卡住就跳下一首"体面得多）。 */
 async function recoverStalled() {
-  if (recovering || !player.meta) return;
+  if (recovering || player.loading || !player.meta || !player.urlInfo) return;
+  const request = player._playRequest;
   recovering = true;
   if (!stallNotified) { stallNotified = true; emit('stalling', true); }
   // 先把「这条 CDN 线卡了」报给服务端：它据此在换线时避开这条线
@@ -1019,6 +1054,7 @@ async function recoverStalled() {
     const pin = network.cdn === 'auto' ? (lineBest.byFam[famOf(((player.urlInfo || {}).host) || '')] || '') : '';
     const info = await resolveSongUrl(player.meta, _pl3.level, _pl3.immerse,
                                       pin ? { refresh: true, host: pin } : { refresh: true });
+    if (player._playRequest !== request) return;
     const betterR = swapLine(info);
     if (betterR) info.url = betterR;
     player.urlInfo = info;
@@ -1029,11 +1065,11 @@ async function recoverStalled() {
       await waitAhead(8, 6);
       if (player.wantPlaying && player.urlInfo === info) audio.play().catch(() => {});
     }
-    toast('网络波动，已切换线路并在原位置续播');
+    if (player._playRequest === request) toast('网络波动，已切换线路并在原位置续播');
   } catch { /* 自愈失败：交给上层失败计数与跳曲逻辑 */ }
   finally {
     recovering = false;
-    if (stallNotified) { stallNotified = false; emit('stalling', false); }
+    if (player._playRequest === request && stallNotified) clearStallWatch();
   }
 }
 
@@ -1102,6 +1138,11 @@ function bindAudio(el) {
     errStreak = 0;                     // 真正开始播放了：连续失败计数清零
     emit('state'); keepAlive(true); player.updateMediaSession(); player.pushMediaState();
   });
+  el.addEventListener('playing', () => {
+    if (el !== audio || !player.starting) return;
+    player.starting = false;
+    emit('state');
+  });
   el.addEventListener('pause', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
     flushListen();                     // 暂停即结账：暂停期间的时间本来就不该计入
@@ -1144,6 +1185,11 @@ function bindAudio(el) {
       return;                       // 不计入连续失败熔断
     }
     if (!player.urlInfo) return;
+    if (player.starting) {
+      player.starting = false;
+      emit('stalling', false);
+      emit('state');
+    }
     errStreak++;
     const cap = Math.min(3, Math.max(1, player.queue.length));
     if (errStreak >= cap) {
@@ -1180,10 +1226,14 @@ function keepAlive(on) {
 /** 真正停止播放（队列播完且不循环 / 清空队列）：释放前台服务与唤醒锁。 */
 export function stopPlayback() {
   flushListen(true);
+  player._playRequest = null;
+  player.loading = player.starting = false;
   player.wantPlaying = false;
   clearTimeout(resumeTimer);
+  clearStallWatch();
   keepAlive(false);
   updateBrowserMediaState(player, 'none');
+  emit('state');
 }
 // 连续播放失败熔断：error 会 next() 换下一首，但若整队都解析失败
 // （上游风控/断网）会无限循环「解析→失败→换下一首」刷爆接口与提示。
