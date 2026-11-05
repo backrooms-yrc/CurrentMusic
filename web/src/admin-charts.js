@@ -448,7 +448,7 @@ export function drawComboChart(canvas, points, opts = {}) {
 }
 
 /**
- * 环图（角色构成）。items: [{label, value, color}]；图例由页面在 HTML 里渲染。
+ * 环图或饼图。items: [{label, value, color}]；图例由页面在 HTML 里渲染。
  */
 export function drawDonutChart(canvas, items, opts = {}) {
   const { ctx, w, h } = setup(canvas);
@@ -466,12 +466,14 @@ export function drawDonutChart(canvas, items, opts = {}) {
     const g = Math.min(gap, a * .25);      // 极小占比时不能把缺口撑成负角度
     ctx.beginPath();
     ctx.arc(cx, cy, r, angle + g, angle + a - g);
-    ctx.arc(cx, cy, inner, angle + a - g, angle + g, true);
+    if (opts.pie) ctx.lineTo(cx, cy);
+    else ctx.arc(cx, cy, inner, angle + a - g, angle + g, true);
     ctx.closePath();
     ctx.fillStyle = x.color || primary();
     ctx.fill();
     angle += a;
   });
+  if (opts.pie) return;
   ctx.fillStyle = css('--label', '#1d1b20');
   ctx.font = `700 22px ${FONT}`;
   ctx.textAlign = 'center';

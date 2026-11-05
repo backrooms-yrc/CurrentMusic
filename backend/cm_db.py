@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at INTEGER NOT NULL,
   token_hash TEXT DEFAULT '',
   token_at INTEGER DEFAULT 0,
+  login_source TEXT NOT NULL DEFAULT 'other',
   is_admin INTEGER DEFAULT 0,
   is_super INTEGER DEFAULT 0,
   is_owner INTEGER DEFAULT 0,        /* 站长（最高角色）：拥有超管全部权限，广场置顶优先于超管 */
@@ -393,6 +394,14 @@ def init():
             " VALUES(?,?,?,?,?,?)",
             (th, uid, "升级前的设备", "app", at or int(time.time()), at or int(time.time())),
         )
+    if "login_source" not in ucols:
+        conn.execute("SAVEPOINT login_source_migration")
+        conn.execute("ALTER TABLE users ADD COLUMN login_source TEXT NOT NULL DEFAULT 'other'")
+        conn.execute("""UPDATE users SET login_source = CASE (
+            SELECT platform FROM sessions WHERE user_id = users.id
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
+        ) WHEN 'web' THEN 'web' WHEN 'x' THEN 'x' ELSE 'other' END""")
+        conn.execute("RELEASE login_source_migration")
     bcols = {r[1] for r in conn.execute("PRAGMA table_info(ncm_bindings)")}
     if "ncm_liked_pl_id" not in bcols:
         conn.execute("ALTER TABLE ncm_bindings ADD COLUMN ncm_liked_pl_id INTEGER DEFAULT 0")
@@ -770,6 +779,7 @@ def issue_token(uid, device="", platform="", *, _conn=None):
     import hashlib
     th = hashlib.sha256(token.encode()).hexdigest()
     now = int(time.time())
+    source = platform if platform in ("web", "x") else "other"
     conn = _conn if _conn is not None else connect()
     try:
         conn.execute(
@@ -777,7 +787,8 @@ def issue_token(uid, device="", platform="", *, _conn=None):
             " VALUES(?,?,?,?,?,?)",
             (th, uid, str(device or "")[:120], str(platform or "")[:20], now, now),
         )
-        conn.execute("UPDATE users SET token_hash=?, token_at=? WHERE id=?", (th, now, uid))
+        conn.execute("UPDATE users SET token_hash=?, token_at=?, login_source=? WHERE id=?",
+                     (th, now, source, uid))
         if _conn is None:
             conn.commit()
     finally:
@@ -969,7 +980,12 @@ def admin_overview():
         day = now - 86400
         week = now - 7 * 86400
         q = lambda sql, args=(): conn.execute(sql, args).fetchone()[0]
-        users = q("SELECT COUNT(*) FROM users WHERE username != '__internal__'")
+        sources = {"web": 0, "x": 0, "other": 0}
+        for source, count in conn.execute(
+            "SELECT login_source, COUNT(*) FROM users WHERE username != '__internal__' GROUP BY login_source"
+        ):
+            sources[source if source in sources else "other"] += count
+        users = sum(sources.values())
         admins = q("SELECT COUNT(*) FROM users WHERE is_admin = 1")
         supers = q("SELECT COUNT(*) FROM users WHERE is_super = 1")
         owners = q("SELECT COUNT(*) FROM users WHERE is_owner = 1")
@@ -1008,6 +1024,7 @@ def admin_overview():
                 "admin": max(0, admins - supers),
                 "user": max(0, users - admins),
             },
+            "sourceCounts": sources,
             # 近 30 天注册 / 近 14 天播放与活跃用户：管理台趋势图数据
             "userDaily": _admin_daily_series(
                 conn,

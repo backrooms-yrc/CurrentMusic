@@ -2,9 +2,11 @@ import os
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import cm_db  # noqa: E402
+import cm_server  # noqa: E402
 
 
 class TestAdminOverviewLikes(unittest.TestCase):
@@ -68,6 +70,39 @@ class TestAdminOverviewLikes(unittest.TestCase):
         # 角色四档互不重叠，合计等于总用户数
         self.assertEqual(sum(ov["roleCounts"].values()), ov["users"])
         self.assertEqual(ov["roleCounts"]["user"], 1)
+
+    def test_user_sources_track_latest_successful_login(self):
+        uid = cm_db.create_user("source_test", "password123", "来源测试")
+        other = cm_db.create_user("legacy_user", "password123", "历史用户")
+        internal = cm_db.create_user("__internal__", "password123", "内部账户")
+        cm_db.issue_token(internal, "网页", "web")
+
+        cm_db.issue_token(uid, "网页", "web")
+        self.assertEqual(cm_db.admin_overview()["sourceCounts"], {"web": 1, "x": 0, "other": 1})
+        handler = SimpleNamespace(headers={"User-Agent": "okhttp/4.12.0"})
+        device, platform = cm_server.device_label(handler, {"device": "Google Pixel 8", "platform": "app"})
+        token = cm_db.issue_token(uid, device, platform)
+        cm_db.revoke_token(uid, token)
+
+        handler.headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 14) Chrome/130.0"
+        device, platform = cm_server.device_label(handler, {"device": "Google Pixel 8 · Android 14", "platform": "app"})
+        cm_db.issue_token(other, device, platform)
+        handler.headers["User-Agent"] = "python-requests/2.32.5"
+        self.assertEqual(cm_server.device_label(handler)[1], "app")
+        ov = cm_db.admin_overview()
+        self.assertEqual(ov["sourceCounts"], {"web": 0, "x": 1, "other": 1})
+        self.assertEqual(sum(ov["sourceCounts"].values()), ov["users"])
+
+    def test_user_sources_backfill_from_latest_retained_session(self):
+        uid = cm_db.create_user("old_web", "password123", "旧网页用户")
+        cm_db.issue_token(uid, "Android", "app")
+        cm_db.issue_token(uid, "网页", "web")
+        uid = cm_db.create_user("old_app", "password123", "旧客户端用户")
+        cm_db.issue_token(uid, "Google Pixel 8", "app")
+        with cm_db.connect() as conn:
+            conn.execute("ALTER TABLE users DROP COLUMN login_source")
+        cm_db.init()
+        self.assertEqual(cm_db.admin_overview()["sourceCounts"], {"web": 1, "x": 0, "other": 1})
 
 
 if __name__ == "__main__":

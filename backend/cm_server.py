@@ -1375,8 +1375,12 @@ def device_label(handler, body=None):
     dev = str(b.get("device") or "").strip()[:120]
     plat = str(b.get("platform") or "").strip()[:20]
     ua = handler.headers.get("User-Agent", "") or ""
+    # CurrentMusicX 现有版本使用 OkHttp，登录时上报 app 和「厂商 型号」。
+    if plat == "app" and ua.startswith("okhttp/") and " " in dev and " · Android " not in dev:
+        plat = "x"
     if not plat:
-        plat = "app" if "/" not in ua or "CurrentMusic" in ua else "web"
+        is_browser = ua.startswith("Mozilla/") and "CurrentMusic" not in ua and "; wv)" not in ua
+        plat = "web" if is_browser else "app"
     if not dev:
         m = re.search(r"Android[ /]([\d.]+)", ua)
         ch = re.search(r"Chrome/([\d.]+)", ua)
@@ -2395,7 +2399,7 @@ def route(handler, method):
             ("GET", "/announcements", "公开", "站内公告（客户端每次打开拉取并弹窗，置顶在前）"),
             ("GET", "/ncm/lyric", "公开", "歌词归一化：{lines:[{t,txt,trans,roma,w?,words?,wSynth?}],isYrc,source,wordLevel}；t/w 单位为毫秒，w=[起始,字/词]；官方 YRC → LDDC 逐字 → 按行时长估算（wSynth）"),
             ("GET", "/admin/announcements", "管理员", "公告管理列表（含已移除；带 canEdit 权限标记）"),
-            ("GET", "/admin/overview", "管理员", "管理台概览：总量 + 近30天注册/近14天播放序列 + 角色计数"),
+            ("GET", "/admin/overview", "管理员", "管理台概览：总量、注册与播放趋势、角色计数、用户来源 sourceCounts {web,x,other}（按最近一次成功登录或注册归类）"),
             ("GET", "/admin/clients", "管理员", "客户端版本：CurrentMusic 与 CurrentMusicX 的版本/大小/发布时间/更新说明/历史/下载数"),
             ("GET", "/admin/traffic", "管理员", "站点出站流量（需 CM_TRAFFIC_LOG；服务端 20s 缓存）"),
             ("GET", "/admin/users", "管理员", "用户搜索/分页/排序 {query,limit,offset,sort}；sort=reg/reg_asc/name/active/sessions/likes/plays/role"),

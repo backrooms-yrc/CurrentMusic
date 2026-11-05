@@ -39,6 +39,11 @@ const TAB_DESC = {
   system: '数据量、角色与缓存维护',
 };
 const ROLE_COLORS = ['#6750a4', '#0088cc', '#ff8d28', '#8e8e93'];
+const sourceChartItems = (counts) => [
+  { label: 'Web 端', value: counts.web, color: '#6750a4' },
+  { label: 'X 侧', value: counts.x, color: '#0088cc' },
+  { label: '其他', value: counts.other, color: '#8e8e93' },
+];
 
 const fmtTime = ts => {
   if (!ts) return '—';
@@ -120,7 +125,7 @@ const overviewSkeleton = () => `
       <div class="cm-agrid" style="margin-top:12px">${trafficCardsSkeleton()}</div>
       <div class="sk cm-chart-skel"></div>
     </div>
-    ${Array.from({ length: 4 }, () => `<div class="cm-acard cm-achart">${sk('height:17px;width:42%')}<div class="sk cm-chart-skel"></div></div>`).join('')}
+    ${Array.from({ length: 5 }, () => `<div class="cm-acard cm-achart">${sk('height:17px;width:42%')}<div class="sk cm-chart-skel"></div></div>`).join('')}
   </div>`;
 
 const topSkeleton = () => `<div class="cm-hbars">${Array.from({ length: 4 }, () => `
@@ -406,7 +411,17 @@ export async function render(el) {
           </div>
         </div>
 
-        <div class="cm-acard cm-achart">
+        ${ov.sourceCounts ? `<div class="cm-acard cm-achart">
+          <div class="cm-achart-head"><div><div class="cm-achart-title">用户来源</div><div class="cm-achart-sub">按最近一次成功登录或注册归类</div></div></div>
+          <div class="cm-role-wrap">
+            <div class="cm-chart-wrap cm-donut-wrap"><canvas id="sourceChart" class="cm-chart-canvas cm-donut-canvas" aria-label="用户来源饼图"></canvas></div>
+            <div class="cm-legend cm-legend-col">
+              ${sourceChartItems(ov.sourceCounts).map(({ label, value, color }) => `<span class="cm-legend-item"><i class="cm-legend-dot" style="background:${color}"></i>${label}<b>${fmtCount(value)}</b></span>`).join('')}
+            </div>
+          </div>
+        </div>` : ''}
+
+        <div class="cm-acard cm-achart${ov.sourceCounts ? ' cm-awide' : ''}">
           <div class="cm-achart-head"><div><div class="cm-achart-title">内容与互动</div><div class="cm-achart-sub">站内数据量对比</div></div></div>
           ${hBars(content, { value: x => x.value, label: x => x.label, format: fmtCount })}
         </div>
@@ -448,6 +463,10 @@ export async function render(el) {
         { label: '管理员', value: r.admin || 0, color: ROLE_COLORS[2] },
         { label: '普通用户', value: r.user || 0, color: ROLE_COLORS[3] },
       ], { centerLabel: '个账号' });
+    }
+    const source = el.querySelector('#sourceChart');
+    if (source && source.clientWidth) {
+      drawDonutChart(source, sourceChartItems(S.ov.sourceCounts), { pie: true });
     }
   }
 
