@@ -864,7 +864,8 @@ def _resolve_official_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
         level = "lossless"
     # 只有 auto 受码率上限约束；显式档位是调用方明确要的，不越权改它。
     eff_br = max_br if auto else 0
-    rt_key = f"surl:{ncm_id}:{level}:{immerse or ''}:{eff_br}:{real_ip}"
+    # v2 discards cached URLs accepted before explicit trial rejection was added.
+    rt_key = f"surl:v2:{ncm_id}:{level}:{immerse or ''}:{eff_br}:{real_ip}"
 
     cached_raw = cm_db.cache_get(rt_key)
     cached = json.loads(cached_raw) if cached_raw else None
@@ -2444,7 +2445,7 @@ def route(handler, method):
             ("GET", "/ncmbind/likelist", "Bearer", "绑定账号红心列表 {ids}；refresh=1 强制同步，短期合并已成功写入但上游尚未收敛的红心意图"),
             ("GET", "/daily", "可选登录", "每日推荐"),
             ("GET", "/ncm/search", "公开", "网易云搜索代理，透传 NGINX 提供的用户 RealIP 并按用户 IP 隔离缓存；单曲首屏可含 catalogSongs（公开专辑精确匹配，不计入上游分页）。type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；失败通过 lyricContextStatus 明示。详见 /api-docs/reference/guide-search-catalog/ 与 /api-docs/reference/guide-search-lyrics-api/"),
-            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败后调用 /song/url/match 并严格验证音频，匹配结果 level=matched；详见 /api-docs/reference/guide-playback-sources/）"),
+            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败或仅有试听时自动尝试备用接口（含新版 QQ 音源），核对歌曲身份并严格验证完整音频，匹配结果 level=matched；详见 /api-docs/reference/guide-playback-sources/）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
             ("GET", "/song/qualities", "公开", "歌曲音质文件资料（含沉浸声变体；不保证可播放）；详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/song/chorus", "公开", "副歌段落，startMs/endMs 均为毫秒；详见 /api-docs/reference/guide-song-insights-api/"),

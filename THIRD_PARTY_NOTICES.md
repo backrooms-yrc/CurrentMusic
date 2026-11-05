@@ -77,6 +77,10 @@ be imported without installing the Qt GUI stack.
   validated Debian 5.1.9 build enables GPL components and reports GPL-2.0-or-later.
   No FFmpeg binary or source is bundled by this repository; redistribution of a
   system image must preserve the applicable FFmpeg and dependency licenses.
+- The optional grey-track matching path also calls the public Vkeys service,
+  https://doc.vkeys.cn/, for QQ song metadata and stream URLs. Its REST adapter is
+  independently implemented; no service source, API keys or cookies are bundled.
+  Service responses and third-party music remain outside this repository's MIT license.
 - CurrentMusic branding in `assets/brand/` was generated for this project;
   provenance is recorded in its README. Third-party decoration metadata does
   not grant rights to the images referenced by it. User uploads, avatars,

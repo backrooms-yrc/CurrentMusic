@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { MatchError, checkDuration, inspectAudio, matchCandidates } = require('../backend/ncm-match-core.cjs');
 const { createService, matchEndpoint, wrapPlayback } = require('../backend/ncm-match-runtime.cjs');
+const { qqCandidates, selectQQSong } = require('../backend/ncm-fallback-providers.cjs');
 
 const reference = { id: 186001, duration: 299000 };
 const verified = { url: 'https://audio.example.test/full.mp3', type: 'mp3', durationMs: 299000,
@@ -58,6 +59,44 @@ async function run() {
     assert.throws(() => checkDuration(NaN, 299000), error => error.code === 'audio_duration_missing');
     checkDuration(299500, 299000);
     console.log('PASS source iteration: invalid candidates skipped, later complete source accepted, duplicate URLs checked once, missing durations fail closed');
+
+    const rescued = await matchCandidates(reference, [
+      { name: 'hung-a', timeoutMs: 15, get: () => new Promise(() => {}) },
+      { name: 'hung-b', timeoutMs: 15, get: () => new Promise(() => {}) },
+      { name: 'later', get: async () => base + '/full' },
+    ]);
+    assert.equal(rescued.source, 'later');
+    assert.equal(rescued.attempts.filter(a => a.reason === 'provider_timeout').length, 2);
+    console.log('PASS provider deadlines: two stalled providers cannot prevent a later complete source from running');
+
+    const songReference = { ...reference, name: '七里香', artists: [{ name: '周杰伦' }], album: { name: '七里香' } };
+    const qq = { mid: '004Z8Ihr0JIu5s', song: '七里香', singer_list: [{ name: '周杰伦' }], album: '七里香', interval: '4分59秒' };
+    const cover = { ...qq, singer_list: [{ name: '翻唱歌手' }] };
+    const live = { ...qq, song: '七里香 (Live)' };
+    const shortMetadata = { ...qq, interval: '0分30秒' };
+    assert.equal(selectQQSong(songReference, [cover, live, shortMetadata, qq]), qq);
+    for (const wrong of [cover, live, shortMetadata, { ...qq, subtitle: 'Live' }, { ...qq, singer_list: [] }]) {
+      assert.throws(() => selectQQSong(songReference, [wrong]), error => error.code === 'identity_mismatch');
+    }
+    const requests = [];
+    const fetchQQ = async (url, options) => {
+      url = new URL(url); requests.push(url);
+      assert(!Object.keys(options.headers).some(k => /cookie|authorization|real-ip|forwarded/i.test(k)));
+      const result = url.pathname === '/v2/music/tencent' ? { code: 200, data: [cover, live, qq] }
+        : { code: 0, data: { songMID: qq.mid, url: base + (url.searchParams.get('quality') === '2' ? '/short' : '/full') } };
+      return { ok: true, text: async () => JSON.stringify(result) };
+    };
+    const qqOptions = qqCandidates(songReference, { fetchImpl: fetchQQ });
+    await rejects(matchCandidates(songReference, [qqOptions[0]]), 'no_verified_source');
+    const alternatives = await matchCandidates(songReference, qqOptions);
+    assert.equal(alternatives.source, 'vkeys:qq:1');
+    assert.equal(alternatives.durationMs, 299000);
+    assert.equal(requests.filter(u => u.pathname === '/v2/music/tencent').length, 1, 'parallel qualities share the metadata lookup');
+    assert(requests.filter(u => u.pathname.endsWith('/song/link')).every(u => u.searchParams.get('mid') === qq.mid));
+    const malformed = qqCandidates(songReference, { fetchImpl: async url => ({ ok: true, text: async () =>
+      JSON.stringify(String(url).includes('/v2/') ? { code: 200, data: [qq] } : { code: 0, data: { songMID: 'wrong', url: base + '/full' } }) }) });
+    await rejects(matchCandidates(songReference, malformed), 'no_verified_source');
+    console.log('PASS cross-platform fallback: exact singer/title/version/duration required, current QQ link API used, previews rejected, next quality tried, cookies/IP never forwarded');
 
     let calls = 0, release;
     const engine = createService('/fixture', async () => { calls++; await new Promise(resolve => { release = resolve; }); return { ...verified }; });

@@ -644,6 +644,8 @@ def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, t
     it = items[0]
     if not it.get("url"):
         raise NcmError("该歌曲不可播放（版权/地区限制）")
+    if it.get("freeTrialInfo"):
+        raise NcmError("官方接口仅返回试听片段，需尝试备用音源")
     url = _https(it["url"])
     spec = {}
     if probe:

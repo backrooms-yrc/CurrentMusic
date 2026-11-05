@@ -32,6 +32,20 @@ class PlaybackSourceTests(unittest.TestCase):
             cm_ncm.song_url(1, real_ip=IP_A, probe=False)
         self.assertEqual(upstream.call_args.args[1]['realIP'], IP_A)
 
+    def test_official_preview_cannot_win_quality_selection_or_skip_fallback(self):
+        response = {'data': [{'url': 'https://audio.example.test/preview.mp3',
+                             'level': 'standard', 'freeTrialInfo': {'start': 0, 'end': 60}}]}
+        with mock.patch.object(cm_ncm, '_bounded_call', return_value=response), \
+             mock.patch.object(cm_ncm, 'probe_audio') as probe:
+            for checked in (True, False):
+                with self.assertRaisesRegex(cm_ncm.NcmError, '试听'):
+                    cm_ncm.song_url(1, real_ip=IP_A, probe=checked)
+            probe.assert_not_called()
+            with mock.patch.object(cm_ncm, 'song_url_match', return_value=MATCHED) as match:
+                out = cm_server.resolve_play_url(1, real_ip=IP_A)
+                self.assertEqual(out['level'], 'matched')
+                match.assert_called_once_with(1, real_ip=IP_A)
+
     def test_match_forwards_realip_without_cookie_and_reports_verified_quality(self):
         with mock.patch.dict('os.environ', {'CM_NCM_MATCH_SOURCE': 'fixture'}), \
              mock.patch.object(cm_ncm, '_ts', return_value=123), \

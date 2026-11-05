@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { fork } = require('node:child_process');
 const { createRequire } = require('node:module');
 const { MatchError, inspectAudio, matchCandidates } = require('./ncm-match-core.cjs');
+const { qqCandidates } = require('./ncm-fallback-providers.cjs');
 
 function stopWorker(child) {
   try { if (process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL'); else child.kill('SIGKILL'); } catch { /* already exited */ }
@@ -129,9 +130,13 @@ async function worker(job) {
   const utils = fs.realpathSync(path.dirname(req.resolve('@neteasecloudmusicapienhanced/unblockmusic-utils/package.json')));
   const modules = path.join(utils, 'modules');
   const names = fs.readdirSync(modules).filter(name => /^[a-z][a-z0-9_-]*\.js$/.test(name)).map(name => name.slice(0, -3));
-  if (job.source && !names.includes(job.source)) throw new MatchError('unknown_source');
+  if (job.source && job.source !== 'vkeys' && !names.includes(job.source)) throw new MatchError('unknown_source');
   const candidates = [];
-  for (const name of job.source ? [job.source] : names) {
+  // Keep the second QQ quality as a later fallback, so one unavailable service
+  // cannot occupy both workers while other independent sources are waiting.
+  const qq = !job.source || job.source === 'vkeys' ? qqCandidates(reference) : [];
+  if (qq.length) candidates.push(qq[0]);
+  for (const name of job.source === 'vkeys' ? [] : job.source ? [job.source] : names) {
     if (name === 'unm') {
       const localRequire = createRequire(path.join(utils, 'package.json'));
       const native = localRequire('@unblockneteasemusic/server');
@@ -149,6 +154,7 @@ async function worker(job) {
       } });
     }
   }
+  if (qq.length > 1) candidates.push(qq[1]);
   return matchCandidates(reference, candidates);
 }
 

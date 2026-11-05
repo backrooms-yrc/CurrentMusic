@@ -82,6 +82,14 @@ async function inspectAudio(candidate, reference, { fetchImpl = fetch, executeIm
     sr: Number(audio.sample_rate) || 0, bits: Number(audio.bits_per_raw_sample) || 0, ch: Number(audio.channels) || 0 };
 }
 
+function providerResult(candidate, reference) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new MatchError('provider_timeout')), candidate.timeoutMs || 2500);
+  });
+  return Promise.race([Promise.resolve().then(() => candidate.get(reference)), deadline]).finally(() => clearTimeout(timer));
+}
+
 async function matchCandidates(reference, candidates, inspect = inspectAudio) {
   if (!Number.isSafeInteger(reference.id) || reference.id <= 0 || !(reference.duration > 0)) throw new MatchError('reference_duration_missing');
   const attempts = [], checks = new Map();
@@ -91,7 +99,7 @@ async function matchCandidates(reference, candidates, inspect = inspectAudio) {
       const candidate = candidates[cursor++];
       if (!candidate) return;
       try {
-        const value = await candidate.get(reference);
+        const value = await providerResult(candidate, reference);
         const url = mediaUrl(typeof value === 'string' ? value : value?.url);
         if (!checks.has(url)) checks.set(url, inspect(url, reference));
         const verified = await checks.get(url);
