@@ -2441,7 +2441,7 @@ def route(handler, method):
             ("GET", "/songs/status", "可选登录", "歌曲列表状态：liked/faved 为本地状态，counts 为本地计数，ncmCounts 为网易云红心数"),
             ("GET", "/likes/count", "公开", "批量点赞数：counts 本地、ncmCounts 网易云红心数"),
             ("POST", "/likes/{ncmId}", "Bearer", "CurrentMusic 自建红心 toggle {meta}，返回 {on,count}（本地计数）"),
-            ("POST", "/ncmbind/like/{ncmId}", "Bearer", "网易云红心/取消红心 {like, meta}，返回 {liked,count}（网易云红心数）；写操作透传可信 RealIP"),
+            ("POST", "/ncmbind/like/{ncmId}", "Bearer", "网易云红心/取消红心 {like, meta}，返回 {liked,count}（网易云红心数）；上游返回带红心歌单 ID 的 500 时，核实归属后更新该歌单。写操作透传可信 RealIP"),
             ("GET", "/ncmbind/likelist", "Bearer", "绑定账号红心列表 {ids}；refresh=1 强制同步，短期合并已成功写入但上游尚未收敛的红心意图"),
             ("GET", "/daily", "可选登录", "每日推荐"),
             ("GET", "/ncm/search", "公开", "网易云搜索代理，透传 NGINX 提供的用户 RealIP 并按用户 IP 隔离缓存；单曲首屏可含 catalogSongs（公开专辑精确匹配，不计入上游分页）。type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；失败通过 lyricContextStatus 明示。详见 /api-docs/reference/guide-search-catalog/ 与 /api-docs/reference/guide-search-lyrics-api/"),
@@ -3568,21 +3568,26 @@ def route(handler, method):
         """红心/取消红心到绑定的网易云账号，并同步维护本地「我喜欢·网易云」快照。"""
         u = require_user(handler)
         b = cm_db.get_binding(u["id"])
-        if not b:
+        if not b or not b["cookie"]:
             raise ApiError(400, "未绑定网易云账号，请先在「我的」页扫码绑定")
         ncm_id = int(m.group(1))
         meta = norm_meta({**(body or {}), "ncm_id": ncm_id})
         like = bool((body or {}).get("like", True))
         cm_db.upsert_song(meta)
         try:
-            cm_ncm.like_song(b["cookie"], ncm_id, like,
-                             real_ip=cm_ncm_gateway.client_ip(handler))
+            liked_pid = cm_ncm.set_song_like(b["cookie"], b["ncm_uid"], ncm_id, like,
+                                            real_ip=cm_ncm_gateway.client_ip(handler))
         except cm_ncm.NcmError as e:
-            raise ApiError(502, str(e))
+            if e.status_code in (301, 401):
+                raise ApiError(401, "网易云登录已失效，请重新绑定网易云账号后再试") from None
+            if e.status_code and (400 <= e.status_code < 500 or e.status_code == 503):
+                raise ApiError(e.status_code, str(e)) from None
+            raise ApiError(502, str(e)) from None
         _remember_ncm_like(u['id'], b, ncm_id, like)
         counts = _ncm_like_counts([ncm_id], refresh=True)
-        if b["ncm_liked_pl_id"]:
-            pid = cm_db.find_ncm_playlist(u["id"], b["ncm_liked_pl_id"])
+        liked_pid = liked_pid or b["ncm_liked_pl_id"]
+        if liked_pid:
+            pid = cm_db.find_ncm_playlist(u["id"], liked_pid)
             if pid:
                 if like:
                     cm_db.playlist_add_tracks(pid, [ncm_id])

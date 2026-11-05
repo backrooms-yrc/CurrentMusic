@@ -70,9 +70,10 @@ class NcmError(Exception):
     限额）映射为 4xx；网络故障和未知上游异常仍由网关统一返回 502。
     """
 
-    def __init__(self, message, status_code=None):
+    def __init__(self, message, status_code=None, response=None):
         super().__init__(message)
         self.status_code = status_code
+        self.response = response or {}
 
 
 _WALL_TIMEOUT = object()
@@ -94,16 +95,21 @@ def _bounded_call(path, params, timeout, **kw):
     return out
 
 
-def _json_error_message(exc):
-    """从上游 HTTPError 的 JSON body 提取网易云的 message/msg。"""
+def _json_error_response(exc):
     try:
         raw = exc.read().decode("utf-8", errors="replace")
         data = json.loads(raw)
         if isinstance(data, dict):
-            return data.get("message") or data.get("msg") or ""
+            return data
     except (OSError, ValueError, UnicodeError):
         pass
-    return ""
+    return {}
+
+
+def _json_error_message(exc):
+    """从上游 HTTPError 的 JSON body 提取网易云的 message/msg。"""
+    data = _json_error_response(exc)
+    return data.get("message") or data.get("msg") or ""
 
 
 def ncm_cookie():
@@ -176,25 +182,26 @@ def call(path, params=None, timeout=15.0, retries=1, with_cookie=True, cookie=No
 
 def post_json(path, payload, cookie=None, timeout=10.0, real_ip=None):
     """POST JSON 到 api-enhanced（少数接口如 /weblog 需要对象 body，而不是 query）。"""
-    q = {}
+    payload = dict(payload)
     if real_ip:
-        q["realIP"] = real_ip
+        payload["realIP"] = real_ip
     ck = with_os_pc(cookie if cookie is not None else ncm_cookie())
     if ck:
-        q["cookie"] = ck
-    url = f"{BASE}{path}" + (f"?{urllib.parse.urlencode(q)}" if q else "")
+        payload["cookie"] = ck
+    # 上游缓存键不包含 POST body。写操作必须绕过缓存，凭据留在请求体内。
     req = urllib.request.Request(
-        url,
+        f"{BASE}{path}",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json", "User-Agent": "CurrentMusic/1.0"},
+        headers={"Content-Type": "application/json", "User-Agent": "CurrentMusic/1.0", "X-Apicache-Bypass": "1"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        message = _json_error_message(e)
-        raise NcmError(f"网易云请求失败：{message or e}", status_code=e.code)
+        response = _json_error_response(e)
+        message = response.get("message") or response.get("msg")
+        raise NcmError(f"网易云请求失败：{message or e}", status_code=e.code, response=response) from None
     except Exception as e:  # noqa: BLE001
         raise NcmError(f"NCM 上游请求失败: {e}")
 
@@ -1291,15 +1298,47 @@ def user_playlists(cookie, uid):
 
 
 def like_song(cookie, ncm_id, like=True, real_ip=None):
-    """红心/取消红心到绑定的网易云账号。
-    实测：/like 写生效存在数秒延迟、偶发首试被静默吞掉（返回 200 但未落库），
-    故带一次重试；likelist 与喜欢歌单会随后一致。"""
-    d = call("/like", {"id": int(ncm_id), "like": "true" if like else "false"},
-             cookie=cookie, timeout=12.0, retries=1, real_ip=real_ip)
-    code = (d or {}).get("code")
-    if code not in (200, 100000, 100001):
-        raise NcmError(f"网易云红心失败: {(d or {}).get('message') or code}")
+    """红心/取消红心到绑定的网易云账号。"""
+    data = post_json("/like", {"id": int(ncm_id), "like": "true" if like else "false"},
+                     cookie=cookie, timeout=12.0, real_ip=real_ip)
+    _check_like_result(data, (200, 100000, 100001))
     return True
+
+
+def _check_like_result(data, accepted=(200,)):
+    data = data if isinstance(data, dict) else {}
+    code = data.get("code")
+    if code not in accepted:
+        raise NcmError("网易云未能更新这首歌的红心，请稍后重试",
+                       status_code=code if isinstance(code, int) else None, response=data)
+
+
+def set_song_like(cookie, uid, ncm_id, like=True, real_ip=None):
+    """常规红心失败时，使用已核实的本人红心歌单，返回备用路径写入的歌单 ID。"""
+    try:
+        like_song(cookie, ncm_id, like, real_ip=real_ip)
+        return None
+    except NcmError as error:
+        pid = str(error.response.get("playlistId") or "")
+        # /radio/like 对部分曲目返回 500，并带当前账号的红心歌单 ID。
+        # 登录失效、限流和普通网络错误不能据此尝试另一条写入路径。
+        if error.status_code != 500 or error.response.get("code") != 500 or not pid.isdecimal() or not uid:
+            raise
+
+    data = post_json("/user/playlist", {"uid": uid, "limit": 10}, cookie=cookie, timeout=8.0)
+    playlists = data.get("playlist") if isinstance(data, dict) and data.get("code") == 200 else None
+    if not isinstance(playlists, list) or not any(
+        isinstance(p, dict) and str(p.get("id")) == pid and str(p.get("userId")) == str(uid)
+        and p.get("specialType") == 5 and not p.get("subscribed")
+        for p in playlists
+    ):
+        raise NcmError("未能确认网易云绑定账号的「我喜欢」歌单，红心更新失败")
+    data = post_json("/playlist/tracks", {"pid": int(pid), "tracks": str(ncm_id), "op": "add" if like else "del"},
+                     cookie=cookie, timeout=12.0, real_ip=real_ip)
+    # api-enhanced 的 playlist/tracks 在正常路径会多包一层 body。
+    result = data.get("body", data) if isinstance(data, dict) else data
+    _check_like_result(result)
+    return int(pid)
 
 
 def likelist(cookie, uid):

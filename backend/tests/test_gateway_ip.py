@@ -58,7 +58,7 @@ class TestRealIpPolicy(unittest.TestCase):
         self.assertNotIn("realIP", p)
 
     def test_custom_writes_forward_server_derived_ip(self):
-        with mock.patch.object(cm_ncm, "call", return_value={"code": 200}) as m:
+        with mock.patch.object(cm_ncm, "post_json", return_value={"code": 200}) as m:
             cm_ncm.like_song("cookie", 1, True, real_ip="36.59.138.2")
             self.assertEqual(m.call_args.kwargs["real_ip"], "36.59.138.2")
         with mock.patch.object(cm_ncm, "call", return_value={"code": 200, "comment": {"commentId": 9}}) as m:
