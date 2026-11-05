@@ -40,6 +40,12 @@ export function applyTheme() {
   if (settings.theme === 'light') root.classList.add('mdui-theme-light');
   else if (settings.theme === 'dark') root.classList.add('mdui-theme-dark');
   else {
+    // 翱翔鸟Music：auto 默认保持浅色，不跟随系统半夜自动变黑（用户反馈「莫名变深色」）。
+    // 需要深色时在设置里显式选「深色」即可。
+    if (root.getAttribute('data-ui-preset') === 'soaringbird') {
+      root.classList.add('mdui-theme-light');
+      return;
+    }
     // auto：Android 壳里跟随系统（桥查询），浏览器里用 media query
     const sysDark = typeof window.NativeApi !== 'undefined' && window.NativeApi.isDarkMode
       ? window.NativeApi.isDarkMode()

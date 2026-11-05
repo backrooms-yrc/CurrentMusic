@@ -88,6 +88,61 @@ async function decorBannerHTML() {
   try { return decorBannerFromMe(await api.me()); } catch (e) { return ''; }   // 未登录/限流/断网都静默不显示
 }
 
+// 首页大横幅：移植「翱翔鸟Music / Apple Music」首页的双列 hero
+// （封面大图 + 从左侧压暗的遮罩 + 大标题，点击进歌单或直接播放）。
+const HERO_TINT = [['#5B4BFF', '#FF3D71'], ['#00C2FF', '#FF6B4A']];
+function heroHTML(daily, recPls) {
+  const items = [];
+  (recPls || []).slice(0, 2).forEach((p, i) => {
+    if (!p || !p.picUrl) return;
+    items.push({
+      kind: 'pl', id: p.id, pic: `${p.picUrl}?param=800y800`, tint: HERO_TINT[i % 2],
+      eyebrow: '精选歌单', title: p.name, sub: p.trackCount ? `${p.trackCount} 首` : '',
+    });
+  });
+  (daily || []).forEach((s, idx) => {
+    if (items.length >= 2 || !s || !s.pic) return;
+    items.push({
+      kind: 'song', songIdx: idx, pic: s.pic, tint: HERO_TINT[items.length % 2],
+      eyebrow: '每日推荐', title: s.name, sub: s.artists || '',
+    });
+  });
+  if (!items.length) return '';
+  return renderHeroItems(items);
+}
+
+/** 兜底：直接从「每日推荐」横滑卡片提取封面/标题，保证 hero 一定出得来。 */
+function heroFromCards(el) {
+  const cards = [...el.querySelectorAll('#dailyRow .cm-card')].slice(0, 2);
+  const items = cards.map((c, i) => {
+    const img = c.querySelector('img');
+    const src = img && img.getAttribute('src');
+    if (!src) return null;
+    return {
+      kind: 'song', songIdx: +c.dataset.i, pic: src, tint: HERO_TINT[i % 2],
+      eyebrow: '每日推荐',
+      title: (c.querySelector('.cm-card-name') || {}).textContent || '',
+      sub: (c.querySelector('.cm-card-sub') || {}).textContent || '',
+    };
+  }).filter(Boolean);
+  return items.length ? renderHeroItems(items) : '';
+}
+
+function renderHeroItems(items) {
+  return `<section class="cm-hero">${items.map(it => {
+    const inner = `<img class="cm-hero__art" src="${esc(it.pic)}" alt="" loading="lazy">
+      <span class="cm-hero__veil" aria-hidden="true"></span>
+      <span class="cm-hero__text">
+        <span class="cm-hero__eyebrow">${esc(it.eyebrow)}</span>
+        <span class="cm-hero__title">${esc(it.title)}</span>
+        ${it.sub ? `<span class="cm-hero__sub">${esc(it.sub)}</span>` : ''}
+      </span>`;
+    return it.kind === 'pl'
+      ? `<a class="cm-hero__card" href="#/ncmpl/${it.id}" style="--h1:${it.tint[0]};--h2:${it.tint[1]}">${inner}</a>`
+      : `<button type="button" class="cm-hero__card" data-hero-song="${it.songIdx}" style="--h1:${it.tint[0]};--h2:${it.tint[1]}">${inner}</button>`;
+  }).join('')}</section>`;
+}
+
 export async function render(el) {
   el.innerHTML = `
     ${cmxBannerHTML()}
@@ -203,6 +258,18 @@ export async function render(el) {
     </section>` : ''}
   `;
   startGreetClock(el);            // 正式内容渲染后重启时钟（骨架屏那份随节点替换自动停）
+  // 首页 hero 单独插入（放在问候语之后、第一个区块之前）：不参与整页模板字符串，
+  // 数据为空时也不会占位。
+  const heroSection = heroHTML(daily, recPls) || heroFromCards(el);
+  const firstSec = el.querySelector('.cm-sec');
+  if (heroSection && firstSec) firstSec.insertAdjacentHTML('beforebegin', heroSection);
+  // 首页 hero 里「每日推荐歌曲」那张大卡：点一下就从该曲开始播
+  el.querySelectorAll('.cm-hero__card[data-hero-song]').forEach(b => {
+    b.addEventListener('click', () => {
+      const i = +b.dataset.heroSong;
+      if (daily[i]) player.playList(daily, i);
+    });
+  });
   // 骨架屏那次渲染会被正式内容整体替换，所以必须在这里（最终 DOM）绑定；
   // App 的 WebView 不会把 APK 链接当下载，直接走原生下载桥；浏览器保留普通 <a>。
   const cmxBanner = el.querySelector('.cm-cmx-banner');

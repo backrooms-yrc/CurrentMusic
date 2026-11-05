@@ -50,7 +50,24 @@ export function setUiPreset(key) {
   try { document.dispatchEvent(new Event('cm-uipreset')); } catch (e) { /* 忽略 */ }
 }
 
+/* 翱翔鸟专属侧栏（index.html 里的静态结构）的激活项跟着当前路由走。
+   其它皮肤下该侧栏由 CSS 隐藏，这里只是切类，无副作用。 */
+let sbNavBound = false;
+function syncSbNav() {
+  const nav = document.getElementById('sbNav');
+  if (!nav) return;
+  const hash = (location.hash || '#/home').split('?')[0];
+  nav.querySelectorAll('.sb-snav__item').forEach(a => {
+    a.classList.toggle('is-active', a.getAttribute('href') === hash);
+  });
+}
+
 /** 启动时套用（main.js 很早就调用；index.html 里另有一段内联脚本防闪白）。 */
 export function bootUiPreset() {
   applyUiPreset(uiPresetKey());
+  if (!sbNavBound) {
+    sbNavBound = true;
+    window.addEventListener('hashchange', syncSbNav);
+  }
+  syncSbNav();
 }

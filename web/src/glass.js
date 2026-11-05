@@ -221,11 +221,27 @@ function targetEls(t) {
   return out;
 }
 
-/** 按当前皮肤与尺寸重建所有折射图（非玻璃皮肤时直接跳过）。 */
+/** 移除所有折射透镜：切换皮肤到没有玻璃目标的主题时必须清掉，
+    否则旧的 displacement 滤镜会留在底栏/胶囊上，看起来像一层糊住的白色覆盖物。 */
+function removeLenses() {
+  Object.keys(built).forEach(id => {
+    const b = built[id];
+    if (b && b.el) {
+      try { b.el.style.removeProperty('--frs-lens'); } catch { /* 忽略 */ }
+    }
+    if (b && b.filterNode && b.filterNode.parentNode) {
+      try { b.filterNode.parentNode.removeChild(b.filterNode); } catch { /* 忽略 */ }
+    }
+    delete built[id];
+  });
+}
+
 export function refreshGlass() {
-  if (!glassRefractionSupported()) return;
   const targets = activeTargets();
-  if (!targets) return;
+  // 先判断皮肤：非玻璃皮肤必须清掉旧滤镜，不能因为「当前内核不支持折射」就跳过清理，
+  // 否则上一套皮肤留下的 --frs-lens 会像一层糊住的白膜压在胶囊上。
+  if (!targets) { removeLenses(); return; }
+  if (!glassRefractionSupported()) return;
   targets.forEach(t => {
     targetEls(t).forEach(({ el, id }) => {
       const r = el.getBoundingClientRect();

@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <!-- index.html 本身没有指纹；一旦被 CDN/WebView 缓存，就会引用旧版 app.css/app.js，
+       表现成「改了但没生效」。强制每次重新校验入口文件，资源仍走 ?v= 指纹缓存。 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>CurrentMusic</title>
   <link rel="icon" href="brand-icon.png?v=sage1" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=sage1">
@@ -37,8 +42,10 @@
     } catch (e) { /* 忽略 */ }
     try {
       var bootTheme = localStorage.getItem('cm.theme') || 'auto';
-      document.documentElement.classList.add('mdui-theme-' + (bootTheme === 'dark' || bootTheme === 'light' ? bootTheme : 'auto'));
       var p = localStorage.getItem('cm.uiPreset');
+      // 翱翔鸟Music：auto 不跟随系统变深色（首帧也不能闪黑）
+      if (p === 'soaringbird' && bootTheme !== 'light' && bootTheme !== 'dark') bootTheme = 'light';
+      document.documentElement.classList.add('mdui-theme-' + (bootTheme === 'dark' || bootTheme === 'light' ? bootTheme : 'auto'));
       // 默认皮肤 = CurrentMusicX 风格（v1.28.74 起）：未选择过 → cmx；
       // 显式选了 Material 3 → 不打属性（基础样式）；其余按所存值。
       if (p === 'frost' || p === 'glass' || p === 'cmx' || p === 'soaringbird') document.documentElement.setAttribute('data-ui-preset', p);
@@ -89,10 +96,46 @@
 
   <div id="mini"></div>
 
+  <!-- 翱翔鸟Music 专属侧栏（仅该主题 + 桌面显示）：结构对齐参考项目 Sidebar.jsx -->
+  <nav id="sbNav" aria-label="主导航">
+    <div class="sb-sidebar__top">
+      <a class="sb-sidebar__brand" href="#/home">
+        <img src="brand-icon.png?v=sage1" alt="" width="25" height="25">
+        <span>CurrentMusic</span>
+      </a>
+    </div>
+    <div class="sb-sidebar__scroll">
+      <ul class="sb-snav">
+        <li><a class="sb-snav__item" href="#/search"><span class="material-icons-outlined">search</span><span>搜索</span></a></li>
+      </ul>
+      <ul class="sb-snav">
+        <li><a class="sb-snav__item" href="#/home"><span class="material-icons-outlined">home</span><span>主页</span></a></li>
+        <li><a class="sb-snav__item" href="#/square"><span class="material-icons-outlined">explore</span><span>发现</span></a></li>
+        <li><a class="sb-snav__item" href="#/library"><span class="material-icons-outlined">library_music</span><span>歌单</span></a></li>
+      </ul>
+      <p class="sb-snav__label">账号</p>
+      <ul class="sb-snav">
+        <li><a class="sb-snav__item" href="#/user"><span class="material-icons-outlined">person</span><span>我的</span></a></li>
+        <li><a class="sb-snav__item" href="#/settings"><span class="material-icons-outlined">settings</span><span>设置</span></a></li>
+      </ul>
+    </div>
+    <div class="sb-sidebar__user">
+      <a class="sb-sidebar__user-row" href="#/user">
+        <span class="sb-sidebar__avatar material-icons-outlined">person</span>
+        <span class="sb-sidebar__user-meta">
+          <span class="sb-sidebar__user-name">CurrentMusic</span>
+          <span class="sb-sidebar__user-hint">账户与设置</span>
+        </span>
+        <span class="sb-sidebar__chev material-icons-outlined">chevron_right</span>
+      </a>
+    </div>
+  </nav>
+
   <nav id="bottomNav">
     <!-- 液态玻璃「水滴」指示器：包裹当前选中的 tab，切换时像液滴一样流动拉伸。
          仅在「简约玻璃」皮肤下显示（见 app.css），默认皮肤沿用 MD3 胶囊。 -->
     <span id="navDrop" aria-hidden="true"></span>
+    <a href="#/search" class="navItem sb-only"><span class="nav-ic"><span class="material-icons-outlined">search</span></span><span>搜索</span></a>
     <a href="#/home" class="navItem"><span class="nav-ic"><span class="material-icons-outlined">home</span></span><span>首页</span></a>
     <a href="#/square" class="navItem"><span class="nav-ic"><span class="material-icons-outlined">explore</span></span><span>发现</span></a>
     <a href="#/library" class="navItem"><span class="nav-ic"><span class="material-icons-outlined">library_music</span></span><span>歌单</span></a>
