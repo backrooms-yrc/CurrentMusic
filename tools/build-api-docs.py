@@ -21,7 +21,7 @@ import cm_ncm_gateway
 
 GROUPS = {
     'auth': '账号与认证', 'profile': '个人资料', 'passport': '通行证与应用授权',
-    'users': '用户与社交', 'ncmbind': '网易云绑定与同步', 'ncm': '音乐与媒体',
+    'users': '用户与社交', 'levels': '用户与社交', 'ncmbind': '网易云绑定与同步', 'ncm': '音乐与媒体',
     'network': '线路测速', 'rooms': '一起听房间', 'chat': '聊天与 AI', 'ai': '聊天与 AI',
     'admin': '管理接口', 'announcements': '公告', 'posts': '动态', 'playlists': '歌单',
     'likes': '收藏与红心', 'favs': '收藏与红心', 'songs': '音乐与媒体', 'search': '搜索历史',
@@ -29,6 +29,7 @@ GROUPS = {
     'download': '客户端与资源', 'x': '客户端与资源', 'cast': '客户端与资源',
 }
 GUIDES = {
+    'user-levels-api': '用户等级、试炼与发现排序',
     'admin-overview-api': '管理台用户来源统计',
     'song-insights-api': '歌曲音质、副歌与其他版本',
     'search-history-api': '账号搜索历史与多端同步',

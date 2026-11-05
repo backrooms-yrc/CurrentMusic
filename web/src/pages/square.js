@@ -5,6 +5,9 @@ import { mountPosts } from '../posts.js';
 import { closeChat } from '../chat.js';
 
 const SORTS = [
+  { key: 'composite', label: '综合排序' },
+  { key: 'active', label: '活跃排序' },
+  { key: 'level', label: '等级排序' },
   { key: 'reg', label: '注册最新' },
   { key: 'reg_asc', label: '注册最早' },
   { key: 'name', label: '昵称' },
@@ -32,7 +35,8 @@ function switchTab(k) {
 
 export async function render(el, params, state = {}) {
   const query = state.query ?? ((params && params.q) || '');
-  const sort = state.sort ?? (sessionStorage.getItem('cm.sqSort') || 'reg');
+  const requestedSort = state.sort ?? sessionStorage.getItem('cm.sqSort');
+  const sort = SORTS.some(s => s.key === requestedSort) ? requestedSort : 'composite';
   // 「仅显示正在听歌」：与排序一样记住选择（会话级）
   const listening = state.listening ?? (sessionStorage.getItem('cm.sqListening') === '1');
   const users = state.users ?? null;

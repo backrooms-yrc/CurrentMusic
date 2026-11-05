@@ -25,6 +25,7 @@ import cm_passkeys
 import cm_db
 import cm_decor
 import cm_lddc
+import cm_levels
 import cm_mail
 import cm_ncm
 import cm_songinfo
@@ -271,6 +272,7 @@ def _payload_daily(u):
 def _payload_me(u):
     """当前用户资料 + 统计 + 挂件解锁状态。原 /auth/me 逻辑。"""
     out = public_user(u)
+    out["points"] = u["points"]
     protection = cm_2fa.status(u["id"])
     out["twoFactorEnabled"] = protection["enabled"]
     out["securityQuestionEnabled"] = protection["securityQuestionEnabled"]
@@ -1485,6 +1487,7 @@ def public_user(u):
         "isSuper": bool(u.get("is_super")),        # 超级管理员（广场恒置顶）
         "isOwner": bool(u.get("is_owner")),        # 站长（最高角色，广场置顶优先于超管）
         "title": u.get("title") or "",             # 站内头衔（管理员授予；''=无）——广场/主页等各处展示
+        "level": u["level"],
         "publicSquare": bool(u.get("public_square", 1)),   # 是否公开到发现页广场
         "avatarDecoration": u.get("avatar_decoration") or "",   # 已选头像挂件 id（''=未设置）
         "phone": mask_phone(u.get("phone")),       # 已绑手机（脱敏），未绑定为空串
@@ -2383,7 +2386,7 @@ def route(handler, method):
             ("POST", "/auth/2fa/login", "公开", "{challengeToken, code}：完成第二步登录，返回 {token, user}；5 分钟有效，失败每账号 5 次/5 分钟"),
             ("POST", "/auth/login", "公开", "登录 Current 账户；开启验证器 2FA 或密保时先返回验证挑战（requires2FA 或 requiresSecurityQuestion、challengeToken、expiresIn），不会签发会话"),
             ("POST", "/auth/logout", "Bearer", "退出当前设备并撤销会话"),
-            ("GET", "/auth/me", "Bearer", "当前账户资料与统计"),
+            ("GET", "/auth/me", "Bearer", "当前账户资料与统计（含累计积分 points 和等级 level）"),
             ("GET", "/auth/sessions", "Bearer", "在线设备列表 {max:null,sessions}；数量不限，超过 5 台时客户端提示风险"),
             ("DELETE", "/auth/sessions/{id}", "Bearer", "下线指定设备"),
             ("DELETE", "/auth/sessions/others", "Bearer", "下线其他设备"),
@@ -2393,7 +2396,8 @@ def route(handler, method):
             ("GET", "/admin/overview", "管理员", "管理台概览：总量、注册与播放趋势、角色计数、用户来源 sourceCounts {web,x,other}（按最近一次成功登录或注册归类）"),
             ("GET", "/admin/clients", "管理员", "客户端版本：CurrentMusic 与 CurrentMusicX 的版本/大小/发布时间/更新说明/历史/下载数"),
             ("GET", "/admin/traffic", "管理员", "站点出站流量（需 CM_TRAFFIC_LOG；服务端 20s 缓存）"),
-            ("GET", "/admin/users", "管理员", "用户搜索/分页/排序 {query,limit,offset,sort}；sort=reg/reg_asc/name/active/sessions/likes/plays/role"),
+            ("GET", "/admin/users", "管理员", "用户搜索/分页/排序（含 points、level）；sort=reg/reg_asc/name/active/sessions/likes/plays/role"),
+            ("POST", "/admin/users/{id}/progression", "管理员", "为指定账号设置积分和等级 {points,level}，7 表示 Lv.6 Plus"),
             ("GET", "/admin/sessions", "管理员", "全部在线设备（最多 100 台）"),
             ("POST", "/announcements", "管理员", "发布公告（标题必填，正文支持 Markdown）"),
             ("PUT", "/announcements/{id}", "管理员本人/超管", "编辑公告（普通管理员仅限自己发布的）"),
@@ -2403,7 +2407,10 @@ def route(handler, method):
             ("POST", "/admin/users/{id}/title", "管理员", "设置 / 清空用户头衔（''=清空；普通管理员不能改超管）"),
             ("POST", "/admin/users/{id}/super", "超管", "设置 / 取消超级管理员（仅超管/站长，至少保留一位）"),
             ("POST", "/admin/users/{id}/owner", "站长", "设置 / 取消站长（最高角色，仅站长，至少保留一位）"),
-            ("GET", "/users/square", "公开", "用户发现广场（含 ipRegion IP 属地：省份/国家，空串=未知）"),
+            ("GET", "/users/square", "公开", "用户发现广场（含 level、ipRegion）；sort 默认 composite，新增 active、level"),
+            ("GET", "/levels/rules", "公开", "活跃积分、等级门槛与试炼规则"),
+            ("GET", "/levels/trial", "Bearer", "Lv.6 试炼题目（无答案）"),
+            ("POST", "/levels/trial", "Bearer", "提交 10 道试炼答案 {answers}；达到及格线升至 Lv.6 Plus"),
             ("GET", "/ncmbind", "Bearer", "网易云绑定状态（bound/profile/stale/lastSync）"),
             ("GET", "/ncmbind/session", "Bearer", "**第三方客户端用**：一次返回 bound/valid/profile/note（不暴露 cookie，登录态由服务端代理）"),
             ("POST", "/ncmbind/import", "Bearer", "同步本机网易云登录至当前账号；服务端验证身份，不返回 cookie；详见第三方登录态同步专题"),
@@ -3702,6 +3709,31 @@ def route(handler, method):
             raise ApiError(403, "只能删除自己的评论")
         return jresp(handler, 200, {"ok": True})
 
+    if path == "/levels/rules" and method == "GET":
+        return jresp(handler, 200, cm_levels.rules())
+
+    if path == "/levels/trial" and method == "GET":
+        u = require_user(handler)
+        if u["level"] < cm_levels.TRIAL_LEVEL:
+            raise ApiError(403, "达到 Lv.6 后可参加试炼")
+        if u["level"] == cm_levels.PLUS_LEVEL:
+            raise ApiError(409, "已达到 Lv.6 Plus")
+        return jresp(handler, 200, {"questions": cm_levels.trial_questions()})
+
+    if path == "/levels/trial" and method == "POST":
+        u = require_user(handler)
+        if u["level"] < cm_levels.TRIAL_LEVEL:
+            raise ApiError(403, "达到 Lv.6 后可参加试炼")
+        try:
+            score = cm_levels.trial_score(body.get("answers") if isinstance(body, dict) else None)
+        except ValueError as e:
+            raise ApiError(400, str(e))
+        passed = score >= cm_levels.PASS_SCORE
+        level = cm_db.finish_level_trial(u["id"], passed)
+        if level < cm_levels.TRIAL_LEVEL:
+            raise ApiError(403, "达到 Lv.6 后可参加试炼")
+        return jresp(handler, 200, {"score": score, "passed": passed, "level": level})
+
     if path == "/users/square" and method == "GET":
         try:
             limit = min(int(q.get("limit") or 30), 60)
@@ -3709,7 +3741,7 @@ def route(handler, method):
         except ValueError:
             raise ApiError(400, "分页参数错误")
         return jresp(handler, 200, cm_db.square_users(
-            (q.get("query") or "").strip()[:50], q.get("sort") or "reg", limit, offset,
+            (q.get("query") or "").strip()[:50], q.get("sort") or "composite", limit, offset,
             listening_only=q.get("listening") in ("1", "true", "yes")))
 
     m = re.fullmatch(r"/users/(\d+)/profile", path)
@@ -4841,6 +4873,22 @@ def route(handler, method):
             raise ApiError(400, "分页参数错误")
         return jresp(handler, 200, cm_db.admin_list_users(
             q.get("query") or "", limit, offset, q.get("sort") or "reg"))
+
+    m = re.fullmatch(r"/admin/users/(\d+)/progression", path)
+    if m and method == "POST":
+        me = require_admin(handler)
+        uid = int(m.group(1))
+        if not isinstance(body, dict):
+            raise ApiError(400, "请提供积分和等级")
+        points, level = body.get("points"), body.get("level")
+        if type(points) is not int or not 0 <= points <= cm_levels.MAX_POINTS:
+            raise ApiError(400, f"积分须为 0 至 {cm_levels.MAX_POINTS} 的整数")
+        if type(level) is not int or not 1 <= level <= cm_levels.PLUS_LEVEL:
+            raise ApiError(400, "等级须为 1 至 7 的整数（7 为 Lv.6 Plus）")
+        if not cm_db.set_progression(uid, points, level):
+            raise ApiError(404, "用户不存在")
+        log.info("管理员 %s 设置了用户 %s 的积分=%s、等级=%s", me["id"], uid, points, level)
+        return jresp(handler, 200, {"ok": True, "points": points, "level": level})
 
     m = re.fullmatch(r"/admin/users/(\d+)/(disable|password|kick|admin|title|super|owner)", path)
     if m and method == "POST":

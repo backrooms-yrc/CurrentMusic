@@ -6,7 +6,7 @@
 import { mdui } from '../md.js';
 import { api, auth, settings } from '../api.js';
 import { renderMarkdown } from '../markdown.js';
-import { esc, toast, confirmDialog, promptDialog, userTags, fmtCount, avatarHTML } from '../ui.js';
+import { esc, toast, confirmDialog, promptDialog, userTags, levelLabel, fmtCount, avatarHTML } from '../ui.js';
 import { drawLineChart, drawBarChart, drawComboChart, drawDonutChart } from '../admin-charts.js';
 
 const PAGE = 20;
@@ -613,6 +613,7 @@ export async function render(el) {
             ${u.username === '__internal__' ? '<span class="cm-tag">内部账户</span>' : ''}
           </div>
           <div class="cm-usub">@${esc(u.username)}${u.email ? ' · ' + esc(u.email) : ''}${u.phone ? ' · ' + esc(u.phone) : ''} · 注册于 ${fmtTime(u.created_at)}</div>
+          <div class="cm-usub">${esc(u.points ?? 0)} 积分</div>
           <div class="cm-usub">赞 ${u.likes} · 歌单 ${u.playlists} · 播放 ${u.plays} · 在线设备 ${u.sessions}${u.bound ? ' · 已绑网易云' : ''}${u.last_seen ? ' · 最近活跃 ' + fmtTime(u.last_seen) : ''}</div>
         </div>
         <span class="cm-uact" data-act="menu" data-id="${u.id}" title="用户操作"><span class="material-icons-outlined">more_vert</span></span>
@@ -660,6 +661,7 @@ export async function render(el) {
       { k: 'pw', label: '重置密码', icon: 'password' },
       { k: u.disabled ? 'enable' : 'disable', label: u.disabled ? '解除禁用' : '禁用账号', icon: u.disabled ? 'lock_open' : 'block' },
       { k: 'title', label: u.title ? `修改头衔（当前：${u.title}）` : '设置头衔', icon: 'military_tech' },
+      { k: 'progression', label: '设置积分与等级', icon: 'trending_up' },
       ...roleActs,
     ];
     const diag = mdui.dialog({
@@ -692,6 +694,30 @@ export async function render(el) {
                 label: `头衔（最多 ${max} 字，留空 = 取消）`, value: u.title || '',
                 allowEmpty: true, maxlength: max,
                 onOk: async t => { const r = await api.adminSetTitle(id, t); toast(r.title ? `头衔已设为「${r.title}」` : '已取消头衔'); await afterUserChange(); },
+              });
+            } else if (k === 'progression') {
+              const rules = await api.levelRules();
+              const levels = rules.levels.map(item => item.level).concat(rules.trial.plusLevel);
+              const editor = mdui.dialog({
+                headline: `设置「${u.nickname || u.username}」的积分与等级`,
+                body: `<div class="cm-level-editor">
+                  <label>累计积分<input name="points" type="number" min="0" max="${esc(rules.maxPoints)}" step="1" value="${esc(u.points)}" required></label>
+                  <label>等级<select name="level">${levels.map(level =>
+                    `<option value="${level}" ${u.level === level ? 'selected' : ''}>${levelLabel(level)}</option>`).join('')}</select></label>
+                </div>`,
+                actions: [
+                  { text: '取消' },
+                  { text: '保存', onClick: async () => {
+                    const input = editor.querySelector('[name="points"]');
+                    if (!input.reportValidity()) return false;
+                    const level = Number(editor.querySelector('[name="level"]').value);
+                    try {
+                      await api.adminSetProgression(id, input.valueAsNumber, level);
+                      toast('积分与等级已更新');
+                      await afterUserChange();
+                    } catch (e) { toast(e.message); return false; }
+                  } },
+                ],
               });
             } else if (k === 'pw') {
               promptDialog({

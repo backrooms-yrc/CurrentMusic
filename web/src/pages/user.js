@@ -506,6 +506,7 @@ async function renderProfile(el, autoDecor) {
       </div>
 
       <div class="cm-quickrow">
+        <a class="cm-quick" href="#/levels"><span class="material-icons-outlined">military_tech</span><b>积分与升级规则</b>${u.points == null ? '' : `<i>${esc(u.points)} 积分</i>`}</a>
         <a class="cm-quick" href="#/pl/likes"><span class="material-icons-outlined">favorite</span><b>我喜欢的音乐</b></a>
         <a class="cm-quick" href="#/library"><span class="material-icons-outlined">queue_music</span><b>我的歌单</b></a>
         <a class="cm-quick" href="#/lyricmarks"><span class="material-icons-outlined">format_quote</span><b>我的歌词本</b></a>

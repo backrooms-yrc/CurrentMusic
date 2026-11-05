@@ -6,6 +6,8 @@ import secrets
 import sqlite3
 import time
 
+import cm_levels
+
 log = logging.getLogger("cm")     # 与 cm_server 同名 logger；迁移等一次性动作会打这里
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,6 +34,9 @@ CREATE TABLE IF NOT EXISTS users (
   is_owner INTEGER DEFAULT 0,        /* 站长（最高角色）：拥有超管全部权限，广场置顶优先于超管 */
   public_square INTEGER DEFAULT 1,   /* 是否公开到「发现」页广场（1=公开） */
   disabled INTEGER DEFAULT 0,
+  points INTEGER NOT NULL DEFAULT 0,
+  level INTEGER NOT NULL DEFAULT 1,
+  activity_at INTEGER NOT NULL DEFAULT 0,
   title TEXT DEFAULT '',             /* 站内头衔（管理员授予；''=无）。广场/主页/帖子/评论等各处展示 */
   avatar_decoration TEXT DEFAULT ''  /* 已选头像挂件 id（''=未设置）；需听歌时长达标才可设置 */
 );
@@ -372,6 +377,9 @@ def init():
         ("is_owner", "ALTER TABLE users ADD COLUMN is_owner INTEGER DEFAULT 0"),
         ("public_square", "ALTER TABLE users ADD COLUMN public_square INTEGER DEFAULT 1"),
         ("disabled", "ALTER TABLE users ADD COLUMN disabled INTEGER DEFAULT 0"),
+        ("points", "ALTER TABLE users ADD COLUMN points INTEGER NOT NULL DEFAULT 0"),
+        ("level", "ALTER TABLE users ADD COLUMN level INTEGER NOT NULL DEFAULT 1"),
+        ("activity_at", "ALTER TABLE users ADD COLUMN activity_at INTEGER NOT NULL DEFAULT 0"),
         # 站内头衔：管理员/超管授予，空串=无（广场/主页/帖子/评论等各处展示）
         ("title", "ALTER TABLE users ADD COLUMN title TEXT DEFAULT ''"),
         # v1.18.0 头像挂件：仅存挂件 id，元数据在 decorations 表中
@@ -748,6 +756,29 @@ def get_user(uid):
         conn.close()
 
 
+def set_progression(uid, points, level):
+    conn = connect()
+    try:
+        cur = conn.execute("UPDATE users SET points=?, level=? WHERE id=?", (points, level, uid))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def finish_level_trial(uid, passed):
+    conn = connect()
+    try:
+        if passed:
+            conn.execute("UPDATE users SET level=? WHERE id=? AND level=? AND disabled=0",
+                         (cm_levels.PLUS_LEVEL, uid, cm_levels.TRIAL_LEVEL))
+        user = conn.execute("SELECT level FROM users WHERE id=? AND disabled=0", (uid,)).fetchone()
+        conn.commit()
+        return user["level"] if user else 0
+    finally:
+        conn.close()
+
+
 def get_user_by_phone(phone):
     conn = connect()
     try:
@@ -816,6 +847,24 @@ def revoke_token(uid, token=None):
         conn.close()
 
 
+_LEVEL_PROMOTION = " ".join(
+    f"WHEN points < {threshold} AND points + {cm_levels.DAILY_POINTS} >= {threshold} THEN {level}"
+    for level, threshold in reversed(list(enumerate(cm_levels.THRESHOLDS, 1))) if threshold
+)
+
+
+def _record_activity(conn, uid, now, day_start):
+    # 只在越过新门槛时自动升级，保留管理员指定的等级，且自然升级不会降级。
+    conn.execute(
+        f"""UPDATE users SET activity_at=?,
+               level=CASE WHEN activity_at<? THEN MAX(level, CASE {_LEVEL_PROMOTION} ELSE level END)
+                          ELSE level END,
+               points=CASE WHEN activity_at<? THEN MIN(points+?, ?) ELSE points END
+             WHERE id=? AND activity_at<? AND disabled=0""",
+        (now, day_start, day_start, cm_levels.DAILY_POINTS, cm_levels.MAX_POINTS, uid, now),
+    )
+
+
 def user_by_token(token):
     """校验会话并按需刷新 last_seen（60s 节流，避免每次请求都写库）。"""
     import hashlib
@@ -823,16 +872,27 @@ def user_by_token(token):
     conn = connect()
     try:
         r = conn.execute(
-            "SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash=?", (th,)
+            "SELECT u.*, s.last_seen AS session_last_seen "
+            "FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash=?", (th,)
         ).fetchone()
         if not r or r["disabled"]:
             return None
         now = int(time.time())
-        s = conn.execute("SELECT last_seen FROM sessions WHERE token_hash=?", (th,)).fetchone()
-        if s and now - (s["last_seen"] or 0) > 60:
-            conn.execute("UPDATE sessions SET last_seen=? WHERE token_hash=?", (now, th))
+        day_start = now - (now + 8 * 3600) % 86400  # Asia/Shanghai
+        credit = r["activity_at"] < day_start
+        if credit or now - (r["session_last_seen"] or 0) > 60:
+            cur = conn.execute("UPDATE sessions SET last_seen=MAX(last_seen, ?) WHERE token_hash=?", (now, th))
+            if not cur.rowcount:
+                return None
+            _record_activity(conn, r["id"], now, day_start)
+            if credit:
+                r = conn.execute("SELECT * FROM users WHERE id=?", (r["id"],)).fetchone()
             conn.commit()
-        return dict(r)
+        if not r or r["disabled"]:
+            return None
+        user = dict(r)
+        user.pop("session_last_seen", None)
+        return user
     finally:
         conn.close()
 
@@ -1170,7 +1230,7 @@ def admin_list_users(query="", limit=20, offset=0, sort="reg"):
         rows = conn.execute(
             f"""SELECT u.id, u.username, u.nickname, u.avatar, u.avatar_decoration,
                    u.email, u.phone, u.created_at, u.is_admin, u.is_super, u.is_owner, u.disabled,
-                   u.title,
+                   u.title, u.points, u.level,
                    (SELECT COUNT(*) FROM likes l WHERE l.user_id=u.id) AS likes,
                    (SELECT COUNT(*) FROM playlists p WHERE p.user_id=u.id) AS playlists,
                    (SELECT COUNT(*) FROM plays pl WHERE pl.user_id=u.id) AS plays,
@@ -1194,8 +1254,12 @@ def admin_list_users(query="", limit=20, offset=0, sort="reg"):
 
 # ---------- 用户广场 / 公开主页 ----------
 
+_SQUARE_ACTIVITY = "MAX(u.activity_at, COALESCE((SELECT MAX(last_seen) FROM sessions WHERE user_id=u.id),0))"
 _SQUARE_SORTS = {
-    "reg": "u.created_at DESC",            # 注册时间（默认，最新在前）
+    "composite": f"u.level DESC, u.points DESC, {_SQUARE_ACTIVITY} DESC",
+    "active": f"{_SQUARE_ACTIVITY} DESC",
+    "level": "u.level DESC",
+    "reg": "u.created_at DESC",
     "reg_asc": "u.created_at ASC",
     "name": "u.nickname COLLATE NOCASE ASC",
     "days": "days DESC",                   # 听歌天数
@@ -1433,11 +1497,11 @@ def posts_count(author_id=None):
         conn.close()
 
 
-def square_users(query="", sort="reg", limit=30, offset=0, listening_only=False):
+def square_users(query="", sort="composite", limit=30, offset=0, listening_only=False):
     """用户广场：公开资料（头像/昵称/个签）+ 轻统计（含听歌时长）；管理员恒置顶。
     内部账户、被禁用用户、以及主动关闭「公开到广场」的用户都不出现。
     listening_only=True 时只返回「正在听歌」（近 LISTENING_WINDOW 秒内有播放）的用户。"""
-    order = _SQUARE_SORTS.get(sort, _SQUARE_SORTS["reg"])
+    order = _SQUARE_SORTS.get(sort, _SQUARE_SORTS["composite"])
     where = "WHERE u.disabled=0 AND u.username != '__internal__' AND u.public_square=1"
     args = []
     if query:
@@ -1452,14 +1516,15 @@ def square_users(query="", sort="reg", limit=30, offset=0, listening_only=False)
     try:
         rows = conn.execute(
             f"""SELECT u.id, u.nickname, u.avatar, u.bio, u.created_at, u.is_admin, u.is_super, u.is_owner,
-                   u.avatar_decoration, u.title, u.ip_region, u.is_bot,
+                   u.avatar_decoration, u.title, u.ip_region, u.is_bot, u.level,
                    (SELECT COUNT(*) FROM likes l WHERE l.user_id=u.id) AS likes,
                    (SELECT COUNT(*) FROM playlists p WHERE p.user_id=u.id) AS playlists,
                    (SELECT COUNT(DISTINCT date(pl.played_at,'unixepoch')) FROM plays pl WHERE pl.user_id=u.id) AS days,
                    (SELECT COALESCE(SUM(pl.ms),0) FROM plays pl
                      WHERE pl.user_id=u.id) AS listenMs
             FROM users u {where}
-            ORDER BY (u.username = ?) DESC, u.is_owner DESC, u.is_super DESC, u.is_admin DESC, {order}
+            ORDER BY (u.username = ?) DESC, u.is_owner DESC, u.is_super DESC, u.is_admin DESC,
+                     {order}, u.id DESC
             LIMIT ? OFFSET ?""",   # Rcst20 恒置顶；其余按角色，再按用户选择的排序
             args + [SQUARE_PINNED_USERNAME, limit, offset],
         ).fetchall()
@@ -1514,6 +1579,7 @@ def public_profile(uid):
                  "isOwner": bool(u.get("is_owner")),
                  "avatarDecoration": u.get("avatar_decoration") or "",
                  "title": u.get("title") or "",
+                 "level": u["level"],
                  "ipRegion": u.get("ip_region") or "",
                  "isBot": bool(u.get("is_bot")),
                  "public": bool(u.get("public_square", 1))},   # 关闭公开的人不对外暴露关注等社交数据

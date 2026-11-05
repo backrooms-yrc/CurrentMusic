@@ -28,7 +28,7 @@ class TestSquarePinAndAdminSort(unittest.TestCase):
         other = cm_db.create_user("bileizhen", "password123", "另一位站长")
         cm_db.set_owner(other, True)
 
-        for sort in ("reg", "reg_asc", "name", "days", "listen", "likes"):
+        for sort in ("composite", "active", "level", "reg", "reg_asc", "name", "days", "listen", "likes"):
             d = cm_db.square_users(sort=sort, limit=10, offset=0)
             self.assertEqual(d["users"][0]["id"], pinned, sort)
             self.assertEqual(d["users"][0]["nickname"], "ℝ𝕔𝕤𝕥𝟚𝟘", sort)

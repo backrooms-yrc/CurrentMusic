@@ -83,9 +83,22 @@ function decorBannerFromMe(me) {
     </a>`;
 }
 
-async function decorBannerHTML() {
+function accountBannersFromMe(me) {
+  const trial = me?.level === 6 ? `
+    <a class="cm-decor-banner" href="#/levels/trial">
+      <span class="material-icons-outlined">military_tech</span>
+      <span class="cm-decor-banner-t">
+        <b>通过试炼</b>
+        <span class="cm-decor-banner-sub">已达到 Lv.6，答题及格即可升至 Lv.6 Plus</span>
+      </span>
+      <span class="cm-decor-banner-go">开始答题<span class="material-icons-outlined">chevron_right</span></span>
+    </a>` : '';
+  return trial + decorBannerFromMe(me);
+}
+
+async function accountBannersHTML() {
   if (!auth.token) return '';
-  try { return decorBannerFromMe(await api.me()); } catch (e) { return ''; }   // 未登录/限流/断网都静默不显示
+  try { return accountBannersFromMe(await api.me()); } catch (e) { return ''; }   // 未登录/限流/断网都静默不显示
 }
 
 // 首页大横幅：移植「翱翔鸟Music / Apple Music」首页的双列 hero
@@ -147,7 +160,6 @@ export async function render(el) {
   el.innerHTML = `
     ${cmxBannerHTML()}
     ${greetMarkup()}
-    <div id="decorBanner"></div>
     <section class="cm-sec"><div class="cm-sec-head"><h2>每日推荐</h2></div>${skelCards(8)}</section>
     <section class="cm-sec">${skelList(3)}</section>`;
   startGreetClock(el);
@@ -163,11 +175,11 @@ export async function render(el) {
     daily = boot.daily.daily || [];
     forYou = boot.daily.forYou || [];
     artists = boot.daily.artists || [];
-    bannerHTML = decorBannerFromMe(boot.me);
+    bannerHTML = accountBannersFromMe(boot.me);
     ncmBound = !!(boot.bind && boot.bind.bound);
     recent = (boot.recent && boot.recent.songs) || [];
   } else {
-    const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
+    const bannerJob = accountBannersHTML().then(html => { bannerHTML = html; });
     const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => {})];
     if (auth.token) jobs.push(api.bindStatus().then(b => { if (b && b.bound) ncmBound = true; }).catch(() => {}));
     if (auth.token) jobs.push(api.recentPlays(20).then(d => { recent = d.songs || []; }).catch(() => {}));

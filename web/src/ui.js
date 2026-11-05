@@ -800,6 +800,11 @@ export function avatarHTML(user, size = 72) {
   return `<span class="cm-ava-box" style="width:${size}px;height:${size}px">${inner}${decor}</span>`;
 }
 
+export function levelLabel(level) {
+  if (level === 7) return 'Lv.6 Plus';
+  return Number.isInteger(level) && level >= 1 && level <= 6 ? `Lv.${level}` : '';
+}
+
 /**
  * 用户身份徽章：站内头衔 + 站长 / 超级管理员 / 管理员。
  * 兼容两种字段命名：广场接口是 snake_case（is_owner/is_super/is_admin），其余接口是 camelCase（isOwner/…）。
@@ -810,8 +815,10 @@ export function userTags(u, { role = true } = {}) {
   if (!u) return '';
   const out = [];
   const title = String(u.title || '').trim();
+  const level = levelLabel(u.level);
   if (u.isBot || u.is_bot) out.push('<span class="cm-tag ai">AI</span>');
   if (title) out.push(`<span class="cm-tag title">${esc(title)}</span>`);
+  if (level) out.push(`<span class="cm-tag">${level}</span>`);
   if (role) {
     if (u.isOwner || u.is_owner) out.push('<span class="cm-tag owner">站长</span>');
     else if (u.isSuper || u.is_super) out.push('<span class="cm-tag super">超级管理员</span>');

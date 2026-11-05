@@ -261,6 +261,7 @@ export const api = {
   /** 站点出站流量统计（nginx 日志聚合，需部署方配置 CM_TRAFFIC_LOG）。 */
   adminTraffic: () => call('GET', '/admin/traffic', { auth: true }),
   adminUsers: (query = '', offset = 0, limit = 20, sort = 'reg') => call('GET', `/admin/users?query=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}&sort=${encodeURIComponent(sort)}`, { auth: true }),
+  adminSetProgression: (id, points, level) => call('POST', `/admin/users/${id}/progression`, { body: { points, level }, auth: true }),
   adminDisable: (id, on) => call('POST', `/admin/users/${id}/disable`, { body: { on }, auth: true }),
   adminResetPassword: (id, password) => call('POST', `/admin/users/${id}/password`, { body: { password }, auth: true }),
   adminKick: (id) => call('POST', `/admin/users/${id}/kick`, { body: {}, auth: true }),
@@ -306,7 +307,10 @@ export const api = {
   recentPlays: (limit = 50) => call('GET', `/plays/recent?limit=${limit}`, { auth: true }),
 
   // 用户广场 / 公开主页（公开端点）
-  userSquare: (query = '', sort = 'reg', offset = 0, limit = 30, listening = false) =>
+  levelRules: () => call('GET', '/levels/rules'),
+  levelTrial: () => call('GET', '/levels/trial', { auth: true }),
+  submitLevelTrial: (answers) => call('POST', '/levels/trial', { body: { answers }, auth: true }),
+  userSquare: (query = '', sort = 'composite', offset = 0, limit = 30, listening = false) =>
     call('GET', `/users/square?query=${encodeURIComponent(query)}&sort=${sort}&offset=${offset}&limit=${limit}`
       + (listening ? '&listening=1' : '')),
   userProfile: (uid) => call('GET', `/users/${uid}/profile`),

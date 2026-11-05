@@ -44,6 +44,7 @@ import { initTopAccount } from './top-account.js';
 import { applyTheme } from './pages/settings.js';
 
 import * as home from './pages/home.js';
+import * as levels from './pages/levels.js';
 import * as search from './pages/search.js';
 import * as library from './pages/library.js';
 import * as playlist from './pages/playlist.js';
@@ -91,6 +92,8 @@ import * as legalPage from './pages/legal.js';
 
 const ROUTES = [
   { re: /^#\/home$/, page: home, title: 'CurrentMusic' },
+  { re: /^#\/levels$/, page: levels, title: '积分与升级规则' },
+  { re: /^#\/levels\/trial$/, page: levels, title: '通过试炼', fixed: ['trial'] },
   { re: /^#\/search$/, page: search, title: '搜索' },
   { re: /^#\/square$/, page: squarePage, title: '发现' },
   { re: /^#\/u\/(\d+)$/, page: profilePage, title: '用户主页', fixed: m => [m[1]] },
