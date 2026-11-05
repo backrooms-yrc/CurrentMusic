@@ -1,0 +1,1034 @@
+/* ==========================================================================
+   Aimo 设计风格预设
+   --------------------------------------------------------------------------
+   设计语言：编辑部 / 档案美学
+   核心特征：中性纸墨底色、纯正黑白主操作、衬线大字标题、等宽数字微排版、
+             胶囊圆角、隐形滚动条与细腻结构线。
+   作用域隔离：所有规则严格限定在 html[data-ui-preset="aimo"] 下，零全局污染。
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. 设计令牌与语义代币
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] {
+  /* 基础纸墨调色板（浅色模式） */
+  --aimo-bg: #fafaf9;
+  --aimo-bg-elevated: #ffffff;
+  --aimo-bg-sunken: #eeeeec;
+  --aimo-panel: #f4f4f2;
+  --aimo-text-primary: #191918;
+  --aimo-text-secondary: #5f605d;
+  --aimo-text-tertiary: #6b6c67;
+  --aimo-border: #d7d7d2;
+  --aimo-border-soft: #e7e7e2;
+  --aimo-primary: #1b1b19;
+  --aimo-primary-hover: #333330;
+  --aimo-primary-text: #fafaf8;
+  --aimo-accent: #1b1b19;
+  --aimo-accent-soft: #e7e7e2;
+  --aimo-accent-text: #fafaf8;
+  --aimo-success: #44745a;
+  --aimo-success-soft: #deebe2;
+  --aimo-warning: #9a651f;
+  --aimo-warning-soft: #f4e8cf;
+  --aimo-danger: #ad3e2d;
+  --aimo-danger-soft: #f5dfda;
+
+  /* 阴影系统 */
+  --aimo-shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.12);
+  --aimo-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.08);
+  --aimo-shadow-lg: 0 20px 54px rgba(0, 0, 0, 0.16);
+  --aimo-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  /* 形态与动效 */
+  --aimo-radius-button: 999px;
+  --aimo-radius-modal: 24px;
+  --aimo-radius-surface: 20px;
+  --aimo-radius-sheet: 28px;
+  --aimo-radius-control: 14px;
+  --aimo-radius-card: 16px;
+  --aimo-radius-item: 12px;
+  --aimo-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --aimo-motion: 260ms;
+
+  /* 字体族定义 */
+  --aimo-font-sans: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --aimo-font-serif: "Noto Serif SC", "Iowan Old Style", Baskerville, Georgia, "Songti SC", SimSun, serif;
+  --aimo-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* 映射项目主前景色与强调色 */
+  --cm-primary: var(--aimo-primary);
+  --cm-radius: var(--aimo-radius-card);
+
+  /* MDUI 亮色代币映射 */
+  --mdui-color-background-light: 250, 250, 249 !important;
+  --mdui-color-on-background-light: 25, 25, 24 !important;
+  --mdui-color-surface-light: 255, 255, 255 !important;
+  --mdui-color-surface-dim-light: 238, 238, 236 !important;
+  --mdui-color-surface-bright-light: 255, 255, 255 !important;
+  --mdui-color-surface-container-lowest-light: 255, 255, 255 !important;
+  --mdui-color-surface-container-low-light: 250, 250, 249 !important;
+  --mdui-color-surface-container-light: 244, 244, 242 !important;
+  --mdui-color-surface-container-high-light: 255, 255, 255 !important;
+  --mdui-color-surface-container-highest-light: 238, 238, 236 !important;
+  --mdui-color-on-surface-light: 25, 25, 24 !important;
+  --mdui-color-on-surface-variant-light: 95, 96, 93 !important;
+  --mdui-color-outline-light: 215, 215, 210 !important;
+  --mdui-color-outline-variant-light: 231, 231, 226 !important;
+  --mdui-color-primary-light: 27, 27, 25 !important;
+  --mdui-color-on-primary-light: 250, 250, 248 !important;
+  --mdui-color-primary-container-light: 238, 238, 236 !important;
+  --mdui-color-on-primary-container-light: 25, 25, 24 !important;
+
+  /* MDUI 圆角规整 */
+  --mdui-shape-corner-extra-small: 6px;
+  --mdui-shape-corner-small: 10px;
+  --mdui-shape-corner-medium: 14px;
+  --mdui-shape-corner-large: 20px;
+  --mdui-shape-corner-extra-large: 24px;
+  --mdui-shape-corner-full: 999px;
+}
+
+/* 深色模式令牌覆写 */
+html[data-ui-preset="aimo"].mdui-theme-dark {
+  --aimo-bg: #141414;
+  --aimo-bg-elevated: #202020;
+  --aimo-bg-sunken: #101010;
+  --aimo-panel: #1b1b1b;
+  --aimo-text-primary: #f2f2ed;
+  --aimo-text-secondary: #c2c2bc;
+  --aimo-text-tertiary: #a1a19a;
+  --aimo-border: #41413e;
+  --aimo-border-soft: #2d2d2b;
+  --aimo-primary: #f0f0eb;
+  --aimo-primary-hover: #ffffff;
+  --aimo-primary-text: #171717;
+  --aimo-accent: #f0f0eb;
+  --aimo-accent-soft: #30302e;
+  --aimo-accent-text: #171717;
+  --aimo-success: #6fa382;
+  --aimo-success-soft: #223328;
+  --aimo-warning: #d7a558;
+  --aimo-warning-soft: #372d1e;
+  --aimo-danger: #d9705a;
+  --aimo-danger-soft: #3b2521;
+
+  --aimo-shadow-popover: 0 14px 34px rgba(0, 0, 0, 0.42);
+  --aimo-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --aimo-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.50);
+  --aimo-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+
+  --cm-primary: var(--aimo-primary);
+
+  /* MDUI 暗色代币映射 */
+  --mdui-color-background-dark: 20, 20, 20 !important;
+  --mdui-color-on-background-dark: 242, 242, 237 !important;
+  --mdui-color-surface-dark: 32, 32, 32 !important;
+  --mdui-color-surface-dim-dark: 20, 20, 20 !important;
+  --mdui-color-surface-bright-dark: 45, 45, 45 !important;
+  --mdui-color-surface-container-lowest-dark: 16, 16, 16 !important;
+  --mdui-color-surface-container-low-dark: 20, 20, 20 !important;
+  --mdui-color-surface-container-dark: 27, 27, 27 !important;
+  --mdui-color-surface-container-high-dark: 36, 36, 36 !important;
+  --mdui-color-surface-container-highest-dark: 45, 45, 45 !important;
+  --mdui-color-on-surface-dark: 242, 242, 237 !important;
+  --mdui-color-on-surface-variant-dark: 194, 194, 188 !important;
+  --mdui-color-outline-dark: 65, 65, 62 !important;
+  --mdui-color-outline-variant-dark: 45, 45, 43 !important;
+  --mdui-color-primary-dark: 240, 240, 235 !important;
+  --mdui-color-on-primary-dark: 23, 23, 23 !important;
+  --mdui-color-primary-container-dark: 32, 32, 32 !important;
+  --mdui-color-on-primary-container-dark: 242, 242, 237 !important;
+}
+
+/* 强制清除全局彩色主色覆盖 */
+html[data-ui-preset="aimo"]:not([style*="--cm-primary"]) {
+  --cm-primary: var(--aimo-primary);
+}
+
+/* --------------------------------------------------------------------------
+   2. 全局基础排版、选区高亮与隐形滚动条
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] {
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html[data-ui-preset="aimo"] body {
+  background-color: var(--aimo-bg) !important;
+  background-image: none !important;
+  color: var(--aimo-text-primary) !important;
+  font-family: var(--aimo-font-sans);
+}
+
+/* 墨白文字反色选区 */
+html[data-ui-preset="aimo"] ::selection {
+  background: var(--aimo-primary);
+  color: var(--aimo-primary-text);
+}
+
+/* 全站隐形滚动条（保留原生顺滑滚动） */
+html[data-ui-preset="aimo"] * {
+  scrollbar-width: none !important;
+}
+html[data-ui-preset="aimo"] *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* 标题防孤字与排版平衡 */
+html[data-ui-preset="aimo"] h1,
+html[data-ui-preset="aimo"] h2,
+html[data-ui-preset="aimo"] h3,
+html[data-ui-preset="aimo"] .cm-sec-head h2,
+html[data-ui-preset="aimo"] .cm-greet-title,
+html[data-ui-preset="aimo"] #pageTitle,
+html[data-ui-preset="aimo"] .cm-detail-head h2 {
+  text-wrap: balance;
+  letter-spacing: -0.03em;
+}
+
+/* --------------------------------------------------------------------------
+   3. 顶部导航与滚动渐变模糊
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] #topbar {
+  height: calc(64px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))));
+  padding-top: min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px)));
+  padding-left: 20px;
+  padding-right: 16px;
+  background: transparent !important;
+  border-bottom: 1px solid transparent;
+  box-shadow: none !important;
+  transition: background-color var(--aimo-motion) var(--aimo-ease),
+              border-color var(--aimo-motion) var(--aimo-ease),
+              backdrop-filter var(--aimo-motion) var(--aimo-ease);
+}
+
+html[data-ui-preset="aimo"] #brandLock {
+  display: none !important;
+}
+
+html[data-ui-preset="aimo"] #pageTitle {
+  font-family: var(--aimo-font-serif);
+  font-size: calc(26px * var(--cm-fs, 1));
+  font-weight: 500;
+  line-height: 1.2;
+  color: var(--aimo-text-primary);
+}
+
+html[data-ui-preset="aimo"] #topSearch,
+html[data-ui-preset="aimo"] #topAction {
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--aimo-bg-elevated);
+  color: var(--aimo-text-primary);
+  border: 1px solid var(--aimo-border);
+  box-shadow: var(--aimo-shadow-sm);
+  transition: transform 120ms var(--aimo-ease), background 180ms ease;
+}
+
+html[data-ui-preset="aimo"] #topSearch:active,
+html[data-ui-preset="aimo"] #topAction:active {
+  transform: scale(0.92);
+  background: var(--aimo-panel);
+}
+
+/* 滚动时优雅淡入的渐变模糊与细微结构底线 */
+html[data-ui-preset="aimo"] #topbar.scrolled {
+  background: linear-gradient(var(--aimo-bg) 75%, transparent) !important;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--aimo-border-soft);
+}
+
+/* --------------------------------------------------------------------------
+   4. 主体布局与卡片体系
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] #out {
+  top: calc(64px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))));
+  bottom: 0;
+  padding: 6px clamp(16px, 4vw, 28px) calc(160px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+}
+
+html[data-ui-preset="aimo"] body.no-mini #out {
+  padding-bottom: calc(90px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+}
+
+html[data-ui-preset="aimo"] .cm-page {
+  max-width: 980px;
+}
+
+/* 问候区微排版 */
+html[data-ui-preset="aimo"] .cm-greet {
+  padding: 2px 2px 20px;
+}
+
+html[data-ui-preset="aimo"] .cm-greet-title {
+  font-family: var(--aimo-font-serif);
+  font-size: calc(28px * var(--cm-fs, 1));
+  font-weight: 500;
+  color: var(--aimo-text-primary);
+  line-height: 1.35;
+}
+
+html[data-ui-preset="aimo"] .cm-greet-date {
+  color: var(--aimo-text-tertiary);
+  font-size: 13px;
+  font-family: var(--aimo-font-mono);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+
+/* 分区标题 */
+html[data-ui-preset="aimo"] .cm-sec-head {
+  margin: 24px 2px 12px;
+}
+
+html[data-ui-preset="aimo"] .cm-sec-head h2 {
+  font-family: var(--aimo-font-serif);
+  font-size: calc(20px * var(--cm-fs, 1));
+  font-weight: 500;
+  color: var(--aimo-text-primary);
+}
+
+html[data-ui-preset="aimo"] .cm-sec-more {
+  color: var(--aimo-text-primary) !important;
+  font-weight: 500;
+  font-size: 13px;
+  opacity: 0.85;
+}
+html[data-ui-preset="aimo"] .cm-sec-more:hover {
+  opacity: 1;
+}
+
+/* 快捷卡片与功能行 */
+html[data-ui-preset="aimo"] .cm-quickrow {
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+html[data-ui-preset="aimo"] .cm-quick {
+  align-items: flex-start;
+  text-align: left;
+  gap: 6px;
+  padding: 16px 16px;
+  min-height: 84px;
+  border-radius: var(--aimo-radius-card);
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  transition: transform 120ms var(--aimo-ease), background 180ms ease;
+}
+
+html[data-ui-preset="aimo"] .cm-quick:active {
+  background: var(--aimo-panel) !important;
+  transform: scale(0.985);
+}
+
+html[data-ui-preset="aimo"] .cm-quick .material-icons-outlined {
+  font-size: calc(22px * var(--cm-fs, 1));
+  color: var(--aimo-text-primary);
+}
+
+html[data-ui-preset="aimo"] .cm-quick b {
+  font-size: calc(15px * var(--cm-fs, 1));
+  font-weight: 600;
+  color: var(--aimo-text-primary);
+}
+
+html[data-ui-preset="aimo"] .cm-quick i {
+  color: var(--aimo-text-secondary);
+  font-size: calc(12px * var(--cm-fs, 1));
+  opacity: 1;
+}
+
+/* 实体卡片通用规范 */
+html[data-ui-preset="aimo"] .cm-setting-list,
+html[data-ui-preset="aimo"] .cm-login-tip,
+html[data-ui-preset="aimo"] .cm-bindbox,
+html[data-ui-preset="aimo"] .cm-acard,
+html[data-ui-preset="aimo"] .cm-roomcard,
+html[data-ui-preset="aimo"] .cm-rnow,
+html[data-ui-preset="aimo"] .cm-ucard,
+html[data-ui-preset="aimo"] .cm-up-stats > div,
+html[data-ui-preset="aimo"] .cm-sq-stats,
+html[data-ui-preset="aimo"] .cm-cast-item,
+html[data-ui-preset="aimo"] .cm-cast-now,
+html[data-ui-preset="aimo"] .cm-pl-pick-item,
+html[data-ui-preset="aimo"] .upd-src,
+html[data-ui-preset="aimo"] .upd-log,
+html[data-ui-preset="aimo"] .cm-settings-card {
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border) !important;
+  border-radius: var(--aimo-radius-card) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+/* 横幅与通知 */
+html[data-ui-preset="aimo"] .cm-cmx-banner,
+html[data-ui-preset="aimo"] .cm-decor-banner {
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border) !important;
+  border-radius: var(--aimo-radius-card) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+/* 封面与头像 */
+html[data-ui-preset="aimo"] .cm-card img,
+html[data-ui-preset="aimo"] .cm-plcover,
+html[data-ui-preset="aimo"] .cm-detail-cover,
+html[data-ui-preset="aimo"] .cm-wiki-cover {
+  border-radius: 14px !important;
+  border: 1px solid var(--aimo-border-soft);
+  box-shadow: none !important;
+}
+
+html[data-ui-preset="aimo"] .cm-card-name {
+  font-weight: 600;
+  color: var(--aimo-text-primary);
+}
+
+html[data-ui-preset="aimo"] .cm-card-sub,
+html[data-ui-preset="aimo"] .cm-plsub,
+html[data-ui-preset="aimo"] .cm-song-sub,
+html[data-ui-preset="aimo"] .cm-detail-sub {
+  color: var(--aimo-text-secondary);
+  opacity: 1;
+}
+
+html[data-ui-preset="aimo"] .cm-detail-head h2 {
+  font-family: var(--aimo-font-serif);
+  font-size: calc(26px * var(--cm-fs, 1));
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--aimo-text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   5. 歌曲行与条目排版
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] .cm-song {
+  border-radius: var(--aimo-radius-item);
+  min-height: 60px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--aimo-border-soft);
+  transition: background 160ms ease, transform 120ms var(--aimo-ease);
+}
+
+html[data-ui-preset="aimo"] .cm-song:last-child {
+  border-bottom: none;
+}
+
+html[data-ui-preset="aimo"] .cm-song:hover {
+  background: var(--aimo-panel);
+}
+
+html[data-ui-preset="aimo"] .cm-song:active {
+  background: var(--aimo-bg-sunken);
+  transform: scale(0.99);
+}
+
+html[data-ui-preset="aimo"] .cm-song-pic {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  border: 1px solid var(--aimo-border-soft);
+}
+
+html[data-ui-preset="aimo"] .cm-song-name {
+  font-weight: 550;
+  color: var(--aimo-text-primary);
+}
+
+html[data-ui-preset="aimo"] .cm-song-time {
+  font-family: var(--aimo-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--aimo-text-tertiary);
+  font-size: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   6. 分段控制器、标签、徽章与搜索
+   -------------------------------------------------------------------------- */
+/* 分段控制器 */
+html[data-ui-preset="aimo"] .cm-sqtabs {
+  gap: 3px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--aimo-bg-sunken);
+  border: 1px solid var(--aimo-border-soft);
+}
+
+html[data-ui-preset="aimo"] .cm-sqtab {
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--aimo-text-secondary);
+  font-weight: 500;
+  font-size: 13px;
+  transition: all 180ms var(--aimo-ease);
+}
+
+html[data-ui-preset="aimo"] .cm-sqtab.on {
+  background: var(--aimo-bg-elevated);
+  color: var(--aimo-text-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--aimo-border-soft);
+}
+
+/* 标签与徽章 */
+html[data-ui-preset="aimo"] .cm-hot,
+html[data-ui-preset="aimo"] .cm-hist,
+html[data-ui-preset="aimo"] .cm-tag,
+html[data-ui-preset="aimo"] mdui-chip {
+  border-radius: 999px !important;
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border) !important;
+  color: var(--aimo-text-primary) !important;
+  box-shadow: none !important;
+}
+
+html[data-ui-preset="aimo"] .cm-hot.on,
+html[data-ui-preset="aimo"] .cm-hot:active {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  border-color: var(--aimo-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-tag.admin,
+html[data-ui-preset="aimo"] .cm-tag.super {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  border-color: transparent !important;
+}
+
+html[data-ui-preset="aimo"] .cm-tag.owner {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  border-color: var(--aimo-border) !important;
+}
+
+/* 搜索框与输入框 */
+html[data-ui-preset="aimo"] .cm-search-bar mdui-text-field {
+  --mdui-comp-text-field-container-shape: 14px;
+  --mdui-comp-text-field-container-color: var(--aimo-panel);
+  --mdui-comp-text-field-label-color: var(--aimo-text-secondary);
+  --mdui-comp-text-field-input-text-color: var(--aimo-text-primary);
+}
+
+html[data-ui-preset="aimo"] .cm-settings-search {
+  background: var(--aimo-panel);
+  border: 1px solid var(--aimo-border);
+  border-radius: var(--aimo-radius-control);
+}
+
+html[data-ui-preset="aimo"] .cm-settings-search:focus-within {
+  border-color: var(--aimo-accent);
+  box-shadow: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   7. 按钮与交互控件规范（胶囊、纯描边聚焦与机械按压）
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] mdui-button {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+html[data-ui-preset="aimo"] mdui-button::part(container) {
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+
+/* 机械按压微动效 */
+html[data-ui-preset="aimo"] mdui-button:active,
+html[data-ui-preset="aimo"] .button:active {
+  transform: scale(0.985);
+  opacity: 0.88;
+  transition: transform 120ms var(--aimo-ease);
+}
+
+/* 主操作按钮（Filled）：纯黑白主调 */
+html[data-ui-preset="aimo"] mdui-button[variant="filled"]::part(container) {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-button[variant="filled"]:hover::part(container) {
+  background: var(--aimo-primary-hover) !important;
+}
+
+/* 辅操作按钮（Tonal / Outlined） */
+html[data-ui-preset="aimo"] mdui-button[variant="tonal"]::part(container),
+html[data-ui-preset="aimo"] mdui-button[variant="outlined"]::part(container) {
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-button[variant="tonal"]:hover::part(container),
+html[data-ui-preset="aimo"] mdui-button[variant="outlined"]:hover::part(container) {
+  background: var(--aimo-panel) !important;
+}
+
+/* 弹窗与菜单圆角 */
+html[data-ui-preset="aimo"] mdui-dialog::part(panel) {
+  border-radius: var(--aimo-radius-modal) !important;
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border) !important;
+  box-shadow: var(--aimo-shadow-lg) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-dialog::part(headline) {
+  font-family: var(--aimo-font-serif);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+html[data-ui-preset="aimo"] mdui-menu::part(panel) {
+  border-radius: var(--aimo-radius-surface) !important;
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border) !important;
+  box-shadow: var(--aimo-shadow-popover) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-menu-item::part(container) {
+  border-radius: var(--aimo-radius-item) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-menu-item:hover::part(container) {
+  background: var(--aimo-panel) !important;
+}
+
+/* 开关与复选框 */
+html[data-ui-preset="aimo"] mdui-switch::part(track) {
+  border-radius: 999px;
+  background: var(--aimo-bg-sunken);
+  border: 1px solid var(--aimo-border);
+}
+
+html[data-ui-preset="aimo"] mdui-switch[checked]::part(track) {
+  background: var(--aimo-accent) !important;
+  border-color: var(--aimo-accent) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-switch::part(thumb) {
+  background: var(--aimo-bg-elevated) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-checkbox::part(indicator) {
+  border-radius: 5px;
+  border-color: var(--aimo-border);
+}
+
+html[data-ui-preset="aimo"] mdui-checkbox[checked]::part(indicator) {
+  background: var(--aimo-accent) !important;
+  border-color: var(--aimo-accent) !important;
+}
+
+/* 焦点环系统（无光晕纯描边） */
+html[data-ui-preset="aimo"] :focus-visible {
+  outline: 2px solid var(--aimo-accent) !important;
+  outline-offset: 2px !important;
+}
+html[data-ui-preset="aimo"] :focus:not(:focus-visible) {
+  outline: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   8. 底部导航栏与迷你播放器（移动端）
+   -------------------------------------------------------------------------- */
+@media (max-width: 899px) {
+  /* 悬浮胶囊底栏 */
+  html[data-ui-preset="aimo"] #bottomNav {
+    left: 16px;
+    right: 16px;
+    bottom: calc(12px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+    height: 64px;
+    min-height: 64px;
+    border: 1px solid var(--aimo-border) !important;
+    border-radius: 999px;
+    background: var(--aimo-bg-elevated) !important;
+    box-shadow: var(--aimo-shadow-md) !important;
+    padding: 0 10px;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  html[data-ui-preset="aimo"] .navItem {
+    position: relative;
+    z-index: 1;
+    font-size: calc(11px * var(--cm-fs, 1));
+    color: var(--aimo-text-secondary);
+    font-weight: 500;
+  }
+
+  html[data-ui-preset="aimo"] .navItem.cur {
+    color: var(--aimo-primary);
+    font-weight: 700;
+  }
+
+  html[data-ui-preset="aimo"] .navItem.cur .nav-ic {
+    background: var(--aimo-bg-sunken);
+    border-radius: 999px;
+  }
+
+  html[data-ui-preset="aimo"] .navItem.cur .nav-ic::before {
+    opacity: 0 !important;
+  }
+
+  html[data-ui-preset="aimo"] .nav-ic {
+    width: 48px;
+    height: 28px;
+    border-radius: 14px;
+  }
+
+  /* 迷你播放条 */
+  html[data-ui-preset="aimo"] #mini {
+    left: 16px;
+    right: 16px;
+    bottom: calc(86px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-inner {
+    background: var(--aimo-bg-elevated) !important;
+    border: 1px solid var(--aimo-border) !important;
+    border-radius: var(--aimo-radius-surface);
+    box-shadow: var(--aimo-shadow-md) !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-inner img,
+  html[data-ui-preset="aimo"] .cm-mini-ph {
+    border-radius: 10px;
+    border: 1px solid var(--aimo-border-soft);
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-t {
+    font-weight: 600;
+    color: var(--aimo-text-primary);
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-s {
+    color: var(--aimo-text-secondary);
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-prog {
+    left: 16px;
+    right: 16px;
+    height: 2px;
+    background: var(--aimo-border-soft);
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-prog i {
+    background: var(--aimo-primary);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   9. 桌面端导航（左侧编辑部导引栏）
+   -------------------------------------------------------------------------- */
+@media (min-width: 900px) {
+  html[data-ui-preset="aimo"] #topbar {
+    left: calc(96px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
+  }
+
+  html[data-ui-preset="aimo"] body.cm-has-account #topbar {
+    --cm-account-header-left: calc(96px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav {
+    top: 20px;
+    bottom: 20px;
+    left: 16px;
+    right: auto;
+    width: 72px;
+    height: auto;
+    padding: 16px 6px;
+    box-sizing: border-box;
+    gap: 10px;
+    border: 1px solid var(--aimo-border) !important;
+    border-radius: var(--aimo-radius-surface);
+    background: var(--aimo-bg-elevated) !important;
+    box-shadow: var(--aimo-shadow-sm) !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .navItem {
+    position: relative;
+    z-index: 1;
+    min-height: 60px;
+    padding: 6px 0;
+    box-sizing: border-box;
+    border-radius: var(--aimo-radius-item);
+    gap: 4px;
+    color: var(--aimo-text-secondary);
+    transition: color 180ms ease, background-color 180ms ease;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .nav-ic {
+    width: 44px;
+    height: 28px;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .nav-ic::before {
+    display: none;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .navItem.cur {
+    color: var(--aimo-primary);
+    background: var(--aimo-bg-sunken);
+    font-weight: 700;
+  }
+
+  html[data-ui-preset="aimo"] #out {
+    left: calc(96px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
+    padding: 12px 32px 100px;
+  }
+
+  html[data-ui-preset="aimo"] #mini {
+    left: calc(96px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
+    right: 20px;
+    bottom: 16px;
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-inner {
+    background: var(--aimo-bg-elevated) !important;
+    border: 1px solid var(--aimo-border) !important;
+    border-radius: var(--aimo-radius-surface);
+    box-shadow: var(--aimo-shadow-md) !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   10. 播放器全屏界面（纯净纸墨质感 · 弱化彩色弥散 · 突出封面与排版）
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] #playerOverlay {
+  background: var(--aimo-bg) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+/* 弱化彩色弥散流体光晕，遵循纯净纸面白/沉稳炭灰底色 */
+html[data-ui-preset="aimo"] .pl-bg {
+  display: none !important;
+}
+
+html[data-ui-preset="aimo"] .pl-page {
+  color: var(--aimo-text-primary) !important;
+}
+
+/* 封面展示：精细边框与实体纸面投影 */
+html[data-ui-preset="aimo"] #plCover {
+  border-radius: 18px;
+  border: 1px solid var(--aimo-border) !important;
+  box-shadow: var(--aimo-shadow-lg) !important;
+  background: var(--aimo-bg-elevated) !important;
+}
+
+/* 歌曲标题：衬线体大字排版 */
+html[data-ui-preset="aimo"] .pl-name {
+  font-family: var(--aimo-font-serif);
+  font-size: calc(28px * var(--cm-fs, 1));
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  color: var(--aimo-text-primary);
+  text-wrap: balance;
+}
+
+/* 艺术家与元数据 */
+html[data-ui-preset="aimo"] .pl-artist {
+  font-family: var(--aimo-font-sans);
+  font-size: calc(14px * var(--cm-fs, 1));
+  color: var(--aimo-text-secondary);
+  margin-top: 4px;
+}
+
+html[data-ui-preset="aimo"] .pl-stats {
+  color: var(--aimo-text-tertiary);
+  font-family: var(--aimo-font-mono);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+/* 音质指示胶囊 */
+html[data-ui-preset="aimo"] .pl-quality {
+  border: 1px solid var(--aimo-border) !important;
+  background: var(--aimo-bg-elevated) !important;
+  color: var(--aimo-text-primary) !important;
+  font-family: var(--aimo-font-mono);
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+}
+
+/* 进度条与等宽时间 */
+html[data-ui-preset="aimo"] .pl-seek > span {
+  color: var(--aimo-text-secondary);
+  font-family: var(--aimo-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+html[data-ui-preset="aimo"] .pl-seek-track {
+  background: var(--aimo-bg-sunken);
+  border-radius: 999px;
+}
+
+html[data-ui-preset="aimo"] .pl-seek-track i {
+  background: var(--aimo-primary);
+}
+
+html[data-ui-preset="aimo"] .pl-seek-track #plBuf {
+  background: var(--aimo-border-soft);
+}
+
+html[data-ui-preset="aimo"] .pl-seek-thumb {
+  background: var(--aimo-primary);
+  box-shadow: var(--aimo-shadow-sm);
+}
+
+/* 播放走带控制 */
+html[data-ui-preset="aimo"] .pl-ctrl .material-icons-outlined,
+html[data-ui-preset="aimo"] .pl-btn {
+  color: var(--aimo-text-primary);
+  opacity: 0.85;
+  transition: opacity 120ms ease, transform 120ms var(--aimo-ease);
+}
+
+html[data-ui-preset="aimo"] .pl-btn:hover {
+  opacity: 1;
+}
+
+html[data-ui-preset="aimo"] .pl-btn:active {
+  transform: scale(0.92);
+}
+
+html[data-ui-preset="aimo"] .pl-btn.on {
+  color: var(--aimo-primary) !important;
+  opacity: 1;
+}
+
+/* 主播放/暂停按钮：居中墨色胶囊/圆环 */
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge {
+  background: var(--aimo-primary);
+  color: var(--aimo-primary-text) !important;
+  border-radius: 50%;
+  box-shadow: var(--aimo-shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge .material-icons-outlined {
+  color: var(--aimo-primary-text) !important;
+}
+
+/* 歌词视窗：高对比度纸墨极简排版 */
+html[data-ui-preset="aimo"] .pl-lyric {
+  font-family: var(--aimo-font-sans);
+}
+
+html[data-ui-preset="aimo"] .pl-lyric-line {
+  color: var(--aimo-text-tertiary);
+  opacity: 0.55;
+  font-size: calc(18px * var(--cm-fs, 1));
+  line-height: 2.2;
+  transition: color var(--aimo-motion) var(--aimo-ease),
+              opacity var(--aimo-motion) var(--aimo-ease),
+              font-size var(--aimo-motion) var(--aimo-ease);
+}
+
+html[data-ui-preset="aimo"] .pl-lyric-line.cur {
+  color: var(--aimo-text-primary) !important;
+  font-family: var(--aimo-font-serif);
+  font-weight: 600;
+  opacity: 1;
+  font-size: calc(24px * var(--cm-fs, 1));
+}
+
+html[data-ui-preset="aimo"] .pl-lyric-tran {
+  font-family: var(--aimo-font-sans);
+  font-size: calc(14px * var(--cm-fs, 1));
+  color: var(--aimo-text-secondary);
+  font-weight: 400;
+}
+
+/* 播放页开启时暂停底栏/迷你条以释放性能 */
+html[data-ui-preset="aimo"] body.player-open #bottomNav,
+html[data-ui-preset="aimo"] body.player-open #mini {
+  visibility: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   11. 评论浮层与 Toast 提示
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] #commentOverlay {
+  background: var(--aimo-bg) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] #commentOverlay .pl-top {
+  border-bottom: 1px solid var(--aimo-border-soft);
+  background: var(--aimo-bg-elevated);
+}
+
+html[data-ui-preset="aimo"] .cmt-item {
+  border-bottom: 1px solid var(--aimo-border-soft);
+}
+
+html[data-ui-preset="aimo"] .cmt-name {
+  color: var(--aimo-text-primary);
+  font-weight: 550;
+}
+
+html[data-ui-preset="aimo"] .cmt-time {
+  color: var(--aimo-text-tertiary);
+  font-family: var(--aimo-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-ui-preset="aimo"] .cmt-composer {
+  background: var(--aimo-bg-elevated);
+  border-top: 1px solid var(--aimo-border-soft);
+}
+
+html[data-ui-preset="aimo"] .cmt-input {
+  background: var(--aimo-panel);
+  border: 1px solid var(--aimo-border);
+  border-radius: var(--aimo-radius-control);
+  color: var(--aimo-text-primary);
+}
+
+/* Toast 提示条 */
+html[data-ui-preset="aimo"] #toast,
+html[data-ui-preset="aimo"] .cm-toast {
+  border-radius: var(--aimo-radius-surface);
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border) !important;
+  color: var(--aimo-text-primary) !important;
+  box-shadow: var(--aimo-shadow-popover) !important;
+}
+
+/* --------------------------------------------------------------------------
+   12. 减弱动效模式兜底 (prefers-reduced-motion)
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui-preset="aimo"] *,
+  html[data-ui-preset="aimo"] *::before,
+  html[data-ui-preset="aimo"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
