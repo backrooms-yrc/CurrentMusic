@@ -56,9 +56,23 @@ export function createPageMotion(container) {
     try { result = render(wrap); }
     catch (error) { result = Promise.reject(error); }
     enhanceLoading(wrap);
+    const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
     const hasSkeleton = !!wrap.querySelector('.sk, .cm-skeleton, .cm-search-result-skeleton');
     let ownIndicator = null, ownCycle = null;
-    if (!hasSkeleton && !refresh) {
+    if (isAimo) {
+      if (!hasSkeleton && !wrap.firstElementChild) {
+        wrap.innerHTML = `<div class="cm-skeleton" role="status" aria-label="正在加载">
+          <div class="sk sk-l1" style="height:28px;width:34%;margin:12px 0 24px;border-radius:6px"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:24px">
+            <div class="sk" style="height:100px;border-radius:14px"></div>
+            <div class="sk" style="height:100px;border-radius:14px"></div>
+            <div class="sk" style="height:100px;border-radius:14px"></div>
+          </div>
+          <div class="cm-skel-list">${Array.from({ length: 4 }, () =>
+            `<div class="cm-skel-song"><div class="sk sk-pic"></div><div class="cm-skel-main"><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div></div>`).join('')}</div>
+        </div>`;
+      }
+    } else if (!hasSkeleton && !refresh) {
       if (document.getElementById('boot')) {
         // Boot already guarantees a full cycle; keep a visible fallback if the request outlives it.
         if (!wrap.firstElementChild) wrap.appendChild(createLoadingIndicator('cm-route-loading-placeholder'));

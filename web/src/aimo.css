@@ -1,14 +1,14 @@
 /* ==========================================================================
-   Aimo 设计风格预设
+   Aimo 设计风格预设 (Aimo Design System Theme Preset)
    --------------------------------------------------------------------------
-   设计语言：编辑部 / 档案美学
-   核心特征：中性纸墨底色、纯正黑白主操作、衬线大字标题、等宽数字微排版、
-             胶囊圆角、隐形滚动条与细腻结构线。
-   作用域隔离：所有规则严格限定在 html[data-ui-preset="aimo"] 下，零全局污染。
+   设计语言：编辑部 / 档案美学 (Editorial & Archival Aesthetics)
+   核心特征：中性纸墨底色、纯正黑白主操作、衬线标题排版、等宽数字微排版、
+             贴边停靠导航（非悬浮侧栏）、垂直导引线对齐、同构骨架屏转场与隐形滚动条。
+   作用域隔离：所有样式规则严格限定在 html[data-ui-preset="aimo"] 下，零全局污染。
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   1. 设计令牌与语义代币
+   1. 设计令牌与语义代币 (Tokens & Palette)
    -------------------------------------------------------------------------- */
 html[data-ui-preset="aimo"] {
   /* 基础纸墨调色板（浅色模式） */
@@ -18,7 +18,7 @@ html[data-ui-preset="aimo"] {
   --aimo-panel: #f4f4f2;
   --aimo-text-primary: #191918;
   --aimo-text-secondary: #5f605d;
-  --aimo-text-tertiary: #6b6c67;
+  --aimo-text-tertiary: #878882;
   --aimo-border: #d7d7d2;
   --aimo-border-soft: #e7e7e2;
   --aimo-primary: #1b1b19;
@@ -34,29 +34,29 @@ html[data-ui-preset="aimo"] {
   --aimo-danger: #ad3e2d;
   --aimo-danger-soft: #f5dfda;
 
-  /* 阴影系统 */
-  --aimo-shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.12);
-  --aimo-shadow-md: 0 12px 32px rgba(0, 0, 0, 0.08);
-  --aimo-shadow-lg: 0 20px 54px rgba(0, 0, 0, 0.16);
-  --aimo-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+  /* 阴影系统：精简柔和，不使用过重的彩色光晕 */
+  --aimo-shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.10);
+  --aimo-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --aimo-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.12);
+  --aimo-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.04);
 
-  /* 形态与动效 */
+  /* 形态与动效几何 */
   --aimo-radius-button: 999px;
-  --aimo-radius-modal: 24px;
-  --aimo-radius-surface: 20px;
-  --aimo-radius-sheet: 28px;
-  --aimo-radius-control: 14px;
-  --aimo-radius-card: 16px;
-  --aimo-radius-item: 12px;
+  --aimo-radius-modal: 20px;
+  --aimo-radius-surface: 16px;
+  --aimo-radius-sheet: 24px;
+  --aimo-radius-control: 12px;
+  --aimo-radius-card: 14px;
+  --aimo-radius-item: 10px;
   --aimo-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --aimo-motion: 260ms;
+  --aimo-motion: 240ms;
 
   /* 字体族定义 */
   --aimo-font-sans: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   --aimo-font-serif: "Noto Serif SC", "Iowan Old Style", Baskerville, Georgia, "Songti SC", SimSun, serif;
   --aimo-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* 映射项目主前景色与强调色 */
+  /* 映射项目主色与圆角 */
   --cm-primary: var(--aimo-primary);
   --cm-radius: var(--aimo-radius-card);
 
@@ -80,31 +80,31 @@ html[data-ui-preset="aimo"] {
   --mdui-color-primary-container-light: 238, 238, 236 !important;
   --mdui-color-on-primary-container-light: 25, 25, 24 !important;
 
-  /* MDUI 圆角规整 */
+  /* MDUI 圆角映射 */
   --mdui-shape-corner-extra-small: 6px;
   --mdui-shape-corner-small: 10px;
-  --mdui-shape-corner-medium: 14px;
-  --mdui-shape-corner-large: 20px;
-  --mdui-shape-corner-extra-large: 24px;
+  --mdui-shape-corner-medium: 12px;
+  --mdui-shape-corner-large: 16px;
+  --mdui-shape-corner-extra-large: 20px;
   --mdui-shape-corner-full: 999px;
 }
 
-/* 深色模式令牌覆写 */
+/* 深色模式令牌覆写（炭黑纸墨体系） */
 html[data-ui-preset="aimo"].mdui-theme-dark {
   --aimo-bg: #141414;
-  --aimo-bg-elevated: #202020;
+  --aimo-bg-elevated: #1f1f1f;
   --aimo-bg-sunken: #101010;
-  --aimo-panel: #1b1b1b;
+  --aimo-panel: #1a1a1a;
   --aimo-text-primary: #f2f2ed;
-  --aimo-text-secondary: #c2c2bc;
-  --aimo-text-tertiary: #a1a19a;
-  --aimo-border: #41413e;
-  --aimo-border-soft: #2d2d2b;
+  --aimo-text-secondary: #b5b5ae;
+  --aimo-text-tertiary: #82827b;
+  --aimo-border: #3c3c39;
+  --aimo-border-soft: #282826;
   --aimo-primary: #f0f0eb;
   --aimo-primary-hover: #ffffff;
   --aimo-primary-text: #171717;
   --aimo-accent: #f0f0eb;
-  --aimo-accent-soft: #30302e;
+  --aimo-accent-soft: #2e2e2c;
   --aimo-accent-text: #171717;
   --aimo-success: #6fa382;
   --aimo-success-soft: #223328;
@@ -114,30 +114,30 @@ html[data-ui-preset="aimo"].mdui-theme-dark {
   --aimo-danger-soft: #3b2521;
 
   --aimo-shadow-popover: 0 14px 34px rgba(0, 0, 0, 0.42);
-  --aimo-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
-  --aimo-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.50);
-  --aimo-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --aimo-shadow-md: 0 6px 20px rgba(0, 0, 0, 0.32);
+  --aimo-shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.48);
+  --aimo-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.22);
 
   --cm-primary: var(--aimo-primary);
 
   /* MDUI 暗色代币映射 */
   --mdui-color-background-dark: 20, 20, 20 !important;
   --mdui-color-on-background-dark: 242, 242, 237 !important;
-  --mdui-color-surface-dark: 32, 32, 32 !important;
-  --mdui-color-surface-dim-dark: 20, 20, 20 !important;
-  --mdui-color-surface-bright-dark: 45, 45, 45 !important;
-  --mdui-color-surface-container-lowest-dark: 16, 16, 16 !important;
+  --mdui-color-surface-dark: 31, 31, 31 !important;
+  --mdui-color-surface-dim-dark: 18, 18, 18 !important;
+  --mdui-color-surface-bright-dark: 42, 42, 42 !important;
+  --mdui-color-surface-container-lowest-dark: 14, 14, 14 !important;
   --mdui-color-surface-container-low-dark: 20, 20, 20 !important;
-  --mdui-color-surface-container-dark: 27, 27, 27 !important;
-  --mdui-color-surface-container-high-dark: 36, 36, 36 !important;
-  --mdui-color-surface-container-highest-dark: 45, 45, 45 !important;
+  --mdui-color-surface-container-dark: 26, 26, 26 !important;
+  --mdui-color-surface-container-high-dark: 34, 34, 34 !important;
+  --mdui-color-surface-container-highest-dark: 42, 42, 42 !important;
   --mdui-color-on-surface-dark: 242, 242, 237 !important;
-  --mdui-color-on-surface-variant-dark: 194, 194, 188 !important;
-  --mdui-color-outline-dark: 65, 65, 62 !important;
-  --mdui-color-outline-variant-dark: 45, 45, 43 !important;
+  --mdui-color-on-surface-variant-dark: 181, 181, 174 !important;
+  --mdui-color-outline-dark: 60, 60, 57 !important;
+  --mdui-color-outline-variant-dark: 40, 40, 38 !important;
   --mdui-color-primary-dark: 240, 240, 235 !important;
   --mdui-color-on-primary-dark: 23, 23, 23 !important;
-  --mdui-color-primary-container-dark: 32, 32, 32 !important;
+  --mdui-color-primary-container-dark: 31, 31, 31 !important;
   --mdui-color-on-primary-container-dark: 242, 242, 237 !important;
 }
 
@@ -191,236 +191,597 @@ html[data-ui-preset="aimo"] .cm-detail-head h2 {
 }
 
 /* --------------------------------------------------------------------------
-   3. 顶部导航与滚动渐变模糊
+   3. 骨架屏转场与路由加载屏蔽 (Skeleton Screen Transition)
    -------------------------------------------------------------------------- */
-html[data-ui-preset="aimo"] #topbar {
-  height: calc(64px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))));
-  padding-top: min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px)));
-  padding-left: 20px;
-  padding-right: 16px;
-  background: transparent !important;
-  border-bottom: 1px solid transparent;
-  box-shadow: none !important;
-  transition: background-color var(--aimo-motion) var(--aimo-ease),
-              border-color var(--aimo-motion) var(--aimo-ease),
-              backdrop-filter var(--aimo-motion) var(--aimo-ease);
+/* Aimo 主题全面采用结构化骨架屏，禁止显示全屏 loading 遮罩门 */
+html[data-ui-preset="aimo"] .cm-route-loading,
+html[data-ui-preset="aimo"] .cm-route-loading-placeholder {
+  display: none !important;
+}
+html[data-ui-preset="aimo"] #out.cm-route-loading-active {
+  overflow-y: auto !important;
 }
 
+/* Aimo 骨架屏基底与平滑微闪动效 */
+html[data-ui-preset="aimo"] .sk,
+html[data-ui-preset="aimo"] .cm-skeleton .sk,
+html[data-ui-preset="aimo"] .cm-search-result-skeleton .sk,
+html[data-ui-preset="aimo"] .cm-skel-song .sk,
+html[data-ui-preset="aimo"] .cm-skel-card .sk {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--aimo-text-primary) 7%, var(--aimo-bg-elevated)) !important;
+  border: none !important;
+}
+
+html[data-ui-preset="aimo"] .sk::after,
+html[data-ui-preset="aimo"] .cm-skeleton .sk::after,
+html[data-ui-preset="aimo"] .cm-search-result-skeleton .sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--aimo-bg-elevated) 72%, transparent), transparent);
+  animation: aimo-skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+@keyframes aimo-skeleton-shimmer {
+  to { transform: translateX(100%); }
+}
+
+html[data-ui-preset="aimo"] .sk-l1 {
+  height: 14px;
+  border-radius: 4px;
+}
+html[data-ui-preset="aimo"] .sk-l2 {
+  height: 11px;
+  border-radius: 4px;
+}
+html[data-ui-preset="aimo"] .sk-pic {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+html[data-ui-preset="aimo"] .sk-cover {
+  border-radius: 12px;
+}
+html[data-ui-preset="aimo"] .sk-ava {
+  border-radius: 50%;
+}
+
+/* --------------------------------------------------------------------------
+   4. 桌面端布局：贴边停靠侧边栏与基准线对齐 (Desktop Docked Rail & Alignment)
+   -------------------------------------------------------------------------- */
+@media (min-width: 900px) {
+  /* 侧边栏：贴边停靠，严禁悬浮，严禁圆角与浮动边距 */
+  html[data-ui-preset="aimo"] #bottomNav {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: auto !important;
+    width: 72px !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: calc(18px + max(env(safe-area-inset-top), var(--safe-t, 0px))) 0 calc(18px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    border: none !important;
+    border-right: 1px solid var(--aimo-border-soft) !important;
+    border-radius: 0 !important;
+    background: var(--aimo-panel) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    z-index: 40 !important;
+  }
+
+  /* 导航项 */
+  html[data-ui-preset="aimo"] #bottomNav .navItem {
+    width: 56px;
+    height: 52px;
+    flex: none;
+    margin: 0 auto;
+    border-radius: var(--aimo-radius-item);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--aimo-text-secondary);
+    text-decoration: none;
+    font-size: calc(11px * var(--cm-fs, 1));
+    font-weight: 500;
+    transition: background 160ms ease, color 160ms ease;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .navItem:hover {
+    background: var(--aimo-bg-sunken);
+    color: var(--aimo-text-primary);
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .navItem.cur {
+    background: var(--aimo-bg-sunken);
+    color: var(--aimo-primary);
+    font-weight: 600;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .nav-ic {
+    width: 32px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: transparent !important;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .nav-ic::before {
+    display: none !important;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .navItem .material-icons-outlined {
+    font-size: 20px;
+    color: inherit;
+  }
+
+  /* 桌面顶栏：从 72px 侧栏右侧贴边延伸至右缘，高度 56px，底边细线分隔 */
+  html[data-ui-preset="aimo"] #topbar {
+    position: fixed !important;
+    top: 0 !important;
+    left: calc(72px + max(env(safe-area-inset-left), var(--safe-l, 0px))) !important;
+    right: 0 !important;
+    width: calc(100% - 72px - max(env(safe-area-inset-left), var(--safe-l, 0px))) !important;
+    height: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px))) !important;
+    min-height: 56px !important;
+    padding: max(env(safe-area-inset-top), var(--safe-t, 0px)) clamp(24px, 3.5vw, 44px) 0 !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    border: none !important;
+    border-bottom: 1px solid var(--aimo-border-soft) !important;
+    border-radius: 0 !important;
+    background: var(--aimo-bg-elevated) !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    z-index: 30 !important;
+  }
+
+  html[data-ui-preset="aimo"] #topbar.scrolled {
+    background: var(--aimo-bg) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    backdrop-filter: blur(12px) !important;
+  }
+
+  /* 账号入口在桌面端于剩余可用视口精确居中对齐 */
+  html[data-ui-preset="aimo"] #topAccount {
+    left: calc(50vw + 36px) !important;
+  }
+  html[data-ui-preset="aimo"] body.cm-has-account #topbar {
+    --cm-account-header-left: calc(72px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
+  }
+
+  /* 桌面主滚动容器：严格从 72px 处开始，并与顶栏对齐内边距 */
+  html[data-ui-preset="aimo"] #out {
+    position: fixed !important;
+    top: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px))) !important;
+    bottom: 0 !important;
+    left: calc(72px + max(env(safe-area-inset-left), var(--safe-l, 0px))) !important;
+    right: 0 !important;
+    width: calc(100% - 72px - max(env(safe-area-inset-left), var(--safe-l, 0px))) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+    padding: 24px clamp(24px, 3.5vw, 44px) calc(88px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
+  }
+
+  html[data-ui-preset="aimo"] body.no-mini #out {
+    padding-bottom: calc(36px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
+  }
+
+  /* 页面容器：采用编辑部居左基准线排版，与顶栏标题同轴对齐 */
+  html[data-ui-preset="aimo"] .cm-page {
+    max-width: 1120px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 歌曲双栏排版与列间距 */
+  html[data-ui-preset="aimo"] .cm-songs {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    column-gap: 20px !important;
+    row-gap: 2px !important;
+    align-content: start !important;
+  }
+
+  /* 桌面迷你播放条：贴底停靠，严禁悬浮与浮动边距 */
+  html[data-ui-preset="aimo"] #mini {
+    position: fixed !important;
+    left: calc(72px + max(env(safe-area-inset-left), var(--safe-l, 0px))) !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: calc(100% - 72px - max(env(safe-area-inset-left), var(--safe-l, 0px))) !important;
+    height: calc(64px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-top: 1px solid var(--aimo-border-soft) !important;
+    border-radius: 0 !important;
+    background: var(--aimo-panel) !important;
+    box-shadow: none !important;
+    z-index: 35 !important;
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-inner {
+    height: 64px !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 clamp(24px, 3.5vw, 44px) max(env(safe-area-inset-bottom), var(--safe-b, 0px)) !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-prog {
+    left: clamp(24px, 3.5vw, 44px) !important;
+    right: clamp(24px, 3.5vw, 44px) !important;
+    top: -1px !important;
+    height: 2px !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   5. 移动端布局：贴底停靠导航栏与齐平迷你条 (Mobile Docked Navigation & Alignment)
+   -------------------------------------------------------------------------- */
+@media (max-width: 899px) {
+  /* 移动底栏：贴底停靠，严禁悬浮圆角 */
+  html[data-ui-preset="aimo"] #bottomNav {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: calc(56px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
+    min-height: 56px !important;
+    margin: 0 !important;
+    padding: 0 4px max(env(safe-area-inset-bottom), var(--safe-b, 0px)) !important;
+    box-sizing: border-box !important;
+    border: none !important;
+    border-top: 1px solid var(--aimo-border-soft) !important;
+    border-radius: 0 !important;
+    background: var(--aimo-bg-elevated) !important;
+    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    z-index: 40 !important;
+  }
+
+  html[data-ui-preset="aimo"] .navItem {
+    flex: 1;
+    height: 56px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--aimo-text-secondary);
+    font-size: calc(11px * var(--cm-fs, 1));
+    font-weight: 500;
+  }
+
+  html[data-ui-preset="aimo"] .navItem.cur {
+    color: var(--aimo-primary);
+    font-weight: 600;
+  }
+
+  html[data-ui-preset="aimo"] .navItem.cur .nav-ic {
+    background: var(--aimo-bg-sunken);
+    border-radius: 999px;
+  }
+
+  html[data-ui-preset="aimo"] .navItem.cur .nav-ic::before {
+    display: none !important;
+  }
+
+  html[data-ui-preset="aimo"] .nav-ic {
+    width: 44px;
+    height: 26px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  html[data-ui-preset="aimo"] .navItem .material-icons-outlined {
+    font-size: 20px;
+  }
+
+  /* 移动迷你播放条：紧贴底栏上方停靠，全宽无缝对齐 */
+  html[data-ui-preset="aimo"] #mini {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(56px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
+    width: 100% !important;
+    height: 56px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-top: 1px solid var(--aimo-border-soft) !important;
+    border-radius: 0 !important;
+    background: var(--aimo-panel) !important;
+    box-shadow: none !important;
+    z-index: 35 !important;
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-inner {
+    height: 56px !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 16px !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  html[data-ui-preset="aimo"] .cm-mini-prog {
+    left: 0 !important;
+    right: 0 !important;
+    top: -1px !important;
+    height: 2px !important;
+  }
+
+  /* 移动顶栏 */
+  html[data-ui-preset="aimo"] #topbar {
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px))) !important;
+    min-height: 56px !important;
+    padding: max(env(safe-area-inset-top), var(--safe-t, 0px)) 16px 0 !important;
+    box-sizing: border-box !important;
+    border: none !important;
+    border-bottom: 1px solid var(--aimo-border-soft) !important;
+    border-radius: 0 !important;
+    background: var(--aimo-bg-elevated) !important;
+    box-shadow: none !important;
+  }
+
+  /* 移动主容器 */
+  html[data-ui-preset="aimo"] #out {
+    top: calc(56px + max(env(safe-area-inset-top), var(--safe-t, 0px))) !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    padding: 16px 16px calc(136px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-ui-preset="aimo"] body.no-mini #out {
+    padding-bottom: calc(76px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
+  }
+
+  html[data-ui-preset="aimo"] .cm-page {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  html[data-ui-preset="aimo"] .cm-songs {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   6. 顶栏元素与标题排版 (Topbar Typography & Elements)
+   -------------------------------------------------------------------------- */
 html[data-ui-preset="aimo"] #brandLock {
   display: none !important;
 }
 
 html[data-ui-preset="aimo"] #pageTitle {
   font-family: var(--aimo-font-serif);
-  font-size: calc(26px * var(--cm-fs, 1));
+  font-size: calc(22px * var(--cm-fs, 1));
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 1.25;
   color: var(--aimo-text-primary);
+  letter-spacing: -0.025em;
+  margin: 0;
+  padding: 0;
+}
+
+html[data-ui-preset="aimo"] #topActs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 html[data-ui-preset="aimo"] #topSearch,
 html[data-ui-preset="aimo"] #topAction {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  background: var(--aimo-bg-elevated);
+  border-radius: var(--aimo-radius-control);
+  background: var(--aimo-bg-sunken);
   color: var(--aimo-text-primary);
-  border: 1px solid var(--aimo-border);
-  box-shadow: var(--aimo-shadow-sm);
-  transition: transform 120ms var(--aimo-ease), background 180ms ease;
+  border: 1px solid var(--aimo-border-soft);
+  box-shadow: none;
+  transition: transform 120ms var(--aimo-ease), background 160ms ease;
+}
+
+html[data-ui-preset="aimo"] #topSearch:hover,
+html[data-ui-preset="aimo"] #topAction:hover {
+  background: var(--aimo-panel);
 }
 
 html[data-ui-preset="aimo"] #topSearch:active,
 html[data-ui-preset="aimo"] #topAction:active {
   transform: scale(0.92);
-  background: var(--aimo-panel);
-}
-
-/* 滚动时优雅淡入的渐变模糊与细微结构底线 */
-html[data-ui-preset="aimo"] #topbar.scrolled {
-  background: linear-gradient(var(--aimo-bg) 75%, transparent) !important;
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--aimo-border-soft);
 }
 
 /* --------------------------------------------------------------------------
-   4. 主体布局与卡片体系
+   7. 垂直导引对齐与微排版 (Vertical Guide Alignment & Micro-Typography)
    -------------------------------------------------------------------------- */
-html[data-ui-preset="aimo"] #out {
-  top: calc(64px + min(48px, max(env(safe-area-inset-top), var(--safe-t, 0px))));
-  bottom: 0;
-  padding: 6px clamp(16px, 4vw, 28px) calc(160px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
-}
-
-html[data-ui-preset="aimo"] body.no-mini #out {
-  padding-bottom: calc(90px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
-}
-
-html[data-ui-preset="aimo"] .cm-page {
-  max-width: 980px;
-}
-
-/* 问候区微排版 */
+/* 问候语区域 */
 html[data-ui-preset="aimo"] .cm-greet {
-  padding: 2px 2px 20px;
-}
-
-html[data-ui-preset="aimo"] .cm-greet-title {
-  font-family: var(--aimo-font-serif);
-  font-size: calc(28px * var(--cm-fs, 1));
-  font-weight: 500;
-  color: var(--aimo-text-primary);
-  line-height: 1.35;
+  padding: 0 0 20px 0;
+  margin: 0;
 }
 
 html[data-ui-preset="aimo"] .cm-greet-date {
   color: var(--aimo-text-tertiary);
-  font-size: 13px;
+  font-size: 12px;
   font-family: var(--aimo-font-mono);
   font-variant-numeric: tabular-nums;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-/* 分区标题 */
+html[data-ui-preset="aimo"] .cm-greet-title {
+  font-family: var(--aimo-font-serif);
+  font-size: calc(26px * var(--cm-fs, 1));
+  font-weight: 500;
+  color: var(--aimo-text-primary);
+  line-height: 1.3;
+  margin: 0;
+  padding: 0;
+}
+
+/* 分区标题：与内容左边缘严密对齐 */
+html[data-ui-preset="aimo"] .cm-sec {
+  margin: 0 0 28px 0;
+  padding: 0;
+}
+
 html[data-ui-preset="aimo"] .cm-sec-head {
-  margin: 24px 2px 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px 0;
+  padding: 0;
 }
 
 html[data-ui-preset="aimo"] .cm-sec-head h2 {
   font-family: var(--aimo-font-serif);
-  font-size: calc(20px * var(--cm-fs, 1));
+  font-size: calc(19px * var(--cm-fs, 1));
   font-weight: 500;
   color: var(--aimo-text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+
+html[data-ui-preset="aimo"] .cm-sec-sub {
+  color: var(--aimo-text-tertiary);
+  font-size: 12px;
+  margin-left: 8px;
 }
 
 html[data-ui-preset="aimo"] .cm-sec-more {
-  color: var(--aimo-text-primary) !important;
+  color: var(--aimo-text-secondary) !important;
   font-weight: 500;
   font-size: 13px;
-  opacity: 0.85;
-}
-html[data-ui-preset="aimo"] .cm-sec-more:hover {
-  opacity: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: color 150ms ease;
 }
 
-/* 快捷卡片与功能行 */
+html[data-ui-preset="aimo"] .cm-sec-more:hover {
+  color: var(--aimo-text-primary) !important;
+}
+
+/* 快捷功能卡片行：网格对齐 */
 html[data-ui-preset="aimo"] .cm-quickrow {
-  gap: 12px;
-  margin-bottom: 22px;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  gap: 12px !important;
+  margin: 0 0 24px 0 !important;
+  padding: 0 !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick {
-  align-items: flex-start;
-  text-align: left;
-  gap: 6px;
-  padding: 16px 16px;
-  min-height: 84px;
-  border-radius: var(--aimo-radius-card);
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  text-align: left !important;
+  gap: 4px !important;
+  padding: 14px 16px !important;
+  min-height: 78px !important;
+  border-radius: var(--aimo-radius-control) !important;
   background: var(--aimo-bg-elevated) !important;
-  border: 1px solid var(--aimo-border) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
   box-shadow: var(--aimo-shadow-sm) !important;
-  transition: transform 120ms var(--aimo-ease), background 180ms ease;
+  text-decoration: none !important;
+  color: var(--aimo-text-primary) !important;
+  transition: transform 120ms var(--aimo-ease), background 160ms ease, border-color 160ms ease;
+}
+
+html[data-ui-preset="aimo"] .cm-quick:hover {
+  background: var(--aimo-panel) !important;
+  border-color: var(--aimo-border) !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick:active {
-  background: var(--aimo-panel) !important;
-  transform: scale(0.985);
+  transform: scale(0.985) !important;
+  background: var(--aimo-bg-sunken) !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick .material-icons-outlined {
-  font-size: calc(22px * var(--cm-fs, 1));
+  font-size: 20px;
   color: var(--aimo-text-primary);
+  margin-bottom: 2px;
 }
 
 html[data-ui-preset="aimo"] .cm-quick b {
-  font-size: calc(15px * var(--cm-fs, 1));
+  font-size: calc(14px * var(--cm-fs, 1));
   font-weight: 600;
   color: var(--aimo-text-primary);
+  line-height: 1.25;
 }
 
 html[data-ui-preset="aimo"] .cm-quick i {
   color: var(--aimo-text-secondary);
-  font-size: calc(12px * var(--cm-fs, 1));
-  opacity: 1;
-}
-
-/* 实体卡片通用规范 */
-html[data-ui-preset="aimo"] .cm-setting-list,
-html[data-ui-preset="aimo"] .cm-login-tip,
-html[data-ui-preset="aimo"] .cm-bindbox,
-html[data-ui-preset="aimo"] .cm-acard,
-html[data-ui-preset="aimo"] .cm-roomcard,
-html[data-ui-preset="aimo"] .cm-rnow,
-html[data-ui-preset="aimo"] .cm-ucard,
-html[data-ui-preset="aimo"] .cm-up-stats > div,
-html[data-ui-preset="aimo"] .cm-sq-stats,
-html[data-ui-preset="aimo"] .cm-cast-item,
-html[data-ui-preset="aimo"] .cm-cast-now,
-html[data-ui-preset="aimo"] .cm-pl-pick-item,
-html[data-ui-preset="aimo"] .upd-src,
-html[data-ui-preset="aimo"] .upd-log,
-html[data-ui-preset="aimo"] .cm-settings-card {
-  background: var(--aimo-bg-elevated) !important;
-  border: 1px solid var(--aimo-border) !important;
-  border-radius: var(--aimo-radius-card) !important;
-  box-shadow: var(--aimo-shadow-sm) !important;
-  color: var(--aimo-text-primary) !important;
-}
-
-/* 横幅与通知 */
-html[data-ui-preset="aimo"] .cm-cmx-banner,
-html[data-ui-preset="aimo"] .cm-decor-banner {
-  background: var(--aimo-panel) !important;
-  border: 1px solid var(--aimo-border) !important;
-  border-radius: var(--aimo-radius-card) !important;
-  color: var(--aimo-text-primary) !important;
-}
-
-/* 封面与头像 */
-html[data-ui-preset="aimo"] .cm-card img,
-html[data-ui-preset="aimo"] .cm-plcover,
-html[data-ui-preset="aimo"] .cm-detail-cover,
-html[data-ui-preset="aimo"] .cm-wiki-cover {
-  border-radius: 14px !important;
-  border: 1px solid var(--aimo-border-soft);
-  box-shadow: none !important;
-}
-
-html[data-ui-preset="aimo"] .cm-card-name {
-  font-weight: 600;
-  color: var(--aimo-text-primary);
-}
-
-html[data-ui-preset="aimo"] .cm-card-sub,
-html[data-ui-preset="aimo"] .cm-plsub,
-html[data-ui-preset="aimo"] .cm-song-sub,
-html[data-ui-preset="aimo"] .cm-detail-sub {
-  color: var(--aimo-text-secondary);
-  opacity: 1;
-}
-
-html[data-ui-preset="aimo"] .cm-detail-head h2 {
-  font-family: var(--aimo-font-serif);
-  font-size: calc(26px * var(--cm-fs, 1));
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  color: var(--aimo-text-primary);
+  font-size: calc(11.5px * var(--cm-fs, 1));
+  font-style: normal;
+  line-height: 1.25;
 }
 
 /* --------------------------------------------------------------------------
-   5. 歌曲行与条目排版
+   8. 歌曲列表行与列对齐 (Song Rows Column Alignment)
    -------------------------------------------------------------------------- */
 html[data-ui-preset="aimo"] .cm-song {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   border-radius: var(--aimo-radius-item);
-  min-height: 60px;
+  min-height: 58px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--aimo-border-soft);
-  transition: background 160ms ease, transform 120ms var(--aimo-ease);
+  transition: background 150ms ease, transform 120ms var(--aimo-ease);
+  box-sizing: border-box;
 }
 
 html[data-ui-preset="aimo"] .cm-song:last-child {
@@ -437,110 +798,261 @@ html[data-ui-preset="aimo"] .cm-song:active {
 }
 
 html[data-ui-preset="aimo"] .cm-song-pic {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   border: 1px solid var(--aimo-border-soft);
+  object-fit: cover;
+  flex: none;
+  background: var(--aimo-bg-sunken);
+}
+
+html[data-ui-preset="aimo"] .cm-song-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
 }
 
 html[data-ui-preset="aimo"] .cm-song-name {
+  font-size: calc(14px * var(--cm-fs, 1));
   font-weight: 550;
   color: var(--aimo-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
 }
 
-html[data-ui-preset="aimo"] .cm-song-time {
-  font-family: var(--aimo-font-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--aimo-text-tertiary);
-  font-size: 12px;
+html[data-ui-preset="aimo"] .cm-song-sub {
+  font-size: calc(12px * var(--cm-fs, 1));
+  color: var(--aimo-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+  margin: 0;
+}
+
+/* 歌曲时长：等宽微排版，右对齐固定宽度 */
+html[data-ui-preset="aimo"] .cm-song-dur {
+  font-family: var(--aimo-font-mono) !important;
+  font-variant-numeric: tabular-nums !important;
+  color: var(--aimo-text-tertiary) !important;
+  font-size: 12px !important;
+  min-width: 44px !important;
+  text-align: right !important;
+  flex: none !important;
+  opacity: 0.9 !important;
+}
+
+/* 歌曲操作按钮：等宽固定 34px 方块居中对齐 */
+html[data-ui-preset="aimo"] .cm-song-like,
+html[data-ui-preset="aimo"] .cm-song-more,
+html[data-ui-preset="aimo"] .cm-song-mv {
+  width: 34px !important;
+  height: 34px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: var(--aimo-radius-control) !important;
+  color: var(--aimo-text-secondary) !important;
+  flex: none !important;
+  transition: background 150ms ease, color 150ms ease, transform 120ms var(--aimo-ease) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-song-like:hover,
+html[data-ui-preset="aimo"] .cm-song-more:hover,
+html[data-ui-preset="aimo"] .cm-song-mv:hover {
+  background: var(--aimo-bg-sunken) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-song-like:active,
+html[data-ui-preset="aimo"] .cm-song-more:active,
+html[data-ui-preset="aimo"] .cm-song-mv:active {
+  transform: scale(0.9) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-song-like.on {
+  color: var(--aimo-danger) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-song-like .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-song-more .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-song-mv .material-icons-outlined {
+  font-size: 20px !important;
 }
 
 /* --------------------------------------------------------------------------
-   6. 分段控制器、标签、徽章与搜索
+   9. 歌单与卡片网格对齐 (Card & Grid Systems)
    -------------------------------------------------------------------------- */
-/* 分段控制器 */
+/* 横向滚动推荐行 */
+html[data-ui-preset="aimo"] .cm-hscroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 4px 0 14px 0;
+  margin: 0;
+}
+
+html[data-ui-preset="aimo"] .cm-card {
+  flex: none;
+  width: 130px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+}
+
+html[data-ui-preset="aimo"] .cm-card img {
+  width: 130px;
+  height: 130px;
+  border-radius: 12px;
+  border: 1px solid var(--aimo-border-soft);
+  object-fit: cover;
+  background: var(--aimo-bg-sunken);
+}
+
+html[data-ui-preset="aimo"] .cm-card-name {
+  font-size: calc(13px * var(--cm-fs, 1));
+  font-weight: 550;
+  color: var(--aimo-text-primary);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-ui-preset="aimo"] .cm-card-sub {
+  font-size: calc(11.5px * var(--cm-fs, 1));
+  color: var(--aimo-text-secondary);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 歌单网格对齐 */
+html[data-ui-preset="aimo"] .cm-plgrid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(154px, 1fr)) !important;
+  gap: 16px !important;
+  margin: 0 !important;
+  padding: 4px 0 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plcard {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  padding: 10px !important;
+  border-radius: var(--aimo-radius-card) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  background: var(--aimo-bg-elevated) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  box-sizing: border-box !important;
+  transition: transform 120ms var(--aimo-ease), background 160ms ease, border-color 160ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plcard:hover {
+  background: var(--aimo-panel) !important;
+  border-color: var(--aimo-border) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plcover {
+  width: 100% !important;
+  aspect-ratio: 1 !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  overflow: hidden !important;
+  background: var(--aimo-bg-sunken) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plcover img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plname {
+  font-size: calc(13px * var(--cm-fs, 1)) !important;
+  font-weight: 550 !important;
+  color: var(--aimo-text-primary) !important;
+  line-height: 1.35 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plsub {
+  font-size: calc(11.5px * var(--cm-fs, 1)) !important;
+  color: var(--aimo-text-secondary) !important;
+}
+
+/* 详情页头部排版 */
+html[data-ui-preset="aimo"] .cm-detail-head {
+  display: flex !important;
+  gap: 24px !important;
+  align-items: flex-end !important;
+  padding: 12px 0 28px 0 !important;
+  margin: 0 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-detail-cover {
+  width: 150px !important;
+  height: 150px !important;
+  border-radius: 16px !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  flex: none !important;
+}
+
+html[data-ui-preset="aimo"] .cm-detail-head h2 {
+  font-family: var(--aimo-font-serif) !important;
+  font-size: calc(24px * var(--cm-fs, 1)) !important;
+  font-weight: 500 !important;
+  color: var(--aimo-text-primary) !important;
+  line-height: 1.25 !important;
+  margin: 0 0 8px 0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   10. 分段器、控件与表单体系 (Segment Controls & Forms)
+   -------------------------------------------------------------------------- */
+/* 分段胶囊控制器 */
 html[data-ui-preset="aimo"] .cm-sqtabs {
-  gap: 3px;
-  padding: 4px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
   border-radius: 999px;
   background: var(--aimo-bg-sunken);
   border: 1px solid var(--aimo-border-soft);
+  margin-bottom: 20px;
 }
 
 html[data-ui-preset="aimo"] .cm-sqtab {
   border-radius: 999px;
-  padding: 8px 14px;
+  padding: 6px 14px;
   background: transparent;
   color: var(--aimo-text-secondary);
   font-weight: 500;
   font-size: 13px;
+  border: none;
+  cursor: pointer;
   transition: all 180ms var(--aimo-ease);
 }
 
 html[data-ui-preset="aimo"] .cm-sqtab.on {
   background: var(--aimo-bg-elevated);
   color: var(--aimo-text-primary);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-  border: 1px solid var(--aimo-border-soft);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-/* 标签与徽章 */
-html[data-ui-preset="aimo"] .cm-hot,
-html[data-ui-preset="aimo"] .cm-hist,
-html[data-ui-preset="aimo"] .cm-tag,
-html[data-ui-preset="aimo"] mdui-chip {
-  border-radius: 999px !important;
-  background: var(--aimo-bg-elevated) !important;
-  border: 1px solid var(--aimo-border) !important;
-  color: var(--aimo-text-primary) !important;
-  box-shadow: none !important;
-}
-
-html[data-ui-preset="aimo"] .cm-hot.on,
-html[data-ui-preset="aimo"] .cm-hot:active {
-  background: var(--aimo-primary) !important;
-  color: var(--aimo-primary-text) !important;
-  border-color: var(--aimo-primary) !important;
-}
-
-html[data-ui-preset="aimo"] .cm-tag.admin,
-html[data-ui-preset="aimo"] .cm-tag.super {
-  background: var(--aimo-primary) !important;
-  color: var(--aimo-primary-text) !important;
-  border-color: transparent !important;
-}
-
-html[data-ui-preset="aimo"] .cm-tag.owner {
-  background: var(--aimo-primary) !important;
-  color: var(--aimo-primary-text) !important;
-  border-color: var(--aimo-border) !important;
-}
-
-/* 搜索框与输入框 */
-html[data-ui-preset="aimo"] .cm-search-bar mdui-text-field {
-  --mdui-comp-text-field-container-shape: 14px;
-  --mdui-comp-text-field-container-color: var(--aimo-panel);
-  --mdui-comp-text-field-label-color: var(--aimo-text-secondary);
-  --mdui-comp-text-field-input-text-color: var(--aimo-text-primary);
-}
-
-html[data-ui-preset="aimo"] .cm-settings-search {
-  background: var(--aimo-panel);
-  border: 1px solid var(--aimo-border);
-  border-radius: var(--aimo-radius-control);
-}
-
-html[data-ui-preset="aimo"] .cm-settings-search:focus-within {
-  border-color: var(--aimo-accent);
-  box-shadow: none !important;
-}
-
-/* --------------------------------------------------------------------------
-   7. 按钮与交互控件规范（胶囊、纯描边聚焦与机械按压）
-   -------------------------------------------------------------------------- */
+/* 按钮规范 */
 html[data-ui-preset="aimo"] mdui-button {
   font-weight: 500;
-  letter-spacing: -0.01em;
 }
 
 html[data-ui-preset="aimo"] mdui-button::part(container) {
@@ -548,15 +1060,11 @@ html[data-ui-preset="aimo"] mdui-button::part(container) {
   box-shadow: none !important;
 }
 
-/* 机械按压微动效 */
-html[data-ui-preset="aimo"] mdui-button:active,
-html[data-ui-preset="aimo"] .button:active {
+html[data-ui-preset="aimo"] mdui-button:active {
   transform: scale(0.985);
-  opacity: 0.88;
-  transition: transform 120ms var(--aimo-ease);
+  opacity: 0.9;
 }
 
-/* 主操作按钮（Filled）：纯黑白主调 */
 html[data-ui-preset="aimo"] mdui-button[variant="filled"]::part(container) {
   background: var(--aimo-primary) !important;
   color: var(--aimo-primary-text) !important;
@@ -566,7 +1074,6 @@ html[data-ui-preset="aimo"] mdui-button[variant="filled"]:hover::part(container)
   background: var(--aimo-primary-hover) !important;
 }
 
-/* 辅操作按钮（Tonal / Outlined） */
 html[data-ui-preset="aimo"] mdui-button[variant="tonal"]::part(container),
 html[data-ui-preset="aimo"] mdui-button[variant="outlined"]::part(container) {
   background: var(--aimo-bg-elevated) !important;
@@ -579,64 +1086,7 @@ html[data-ui-preset="aimo"] mdui-button[variant="outlined"]:hover::part(containe
   background: var(--aimo-panel) !important;
 }
 
-/* 弹窗与菜单圆角 */
-html[data-ui-preset="aimo"] mdui-dialog::part(panel) {
-  border-radius: var(--aimo-radius-modal) !important;
-  background: var(--aimo-bg-elevated) !important;
-  border: 1px solid var(--aimo-border) !important;
-  box-shadow: var(--aimo-shadow-lg) !important;
-  color: var(--aimo-text-primary) !important;
-}
-
-html[data-ui-preset="aimo"] mdui-dialog::part(headline) {
-  font-family: var(--aimo-font-serif);
-  font-weight: 500;
-  letter-spacing: -0.02em;
-}
-
-html[data-ui-preset="aimo"] mdui-menu::part(panel) {
-  border-radius: var(--aimo-radius-surface) !important;
-  background: var(--aimo-bg-elevated) !important;
-  border: 1px solid var(--aimo-border) !important;
-  box-shadow: var(--aimo-shadow-popover) !important;
-}
-
-html[data-ui-preset="aimo"] mdui-menu-item::part(container) {
-  border-radius: var(--aimo-radius-item) !important;
-  color: var(--aimo-text-primary) !important;
-}
-
-html[data-ui-preset="aimo"] mdui-menu-item:hover::part(container) {
-  background: var(--aimo-panel) !important;
-}
-
-/* 开关与复选框 */
-html[data-ui-preset="aimo"] mdui-switch::part(track) {
-  border-radius: 999px;
-  background: var(--aimo-bg-sunken);
-  border: 1px solid var(--aimo-border);
-}
-
-html[data-ui-preset="aimo"] mdui-switch[checked]::part(track) {
-  background: var(--aimo-accent) !important;
-  border-color: var(--aimo-accent) !important;
-}
-
-html[data-ui-preset="aimo"] mdui-switch::part(thumb) {
-  background: var(--aimo-bg-elevated) !important;
-}
-
-html[data-ui-preset="aimo"] mdui-checkbox::part(indicator) {
-  border-radius: 5px;
-  border-color: var(--aimo-border);
-}
-
-html[data-ui-preset="aimo"] mdui-checkbox[checked]::part(indicator) {
-  background: var(--aimo-accent) !important;
-  border-color: var(--aimo-accent) !important;
-}
-
-/* 焦点环系统（无光晕纯描边） */
+/* 纯描边焦点环 */
 html[data-ui-preset="aimo"] :focus-visible {
   outline: 2px solid var(--aimo-accent) !important;
   outline-offset: 2px !important;
@@ -645,182 +1095,98 @@ html[data-ui-preset="aimo"] :focus:not(:focus-visible) {
   outline: none !important;
 }
 
-/* --------------------------------------------------------------------------
-   8. 底部导航栏与迷你播放器（移动端）
-   -------------------------------------------------------------------------- */
-@media (max-width: 899px) {
-  /* 悬浮胶囊底栏 */
-  html[data-ui-preset="aimo"] #bottomNav {
-    left: 16px;
-    right: 16px;
-    bottom: calc(12px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
-    height: 64px;
-    min-height: 64px;
-    border: 1px solid var(--aimo-border) !important;
-    border-radius: 999px;
-    background: var(--aimo-bg-elevated) !important;
-    box-shadow: var(--aimo-shadow-md) !important;
-    padding: 0 10px;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
+/* 设置列表与卡片对齐 */
+html[data-ui-preset="aimo"] .cm-setting-list,
+html[data-ui-preset="aimo"] .cm-settings-card {
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-card) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  margin-bottom: 20px !important;
+  overflow: hidden !important;
+}
 
-  html[data-ui-preset="aimo"] .navItem {
-    position: relative;
-    z-index: 1;
-    font-size: calc(11px * var(--cm-fs, 1));
-    color: var(--aimo-text-secondary);
-    font-weight: 500;
-  }
+html[data-ui-preset="aimo"] .cm-setting {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 50px !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--aimo-border-soft) !important;
+  color: var(--aimo-text-primary) !important;
+  box-sizing: border-box !important;
+}
 
-  html[data-ui-preset="aimo"] .navItem.cur {
-    color: var(--aimo-primary);
-    font-weight: 700;
-  }
+html[data-ui-preset="aimo"] .cm-setting:last-child {
+  border-bottom: none !important;
+}
 
-  html[data-ui-preset="aimo"] .navItem.cur .nav-ic {
-    background: var(--aimo-bg-sunken);
-    border-radius: 999px;
-  }
+html[data-ui-preset="aimo"] .cm-setting i {
+  margin-left: auto !important;
+  color: var(--aimo-text-tertiary) !important;
+  font-style: normal !important;
+  font-size: 13px !important;
+}
 
-  html[data-ui-preset="aimo"] .navItem.cur .nav-ic::before {
-    opacity: 0 !important;
-  }
+/* 弹窗与菜单面板 */
+html[data-ui-preset="aimo"] mdui-dialog::part(panel) {
+  border-radius: var(--aimo-radius-modal) !important;
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: var(--aimo-shadow-lg) !important;
+  color: var(--aimo-text-primary) !important;
+}
 
-  html[data-ui-preset="aimo"] .nav-ic {
-    width: 48px;
-    height: 28px;
-    border-radius: 14px;
-  }
+html[data-ui-preset="aimo"] mdui-dialog::part(headline) {
+  font-family: var(--aimo-font-serif);
+  font-weight: 500;
+}
 
-  /* 迷你播放条 */
-  html[data-ui-preset="aimo"] #mini {
-    left: 16px;
-    right: 16px;
-    bottom: calc(86px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
-  }
-
-  html[data-ui-preset="aimo"] .cm-mini-inner {
-    background: var(--aimo-bg-elevated) !important;
-    border: 1px solid var(--aimo-border) !important;
-    border-radius: var(--aimo-radius-surface);
-    box-shadow: var(--aimo-shadow-md) !important;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-
-  html[data-ui-preset="aimo"] .cm-mini-inner img,
-  html[data-ui-preset="aimo"] .cm-mini-ph {
-    border-radius: 10px;
-    border: 1px solid var(--aimo-border-soft);
-  }
-
-  html[data-ui-preset="aimo"] .cm-mini-t {
-    font-weight: 600;
-    color: var(--aimo-text-primary);
-  }
-
-  html[data-ui-preset="aimo"] .cm-mini-s {
-    color: var(--aimo-text-secondary);
-  }
-
-  html[data-ui-preset="aimo"] .cm-mini-prog {
-    left: 16px;
-    right: 16px;
-    height: 2px;
-    background: var(--aimo-border-soft);
-  }
-
-  html[data-ui-preset="aimo"] .cm-mini-prog i {
-    background: var(--aimo-primary);
-  }
+html[data-ui-preset="aimo"] mdui-menu::part(panel) {
+  border-radius: var(--aimo-radius-surface) !important;
+  background: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: var(--aimo-shadow-popover) !important;
 }
 
 /* --------------------------------------------------------------------------
-   9. 桌面端导航（左侧编辑部导引栏）
+   11. 迷你播放器内部细节 (Mini Player Details)
    -------------------------------------------------------------------------- */
-@media (min-width: 900px) {
-  html[data-ui-preset="aimo"] #topbar {
-    left: calc(96px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
-  }
+html[data-ui-preset="aimo"] .cm-mini-inner img,
+html[data-ui-preset="aimo"] .cm-mini-ph {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 8px !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  object-fit: cover !important;
+}
 
-  html[data-ui-preset="aimo"] body.cm-has-account #topbar {
-    --cm-account-header-left: calc(96px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
-  }
+html[data-ui-preset="aimo"] .cm-mini-t {
+  font-weight: 600 !important;
+  color: var(--aimo-text-primary) !important;
+  font-size: calc(13.5px * var(--cm-fs, 1)) !important;
+}
 
-  html[data-ui-preset="aimo"] #bottomNav {
-    top: 20px;
-    bottom: 20px;
-    left: 16px;
-    right: auto;
-    width: 72px;
-    height: auto;
-    padding: 16px 6px;
-    box-sizing: border-box;
-    gap: 10px;
-    border: 1px solid var(--aimo-border) !important;
-    border-radius: var(--aimo-radius-surface);
-    background: var(--aimo-bg-elevated) !important;
-    box-shadow: var(--aimo-shadow-sm) !important;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
+html[data-ui-preset="aimo"] .cm-mini-s {
+  color: var(--aimo-text-secondary) !important;
+  font-size: calc(11.5px * var(--cm-fs, 1)) !important;
+}
 
-  html[data-ui-preset="aimo"] #bottomNav .navItem {
-    position: relative;
-    z-index: 1;
-    min-height: 60px;
-    padding: 6px 0;
-    box-sizing: border-box;
-    border-radius: var(--aimo-radius-item);
-    gap: 4px;
-    color: var(--aimo-text-secondary);
-    transition: color 180ms ease, background-color 180ms ease;
-  }
+html[data-ui-preset="aimo"] .cm-mini-prog {
+  background: var(--aimo-border-soft) !important;
+}
 
-  html[data-ui-preset="aimo"] #bottomNav .nav-ic {
-    width: 44px;
-    height: 28px;
-  }
-
-  html[data-ui-preset="aimo"] #bottomNav .nav-ic::before {
-    display: none;
-  }
-
-  html[data-ui-preset="aimo"] #bottomNav .navItem.cur {
-    color: var(--aimo-primary);
-    background: var(--aimo-bg-sunken);
-    font-weight: 700;
-  }
-
-  html[data-ui-preset="aimo"] #out {
-    left: calc(96px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
-    padding: 12px 32px 100px;
-  }
-
-  html[data-ui-preset="aimo"] #mini {
-    left: calc(96px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
-    right: 20px;
-    bottom: 16px;
-  }
-
-  html[data-ui-preset="aimo"] .cm-mini-inner {
-    background: var(--aimo-bg-elevated) !important;
-    border: 1px solid var(--aimo-border) !important;
-    border-radius: var(--aimo-radius-surface);
-    box-shadow: var(--aimo-shadow-md) !important;
-  }
+html[data-ui-preset="aimo"] .cm-mini-prog i {
+  background: var(--aimo-primary) !important;
 }
 
 /* --------------------------------------------------------------------------
-   10. 播放器全屏界面（纯净纸墨质感 · 弱化彩色弥散 · 突出封面与排版）
+   12. 播放器全屏界面 (Full Player Overlay)
    -------------------------------------------------------------------------- */
 html[data-ui-preset="aimo"] #playerOverlay {
   background: var(--aimo-bg) !important;
   color: var(--aimo-text-primary) !important;
 }
 
-/* 弱化彩色弥散流体光晕，遵循纯净纸面白/沉稳炭灰底色 */
 html[data-ui-preset="aimo"] .pl-bg {
   display: none !important;
 }
@@ -829,25 +1195,22 @@ html[data-ui-preset="aimo"] .pl-page {
   color: var(--aimo-text-primary) !important;
 }
 
-/* 封面展示：精细边框与实体纸面投影 */
 html[data-ui-preset="aimo"] #plCover {
-  border-radius: 18px;
-  border: 1px solid var(--aimo-border) !important;
+  border-radius: 16px;
+  border: 1px solid var(--aimo-border-soft) !important;
   box-shadow: var(--aimo-shadow-lg) !important;
   background: var(--aimo-bg-elevated) !important;
 }
 
-/* 歌曲标题：衬线体大字排版 */
 html[data-ui-preset="aimo"] .pl-name {
   font-family: var(--aimo-font-serif);
-  font-size: calc(28px * var(--cm-fs, 1));
+  font-size: calc(26px * var(--cm-fs, 1));
   font-weight: 500;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.03em;
   color: var(--aimo-text-primary);
   text-wrap: balance;
 }
 
-/* 艺术家与元数据 */
 html[data-ui-preset="aimo"] .pl-artist {
   font-family: var(--aimo-font-sans);
   font-size: calc(14px * var(--cm-fs, 1));
@@ -859,12 +1222,10 @@ html[data-ui-preset="aimo"] .pl-stats {
   color: var(--aimo-text-tertiary);
   font-family: var(--aimo-font-mono);
   font-variant-numeric: tabular-nums;
-  opacity: 0.85;
 }
 
-/* 音质指示胶囊 */
 html[data-ui-preset="aimo"] .pl-quality {
-  border: 1px solid var(--aimo-border) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
   background: var(--aimo-bg-elevated) !important;
   color: var(--aimo-text-primary) !important;
   font-family: var(--aimo-font-mono);
@@ -872,7 +1233,6 @@ html[data-ui-preset="aimo"] .pl-quality {
   border-radius: 999px;
 }
 
-/* 进度条与等宽时间 */
 html[data-ui-preset="aimo"] .pl-seek > span {
   color: var(--aimo-text-secondary);
   font-family: var(--aimo-font-mono);
@@ -889,37 +1249,6 @@ html[data-ui-preset="aimo"] .pl-seek-track i {
   background: var(--aimo-primary);
 }
 
-html[data-ui-preset="aimo"] .pl-seek-track #plBuf {
-  background: var(--aimo-border-soft);
-}
-
-html[data-ui-preset="aimo"] .pl-seek-thumb {
-  background: var(--aimo-primary);
-  box-shadow: var(--aimo-shadow-sm);
-}
-
-/* 播放走带控制 */
-html[data-ui-preset="aimo"] .pl-ctrl .material-icons-outlined,
-html[data-ui-preset="aimo"] .pl-btn {
-  color: var(--aimo-text-primary);
-  opacity: 0.85;
-  transition: opacity 120ms ease, transform 120ms var(--aimo-ease);
-}
-
-html[data-ui-preset="aimo"] .pl-btn:hover {
-  opacity: 1;
-}
-
-html[data-ui-preset="aimo"] .pl-btn:active {
-  transform: scale(0.92);
-}
-
-html[data-ui-preset="aimo"] .pl-btn.on {
-  color: var(--aimo-primary) !important;
-  opacity: 1;
-}
-
-/* 主播放/暂停按钮：居中墨色胶囊/圆环 */
 html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge {
   background: var(--aimo-primary);
   color: var(--aimo-primary-text) !important;
@@ -934,19 +1263,11 @@ html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge .material-icons-outlined 
   color: var(--aimo-primary-text) !important;
 }
 
-/* 歌词视窗：高对比度纸墨极简排版 */
-html[data-ui-preset="aimo"] .pl-lyric {
-  font-family: var(--aimo-font-sans);
-}
-
 html[data-ui-preset="aimo"] .pl-lyric-line {
   color: var(--aimo-text-tertiary);
-  opacity: 0.55;
+  opacity: 0.5;
   font-size: calc(18px * var(--cm-fs, 1));
   line-height: 2.2;
-  transition: color var(--aimo-motion) var(--aimo-ease),
-              opacity var(--aimo-motion) var(--aimo-ease),
-              font-size var(--aimo-motion) var(--aimo-ease);
 }
 
 html[data-ui-preset="aimo"] .pl-lyric-line.cur {
@@ -954,74 +1275,16 @@ html[data-ui-preset="aimo"] .pl-lyric-line.cur {
   font-family: var(--aimo-font-serif);
   font-weight: 600;
   opacity: 1;
-  font-size: calc(24px * var(--cm-fs, 1));
+  font-size: calc(23px * var(--cm-fs, 1));
 }
 
-html[data-ui-preset="aimo"] .pl-lyric-tran {
-  font-family: var(--aimo-font-sans);
-  font-size: calc(14px * var(--cm-fs, 1));
-  color: var(--aimo-text-secondary);
-  font-weight: 400;
-}
-
-/* 播放页开启时暂停底栏/迷你条以释放性能 */
 html[data-ui-preset="aimo"] body.player-open #bottomNav,
 html[data-ui-preset="aimo"] body.player-open #mini {
   visibility: hidden;
 }
 
 /* --------------------------------------------------------------------------
-   11. 评论浮层与 Toast 提示
-   -------------------------------------------------------------------------- */
-html[data-ui-preset="aimo"] #commentOverlay {
-  background: var(--aimo-bg) !important;
-  color: var(--aimo-text-primary) !important;
-}
-
-html[data-ui-preset="aimo"] #commentOverlay .pl-top {
-  border-bottom: 1px solid var(--aimo-border-soft);
-  background: var(--aimo-bg-elevated);
-}
-
-html[data-ui-preset="aimo"] .cmt-item {
-  border-bottom: 1px solid var(--aimo-border-soft);
-}
-
-html[data-ui-preset="aimo"] .cmt-name {
-  color: var(--aimo-text-primary);
-  font-weight: 550;
-}
-
-html[data-ui-preset="aimo"] .cmt-time {
-  color: var(--aimo-text-tertiary);
-  font-family: var(--aimo-font-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-html[data-ui-preset="aimo"] .cmt-composer {
-  background: var(--aimo-bg-elevated);
-  border-top: 1px solid var(--aimo-border-soft);
-}
-
-html[data-ui-preset="aimo"] .cmt-input {
-  background: var(--aimo-panel);
-  border: 1px solid var(--aimo-border);
-  border-radius: var(--aimo-radius-control);
-  color: var(--aimo-text-primary);
-}
-
-/* Toast 提示条 */
-html[data-ui-preset="aimo"] #toast,
-html[data-ui-preset="aimo"] .cm-toast {
-  border-radius: var(--aimo-radius-surface);
-  background: var(--aimo-bg-elevated) !important;
-  border: 1px solid var(--aimo-border) !important;
-  color: var(--aimo-text-primary) !important;
-  box-shadow: var(--aimo-shadow-popover) !important;
-}
-
-/* --------------------------------------------------------------------------
-   12. 减弱动效模式兜底 (prefers-reduced-motion)
+   13. 减弱动效模式 (prefers-reduced-motion)
    -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   html[data-ui-preset="aimo"] *,
