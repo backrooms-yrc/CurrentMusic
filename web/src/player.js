@@ -717,7 +717,7 @@ export const player = {
     if (!pend || !auth.token) return;
     if (this._scrobbled === pend.id) return;
     const m = this.meta || {};
-    const sec = Math.floor(this.position() / 1000);
+    const sec = Math.floor(this.posMs() / 1000);
     const src = (this.queue && this.queue[this.index] && this.queue[this.index].source_pl_id) || 0;
     try {
       await api.ncm('/scrobble/v1', {

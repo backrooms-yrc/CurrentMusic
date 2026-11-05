@@ -2307,6 +2307,7 @@ html[data-ui-preset="glass"] .cm-qrbox {
 }
 .cm-swatch.md3 { background: linear-gradient(135deg, #6750a4, #d0bcff); }
 .cm-swatch.cmx { background: linear-gradient(135deg, #f5f6f8 0 45%, #ffffff 45% 72%, #0a84ff 72% 100%); border-color: rgba(10,132,255,.55); }
+.cm-swatch.soaringbird { background: linear-gradient(135deg, #fa233b 0 42%, #ffffff 42% 72%, #1d1d1f 72% 100%); border-color: rgba(250,35,59,.55); }
 
 /* ==========================================================================
    UI 预设：简约玻璃（A 的克制 + B 的液态玻璃）
@@ -4415,3 +4416,1554 @@ html[data-ui-preset="cmx"] .pl-ctrl { gap: min(16px, 2vw); }
 .cm-skel-room-media { width: 100%; height: 170px; border-radius: 24px; }
 @media (min-width: 840px) { .cm-skel-artwork { width: 150px; height: 150px; } }
 @media (prefers-reduced-motion: reduce) { .cm-skeleton *, .cm-skeleton *::after { animation: none !important; transition: none !important; } }
+
+/* ==========================================================================
+   UI 预设：翱翔鸟Music —— 1:1 移植 soaringbird-music 的 Now Playing
+   --------------------------------------------------------------------------
+   结构与数值逐条取自参考项目 src/styles/app.css 的 .lp-* 段落：
+   模糊封面打底 + 封面主色四色团流动 · radiosity 光晕 · 左 32vw / 右 40vw 双栏 ·
+   逐字「已唱/未唱」羽化扫光 · 三态模糊退隐 · 按行距错落的停位。
+   参考页以外的功能（喜欢/歌单/评论/模式/心动/队列/AI/投屏/更多）收进右上角汉堡菜单。
+
+   作用域：全部规则限定在 html[data-ui-preset="soaringbird"] 之下，
+   其余皮肤（cmx / frost / md3 / glass）的 DOM 结构与样式一行都不改。
+   ========================================================================== */
+
+html[data-ui-preset="soaringbird"] {
+  --sb-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --accent: #fa233b;
+  --accent-hover: #fb5c74;
+}
+html[data-ui-preset="soaringbird"]:not([style*="--cm-primary"]) { --cm-primary: #fa233b; }
+html[data-ui-preset="soaringbird"] body { font-family: var(--sb-font); }
+
+/* ---- 播放页容器（参考 .lp） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay { background: #2a2a30; animation: sbLpIn .45s cubic-bezier(.2,.8,.2,1) both; }
+html[data-ui-preset="soaringbird"] #playerOverlay.closing { animation: cmSlideDown .24s cubic-bezier(.3,0,.8,.15) forwards; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp {
+  position: absolute; inset: 0; z-index: 1; background: #2a2a30; overflow: hidden; color: #fff;
+}
+@keyframes sbLpIn {
+  from { opacity: 0; transform: scale(1.03); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---- 背景：模糊封面打底 + 四色团流动（参考 .lp-backdrop / .lp-fluid / .lp-blob） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop {
+  position: absolute; inset: 0; overflow: hidden; background: #2a2a30;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop > img {
+  position: absolute; top: 50%; left: 50%; width: 140%; height: 140%;
+  transform: translate(-50%, -50%); object-fit: cover;
+  filter: blur(80px) brightness(.55) saturate(200%);
+  /* 底图自身慢速漂移，避免「一张静止的模糊封面」 */
+  animation: sbLpBackdropIn 1.2s ease both, sbLpDrift 60s ease-in-out infinite alternate;
+}
+@keyframes sbLpBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sbLpDrift {
+  from { transform: translate(-50%, -50%) scale(1.2) rotate(0deg); }
+  to   { transform: translate(-53%, -47%) scale(1.34) rotate(3deg); }
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-fluid {
+  position: absolute; inset: 0;
+  /* 只从封面取色：把取色结果提高饱和/亮度，避免深色封面的背景发灰 */
+  filter: blur(64px) saturate(215%) brightness(1.12);
+  will-change: transform; contain: paint;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, var(--c) 0%, transparent 68%);
+  opacity: .9; will-change: transform; transform: translateZ(0);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob--1 {
+  --c: var(--c1, #4a4a58);
+  width: 78vmax; height: 78vmax; top: -30%; left: -18%;
+  animation: sbLpFlow1 30s ease-in-out infinite alternate;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob--2 {
+  --c: var(--c2, #2b2b38);
+  width: 72vmax; height: 72vmax; bottom: -34%; right: -16%;
+  animation: sbLpFlow2 38s ease-in-out infinite alternate;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob--3 {
+  --c: var(--c3, #5a3a42);
+  width: 58vmax; height: 58vmax; top: 12%; right: 4%; opacity: .6;
+  animation: sbLpFlow3 34s ease-in-out infinite alternate;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob--4 {
+  --c: var(--c4, #233040);
+  width: 52vmax; height: 52vmax; bottom: -22%; left: 14%; opacity: .55;
+  animation: sbLpFlow4 42s ease-in-out infinite alternate;
+}
+@keyframes sbLpFlow1 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(12vw, 9vh, 0) scale(1.28); }
+}
+@keyframes sbLpFlow2 {
+  from { transform: translate3d(0, 0, 0) scale(1.16); }
+  to { transform: translate3d(-11vw, -7vh, 0) scale(.94); }
+}
+@keyframes sbLpFlow3 {
+  from { transform: translate3d(0, 0, 0) scale(.92) rotate(0deg); }
+  to { transform: translate3d(-9vw, 12vh, 0) scale(1.22) rotate(24deg); }
+}
+@keyframes sbLpFlow4 {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(9vw, -11vh, 0) scale(1.3); }
+}
+/* 压暗渐变（Apple .now-playing-structure：只在底部压暗，顶部保持干净）
+   linear-gradient(0deg,#0006 0,#0000 50%) */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(0deg, rgba(0, 0, 0, .4) 0%, rgba(0, 0, 0, 0) 50%);
+}
+
+/* ---- 收起按钮（参考 .lp-close） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-close {
+  position: absolute; top: 22px; left: 24px; z-index: 6;
+  width: 40px; height: 40px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: hsla(0, 0%, 100%, .9); padding: 0; border: 0; background: none;
+  transition: background .15s ease;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-close:hover { background: hsla(0, 0%, 100%, .12); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-close .material-icons-outlined { font-size: 26px; }
+
+/* ---- 歌词翻译开关（参考 .lp-trans，右下角） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans {
+  position: absolute; bottom: 26px; right: 28px; z-index: 6;
+  width: 40px; height: 40px; border-radius: 50%; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: hsla(0, 0%, 100%, .5); border: 1px solid hsla(0, 0%, 100%, .18);
+  background: none; transition: color .2s ease, background .2s ease, border-color .2s ease;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans svg { width: 19px; height: 19px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans:hover { color: #fff; background: hsla(0, 0%, 100%, .1); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans.is-on {
+  color: #fff; background: hsla(0, 0%, 100%, .16); border-color: hsla(0, 0%, 100%, .34);
+}
+/* 手机端封面/歌词切换按钮（桌面不显示） */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyricview { display: none; }
+
+/* ---- 右上角汉堡菜单（Apple 扁平风；参考页没有，用于收纳多余功能） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn {
+  position: absolute; top: 22px; right: 24px; z-index: 7;
+  width: 40px; height: 40px; border-radius: 50%; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: hsla(0, 0%, 100%, .62); background: none; border: 1px solid hsla(0, 0%, 100%, .16);
+  transition: color .18s ease, background .18s ease, border-color .18s ease;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn svg { width: 18px; height: 18px; }
+/* 五角星收藏：与汉堡菜单同尺寸，排在它左侧 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn { right: 70px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn.is-on,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn.is-on svg {
+  color: #fff !important;
+  border-color: hsla(0, 0%, 100%, .3);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn:active { background: none; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn:hover { color: #fff; background: hsla(0, 0%, 100%, .1); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn.is-open {
+  color: #fff; background: hsla(0, 0%, 100%, .16); border-color: hsla(0, 0%, 100%, .34);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu {
+  position: absolute; top: 70px; right: 24px; z-index: 8;
+  width: 268px; max-width: calc(100vw - 40px); padding: 6px;
+  border-radius: 15px; background: rgba(44, 44, 48, .72);
+  -webkit-backdrop-filter: saturate(180%) blur(26px); backdrop-filter: saturate(180%) blur(26px);
+  border: 1px solid hsla(0, 0%, 100%, .12);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .46);
+  transform-origin: top right;
+  animation: sbLpMenuIn .22s cubic-bezier(.32,.72,0,1) both;
+}
+@keyframes sbLpMenuIn {
+  from { opacity: 0; transform: translateY(-7px) scale(.965); }
+  to { opacity: 1; transform: none; }
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__head {
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid hsla(0, 0%, 100%, .1);
+  margin-bottom: 4px;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__title {
+  font-size: 13px; font-weight: 600; color: hsla(0, 0%, 100%, .92);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__head .pl-stats {
+  margin-top: 3px; font-size: 11px; color: hsla(0, 0%, 100%, .46);
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; min-height: 40px; padding: 0 12px;
+  border: 0; border-radius: 10px; background: none; text-align: left;
+  color: hsla(0, 0%, 100%, .78); font-size: 13.5px; font-weight: 500;
+  position: relative; transition: background .13s ease, color .13s ease; cursor: pointer;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item:hover,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row:hover {
+  background: hsla(0, 0%, 100%, .1); color: #fff;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item.is-on,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item.on { color: var(--accent-hover); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item em {
+  margin-left: auto; font-style: normal; font-size: 12px; font-weight: 400;
+  color: hsla(0, 0%, 100%, .45);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__ic {
+  width: 20px; font-size: 18px; text-align: center; color: inherit;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__sep {
+  height: 1px; margin: 4px 6px; background: hsla(0, 0%, 100%, .1);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row .pl-btn {
+  padding: 0; width: 20px; justify-content: center; color: inherit; pointer-events: none;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row .pl-btn .material-icons-outlined { font-size: 18px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item .cm-ncmdot { position: absolute; right: 10px; }
+
+/* ---- 双栏栅格（参考 .lp-grid） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-grid {
+  position: absolute; inset: 0; z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(280px, 32vw) minmax(300px, 40vw);
+  justify-content: space-between;
+  align-items: stretch;
+  padding: 0 10vw;
+}
+
+/* ---- 左列五行（对齐 Apple .lyrics__controls 的行高：auto / 55 / 65 / 55 / 26） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-left {
+  align-self: center; display: grid;
+  grid-template-rows: auto 55px 65px 55px 26px;
+  max-width: 600px; width: 100%; place-items: center; padding-top: 20px;
+  min-width: 0;
+}
+
+/* ---- 封面 + 光晕（参考 .lp-artwork / __glow） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork {
+  position: relative;
+  width: min(100%, calc(100dvh - 400px));
+  aspect-ratio: 1; height: auto;
+  border-radius: 12px; margin-bottom: 6px;
+  animation: sbLpArtIn 1s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes sbLpArtIn {
+  from { opacity: 0; transform: scale(.92); }
+  to { opacity: 1; transform: none; }
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork > img {
+  position: relative; z-index: 1; width: 100%; height: 100%;
+  object-fit: cover; border-radius: inherit; display: block;
+  box-shadow: 0 20px 25px rgba(0, 0, 0, .1), 0 10px 25px rgba(0, 0, 0, .1);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork__glow {
+  position: absolute; inset: 0; z-index: 0; border-radius: inherit; overflow: hidden;
+  /* Apple .lyrics__artwork-radiosity：blur(20px) saturate(2) / opacity .4 / scale(.88) 底部为原点 */
+  transform: scale(.88); transform-origin: bottom center;
+  filter: blur(20px) saturate(2); opacity: .4; pointer-events: none;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork__glow img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+/* ---- 元信息（参考 .lp-meta） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-meta {
+  width: 100%; text-align: left; align-self: center; min-width: 0;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-meta h2 {
+  margin: 0; font-size: 19px; font-weight: 700; line-height: 1.294; letter-spacing: -.015em;
+  color: hsla(0, 0%, 100%, .95); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-meta p {
+  margin: 2px 0 0; font-size: 16px; line-height: 1.294; color: hsla(0, 0%, 100%, .55);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- 进度：4px 轨道 / 12px 圆点 / 双端时间 + 居中音质胶囊 ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber { width: 100%; align-self: center; position: relative; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar {
+  position: relative; height: 16px; display: flex; align-items: center;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-track {
+  position: absolute; top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px;
+  border-radius: 2px; background: hsla(0, 0%, 100%, .25); overflow: visible;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-track i {
+  position: absolute; top: 0; left: 0; height: 4px; width: 100%;
+  border-radius: 2px; transform-origin: left center;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-track #plBuf {
+  background: hsla(0, 0%, 100%, .32);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-track #plFill { background: #fff; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-thumb {
+  position: absolute; top: 50%; left: var(--playback-progress, 0%);
+  width: 12px; height: 12px; margin-left: -6px; border-radius: 50%;
+  background: #fff; pointer-events: none;
+  transform: translateY(-50%) scale(0); transition: transform .15s ease;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar:hover .pl-seek-thumb,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar:focus-within .pl-seek-thumb {
+  transform: translateY(-50%) scale(1);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-time { display: none; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar input[type="range"] {
+  -webkit-appearance: none; appearance: none; position: absolute;
+  inset: -6px 0; width: 100%; height: auto;
+  margin: 0; padding: 0; background: transparent; cursor: pointer; outline: none;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 28px; height: 28px;
+  border-radius: 50%; background: transparent; border: 0;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__times {
+  position: relative; display: flex; justify-content: space-between; align-items: center;
+  margin-top: 4px; font-size: 12px; color: hsla(0, 0%, 100%, .55); font-variant-numeric: tabular-nums;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-quality {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-quality__chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 9px; border-radius: 999px;
+  border: 0; background: none; cursor: pointer;
+  font-size: 12px; font-weight: 500; color: hsla(0, 0%, 100%, .62);
+  transition: color .15s ease, background .15s ease; white-space: nowrap;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-quality__chip:hover { color: hsla(0, 0%, 100%, .95); background: hsla(0, 0%, 100%, .12); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-quality__ico { font-size: 13px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__stall {
+  /* 直接叠在进度条上（带胶囊底），不再往下压到时间/走带那一行 */
+  position: absolute; left: 50%; bottom: 50%; transform: translate(-50%, 50%);
+  z-index: 3;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__stall .pl-stall {
+  font-size: 11px; color: hsla(0, 0%, 100%, .9); gap: 5px;
+  padding: 3px 9px; border-radius: 999px; background: rgba(24, 24, 28, .72);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+
+/* ---- 走带（参考 .lp-controls / .lp-ctl） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-controls {
+  width: 100%; align-self: center; display: flex; align-items: center; justify-content: space-evenly;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl {
+  color: #fff; display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px; border: 0; background: none; border-radius: 50%; cursor: pointer;
+  transition: transform .12s ease, color .15s ease, opacity .15s ease;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl svg { width: 20px; height: 20px; display: block; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl#plPrev svg,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl#plNext svg { width: 30px; height: 30px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl--play svg { width: 38px; height: 38px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl:active { opacity: .55; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl--side { color: hsla(0, 0%, 100%, .55); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl--side:hover { color: hsla(0, 0%, 100%, .9); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl--side.is-on { color: var(--accent-hover); }
+html[data-ui-preset="soaringbird"] #playerOverlay .play-loading {
+  display: block; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid hsla(0, 0%, 100%, .28); border-top-color: #fff;
+  animation: sbLpSpin .8s linear infinite;
+}
+@keyframes sbLpSpin { to { transform: rotate(360deg); } }
+
+/* ---- 音量（参考 .lp-volume） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume {
+  position: relative; width: 100%; align-self: end;
+  display: flex; align-items: center; color: hsla(0, 0%, 100%, .5);
+  transition: color .22s ease;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume__icon {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  z-index: 2; mix-blend-mode: difference; pointer-events: none;
+  display: inline-flex; color: currentColor;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume__icon svg { width: 16px; height: 16px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume:hover { color: hsla(0, 0%, 100%, .85); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume input[type="range"] {
+  -webkit-appearance: none; appearance: none; flex: 1; min-width: 0;
+  height: 16px; margin: 0; border: 0; padding: 0;
+  background-color: transparent;
+  background-image: linear-gradient(90deg,
+    #fff 0, #fff var(--vol, 0%),
+    hsla(0, 0%, 100%, .25) var(--vol, 0%), hsla(0, 0%, 100%, .25) 100%);
+  background-size: 100% 4px; background-position: center; background-repeat: no-repeat;
+  border-radius: 2px; outline: none; cursor: pointer;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 12px; height: 12px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 5px rgba(0, 0, 0, .35);
+  transform: scale(.7); transition: transform .2s cubic-bezier(.34,1.4,.64,1);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume:hover input[type="range"]::-webkit-slider-thumb,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-volume input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1);
+}
+
+/* ---- 歌词列（参考 .lp-right / .lp-lyrics / .lp-lyric / .lp-tk） ---- */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-right {
+  position: relative; min-width: 0; min-height: 0; height: 100%;
+  display: flex;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics {
+  width: 100%; height: 100%; overflow: hidden;   /* 滚动交给 __track 的 transform */
+  display: flex; flex-direction: column;
+  /* 不再用 mask：mask 会让整条歌词轨道在每次 transform 时重新栅格化，
+     正是换行时「卡一下」的来源。上下层次改由每行的 blur/opacity 表达。 */
+  scrollbar-width: none; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics::-webkit-scrollbar { display: none; }
+/* 歌词轨道：只做 transform 位移，走合成层，滚动不重绘文字 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics__track {
+  display: block; width: 100%; will-change: transform;
+  backface-visibility: hidden;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric {
+  --off: calc(var(--i, 0) - var(--active-i, 0));
+  --adist: max(var(--off), calc(0 - var(--off)));
+  /* 已过的行（off<0）向上退场，未到的行（off>0）从下方进入：
+     之前的公式不分方向，所有行都向下偏 14px，已过歌词就会「往下掉」。 */
+  --up: max(calc(0 - var(--off)), 0);
+  --down: max(var(--off), 0);
+  width: 100%; margin-bottom: 34px; text-align: left; cursor: pointer;
+  /* 关键：字号定义在 .lp-lyric 上，译文（em）才有正确基准。
+     之前把字号只写在 .lp-lyric__text 上，译文的 em 以容器的 16px 为基准，
+     0.64em 只有 10px，所以中文翻译小到看不清。 */
+  font-size: 34px;
+  /* 非当前行不再额外压暗：Apple 全屏歌词里所有非当前行是同一个灰，
+     靠上下遮罩渐隐来区分远近；之前 past 用 .18，切行后上一行几乎看不见。 */
+  color: rgba(255, 255, 255, .36);
+  transform-origin: left center;
+  /* 参考翱翔鸟：近处行轻微羽化，远处行逐级加深；模糊只在换行时换值，不做逐帧动画。 */
+  filter: blur(calc(min(var(--adist), 7) * .8px));
+  /* 没有 mask 后，用更深的距离透明度让上下边缘自然淡出（7 行 ≈ 0） */
+  opacity: calc(1 - min(var(--adist), 7) * .14);
+  /* --ly-shift 是整段歌词的纵向滚动量：直接施加在**每一行**上，
+     让滚动与逐行错落共用同一个 transform 过渡，而不是「整条轨道先大位移、再叠小延时」。 */
+  transform: translate3d(0, calc(
+    var(--ly-shift, 0px) +
+    min(var(--down), 1) * 26px + min(max(var(--down) - 1, 0), 5) * 14px
+    - min(var(--up), 1) * 20px - min(max(var(--up) - 1, 0), 5) * 10px
+  ), 0);
+  /* 逐行延时写在 --sd 上（JS 只切这个变量，不重写 transition 简写，
+     避免换行时把正在进行的动画取消重来 → “卡一下”）。 */
+  transition:
+    transform .85s cubic-bezier(.4, 0, .2, 1) var(--sd, 0ms),
+    opacity .5s cubic-bezier(.4, 0, .2, 1) var(--sd, 0ms),
+    color .4s linear 0ms;
+}
+/* 手动拖动期间禁用过渡，保证跟手 1:1；松手后恢复，不影响下一次换行 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics.is-scrolling .lp-lyric { transition: none; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric:hover { color: rgba(255, 255, 255, .78); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric.is-past { color: rgba(255, 255, 255, .22); }
+/* 当前行：纯白（位移由 --off=0 自然归零，不再额外 scale，避免换行时缩放抖动） */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric.is-active { color: hsla(0, 0%, 100%, .95); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric__text {
+  /* pre-wrap：未分词与分词后（每个字是 pre-wrap 的 inline span）空白与换行规则完全一致，
+     否则某行在进入 ±6 行预分词窗口时会悄悄改变行高，表现为换行时「上方少一行/卡住」。 */
+  display: block; font-size: inherit; font-weight: 700; line-height: 1.206;
+  letter-spacing: -.021em; transform-origin: left center; white-space: pre-wrap;
+  /* 长句末尾不允许被裁切：英文长单词 / 无空格串也允许任意断行 */
+  overflow-wrap: anywhere; word-break: normal;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-tk {
+  /* 参考翱翔鸟：每个字**始终**走 background-clip:text，--cp 只改渐变边界。
+     渲染方式恒定，已唱/未唱切换时不会再因为「有无裁切」而闪一帧。
+     inline 保留正常折行，长句不会横向溢出。 */
+  display: inline; white-space: pre-wrap;
+  transform-origin: center;
+  background-image: linear-gradient(90deg,
+    rgba(255,255,255,1) 0%,
+    rgba(255,255,255,1) calc(var(--cp, 0) * 1% - .22em),
+    rgba(255,255,255,.72) calc(var(--cp, 0) * 1% - .07em),
+    rgba(255,255,255,.3) calc(var(--cp, 0) * 1% + .07em),
+    rgba(255,255,255,.3) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  /* inline 不接受 transform；用相对定位做逐字上浮，过渡只触发绘制、不影响折行 */
+  position: relative; top: 0;
+  transition: top .45s cubic-bezier(.4, 0, .2, 1), opacity .5s cubic-bezier(.4, 0, .2, 1);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-tk.is-sung {
+  top: -1.25px;
+  background-image: linear-gradient(#fff, #fff);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-tk.is-current { top: -1.5px; }
+/* 已过的行：整行白字按不透明度平滑压暗（渐变切换无法过渡，用 opacity 才能白→灰丝滑） */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric.is-past .lp-tk {
+  opacity: .4;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric.is-past .lp-lyric__trans { color: rgba(255, 255, 255, .22); }
+/* 手动滑动歌词时：取消模糊与压暗，所有行清晰可读，方便点选快进 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics.is-manual .lp-lyric {
+  filter: none; opacity: 1;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics.is-manual .lp-tk {
+  background-image: none;
+  -webkit-text-fill-color: currentColor; color: rgba(255, 255, 255, .78);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics.is-manual .lp-lyric.is-active .lp-tk { color: #fff; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics.is-manual .lp-lyric__trans { color: rgba(255, 255, 255, .6); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric__trans {
+  /* 译文比正文小一档；透明度更低（Apple 的次要信息更淡） */
+  display: block; margin-top: .18em; font-size: .52em; font-weight: 500;
+  letter-spacing: -.005em; color: rgba(255, 255, 255, .38);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric.is-active .lp-lyric__trans { color: rgba(255, 255, 255, .52); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics__end { min-height: 42vh; margin-bottom: 0; flex: none; }
+/* 首垫片由 JS 量成「半个面板高」，保证第一句也能停在中线；flex:none 防止被压缩 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics__start { flex: none; margin: 0; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 18px; padding: 0 8%; text-align: center;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__badge {
+  width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center;
+  color: hsla(0, 0%, 100%, .66); background: hsla(0, 0%, 100%, .07);
+  border: 1px solid hsla(0, 0%, 100%, .14);
+  box-shadow: inset 0 1px 0 hsla(0, 0%, 100%, .14), 0 18px 46px rgba(0, 0, 0, .22);
+  -webkit-backdrop-filter: blur(22px) saturate(150%); backdrop-filter: blur(22px) saturate(150%);
+  animation: sbLpBadgeBreath 6s ease-in-out infinite alternate;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__badge .material-icons-outlined { font-size: 38px; }
+@keyframes sbLpBadgeBreath {
+  from { transform: scale(1); opacity: .86; }
+  to { transform: scale(1.05); opacity: 1; }
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__title {
+  margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.021em;
+  color: hsla(0, 0%, 100%, .92);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__sub {
+  margin: -8px 0 0; max-width: 320px; font-size: 15px; line-height: 1.47;
+  color: hsla(0, 0%, 100%, .48);
+}
+
+/* ---- 响应式：字号/行距按 Apple .lyrics__container 的真实档位 ----
+   34px(基础) → 38px(≥1320) → 50px(≥1680) → 72px(≥2000)；
+   行距 34 → 42 → 54 → 82；译文固定 .62em（基准是正文大小）。 */
+@media (min-width: 1320px) {
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric { font-size: 38px; margin-bottom: 42px; }
+}
+@media (min-width: 1680px) {
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric { font-size: 50px; margin-bottom: 54px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric__text { line-height: 1.2; }
+}
+@media (min-width: 2000px) {
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric { font-size: 72px; margin-bottom: 82px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric__text { line-height: 1.195; }
+}
+@media (max-width: 980px) {
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp { overflow-y: auto; }
+  /* 关键：必须保持定位。若改成 static，.lp-backdrop（absolute）会盖住这一层里
+     所有非定位内容——走带按钮整行因此不可见（封面/元信息/进度/音量各自有
+     position:relative 才幸免）。relative 即可让整块栅格重新回到定位层。 */
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-grid {
+    position: relative; inset: auto; z-index: 2; display: flex; flex-direction: column;
+    gap: 8px; padding: 56px 6vw 32px;
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-left {
+    max-width: 360px; margin: 0 auto;
+    grid-template-rows: auto auto auto auto auto; row-gap: 14px;
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork { width: min(72vw, 300px); margin: 0 auto; }
+  /* 移动端关掉整列的 plus-lighter 混合与背景光斑动画：滚动/换行卡顿的两大来源 */
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-right { height: auto; margin-top: 20px; mix-blend-mode: normal; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob { animation: none; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-fluid::before,
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-fluid::after { animation: none; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop > img { animation: sbLpBackdropIn 1.2s ease both; }
+  /* 必须给固定高度并保留内部滚动：若 height:auto，歌词靠整页滚动，
+     lpScrollToArtwork 无处可滚 → 播放时歌词不会跟随（表现为「卡住/错位」）。 */
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics {
+    height: min(56vh, 460px); min-height: 300px;
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric { font-size: 28px; margin-bottom: 24px; }
+}
+@media (max-width: 680px) {
+  /* 手机端全屏播放：按 Apple Music 的单列逻辑压缩，
+     封面 → 标题/歌手 → 进度 → 走带 一屏内完成，歌词在下方独立滚动。 */
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp {
+    padding: calc(58px + max(env(safe-area-inset-top), var(--safe-t, 0px))) 18px
+             calc(20px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-grid { padding: 0; gap: 10px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-left {
+    max-width: 360px; width: 100%; margin: 0 auto; row-gap: 10px;
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork { width: min(58vw, 236px); }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-meta h2 { font-size: 18px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-meta .pl-artist { font-size: 13px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber { margin-top: 2px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-controls { justify-content: space-between; padding: 0 6px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl svg { width: 18px; height: 18px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl#plPrev svg,
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl#plNext svg { width: 26px; height: 26px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-ctl--play svg { width: 34px; height: 34px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-right { margin-top: 4px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics { height: min(42vh, 340px); min-height: 240px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric { font-size: 24px; margin-bottom: 20px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-close { top: 12px; left: 12px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn { top: 12px; right: 12px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-star-btn { top: 12px; right: 58px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu { top: 58px; right: 12px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans { bottom: 16px; right: 16px; }
+  /* Apple 手机端逻辑：默认是封面视图（歌词不占位），点右下角歌词按钮切成整屏歌词 */
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-right { display: none; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp:not(.lp-mobile-lyrics) .lp-trans { display: none; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyricview {
+    display: inline-flex; position: absolute; right: 16px;
+    bottom: calc(16px + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+    z-index: 7; width: 40px; height: 40px; padding: 0; border-radius: 50%;
+    align-items: center; justify-content: center; border: 1px solid hsla(0, 0%, 100%, .16);
+    background: none; color: hsla(0, 0%, 100%, .7);
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyricview .material-icons-outlined { font-size: 20px; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp.lp-mobile-lyrics .lp-left { display: none; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp.lp-mobile-lyrics .lp-trans { display: inline-flex; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp.lp-mobile-lyrics .lp-grid {
+    display: flex; flex: 1; height: calc(100vh - 118px); padding: 0;
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp.lp-mobile-lyrics .lp-right {
+    display: flex; margin: 0; height: 100%;
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp.lp-mobile-lyrics .lp-lyrics {
+    height: 100%; min-height: 0;
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp.lp-mobile-lyrics .lp-lyricview { right: 62px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui-preset="soaringbird"] #playerOverlay,
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp { animation: none; }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob,
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork,
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__badge {
+    animation: none !important;
+  }
+  html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyric {
+    transition: none; filter: none; transform: none;
+  }
+}
+
+
+/* ==========================================================================
+   翱翔鸟Music：播放页细节修正（三点菜单 / Apple 上下文菜单 / 翻译浮层）
+   ========================================================================== */
+
+/* 元信息行：歌名与歌手在左，三点按钮贴右，右缘与进度条同宽对齐 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-meta {
+  position: relative; display: flex; align-items: center; gap: 10px;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-meta__text { flex: 1; min-width: 0; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn {
+  position: static; inset: auto; flex: none; width: 30px; height: 30px; margin: 0; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; background: transparent; color: hsla(0, 0%, 100%, .55);
+  cursor: pointer; transition: color .15s ease, background-color .15s ease;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn svg { width: 19px; height: 19px; display: block; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn:hover,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu-btn.is-open {
+  color: #fff; background: hsla(0, 0%, 100%, .12);
+}
+
+/* 菜单：Apple Music 网页端上下文菜单 —— 浅色半透明、行内左文字右图标、细分隔线 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu {
+  position: fixed; top: 0; right: 0; left: auto; width: 236px;
+  max-width: calc(100vw - 24px); max-height: 420px; max-height: min(72dvh, 420px); overflow-y: auto;
+  padding: 0; margin: 0; border-radius: 12px; z-index: 30;
+  background: rgba(250, 250, 252, .88);
+  -webkit-backdrop-filter: saturate(180%) blur(30px);
+  backdrop-filter: saturate(180%) blur(30px);
+  border: 1px solid rgba(255, 255, 255, .55);
+  box-shadow: 0 14px 44px rgba(0, 0, 0, .38);
+  color: #1d1d1f; transform-origin: top right;
+  /* 菜单底部那条滚动条很出戏：滚轮/触摸照常可用，只是不画滑块 */
+  scrollbar-width: none; -ms-overflow-style: none;
+  animation: sbMenuIn .16s cubic-bezier(.2, .8, .2, 1) both;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu::-webkit-scrollbar { width: 0; height: 0; display: none; }
+@keyframes sbMenuIn {
+  from { opacity: 0; transform: scale(.94) translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu[hidden] { display: none; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__head,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__sep { display: none; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  width: 100%; height: 40px; margin: 0; padding: 0 14px;
+  border: 0; border-bottom: 1px solid rgba(0, 0, 0, .07); border-radius: 0;
+  background: none; color: inherit; text-align: left; cursor: pointer;
+  font: 500 13.5px/1 var(--sb-font);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu > :last-child { border-bottom: 0; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item:hover,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row:hover { background: rgba(0, 0, 0, .06); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item:active,
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row:active { background: rgba(0, 0, 0, .1); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item em {
+  order: 1; margin-left: auto; font-style: normal; font-size: 12px; color: #86868b;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__ic {
+  order: 2; margin-left: auto; font-size: 17px; line-height: 1; color: rgba(0, 0, 0, .46);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item em + .lp-menu__ic { margin-left: 10px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__item.is-on .lp-menu__ic { color: var(--accent); }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row .pl-btn {
+  order: 2; margin-left: auto; padding: 4px; color: rgba(0, 0, 0, .46);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu__row .pl-btn .material-icons-outlined { font-size: 18px; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-menu .cm-ncmdot { position: absolute; left: 52px; }
+
+/* 翻译开关：参考 Apple --lyricsTranslationButton* 的真实取值
+   常态 #ffffff1a / 图标 #ffffff8c；悬停 #ffffff40；开启 #fffffff2 + 深色图标 #525252。 */
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans {
+  top: 18px; right: 20px; left: auto; bottom: auto;
+  width: 34px; height: 34px; padding: 0; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .14);
+  color: rgba(255, 255, 255, .55);
+  -webkit-backdrop-filter: blur(60px) saturate(180%);
+  backdrop-filter: blur(60px) saturate(180%);
+  transition: background-color .16s ease, color .16s ease, border-color .16s ease;
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans svg { width: 18px; height: 18px; display: block; }
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans:hover {
+  background: rgba(255, 255, 255, .25); color: rgba(255, 255, 255, .7);
+}
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-trans.is-on {
+  background: rgba(255, 255, 255, .95); border-color: rgba(255, 255, 255, .95); color: #525252;
+}
+
+/* ==========================================================================
+   翱翔鸟Music：应用外壳（Apple Music 气质）
+   仅该预设生效；cmx / frost / md3 / glass 不受影响。
+   ========================================================================== */
+html[data-ui-preset="soaringbird"] {
+  --sb-bg: #ffffff;
+  --sb-surface: #f5f5f7;
+  --sb-surface-2: #ececef;
+  --sb-text: #1d1d1f;
+  --sb-text-2: #6e6e73;
+  --sb-hairline: rgba(0, 0, 0, .09);
+  --sb-hover: rgba(0, 0, 0, .045);
+  --sb-glass: rgba(255, 255, 255, .84);
+  --sb-playbar-bg: rgba(118, 118, 128, .1);
+  --sb-playbar-track: rgba(0, 0, 0, .1);
+  --sb-playbar-fill: rgba(0, 0, 0, .5);
+  /* 让 mdui 组件（按钮/输入框/chip/开关）也统一到 Apple 红，而不是 MD3 紫 */
+  --mdui-color-primary: 250, 35, 59;
+  --mdui-color-on-primary: 255, 255, 255;
+  --mdui-color-primary-container: 255, 235, 238;
+  --mdui-color-on-primary-container: 190, 20, 40;
+  --mdui-color-secondary: 250, 35, 59;
+  --mdui-color-on-secondary: 255, 255, 255;
+  --mdui-color-secondary-container: 242, 242, 247;
+  --mdui-color-on-secondary-container: 29, 29, 31;
+}
+html.mdui-theme-dark[data-ui-preset="soaringbird"],
+html[data-ui-preset="soaringbird"] .mdui-theme-dark {
+  --sb-bg: #000000;
+  --sb-surface: #101012;
+  --sb-surface-2: #1c1c1e;
+  --sb-text: #f5f5f7;
+  --sb-text-2: #a1a1a6;
+  --sb-hairline: rgba(255, 255, 255, .13);
+  --sb-hover: rgba(255, 255, 255, .06);
+  --sb-glass: rgba(24, 24, 26, .84);
+  --sb-playbar-bg: rgba(255, 255, 255, .06);
+  --sb-playbar-track: hsla(0, 0%, 100%, .1);
+  --sb-playbar-fill: hsla(0, 0%, 100%, .7);
+  --mdui-color-primary: 250, 35, 59;
+  --mdui-color-on-primary: 255, 255, 255;
+  --mdui-color-primary-container: 70, 12, 24;
+  --mdui-color-on-primary-container: 255, 214, 219;
+  --mdui-color-secondary: 250, 35, 59;
+  --mdui-color-on-secondary: 255, 255, 255;
+  --mdui-color-secondary-container: 28, 28, 30;
+  --mdui-color-on-secondary-container: 245, 245, 247;
+}
+html[data-ui-preset="soaringbird"] body { background-color: var(--sb-bg); color: var(--sb-text); }
+
+/* 顶栏 / 底栏 / 迷你条：Apple 的细线 + 磨砂，去掉 MD3 的胶囊指示与阴影 */
+html[data-ui-preset="soaringbird"] #topbar {
+  background: var(--sb-glass);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--sb-hairline);
+  box-shadow: none; color: var(--sb-text);
+  font-weight: 700; letter-spacing: -.022em;
+}
+html[data-ui-preset="soaringbird"] #topbar.scrolled { background: var(--sb-glass); box-shadow: none; }
+html[data-ui-preset="soaringbird"] #topSearch,
+html[data-ui-preset="soaringbird"] #topAction { color: var(--sb-text); }
+html[data-ui-preset="soaringbird"] #bottomNav {
+  background: var(--sb-glass);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-top: 1px solid var(--sb-hairline);
+}
+html[data-ui-preset="soaringbird"] .navItem { color: var(--sb-text-2); font-weight: 500; }
+html[data-ui-preset="soaringbird"] .navItem.cur { color: var(--accent, #fa233b); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .nav-ic { width: 44px; height: 30px; border-radius: 0; }
+html[data-ui-preset="soaringbird"] .nav-ic::before { display: none; }
+/* 迷你条/胶囊的具体样式统一放在后面「底部胶囊播放器」一节，避免这里的
+   #mini .cm-mini-inner 高优先级把圆角写成 0。 */
+html[data-ui-preset="soaringbird"] .cm-mini-inner img { border-radius: 7px; }
+html[data-ui-preset="soaringbird"] .cm-mini-name { color: var(--sb-text); font-size: calc(14px * var(--cm-fs, 1)); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-mini-sub { color: var(--sb-text-2); font-size: calc(11.5px * var(--cm-fs, 1)); }
+html[data-ui-preset="soaringbird"] .cm-mini-btn { color: var(--sb-text); }
+html[data-ui-preset="soaringbird"] .cm-mini-track i { background: var(--accent, #fa233b); }
+
+/* 卡片 / 行列表 / 快捷入口：扁平、细线、无 MD3 大圆角与投影 */
+html[data-ui-preset="soaringbird"] .cm-greet-date { color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .cm-greet-title {
+  color: var(--sb-text); font-size: calc(30px * var(--cm-fs, 1)); font-weight: 700; letter-spacing: -.03em;
+}
+html[data-ui-preset="soaringbird"] .cm-sec-head h2 {
+  color: var(--sb-text); font-size: calc(21px * var(--cm-fs, 1)); font-weight: 700; letter-spacing: -.02em;
+}
+html[data-ui-preset="soaringbird"] .cm-sec-sub,
+html[data-ui-preset="soaringbird"] .cm-sec-more { color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .cm-sec-more { color: var(--accent, #fa233b); }
+
+html[data-ui-preset="soaringbird"] .cm-song {
+  background: transparent; border-radius: 0; box-shadow: none;
+  border-bottom: 1px solid var(--sb-hairline); padding: 8px 2px;
+}
+html[data-ui-preset="soaringbird"] .cm-song:last-child { border-bottom: 0; }
+html[data-ui-preset="soaringbird"] .cm-song:active { background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .cm-song-pic { width: 46px; height: 46px; border-radius: 6px; }
+html[data-ui-preset="soaringbird"] .cm-song-name { color: var(--sb-text); font-size: calc(15px * var(--cm-fs, 1)); font-weight: 500; }
+html[data-ui-preset="soaringbird"] .cm-song-sub,
+html[data-ui-preset="soaringbird"] .cm-song-dur { color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .cm-song-like.on { color: var(--accent, #fa233b); }
+html[data-ui-preset="soaringbird"] .cm-song-mv { color: var(--sb-text-2); }
+
+html[data-ui-preset="soaringbird"] .cm-card { background: transparent; border-radius: 8px; box-shadow: none; }
+html[data-ui-preset="soaringbird"] .cm-card img,
+html[data-ui-preset="soaringbird"] .cm-card .cm-cover,
+html[data-ui-preset="soaringbird"] .cm-plcover { border-radius: 8px; }
+html[data-ui-preset="soaringbird"] .cm-card-name,
+html[data-ui-preset="soaringbird"] .cm-plname { color: var(--sb-text); font-size: calc(13px * var(--cm-fs, 1)); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-card-sub,
+html[data-ui-preset="soaringbird"] .cm-plsub { color: var(--sb-text-2); font-size: calc(12px * var(--cm-fs, 1)); }
+
+/* 一键开听：四卡等高、等宽、同一基线（图标在上、标题/副标题各占一行） */
+html[data-ui-preset="soaringbird"] .cm-quickrow {
+  display: flex; flex-wrap: nowrap; gap: 12px; margin-bottom: 28px;
+}
+html[data-ui-preset="soaringbird"] .cm-quick {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 0; box-sizing: border-box; min-height: 84px; padding: 14px;
+  border: 1px solid var(--sb-hairline); border-radius: 12px; box-shadow: none;
+  background: var(--sb-surface); color: var(--sb-text); text-align: left;
+  transition: background-color .15s ease;
+}
+html[data-ui-preset="soaringbird"] .cm-quick:hover { background: var(--sb-surface-2); }
+html[data-ui-preset="soaringbird"] .cm-quick:active { transform: none; }
+html[data-ui-preset="soaringbird"] .cm-quick .material-icons-outlined {
+  order: 0; margin-bottom: 8px; color: var(--accent, #fa233b);
+  font-size: calc(20px * var(--cm-fs, 1)); line-height: 1;
+}
+html[data-ui-preset="soaringbird"] .cm-quick b,
+html[data-ui-preset="soaringbird"] .cm-quick i {
+  width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-ui-preset="soaringbird"] .cm-quick b {
+  color: var(--sb-text); font-size: calc(14px * var(--cm-fs, 1)); font-weight: 600; line-height: 1.35;
+}
+html[data-ui-preset="soaringbird"] .cm-quick i {
+  margin-top: 2px; color: var(--sb-text-2); opacity: 1;
+  font-size: calc(12px * var(--cm-fs, 1)); line-height: 1.35;
+}
+@media (max-width: 639px) {
+  html[data-ui-preset="soaringbird"] .cm-quickrow { flex-wrap: wrap; gap: 10px; }
+  html[data-ui-preset="soaringbird"] .cm-quick { flex: 1 1 calc(50% - 5px); min-width: calc(50% - 5px); }
+}
+html[data-ui-preset="soaringbird"] .cm-empty { color: var(--sb-text-2); }
+
+/* ---- 底部胶囊播放器（对齐参考 .playbar：820px / 56px / radius 1000 / 内描边） ---- */
+html[data-ui-preset="soaringbird"] #mini {
+  display: flex; justify-content: center; height: auto;
+  pointer-events: none;
+}
+html[data-ui-preset="soaringbird"] .cm-mini-inner {
+  pointer-events: auto;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; column-gap: 16px;
+  width: min(820px, calc(100% - 40px));
+  height: 56px; border-radius: 1000px; padding: 0 18px;
+  /* 走主题变量：浅色/深色各一套玻璃底色，深色模式不会变成一块白板。
+     只留很低的底色 + 模糊，保证后面的内容能透出来（不再叠白色高光）。 */
+  background-color: var(--sb-playbar-bg, rgba(118, 118, 128, .1));
+  background-image: none;
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  backdrop-filter: blur(30px) saturate(200%);
+  /* 极细内描边（Apple 的 glass-stroke），让胶囊在纯白页面上也有轮廓；
+     不用投影，避免下方出现灰白色带。 */
+  border: 1px solid var(--sb-hairline); box-shadow: none;
+}
+/* 皮肤切换时的兜底：迷你条里只允许出现「当前皮肤」的 DOM。
+   旧皮肤的模板若因切换时机残留，会被这里直接隐藏，避免叠成两层播放器。 */
+html[data-ui-preset="soaringbird"] .cm-mini-inner:not(.sb-pb) { display: none !important; }
+:root:not([data-ui-preset="soaringbird"]) #mini .cm-mini-inner.sb-pb { display: none !important; }
+html[data-ui-preset="soaringbird"] #mini .cm-mini-text,
+html[data-ui-preset="soaringbird"] #mini .cm-mini-btn,
+html[data-ui-preset="soaringbird"] #mini .cm-mini-ph { display: none !important; }
+
+/* ---- 播放条三段：左控制组 · 中 LCD · 右动作（1:1 对齐参考 .playbar） ---- */
+html[data-ui-preset="soaringbird"] .sb-pb__controls { display: flex; align-items: center; gap: 2px; flex: none; }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl {
+  width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--sb-text); cursor: pointer;
+  transition: background-color .18s ease, color .18s ease;
+}
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl svg { width: 17px; height: 17px; display: block; }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl:hover:not(:disabled) { background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl:active:not(:disabled) { transform: none; background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl:disabled { cursor: default; }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl--play { width: 42px; height: 42px; }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl--play svg { width: 23px; height: 23px; }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl--side { color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl--side:hover:not(:disabled) { color: var(--sb-text); }
+html[data-ui-preset="soaringbird"] .sb-pb__ctrl--side.is-on { color: var(--accent, #fa233b); }
+
+html[data-ui-preset="soaringbird"] .sb-pb__lcd {
+  min-width: 0; height: 56px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 34px auto;
+  grid-template-areas: "art meta" "prog prog";
+  column-gap: 9px; align-content: center;
+  padding-top: 9px; box-sizing: border-box;
+}
+html[data-ui-preset="soaringbird"] .sb-pb__lcd--empty {
+  display: flex; align-items: center; justify-content: center; padding-top: 0;
+}
+html[data-ui-preset="soaringbird"] .sb-pb__logo { width: 23px; height: 23px; opacity: .4; object-fit: contain; }
+html[data-ui-preset="soaringbird"] .sb-pb__art {
+  grid-area: art; width: 34px; height: 34px; padding: 0; border: 0;
+  border-radius: 6px; overflow: hidden; background: var(--sb-surface-2); cursor: pointer;
+}
+html[data-ui-preset="soaringbird"] .sb-pb__art img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+html[data-ui-preset="soaringbird"] .sb-pb__art .material-icons-outlined { font-size: 18px; color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .sb-pb__meta {
+  grid-area: meta; min-width: 0; padding: 0; border: 0; background: none; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  text-align: left; color: inherit; font: inherit;
+}
+html[data-ui-preset="soaringbird"] .cm-mini-name { color: var(--sb-text); font-size: calc(14px * var(--cm-fs, 1)); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-mini-sub { color: var(--sb-text-2); }
+/* 进度条嵌在 LCD 内，与封面+文字等宽；不再浮在胶囊外 */
+html[data-ui-preset="soaringbird"] .sb-pb__lcd .cm-mini-prog {
+  grid-area: prog; position: relative; top: 0; left: 0; right: auto; bottom: auto;
+  width: 100%; height: 12px; transform: none; pointer-events: auto;
+}
+/* 原生进度 input 的默认外观要清掉，否则会盖出 MD3 的轨道 */
+html[data-ui-preset="soaringbird"] .sb-pb__lcd .cm-mini-prog input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+  opacity: 0; cursor: pointer; -webkit-appearance: none; appearance: none; background: transparent;
+}
+html[data-ui-preset="soaringbird"] .sb-pb__lcd .cm-mini-track {
+  top: 4px; left: 0; right: 0; height: 4px; border-radius: 2px; background: var(--sb-playbar-track, rgba(0, 0, 0, .1));
+}
+html[data-ui-preset="soaringbird"] .sb-pb__lcd .cm-mini-track i { background: var(--sb-playbar-fill, rgba(0, 0, 0, .5)); }
+html[data-ui-preset="soaringbird"] .sb-pb__lcd .cm-mini-track #miniBuf { opacity: .3; }
+html[data-ui-preset="soaringbird"] .sb-pb__lcd .cm-mini-thumb { top: 6px; background: var(--sb-text); border-color: var(--sb-glass); box-shadow: none; }
+
+html[data-ui-preset="soaringbird"] .sb-pb__actions { display: flex; align-items: center; gap: 2px; justify-self: end; }
+html[data-ui-preset="soaringbird"] .sb-pb__act {
+  width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--sb-text-2); cursor: pointer;
+  transition: background-color .18s ease, color .18s ease;
+}
+html[data-ui-preset="soaringbird"] .sb-pb__act svg { width: 17px; height: 17px; display: block; }
+html[data-ui-preset="soaringbird"] .sb-pb__act .material-icons-outlined { font-size: 17px; line-height: 1; color: inherit; }
+html[data-ui-preset="soaringbird"] .sb-pb__act:hover:not(:disabled) { color: var(--sb-text); background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .sb-pb__act.is-on { color: var(--sb-text); }
+html[data-ui-preset="soaringbird"] .sb-pb__act:disabled { cursor: default; }
+/* 音量：平时只露图标，悬停滑出滑块（参考 .pb-volume） */
+html[data-ui-preset="soaringbird"] .sb-pb__volume {
+  display: flex; align-items: center; gap: 6px; width: 16px; margin: 0 4px;
+  overflow: hidden; color: var(--sb-text-2); box-sizing: border-box;
+  transition: width .34s cubic-bezier(.22,1,.36,1), color .18s ease;
+}
+html[data-ui-preset="soaringbird"] .sb-pb__volume svg { width: 15px; height: 15px; flex: 0 0 15px; display: block; }
+html[data-ui-preset="soaringbird"] .sb-pb__volume:hover,
+html[data-ui-preset="soaringbird"] .sb-pb__volume:focus-within { width: 96px; color: var(--sb-text); }
+html[data-ui-preset="soaringbird"] .sb-pb__volume input {
+  -webkit-appearance: none; appearance: none; box-sizing: border-box;
+  flex: 1 1 0; min-width: 0; width: 0; height: 4px; margin: 0; padding: 0; border-radius: 2px;
+  background: var(--sb-playbar-track, rgba(0, 0, 0, .1)); outline: none; cursor: pointer;
+  opacity: 0; transition: opacity .26s ease;
+}
+html[data-ui-preset="soaringbird"] .sb-pb__volume:hover input,
+html[data-ui-preset="soaringbird"] .sb-pb__volume:focus-within input { opacity: 1; }
+html[data-ui-preset="soaringbird"] .sb-pb__volume input::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--sb-text); border: 0;
+}
+html[data-ui-preset="soaringbird"] .sb-pb.is-empty .sb-pb__ctrl,
+html[data-ui-preset="soaringbird"] .sb-pb.is-empty .sb-pb__act { opacity: .34; }
+
+@media (min-width: 900px) {
+  html[data-ui-preset="soaringbird"] #mini {
+    left: 240px; right: 0; bottom: 14px;
+  }
+  html[data-ui-preset="soaringbird"] #out {
+    /* 内容一直铺到视口底部，胶囊浮在内容之上：
+       这样 backdrop-filter 才有东西可模糊（否则胶囊下面只有纯白 body，看起来就是一块白板）。 */
+    bottom: 0;
+    padding: 28px 32px calc(104px + var(--safe-b, 0px));
+  }
+  html[data-ui-preset="soaringbird"] body.no-mini #out { bottom: 0; }
+}
+@media (max-width: 899px) {
+  html[data-ui-preset="soaringbird"] #mini {
+    left: 0; right: 0; bottom: calc(var(--cm-nav-h) + 6px + var(--safe-b, 0px));
+  }
+  html[data-ui-preset="soaringbird"] #out {
+    bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-bottom), var(--safe-b, 0px)));
+    padding-bottom: calc(84px + var(--safe-b, 0px));
+  }
+  html[data-ui-preset="soaringbird"] .cm-mini-inner {
+    width: calc(100% - 24px); height: 54px; padding: 0 10px; column-gap: 6px;
+  }
+}
+/* ≤680：与参考一致，隐藏随机/循环、音量与展开，只留播放核心 */
+@media (max-width: 680px) {
+  html[data-ui-preset="soaringbird"] .sb-pb__controls .sb-pb__ctrl--side { display: none; }
+  html[data-ui-preset="soaringbird"] .sb-pb__volume { display: none; }
+  html[data-ui-preset="soaringbird"] #miniExpand { display: none; }
+  html[data-ui-preset="soaringbird"] .sb-pb__lcd { height: 52px; grid-template-rows: 32px auto; padding-top: 6px; }
+  html[data-ui-preset="soaringbird"] .sb-pb__art { width: 32px; height: 32px; }
+  html[data-ui-preset="soaringbird"] .cm-mini-name { font-size: calc(13px * var(--cm-fs, 1)); }
+  html[data-ui-preset="soaringbird"] .cm-mini-sub { font-size: calc(11px * var(--cm-fs, 1)); }
+}
+
+/* ---- 桌面：翱翔鸟侧栏（结构/数值照搬参考项目 Sidebar.jsx + .sidebar 样式） ---- */
+/* 默认隐藏：侧栏只属于翱翔鸟主题，其它主题不能因此多出一块未样式化的 DOM */
+#sbNav { display: none; }
+.sb-only { display: none; }        /* 只有翱翔鸟主题在移动端底栏补一个搜索入口 */
+/* 参考项目没有顶栏：搜索并入侧栏（桌面）/底部导航（移动）。
+   !important：防止任何内联 display 或后续规则把它重新显示出来。 */
+html[data-ui-preset="soaringbird"] #topbar,
+html[data-ui-preset="soaringbird"] #brandLock,
+html[data-ui-preset="soaringbird"] #topAccount { display: none !important; }
+html[data-ui-preset="soaringbird"] #out {
+  top: 0;
+  /* 顶栏没了，状态栏/刘海的安全区改由内容区自己让出 */
+  padding-top: calc(12px + max(env(safe-area-inset-top), var(--safe-t, 0px)));
+}
+html[data-ui-preset="soaringbird"] .sb-only { display: flex; }
+html[data-ui-preset="soaringbird"] #sbNav { display: none; }
+html[data-ui-preset="soaringbird"] .sb-sidebar__top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 0 14px 16px;
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__brand {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  text-decoration: none; color: var(--sb-text);
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__brand img { width: 25px; height: 25px; flex: none; }
+html[data-ui-preset="soaringbird"] .sb-sidebar__brand span {
+  font-size: calc(16px * var(--cm-fs, 1)); font-weight: 600; letter-spacing: -.02em; white-space: nowrap;
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__scroll { flex: 1; overflow-y: auto; padding: 0 9px; scrollbar-width: none; }
+html[data-ui-preset="soaringbird"] .sb-sidebar__scroll::-webkit-scrollbar { width: 0; }
+html[data-ui-preset="soaringbird"] .sb-snav {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px;
+}
+html[data-ui-preset="soaringbird"] .sb-snav__item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 6px 9px; border-radius: 6px; text-decoration: none;
+  font-size: calc(14px * var(--cm-fs, 1)); font-weight: 400; letter-spacing: -.01em;
+  color: var(--sb-text); transition: background .14s ease, color .14s ease;
+}
+html[data-ui-preset="soaringbird"] .sb-snav__item .material-icons-outlined {
+  font-size: calc(17px * var(--cm-fs, 1)); color: var(--sb-text-2);
+}
+html[data-ui-preset="soaringbird"] .sb-snav__item:hover { background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .sb-snav__item.is-active {
+  background: var(--sb-hover); color: var(--accent, #fa233b); font-weight: 500;
+}
+html[data-ui-preset="soaringbird"] .sb-snav__item.is-active .material-icons-outlined { color: var(--accent, #fa233b); }
+html[data-ui-preset="soaringbird"] .sb-snav__label {
+  margin: 16px 9px 6px; font-size: calc(12px * var(--cm-fs, 1)); font-weight: 500; color: var(--sb-text-2);
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__user {
+  padding: 10px 10px 0; border-top: 1px solid var(--sb-hairline); margin-top: 8px;
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__user-row {
+  display: flex; align-items: center; gap: 9px; min-width: 0; width: 100%;
+  padding: 6px 7px; border-radius: 7px; text-decoration: none; color: var(--sb-text);
+  transition: background .14s ease;
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__user-row:hover { background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .sb-sidebar__avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex: none; display: inline-flex;
+  align-items: center; justify-content: center; overflow: hidden;
+  background: var(--sb-hover); color: var(--sb-text-2); font-size: calc(20px * var(--cm-fs, 1));
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__user-meta {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0;
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__user-name {
+  font-size: calc(13px * var(--cm-fs, 1)); font-weight: 500;
+  max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__user-hint {
+  font-size: calc(11px * var(--cm-fs, 1)); color: var(--sb-text-2);
+  max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__chev {
+  margin-left: auto; color: var(--sb-text-2); font-size: calc(15px * var(--cm-fs, 1));
+  transition: transform .16s ease;
+}
+html[data-ui-preset="soaringbird"] .sb-sidebar__user-row:hover .sb-sidebar__chev { transform: translateX(1px); }
+
+@media (min-width: 900px) {
+  /* 参考项目「顶栏已移除」：搜索与历史导航并入侧栏 */
+  html[data-ui-preset="soaringbird"] #topbar,
+  html[data-ui-preset="soaringbird"] #brandLock,
+  html[data-ui-preset="soaringbird"] #bottomNav,
+  html[data-ui-preset="soaringbird"] #navDrop { display: none; }
+  html[data-ui-preset="soaringbird"] #sbNav {
+    display: flex; flex-direction: column;
+    position: fixed; top: 0; bottom: 0; left: 0; width: 240px; z-index: 25;
+    background: var(--sb-surface); border-right: 1px solid var(--sb-hairline);
+    padding: 22px 0 14px;
+    padding-bottom: calc(14px + var(--safe-b, 0px));
+  }
+  html[data-ui-preset="soaringbird"] #out {
+    left: 240px; top: 0; padding: 28px 32px 112px;
+    bottom: calc(var(--cm-mini-h) + var(--safe-b, 0px));
+  }
+  html[data-ui-preset="soaringbird"] #mini { left: 240px; }
+  html[data-ui-preset="soaringbird"] .cm-page { max-width: 1280px; margin: 0 auto; }
+}
+
+/* ---- 苹果式点按反馈：只降透明度/换底色，不缩小、不投影 ---- */
+/* 翱翔鸟不用 MD3 涟漪：Apple 的按压反馈是颜色/透明度变化 */
+html[data-ui-preset="soaringbird"] .cm-rip { display: none; }
+html[data-ui-preset="soaringbird"] .pl-btn:active,
+html[data-ui-preset="soaringbird"] .cm-song-like:active,
+html[data-ui-preset="soaringbird"] .cm-song-more:active,
+html[data-ui-preset="soaringbird"] .cm-plmenu:active,
+html[data-ui-preset="soaringbird"] .pl-transport .huge:active,
+html[data-ui-preset="soaringbird"] .cm-more-row:active,
+html[data-ui-preset="soaringbird"] .cm-ava-wrap:active,
+html[data-ui-preset="soaringbird"] .cm-decor-item:active,
+html[data-ui-preset="soaringbird"] .cm-roomcard:active,
+html[data-ui-preset="soaringbird"] .cm-ucard:active,
+html[data-ui-preset="soaringbird"] .cm-sqtab:active,
+html[data-ui-preset="soaringbird"] .cm-post-att:active,
+html[data-ui-preset="soaringbird"] .cm-cmx-banner:active,
+html[data-ui-preset="soaringbird"] .cm-decor-banner:active,
+html[data-ui-preset="soaringbird"] .cm-atab:active,
+html[data-ui-preset="soaringbird"] .cm-plcard:active .cm-plcover,
+html[data-ui-preset="soaringbird"] .navItem:active .nav-ic .material-icons-outlined,
+html[data-ui-preset="soaringbird"] .cm-mini-btn:active { transform: none; }
+html[data-ui-preset="soaringbird"] .cm-plcard:active .cm-plcover { box-shadow: none; }
+html[data-ui-preset="soaringbird"] .cm-song-like:active,
+html[data-ui-preset="soaringbird"] .cm-song-more:active,
+html[data-ui-preset="soaringbird"] .cm-plmenu:active { opacity: .55; }
+
+/* ---- 悬停：用底色/文字色区分，不加阴影 ---- */
+html[data-ui-preset="soaringbird"] .cm-song:hover { background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .cm-song-name { transition: color .15s ease; }
+html[data-ui-preset="soaringbird"] .cm-song:hover .cm-song-name { color: var(--accent, #fa233b); }
+html[data-ui-preset="soaringbird"] .cm-card-name,
+html[data-ui-preset="soaringbird"] .cm-plname { transition: color .15s ease; }
+html[data-ui-preset="soaringbird"] .cm-card:hover .cm-card-name,
+html[data-ui-preset="soaringbird"] .cm-plcard:hover .cm-plname { color: var(--accent, #fa233b); }
+html[data-ui-preset="soaringbird"] .cm-sec-more:hover,
+html[data-ui-preset="soaringbird"] .cm-cmx-go:hover { color: var(--accent-hover, #d1112f); }
+
+/* ---- 首页 hero：双列大横幅（移植翱翔鸟 / Apple Music 网页端首页） ---- */
+html[data-ui-preset="soaringbird"] .cm-hero {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;
+  margin: 4px 0 30px;
+}
+html[data-ui-preset="soaringbird"] .cm-hero__card {
+  position: relative; display: block; overflow: hidden;
+  aspect-ratio: 2 / 1; border: 0; padding: 0; margin: 0;
+  border-radius: 12px; cursor: pointer; text-decoration: none; text-align: left;
+  background: linear-gradient(135deg, var(--h1, #5b4bff), var(--h2, #ff3d71));
+  box-shadow: none;
+}
+html[data-ui-preset="soaringbird"] .cm-hero__art {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+/* 底部压暗：封面细节尽量保留，标题落在左下角（Apple 编辑推荐卡同款） */
+html[data-ui-preset="soaringbird"] .cm-hero__veil {
+  position: absolute; inset: 0;
+  background: linear-gradient(0deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.3) 42%, rgba(0,0,0,0) 72%);
+}
+html[data-ui-preset="soaringbird"] .cm-hero__text {
+  position: absolute; left: 20px; right: 20px; bottom: 16px;
+  display: flex; flex-direction: column; gap: 4px; color: #fff;
+}
+html[data-ui-preset="soaringbird"] .cm-hero__eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: rgba(255, 255, 255, .7);
+}
+html[data-ui-preset="soaringbird"] .cm-hero__title {
+  font-size: 24px; font-weight: 700; line-height: 1.12; letter-spacing: -.022em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+html[data-ui-preset="soaringbird"] .cm-hero__sub { font-size: 13px; color: rgba(255, 255, 255, .7); }
+html[data-ui-preset="soaringbird"] .cm-hero__card::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: rgba(255, 255, 255, 0); transition: background-color .18s ease;
+}
+html[data-ui-preset="soaringbird"] .cm-hero__card:hover::after { background: rgba(255, 255, 255, .07); }
+html[data-ui-preset="soaringbird"] .cm-hero__card:active { filter: none; }
+/* 首页区块间距 / 卡片架尺寸：照搬参考 .page(gap 28) / .shelf__row(184px, gap 18) */
+html[data-ui-preset="soaringbird"] .cm-sec { margin-bottom: 28px; }
+html[data-ui-preset="soaringbird"] .cm-sec-head h2 { font-size: calc(22px * var(--cm-fs, 1)); }
+html[data-ui-preset="soaringbird"] .cm-greet-title { font-size: calc(32px * var(--cm-fs, 1)); }
+html[data-ui-preset="soaringbird"] .cm-hscroll { gap: 18px; }
+html[data-ui-preset="soaringbird"] .cm-card { width: 184px; }
+html[data-ui-preset="soaringbird"] .cm-hscroll .cm-card img,
+html[data-ui-preset="soaringbird"] .cm-hscroll .cm-card .cm-cover { width: 184px; height: 184px; }
+html[data-ui-preset="soaringbird"] .cm-card-name { font-size: calc(14px * var(--cm-fs, 1)); }
+html[data-ui-preset="soaringbird"] .cm-card-sub { font-size: calc(13px * var(--cm-fs, 1)); }
+@media (max-width: 900px) {
+  html[data-ui-preset="soaringbird"] .cm-hero { grid-template-columns: 1fr; gap: 12px; }
+  html[data-ui-preset="soaringbird"] .cm-hero__card { aspect-ratio: 2 / 1; }
+}
+@media (max-width: 620px) {
+  html[data-ui-preset="soaringbird"] .cm-hero__title { font-size: 19px; }
+}
+
+/* 推广横幅：去掉 MD3 的紫色渐变与粗边框，改成 Apple 的浅灰底 + 细线 + 蓝色链接 */
+html[data-ui-preset="soaringbird"] .cm-cmx-banner {
+  background: var(--sb-surface); border: 1px solid var(--sb-hairline); border-radius: 10px;
+}
+html[data-ui-preset="soaringbird"] .cm-cmx-banner > .material-icons-outlined { color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .cm-cmx-t b { color: var(--sb-text); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-cmx-sub { color: var(--sb-text-2); opacity: 1; }
+html[data-ui-preset="soaringbird"] .cm-cmx-go { color: #0071e3; font-weight: 500; }
+html[data-ui-preset="soaringbird"] .cm-cmx-go .material-icons-outlined { color: #0071e3; }
+
+/* 主题强调色（保留既有约定） */
+html[data-ui-preset="soaringbird"] mdui-tab a[active],
+html[data-ui-preset="soaringbird"] .cm-chip.on { color: var(--accent, #fa233b); }
+
+/* ---------- 搜索页（参考图二：Apple Music 网页端） ---------- */
+/* SwiftUI 搜索框：灰底圆角、左放大镜、无描边；聚焦只加深底色 */
+html[data-ui-preset="soaringbird"] .cm-search-bar { margin: 0 0 16px; }
+html[data-ui-preset="soaringbird"] .sb-search {
+  display: flex; align-items: center; gap: 8px;
+  height: 38px; padding: 0 12px;
+  background: rgba(118, 118, 128, .12); border-radius: 10px;
+  transition: background-color .15s ease;
+}
+html[data-ui-preset="soaringbird"] .sb-search:focus-within { background: rgba(118, 118, 128, .17); }
+html[data-ui-preset="soaringbird"] .sb-search__icon { flex: none; font-size: 17px; line-height: 1; color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .sb-search input {
+  flex: 1; min-width: 0; height: 100%; margin: 0; padding: 0; border: 0; outline: none;
+  background: transparent; font: inherit; font-size: calc(15px * var(--cm-fs, 1));
+  color: var(--sb-text); -webkit-appearance: none; appearance: none;
+}
+html[data-ui-preset="soaringbird"] .sb-search input::placeholder { color: #8e8e93; opacity: 1; }
+html[data-ui-preset="soaringbird"] .sb-search input::-webkit-search-decoration,
+html[data-ui-preset="soaringbird"] .sb-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+html.mdui-theme-dark[data-ui-preset="soaringbird"] .sb-search { background: rgba(118, 118, 128, .24); }
+html.mdui-theme-dark[data-ui-preset="soaringbird"] .sb-search:focus-within { background: rgba(118, 118, 128, .32); }
+html[data-ui-preset="soaringbird"] .cm-search-bar mdui-text-field {
+  --mdui-comp-text-field-container-shape: 8px;
+  --mdui-comp-text-field-container-color: var(--sb-surface);
+  --mdui-typescale-body-large-size: 15px;
+}
+html[data-ui-preset="soaringbird"] .sb-cats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px; margin: 8px 0 22px;
+}
+html[data-ui-preset="soaringbird"] .sb-cat {
+  position: relative; height: 96px; padding: 14px 16px; box-sizing: border-box;
+  border: 0; border-radius: 14px;
+  overflow: hidden; cursor: pointer; text-align: left;
+  color: #fff;
+  background: linear-gradient(140deg, var(--g1, #8e9aa8) 0%, var(--g2, #4a5563) 100%);
+  box-shadow: none;
+}
+/* 斜向高光 + 右下柔光：只有渐变和文字，不放图标/圆环 */
+html[data-ui-preset="soaringbird"] .sb-cat::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(155deg, rgba(255, 255, 255, .26) 0%, rgba(255, 255, 255, 0) 48%);
+}
+html[data-ui-preset="soaringbird"] .sb-cat::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(140px 140px at 100% 100%, rgba(255, 255, 255, .22) 0%, transparent 72%);
+}
+html[data-ui-preset="soaringbird"] .sb-cat > span {
+  position: relative; z-index: 1; display: block; max-width: 100%;
+  font-size: calc(17px * var(--cm-fs, 1)); font-weight: 600;
+  line-height: 1.24; letter-spacing: -.022em;
+  overflow-wrap: anywhere;
+}
+html[data-ui-preset="soaringbird"] .sb-cat { transition: filter .15s ease; }
+html[data-ui-preset="soaringbird"] .sb-cat:hover { filter: brightness(1.07); }
+html[data-ui-preset="soaringbird"] .sb-cat:active { filter: brightness(1.02); }
+@media (min-width: 1100px) {
+  html[data-ui-preset="soaringbird"] .sb-cats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  html[data-ui-preset="soaringbird"] .sb-cats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  html[data-ui-preset="soaringbird"] .sb-cat { height: 76px; padding: 12px 12px; }
+  html[data-ui-preset="soaringbird"] .sb-cat > span { font-size: calc(15px * var(--cm-fs, 1)); }
+}
+html[data-ui-preset="soaringbird"] .cm-hot,
+html[data-ui-preset="soaringbird"] .cm-hist {
+  background: var(--sb-surface); color: var(--sb-text);
+  border: 1px solid var(--sb-hairline); border-radius: 999px;
+}
+html[data-ui-preset="soaringbird"] .cm-hot b { color: var(--accent, #fa233b); }
+html[data-ui-preset="soaringbird"] .cm-srchtabs { border-bottom-color: var(--sb-hairline); }
+html[data-ui-preset="soaringbird"] .cm-srchtab { color: var(--sb-text-2); font-weight: 500; }
+html[data-ui-preset="soaringbird"] .cm-srchtab.on { color: var(--sb-text); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-srchtab.on::after {
+  left: 0; right: 0; height: 2px; border-radius: 0; background: var(--sb-text);
+}
+html[data-ui-preset="soaringbird"] .cm-plsort { color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .cm-plsort mdui-chip { --mdui-comp-chip-height: 28px; }
+
+/* ---------- 发现页 TAB：Apple 的纯文字页签 + 细线，不用 MD3 胶囊 ---------- */
+html[data-ui-preset="soaringbird"] .cm-sqtabs {
+  gap: 24px; margin: 0 0 18px; border-bottom: 1px solid var(--sb-hairline);
+}
+html[data-ui-preset="soaringbird"] .cm-sqtab {
+  flex: 0 0 auto; padding: 8px 0 10px; border-radius: 0; background: transparent;
+  color: var(--sb-text-2); font-size: calc(15px * var(--cm-fs, 1)); font-weight: 500;
+  transition: color .15s ease;
+}
+html[data-ui-preset="soaringbird"] .cm-sqtab:hover { color: var(--sb-text); }
+html[data-ui-preset="soaringbird"] .cm-sqtab.on {
+  background: transparent; color: var(--sb-text); font-weight: 600;
+  box-shadow: inset 0 -2px 0 0 var(--accent, #fa233b);
+}
+html[data-ui-preset="soaringbird"] .cm-sqtab:active { transform: none; }
+@media (min-width: 600px) {
+  html[data-ui-preset="soaringbird"] .cm-sqtabs { justify-content: flex-start; }
+  html[data-ui-preset="soaringbird"] .cm-sqtab { flex: 0 0 auto; }
+}
+
+/* 顶栏移除后，下拉刷新指示器不再需要让出顶栏高度 */
+html[data-ui-preset="soaringbird"] #ptrInd { top: calc(10px + max(env(safe-area-inset-top), var(--safe-t, 0px))); }
+
+/* ==========================================================================
+   Apple Music 页面系统（仅翱翔鸟Music）
+   统一页边距、标题层级、详情头、分组面板、列表与卡片比例；
+   所有规则只做排版/颜色，不改页面结构。
+   ========================================================================== */
+html[data-ui-preset="soaringbird"] #out { background: var(--sb-bg); }
+html[data-ui-preset="soaringbird"] .cm-page { max-width: 1280px; margin: 0 auto; }
+
+/* 通用标题：大标题紧字距、副标题统一次级灰 */
+html[data-ui-preset="soaringbird"] #out h1,
+html[data-ui-preset="soaringbird"] #out h2,
+html[data-ui-preset="soaringbird"] #out h3 {
+  color: var(--sb-text); letter-spacing: -.022em; font-weight: 700;
+}
+html[data-ui-preset="soaringbird"] .cm-sec-head { margin-bottom: 10px; }
+html[data-ui-preset="soaringbird"] .cm-sec-head h2 { font-size: calc(22px * var(--cm-fs, 1)); line-height: 1.18; }
+html[data-ui-preset="soaringbird"] .cm-sec-sub,
+html[data-ui-preset="soaringbird"] .cm-detail-sub { color: var(--sb-text-2); font-size: calc(13px * var(--cm-fs, 1)); }
+
+/* 详情页头（歌单 / 专辑 / 歌手） */
+html[data-ui-preset="soaringbird"] .cm-detail-head { gap: 20px; padding: 4px 0 24px; align-items: flex-start; }
+html[data-ui-preset="soaringbird"] .cm-detail-cover { width: 120px; height: 120px; border-radius: 10px; }
+html[data-ui-preset="soaringbird"] .cm-detail-head h2 {
+  margin: 2px 0 8px; font-size: calc(26px * var(--cm-fs, 1)); line-height: 1.16;
+}
+html[data-ui-preset="soaringbird"] .cm-artist-head { align-items: center; }
+html[data-ui-preset="soaringbird"] .cm-artist-name { letter-spacing: -.022em; }
+@media (min-width: 900px) {
+  html[data-ui-preset="soaringbird"] .cm-detail-cover { width: 160px; height: 160px; border-radius: 12px; }
+  html[data-ui-preset="soaringbird"] .cm-detail-head h2 { font-size: calc(32px * var(--cm-fs, 1)); }
+}
+
+/* 个人主页：头像与大标题同一基线 */
+html[data-ui-preset="soaringbird"] .cm-profile-head { padding: 6px 0 22px; gap: 20px; align-items: center; }
+html[data-ui-preset="soaringbird"] .cm-profile-name { font-size: calc(26px * var(--cm-fs, 1)); font-weight: 700; letter-spacing: -.022em; }
+html[data-ui-preset="soaringbird"] .cm-profile-bio { color: var(--sb-text-2); opacity: 1; font-size: calc(14px * var(--cm-fs, 1)); }
+html[data-ui-preset="soaringbird"] .cm-profile-stat {
+  gap: 4px 18px; color: var(--sb-text-2); opacity: 1; font-size: calc(12px * var(--cm-fs, 1));
+}
+html[data-ui-preset="soaringbird"] .cm-profile-stat b {
+  display: inline; margin-right: 3px; color: var(--sb-text);
+  font-size: calc(17px * var(--cm-fs, 1)); font-weight: 600;
+}
+
+/* 设置：白底分组面板 + 发丝分隔（纯边框圆角矩形） */
+html[data-ui-preset="soaringbird"] .cm-setting-list {
+  background: var(--sb-surface); border: 1px solid var(--sb-hairline);
+  border-radius: 12px; overflow: hidden; box-shadow: none;
+}
+html[data-ui-preset="soaringbird"] .cm-setting {
+  min-height: 48px; padding: 13px 16px;
+  border-bottom: 1px solid var(--sb-hairline); background: transparent;
+  font-size: calc(15px * var(--cm-fs, 1)); color: var(--sb-text);
+}
+html[data-ui-preset="soaringbird"] .cm-setting:last-child { border-bottom: 0; }
+html[data-ui-preset="soaringbird"] .cm-setting:hover { background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .cm-setting .material-icons-outlined { color: var(--sb-text-2); font-size: calc(18px * var(--cm-fs, 1)); }
+html[data-ui-preset="soaringbird"] .cm-setting i { color: var(--sb-text-2); font-size: calc(13px * var(--cm-fs, 1)); }
+
+/* 设置页（独立 settings.css）：同步翱翔鸟的字体、圆角与扁平交互 */
+html[data-ui-preset="soaringbird"] .cm-settings-hub {
+  --settings-panel: var(--sb-surface);
+  --settings-line: var(--sb-hairline);
+  --settings-muted: var(--sb-text-2);
+  max-width: 860px;
+}
+/* 单一内容列：去掉与卡片重复的二级侧栏，更像 Apple 的设置页 */
+html[data-ui-preset="soaringbird"] .cm-settings-layout { display: block; }
+html[data-ui-preset="soaringbird"] .cm-settings-sidebar { display: none; }
+html[data-ui-preset="soaringbird"] .cm-settings-categories { gap: 12px; }
+html[data-ui-preset="soaringbird"] .cm-settings-header { padding: 8px 0 22px; }
+/* 不在标题上叠英文口号，保持 Apple 的克制；小标题只留中文 */
+html[data-ui-preset="soaringbird"] .cm-settings-eyebrow { display: none; }
+html[data-ui-preset="soaringbird"] .cm-settings-header h1 {
+  font-size: calc(34px * var(--cm-fs, 1)); font-weight: 700; letter-spacing: -.022em;
+}
+html[data-ui-preset="soaringbird"] .cm-settings-header p { font-size: calc(15px * var(--cm-fs, 1)); color: var(--sb-text-2); line-height: 1.5; }
+html[data-ui-preset="soaringbird"] .cm-settings-emblem {
+  transform: none; border-radius: 12px; background: var(--sb-surface);
+  border: 1px solid var(--sb-hairline); color: var(--accent, #fa233b);
+}
+html[data-ui-preset="soaringbird"] .cm-settings-layout { gap: 28px; }
+html[data-ui-preset="soaringbird"] .cm-settings-sidebar a {
+  min-height: 40px; padding: 10px 12px; border-radius: 8px; font-size: calc(14px * var(--cm-fs, 1));
+}
+html[data-ui-preset="soaringbird"] .cm-settings-sidebar a[aria-current] {
+  background: var(--sb-hover); color: var(--accent, #fa233b); font-weight: 600;
+}
+html[data-ui-preset="soaringbird"] .cm-settings-sidebar a:hover { background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .cm-settings-card {
+  border-radius: 12px; padding: 18px 16px; gap: 12px;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+/* 卡片右侧的箭头会挤压标题列宽，导致「外观与个性化」折成两行，直接去掉 */
+html[data-ui-preset="soaringbird"] .cm-settings-card > .material-icons-outlined:last-child { display: none; }
+html[data-ui-preset="soaringbird"] .cm-settings-card h2 { font-size: calc(15px * var(--cm-fs, 1)); line-height: 1.45; }
+html[data-ui-preset="soaringbird"] .cm-settings-card:hover {
+  transform: none; border-color: var(--sb-hairline); background: var(--sb-surface-2);
+}
+html[data-ui-preset="soaringbird"] .cm-settings-card > .material-icons-outlined:first-child {
+  background: var(--sb-hover); border-radius: 8px; color: var(--accent, #fa233b);
+}
+html[data-ui-preset="soaringbird"] .cm-settings-hub .cm-setting-list {
+  background: var(--sb-surface); border: 1px solid var(--sb-hairline); border-radius: 12px;
+}
+html[data-ui-preset="soaringbird"] .cm-settings-hub .cm-setting {
+  min-height: 52px; padding: 14px 16px; gap: 10px;
+}
+html[data-ui-preset="soaringbird"] .cm-settings-hub .cm-setting:hover { background: var(--sb-hover); }
+html[data-ui-preset="soaringbird"] .cm-settings-empty {
+  border-style: solid; border-color: var(--sb-hairline); border-radius: 12px;
+}
+
+/* 我的页：挂件/用户卡片与设置保持同一套边框圆角 */
+html[data-ui-preset="soaringbird"] .cm-decor-banner,
+html[data-ui-preset="soaringbird"] .cm-ucard,
+html[data-ui-preset="soaringbird"] .cm-bindbox {
+  background: var(--sb-surface); border: 1px solid var(--sb-hairline);
+  border-radius: 12px; box-shadow: none;
+}
+html[data-ui-preset="soaringbird"] .cm-decor-banner-go { color: var(--accent, #fa233b); }
+html[data-ui-preset="soaringbird"] .cm-artist-card { width: 112px; }
+html[data-ui-preset="soaringbird"] .cm-artist-ava { width: 96px; height: 96px; border-radius: 50%; }
+html[data-ui-preset="soaringbird"] .cm-artist-name { margin-top: 8px; font-size: calc(13px * var(--cm-fs, 1)); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-bindname { font-size: calc(15px * var(--cm-fs, 1)); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-bindsub { color: var(--sb-text-2); font-size: calc(12px * var(--cm-fs, 1)); }
+
+/* 登录 / 注册：不再用大幅营销插画，改成居中的简洁卡片（Apple 账号页气质） */
+html[data-ui-preset="soaringbird"] .cm-auth-layout {
+  display: block; max-width: 440px; margin: 40px auto 72px;
+  background: var(--sb-bg); border: 1px solid var(--sb-hairline);
+  border-radius: 16px; box-shadow: none; overflow: hidden;
+}
+html[data-ui-preset="soaringbird"] .cm-auth-story { display: none; }
+html[data-ui-preset="soaringbird"] .cm-auth-layout .cm-auth-panel { padding: 34px 30px; gap: 14px; }
+html[data-ui-preset="soaringbird"] .cm-auth-layout h2,
+html[data-ui-preset="soaringbird"] .cm-auth-layout .cm-auth-title {
+  font-size: calc(26px * var(--cm-fs, 1)); font-weight: 700; letter-spacing: -.022em; text-align: left;
+}
+html[data-ui-preset="soaringbird"] .cm-auth-layout .cm-auth-description {
+  color: var(--sb-text-2); opacity: 1; font-size: calc(14px * var(--cm-fs, 1)); line-height: 1.55;
+}
+html[data-ui-preset="soaringbird"] .cm-auth-kicker { color: var(--accent, #fa233b); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-auth-logo img { width: 44px; height: 44px; border-radius: 10px; }
+html[data-ui-preset="soaringbird"] .cm-auth-layout mdui-button { min-height: 44px; border-radius: 12px; }
+html[data-ui-preset="soaringbird"] .cm-auth-alt,
+html[data-ui-preset="soaringbird"] .cm-auth-layout .cm-auth-apk { color: var(--sb-text-2); }
+
+/* 歌单 / 专辑网格：封面比例与标题层级对齐参考项目 */
+html[data-ui-preset="soaringbird"] .cm-plgrid { gap: 18px; }
+html[data-ui-preset="soaringbird"] .cm-plcover { border-radius: 8px; }
+html[data-ui-preset="soaringbird"] .cm-plname { margin-top: 8px; font-size: calc(15px * var(--cm-fs, 1)); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-plsub { color: var(--sb-text-2); font-size: calc(12px * var(--cm-fs, 1)); }
+
+/* 横滑卡片：列宽/间距与参考 .shelf__row（184 / 18） */
+html[data-ui-preset="soaringbird"] .cm-hscroll { gap: 18px; }
+html[data-ui-preset="soaringbird"] .cm-hscroll .cm-card { scroll-snap-align: start; }
+
+/* 广场统计与页签 */
+html[data-ui-preset="soaringbird"] .cm-sq-stats { color: var(--sb-text-2); }
+html[data-ui-preset="soaringbird"] .cm-sq-stats b { color: var(--accent, #fa233b); font-weight: 600; }
+html[data-ui-preset="soaringbird"] .cm-sq-stats .material-icons-outlined { color: var(--sb-text-2); }
+
+/* mdui 组件统一成 Apple 观感：胶囊按钮、无投影、hover 变色 */
+html[data-ui-preset="soaringbird"] mdui-button { font-weight: 600; letter-spacing: -.01em; }
+html[data-ui-preset="soaringbird"] mdui-button::part(button) { box-shadow: none; }
+html[data-ui-preset="soaringbird"] mdui-chip { --mdui-shape-corner-full: 999px; }
+html[data-ui-preset="soaringbird"] mdui-dialog { --mdui-shape-corner-extra-large: 16px; }
+/* 输入框统一为 SwiftUI 灰底圆角（隐藏 MD3 描边，只留底色） */
+html[data-ui-preset="soaringbird"] mdui-text-field {
+  --mdui-shape-corner-extra-small: 10px;
+  --mdui-color-outline: 233, 233, 237;
+  --mdui-typescale-body-large-size: 15px;
+  height: 44px; border-radius: 10px;
+  background: rgba(118, 118, 128, .1);
+}
+html.mdui-theme-dark[data-ui-preset="soaringbird"] mdui-text-field {
+  --mdui-color-outline: 17, 17, 19;
+  background: rgba(118, 118, 128, .2);
+}
+
+/* 设置页的搜索框与卡片圆角也统一到 SwiftUI 观感 */
+html[data-ui-preset="soaringbird"] .cm-settings-search {
+  min-height: 40px; padding: 0 12px; gap: 8px; margin-bottom: 22px;
+  background: rgba(118, 118, 128, .12); border: 0; border-radius: 10px;
+  box-shadow: none;
+}
+html[data-ui-preset="soaringbird"] .cm-settings-search:focus-within { box-shadow: none; background: rgba(118, 118, 128, .17); }
+html[data-ui-preset="soaringbird"] .cm-settings-search input { min-height: 38px; font-size: calc(15px * var(--cm-fs, 1)); }
+html[data-ui-preset="soaringbird"] .cm-settings-card { border-radius: 12px; }
+html[data-ui-preset="soaringbird"] .cm-settings-emblem { border-radius: 12px; }
+html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-settings-search { background: rgba(118, 118, 128, .24); }
+
+/* 空态：居中、两行、次级灰 */
+html[data-ui-preset="soaringbird"] .cm-empty { color: var(--sb-text-2); }
+
+/* 窄屏：页边距收紧，但保留 20px 的呼吸 */
+@media (max-width: 899px) {
+  html[data-ui-preset="soaringbird"] #out { padding-left: 20px; padding-right: 20px; }
+  html[data-ui-preset="soaringbird"] .cm-detail-cover { width: 96px; height: 96px; border-radius: 8px; }
+  html[data-ui-preset="soaringbird"] .cm-detail-head h2 { font-size: calc(22px * var(--cm-fs, 1)); }
+  html[data-ui-preset="soaringbird"] .cm-profile-name { font-size: calc(22px * var(--cm-fs, 1)); }
+}

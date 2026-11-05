@@ -53,9 +53,16 @@ function animateIn(els, { y = 8, stagger = 26, cap = 160 } = {}) {
 let seq = 0;
 
 export async function render(el, params = []) {
+  // 翱翔鸟Music：搜索框走 SwiftUI 样式（灰底圆角 + 放大镜），其余皮肤仍是 MD3 outlined
+  const sbTheme = document.documentElement.getAttribute('data-ui-preset') === 'soaringbird';
   el.innerHTML = `
     <div class="cm-search-bar">
-      <mdui-text-field id="kw" label="搜索歌曲 / 歌手 / 专辑" variant="outlined" clearable style="width:100%"></mdui-text-field>
+      ${sbTheme
+        ? `<label class="sb-search" for="kw">
+             <span class="sb-search__icon material-icons-outlined" aria-hidden="true">search</span>
+             <input id="kw" type="search" placeholder="搜索歌曲 / 歌手 / 专辑" autocomplete="off" spellcheck="false" aria-label="搜索歌曲 / 歌手 / 专辑">
+           </label>`
+        : `<mdui-text-field id="kw" label="搜索歌曲 / 歌手 / 专辑" variant="outlined" clearable style="width:100%"></mdui-text-field>`}
     </div>
     <div id="sugBox"></div>
     <div id="histBox"></div>
@@ -74,6 +81,41 @@ export async function render(el, params = []) {
   let historyVisible = true;
   const hotBox = document.createElement('div');
   histBox.after(hotBox);
+
+  // 翱翔鸟Music：参考图二的 Apple Music 搜索页 —— 搜索框下方先给「类别浏览」彩色网格。
+  // 仅该主题渲染；其余主题保持原搜索页结构不变。
+  const SB_CATS = [
+    ['2026年度最佳', '#9a9aa0', '#3c3c40'],
+    ['国际流行', '#ff7a9c', '#b21e4b'],
+    ['C-Pop', '#ff8f68', '#9e1f18'],
+    ['电子', '#4fd1c5', '#0b5d59'],
+    ['国语流行', '#ff6b6b', '#8c1111'],
+    ['K-Pop', '#f78fb3', '#a31a5b'],
+    ['粤语流行', '#ffab76', '#a63b12'],
+    ['嘻哈/说唱', '#6aa8ff', '#123a80'],
+    ['R&B', '#b39ddb', '#4a2385'],
+    ['睡眠', '#7d8bd6', '#1d2a6b'],
+    ['瞩目之星', '#ff9a9e', '#a3162c'],
+    ['工作时间', '#86c88a', '#1f5c2a'],
+    ['古典音乐', '#aab4e2', '#303b7a'],
+    ['减压', '#63c7bd', '#0e5a55'],
+    ['空间音频', '#84b7ff', '#123e7a'],
+    ['儿童', '#ffd15c', '#9a5a00'],
+    ['健身', '#ffb066', '#9a3d00'],
+  ];
+  const catBox = document.createElement('div');
+  sugBox.after(catBox);
+  const isSoar = () => document.documentElement.getAttribute('data-ui-preset') === 'soaringbird';
+  function renderCats() {
+    if (!isSoar()) { catBox.innerHTML = ''; return; }
+    catBox.innerHTML = `<div class="cm-sec-head"><h2>类别浏览</h2></div>
+      <div class="sb-cats">${SB_CATS.map(([name, g1, g2]) =>
+        `<button type="button" class="sb-cat" data-k="${esc(name)}" style="--g1:${g1};--g2:${g2}"><span>${esc(name)}</span></button>`).join('')}</div>`;
+    catBox.querySelectorAll('.sb-cat').forEach(b => {
+      b.onclick = () => { input.value = b.dataset.k; input.blur(); doSearch(b.dataset.k); };
+    });
+  }
+  renderCats();
 
   // 两个"匹配"接口（/search/match 本地文件匹配、/search/multimatch 多重匹配）：
   // 上游都要把音频指纹/文件摘要作为入参，浏览器端生成不了，所以这里**只做结果查询**，
@@ -102,7 +144,11 @@ export async function render(el, params = []) {
   // 默认搜索关键词（占位提示）：失败保持原 label，不影响使用
   api.searchDefault().then(d => {
     const k = ((d.data || {}).realkeyword || (d.data || {}).showKeyword || '').trim();
-    if (k) input.setAttribute('label', `搜索歌曲 / 歌手 / 专辑（试试「${k}」）`);
+    if (k) {
+      const hint = `搜索歌曲 / 歌手 / 专辑（试试「${k}」）`;
+      if (input.tagName === 'INPUT') input.placeholder = hint;
+      else input.setAttribute('label', hint);
+    }
   }).catch(() => {});
 
   async function renderHot() {
@@ -411,6 +457,7 @@ export async function render(el, params = []) {
     recordSearch(kw);
     renderHist();
     hotBox.innerHTML = '';   // 有搜索内容后隐藏热搜
+    catBox.style.display = 'none';
     resultBox.innerHTML = searchResultSkeleton(6);
     const cycle = loadingCycle(resultBox.querySelector('.cm-search-loading'));
     searchCycle = cycle;
@@ -465,8 +512,9 @@ export async function render(el, params = []) {
   // 输入不触发搜索：只有回车（或点击候选/热搜/历史词条这类明确动作）才发起请求
   input.addEventListener('input', () => {
     historyVisible = !(input.value || '').trim();
-    if (!(input.value || '').trim()) { seq++; if (searchCycle) searchCycle.cancel(); searchCycle = null; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; renderHist(); renderHot(); return; }
+    if (!(input.value || '').trim()) { seq++; if (searchCycle) searchCycle.cancel(); searchCycle = null; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; catBox.style.display = ''; renderHist(); renderHot(); return; }
     // 输入中：候选词独占视野，历史/热搜让位（清空后由上面分支恢复）
+    catBox.style.display = 'none';
     histBox.innerHTML = ''; hotBox.innerHTML = '';
     queueSuggest(input.value.trim());
   });

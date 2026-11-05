@@ -14,6 +14,7 @@ export const DEFAULT_PRESET = 'cmx';
 
 export const UI_PRESETS = [
   { key: 'cmx', name: 'CurrentMusicX 风格', desc: '默认 · 浅灰底 · 白色大圆角卡片 · 折射液态玻璃底栏', swatch: 'cmx' },
+  { key: 'soaringbird', name: '翱翔鸟Music', desc: 'Apple Music 风格 · 流体封面背景 · 逐字羽化歌词', swatch: 'soaringbird' },
   { key: 'frost', name: '简约玻璃', desc: '玻璃浮层 · 卡片磨砂白 + 发丝线', swatch: 'frost' },
   { key: 'md3', name: 'Material 3', desc: '原版样式（Material 3 · 无玻璃）', swatch: 'md3' },
   { key: 'glass', name: '液体玻璃', desc: '半透明玻璃 · 大圆角 · 柔和光影', swatch: 'glass' },
@@ -38,7 +39,7 @@ export function applyUiPreset(key) {
   // md3 是**基础样式**（不带 data-ui-preset 属性，皮肤规则一行都不匹配）；
   // frost/glass 靠属性作用域生效。默认值改为 frost 后不能再用
   // 「key !== DEFAULT_PRESET 就打属性」的写法——那会把 md3 也打成属性。
-  if (key === 'frost' || key === 'glass' || key === 'cmx') el.setAttribute('data-ui-preset', key);
+  if (key === 'frost' || key === 'glass' || key === 'cmx' || key === 'soaringbird') el.setAttribute('data-ui-preset', key);
   else el.removeAttribute('data-ui-preset');
 }
 
@@ -49,7 +50,24 @@ export function setUiPreset(key) {
   try { document.dispatchEvent(new Event('cm-uipreset')); } catch (e) { /* 忽略 */ }
 }
 
+/* 翱翔鸟专属侧栏（index.html 里的静态结构）的激活项跟着当前路由走。
+   其它皮肤下该侧栏由 CSS 隐藏，这里只是切类，无副作用。 */
+let sbNavBound = false;
+function syncSbNav() {
+  const nav = document.getElementById('sbNav');
+  if (!nav) return;
+  const hash = (location.hash || '#/home').split('?')[0];
+  nav.querySelectorAll('.sb-snav__item').forEach(a => {
+    a.classList.toggle('is-active', a.getAttribute('href') === hash);
+  });
+}
+
 /** 启动时套用（main.js 很早就调用；index.html 里另有一段内联脚本防闪白）。 */
 export function bootUiPreset() {
   applyUiPreset(uiPresetKey());
+  if (!sbNavBound) {
+    sbNavBound = true;
+    window.addEventListener('hashchange', syncSbNav);
+  }
+  syncSbNav();
 }

@@ -81,6 +81,10 @@ be imported without installing the Qt GUI stack.
   https://doc.vkeys.cn/, for QQ song metadata and stream URLs. Its REST adapter is
   independently implemented; no service source, API keys or cookies are bundled.
   Service responses and third-party music remain outside this repository's MIT license.
+- SoaringBird developed `soaringbird-music` as a discontinued third-party
+  CurrentMusic Web client. The author contributed the adapted theme to this
+  repository under its MIT license in
+  [PR #3](https://github.com/backrooms-yrc/CurrentMusic/pull/3).
 - CurrentMusic branding in `assets/brand/` was generated for this project;
   provenance is recorded in its README. Third-party decoration metadata does
   not grant rights to the images referenced by it. User uploads, avatars,
