@@ -5,6 +5,7 @@ import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './apple-hig.css';   // Apple HIG 设计令牌层（字体/系统色/圆角/阴影/命中区/材质）
 import './app.css';
+import './levels.css';
 import './auth.css';
 import './settings.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）

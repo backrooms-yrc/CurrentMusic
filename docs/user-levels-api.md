@@ -2,7 +2,16 @@
 
 ## 活跃积分
 
-使用有效的 CurrentMusic 登录会话访问需要识别账号的 API 时，按北京时间（`Asia/Shanghai`）每天首次访问加 10 分。同一账号在多个设备上访问时共享每日额度。既有账号从 Lv.1 和 0 分开始累计，积分体系启用前的活跃记录不补分。
+同一账号在多个设备上共享每日额度，按北京时间（`Asia/Shanghai`）零点换日。活跃事件成功写入时同步计分，历史记录不批量补分。
+
+| 来源 ID | 获分条件 | 每次积分 | 每日次数上限 |
+| --- | --- | ---: | ---: |
+| `visit` | 首次使用有效登录会话访问需要识别账号的 API | 10 | 1 |
+| `listen` | 当天开始的单次播放，累计上报收听满 60 秒，且服务端距开始播放已过至少 60 秒。同一歌曲每天计一次 | 2 | 5 |
+| `post` | 在发现页成功发布帖子 | 5 | 1 |
+| `comment` | 评论他人的帖子，同一帖子每天计一次 | 2 | 2 |
+
+每天最多可获得 29 分。新版 `playId + totalMs` 和旧版 `ms` 播放上报均可计分。跨零点后继续上报前一天开始的播放只更新播放历史。删除帖子或评论不返还当天计分次数。
 
 | 等级 | 累计积分门槛 |
 | --- | ---: |
@@ -19,7 +28,8 @@
 
 | 方法 | 路径 | 权限 | 请求与响应 |
 | --- | --- | --- | --- |
-| GET | `/cm/levels/rules` | 公开 | 返回 `dailyPoints`、`maxPoints`、`timeZone`、`levels: [{level, points}]` 和 `trial: {level, plusLevel, questionCount, passScore, maxScore}` |
+| GET | `/cm/levels/rules` | 公开 | 返回 `dailyPoints`、`maxPoints`、`timeZone`、`pointSources: [{id, points, dailyLimit}]`、`listenSeconds`、`levels: [{level, points}]` 和 `trial: {level, plusLevel, questionCount, passScore, maxScore}` |
+| GET | `/cm/levels/progress` | Bearer | 返回 `{level, points, today}`，`today` 以来源 ID 为键，值为今日已计分次数。本次有效会话访问计入当日访问次数 |
 | GET | `/cm/levels/trial` | Bearer | 返回 `questions: [{prompt, options}]`，顺序用于提交答案。Lv.1 至 Lv.5 返回 403，Lv.6 Plus 返回 409 |
 | POST | `/cm/levels/trial` | Bearer | JSON 提交 `answers`，含 10 个从 0 开始的选项下标，按题目顺序排列。返回 `{score, passed, level}` |
 | POST | `/cm/admin/users/{id}/progression` | 管理员 Bearer | JSON 提交整数 `points` 和 `level`，返回 `{ok, points, level}` |

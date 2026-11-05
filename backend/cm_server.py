@@ -2409,6 +2409,7 @@ def route(handler, method):
             ("POST", "/admin/users/{id}/owner", "站长", "设置 / 取消站长（最高角色，仅站长，至少保留一位）"),
             ("GET", "/users/square", "公开", "用户发现广场（含 level、ipRegion）；sort 默认 composite，新增 active、level"),
             ("GET", "/levels/rules", "公开", "活跃积分、等级门槛与试炼规则"),
+            ("GET", "/levels/progress", "Bearer", "当前积分、等级及今日各途径计分次数"),
             ("GET", "/levels/trial", "Bearer", "Lv.6 试炼题目（无答案）"),
             ("POST", "/levels/trial", "Bearer", "提交 10 道试炼答案 {answers}；达到及格线升至 Lv.6 Plus"),
             ("GET", "/ncmbind", "Bearer", "网易云绑定状态（bound/profile/stale/lastSync）"),
@@ -3711,6 +3712,13 @@ def route(handler, method):
 
     if path == "/levels/rules" and method == "GET":
         return jresp(handler, 200, cm_levels.rules())
+
+    if path == "/levels/progress" and method == "GET":
+        u = require_user(handler)
+        progress = cm_db.point_progress(u["id"])
+        if progress is None:
+            raise ApiError(401, "登录已失效，请重新登录")
+        return jresp(handler, 200, progress)
 
     if path == "/levels/trial" and method == "GET":
         u = require_user(handler)

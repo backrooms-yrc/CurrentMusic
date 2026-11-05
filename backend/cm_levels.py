@@ -1,6 +1,14 @@
 """CurrentMusic 活跃积分规则和试炼题库。"""
 
 DAILY_POINTS = 10
+LISTEN_SECONDS = 60
+# 每次积分与每日次数上限。按账号去重，由写入对应事件的事务发放。
+POINT_SOURCES = {
+    "visit": (DAILY_POINTS, 1),
+    "listen": (2, 5),
+    "post": (5, 1),
+    "comment": (2, 2),
+}
 MAX_POINTS = 2_147_483_647
 THRESHOLDS = (0, 50, 150, 300, 600, 1000)
 TRIAL_LEVEL = len(THRESHOLDS)
@@ -38,10 +46,19 @@ def rules():
         "dailyPoints": DAILY_POINTS,
         "maxPoints": MAX_POINTS,
         "timeZone": "Asia/Shanghai",
+        "pointSources": [
+            {"id": source, "points": points, "dailyLimit": limit}
+            for source, (points, limit) in POINT_SOURCES.items()
+        ],
+        "listenSeconds": LISTEN_SECONDS,
         "levels": [{"level": i, "points": points} for i, points in enumerate(THRESHOLDS, 1)],
         "trial": {"level": TRIAL_LEVEL, "plusLevel": PLUS_LEVEL, "questionCount": len(QUESTIONS),
                   "passScore": PASS_SCORE, "maxScore": len(QUESTIONS) * POINTS_PER_QUESTION},
     }
+
+
+def day_start(now):
+    return now - (now + 8 * 3600) % 86400  # Asia/Shanghai
 
 
 def trial_questions():

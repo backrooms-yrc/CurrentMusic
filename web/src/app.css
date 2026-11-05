@@ -541,19 +541,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   color: var(--cm-primary); white-space: nowrap;
 }
 .cm-decor-banner-go .material-icons-outlined { font-size: calc(16px * var(--cm-fs, 1)); }
-.cm-level-page { max-width: 760px; }
-.cm-level-page p { line-height: 1.6; }
-.cm-level-table { width: 100%; border-collapse: collapse; text-align: left; }
-.cm-level-table th, .cm-level-table td { padding: 10px 12px; border-bottom: 1px solid rgba(127, 127, 127, .24); }
-.cm-level-quiz fieldset { min-width: 0; margin: 0 0 16px; padding: 8px 12px; border: 1px solid rgba(127, 127, 127, .36); border-radius: 12px; }
-.cm-level-quiz legend { padding: 0 6px; font-weight: 600; }
-.cm-level-quiz label { display: flex; align-items: center; min-height: 44px; cursor: pointer; }
-.cm-level-quiz input { margin-right: 10px; accent-color: var(--cm-primary); }
-.cm-level-submit { min-height: 44px; padding: 0 18px; border: 0; border-radius: 24px; font: inherit; color: rgb(var(--mdui-color-on-primary)); background: var(--cm-primary); cursor: pointer; }
-.cm-level-submit:disabled { opacity: .6; cursor: default; }
-.cm-level-editor label { display: block; margin: 10px 0; }
-.cm-level-editor input, .cm-level-editor select { display: block; width: 100%; margin-top: 4px; padding: 8px; box-sizing: border-box; color: inherit; font: inherit; background: transparent; border: 1px solid rgba(127, 127, 127, .5); border-radius: 8px; }
-.cm-level-editor option { background: var(--cm-surface, Canvas); }
 /* 窄屏：辅助说明会与「点此设置」挤在一起并被裁切，直接隐藏，主文案完整保留 */
 @media (max-width: 400px) {
   .cm-decor-banner-sub { display: none; }

@@ -1,6 +1,7 @@
 // UI 工具：转义、toast、时长格式、歌曲行渲染（含点赞/收藏状态）、对话框封装。
 import { mdui } from './md.js';
 import { api, auth, decorScale, settings } from './api.js';
+import { levelBadge } from './level-badges.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -800,13 +801,8 @@ export function avatarHTML(user, size = 72) {
   return `<span class="cm-ava-box" style="width:${size}px;height:${size}px">${inner}${decor}</span>`;
 }
 
-export function levelLabel(level) {
-  if (level === 7) return 'Lv.6 Plus';
-  return Number.isInteger(level) && level >= 1 && level <= 6 ? `Lv.${level}` : '';
-}
-
 /**
- * 用户身份徽章：站内头衔 + 站长 / 超级管理员 / 管理员。
+ * 用户身份徽章：站内头衔、等级与管理角色。
  * 兼容两种字段命名：广场接口是 snake_case（is_owner/is_super/is_admin），其余接口是 camelCase（isOwner/…）。
  * 头衔在后端已做长度与空白规整，这里仍过一遍 esc()，正文里写 <script> 也不会执行。
  * 返回串自带前导空格（有徽章时），调用处直接 ${userTags(u)} 即可，不用自己补间距。
@@ -815,10 +811,10 @@ export function userTags(u, { role = true } = {}) {
   if (!u) return '';
   const out = [];
   const title = String(u.title || '').trim();
-  const level = levelLabel(u.level);
+  const badge = levelBadge(u.level);
   if (u.isBot || u.is_bot) out.push('<span class="cm-tag ai">AI</span>');
   if (title) out.push(`<span class="cm-tag title">${esc(title)}</span>`);
-  if (level) out.push(`<span class="cm-tag">${level}</span>`);
+  if (badge) out.push(badge);
   if (role) {
     if (u.isOwner || u.is_owner) out.push('<span class="cm-tag owner">站长</span>');
     else if (u.isSuper || u.is_super) out.push('<span class="cm-tag super">超级管理员</span>');

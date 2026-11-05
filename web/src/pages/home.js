@@ -2,6 +2,7 @@
 import { api, auth, ncmSongs, settings } from '../api.js';
 import { esc, renderSongList, skelCards, skelList, toast } from '../ui.js';
 import { player } from '../player.js';
+import { levelBadge } from '../level-badges.js';
 
 // 首页顶部问候区（v1.28.37）：完整日期 + 星期 + 秒级时钟 + 按时段问候。
 // 时钟每秒只改两个 textContent；页面被路由替换后（isConnected=false）自动停表。
@@ -86,10 +87,10 @@ function decorBannerFromMe(me) {
 function accountBannersFromMe(me) {
   const trial = me?.level === 6 ? `
     <a class="cm-decor-banner" href="#/levels/trial">
-      <span class="material-icons-outlined">military_tech</span>
+      ${levelBadge(7)}
       <span class="cm-decor-banner-t">
         <b>通过试炼</b>
-        <span class="cm-decor-banner-sub">已达到 Lv.6，答题及格即可升至 Lv.6 Plus</span>
+        <span class="cm-decor-banner-sub">答题及格即可解锁终阶徽章</span>
       </span>
       <span class="cm-decor-banner-go">开始答题<span class="material-icons-outlined">chevron_right</span></span>
     </a>` : '';
