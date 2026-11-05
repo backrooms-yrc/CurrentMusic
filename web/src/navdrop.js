@@ -255,6 +255,50 @@ function ensureRefs() {
   return !!(nav && drop);
 }
 
+/** Desktop hover previews follow the pointer; the current page keeps its own selection. */
+function initRailHover() {
+  const rail = nav;
+  const hint = document.createElement('span');
+  hint.id = 'navHover';
+  hint.setAttribute('aria-hidden', 'true');
+  rail.appendChild(hint);
+  let hovered = null, focused = null;
+  const itemOf = target => target && target.closest ? target.closest(ITEM_SEL) : null;
+  const update = () => {
+    const item = hovered || focused;
+    if (!isCmx() || !matchMedia('(min-width: 900px)').matches || !item) {
+      hint.style.opacity = '0';
+      return;
+    }
+    const r = item.getBoundingClientRect(), nr = rail.getBoundingClientRect();
+    const first = hint.style.opacity !== '1';
+    if (first) hint.classList.add('no-anim');
+    hint.style.setProperty('--nh-y', (r.top - nr.top - rail.clientTop + rail.scrollTop) + 'px');
+    hint.style.height = r.height + 'px';
+    if (first) { void hint.offsetWidth; hint.classList.remove('no-anim'); }
+    hint.style.opacity = '1';
+  };
+  rail.addEventListener('pointerover', e => {
+    if (e.pointerType === 'touch' || !matchMedia('(any-hover: hover)').matches) return;
+    hovered = itemOf(e.target); update();
+  });
+  rail.addEventListener('pointerleave', () => { hovered = null; update(); });
+  rail.addEventListener('pointerout', e => {
+    if (!rail.contains(e.relatedTarget)) { hovered = null; update(); }
+    else if (!itemOf(e.relatedTarget)) { hovered = null; update(); }
+  });
+  rail.addEventListener('focusin', e => {
+    focused = itemOf(e.target);
+    try { if (focused && !focused.matches(':focus-visible')) focused = null; } catch { /* Older WebViews keep native focus. */ }
+    update();
+  });
+  rail.addEventListener('focusout', e => { focused = itemOf(e.relatedTarget); update(); });
+  window.addEventListener('blur', () => { hovered = focused = null; update(); });
+  window.addEventListener('resize', () => { hovered = null; update(); });
+  document.addEventListener('cm-uipreset', () => { hovered = null; update(); });
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(update).observe(rail);
+}
+
 export function refreshNavDrop(noAnim) {
   if (!ensureRefs()) return;
   if (!dropEnabled()) {
@@ -270,6 +314,7 @@ const schedule = () => { clearTimeout(timer); timer = setTimeout(() => refreshNa
 
 export function initNavDrop() {
   if (!ensureRefs()) return;
+  initRailHover();
 
   // 选中项变化：main.js 是给 .navItem 切换 .cur，故监听 class 变化
   try {

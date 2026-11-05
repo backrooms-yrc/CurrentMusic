@@ -56,4 +56,6 @@ def import_binding(user_id, body):
     cm_db.save_binding(user_id, cookie, uid, nickname, avatar)
     for prefix in ('nlikes', 'nsub'):
         cm_db.cache_delete(f'{prefix}:{user_id}')
+    cm_db.cache_delete(f'nlikes:{user_id}:{uid}')
+    cm_db.cache_delete(f'nlikes-pending:{user_id}:{uid}')
     return {'ok': True, 'bound': True, 'profile': {'uid': uid, 'nickname': nickname, 'avatar': avatar}}

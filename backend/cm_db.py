@@ -57,6 +57,16 @@ CREATE TABLE IF NOT EXISTS favs (
   created_at INTEGER NOT NULL,
   UNIQUE(user_id, ncm_id)
 );
+CREATE TABLE IF NOT EXISTS search_history (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  keyword TEXT NOT NULL,
+  UNIQUE(user_id, keyword)
+);
+CREATE INDEX IF NOT EXISTS idx_search_history_user ON search_history(user_id, seq DESC);
+CREATE TABLE IF NOT EXISTS search_history_imports (
+  user_id INTEGER PRIMARY KEY
+);
 CREATE TABLE IF NOT EXISTS playlists (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -269,6 +279,65 @@ def connect():
     # PRAGMA journal_mode=WAL，高频缓存读会反复申请库锁，高峰期可能被拖住。
     conn.execute("PRAGMA busy_timeout=8000")
     return conn
+
+
+SEARCH_HISTORY_LIMIT = 10
+SEARCH_KEYWORD_LIMIT = 200
+
+
+def clean_search_keyword(value):
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > SEARCH_KEYWORD_LIMIT:
+        raise ValueError("keyword 需为 1–200 字符的字符串")
+    return value.strip()
+
+
+def _search_history_in(conn, uid):
+    return [r[0] for r in conn.execute(
+        "SELECT keyword FROM search_history WHERE user_id=? ORDER BY seq DESC LIMIT ?",
+        (uid, SEARCH_HISTORY_LIMIT))]
+
+
+def search_history(uid):
+    conn = connect()
+    try:
+        return _search_history_in(conn, uid)
+    finally:
+        conn.close()
+
+
+def change_search_history(uid, action, value=None):
+    """Atomic per-account operations; cached device snapshots never replace cloud history."""
+    if action in ("add", "remove"):
+        value = clean_search_keyword(value)
+    elif action == "import":
+        if not isinstance(value, list) or len(value) > SEARCH_HISTORY_LIMIT:
+            raise ValueError("keywords 需为最多 10 条的字符串列表")
+        value = list(dict.fromkeys(clean_search_keyword(k) for k in value))
+    elif action != "clear":
+        raise ValueError("未知搜索历史操作")
+    conn = connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        imported = conn.execute("INSERT OR IGNORE INTO search_history_imports(user_id) VALUES(?)", (uid,)).rowcount
+        if action == "add":
+            conn.execute("INSERT OR REPLACE INTO search_history(user_id,keyword) VALUES(?,?)", (uid, value))
+        elif action == "remove":
+            conn.execute("DELETE FROM search_history WHERE user_id=? AND keyword=?", (uid, value))
+        elif action == "clear":
+            conn.execute("DELETE FROM search_history WHERE user_id=?", (uid,))
+        elif imported:
+            # Legacy lists are newest first. Import once per account, so another
+            # device cannot bring back records that were already deleted in cloud.
+            for keyword in reversed(value):
+                conn.execute("INSERT OR IGNORE INTO search_history(user_id,keyword) VALUES(?,?)", (uid, keyword))
+        conn.execute("DELETE FROM search_history WHERE user_id=? AND seq NOT IN "
+                     "(SELECT seq FROM search_history WHERE user_id=? ORDER BY seq DESC LIMIT ?)",
+                     (uid, uid, SEARCH_HISTORY_LIMIT))
+        result = _search_history_in(conn, uid)
+        conn.commit()
+        return result
+    finally:
+        conn.close()
 
 
 def init():

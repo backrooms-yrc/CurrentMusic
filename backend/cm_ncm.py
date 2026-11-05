@@ -5,6 +5,7 @@
 """
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -138,7 +139,7 @@ def call(path, params=None, timeout=15.0, retries=1, with_cookie=True, cookie=No
     """GET 请求 api-enhanced；默认带服务器 SVIP cookie，可显式换绑定的用户 cookie。
 
     real_ip：仅由服务端从可信请求头解析后传入（客户端参数里的 realIP 会被网关剥离），
-    用于媒体地址与账号写操作，让上游按用户真实网络位置选边缘/做风控。
+    用于搜索、媒体地址与账号写操作，让上游按用户真实网络位置检索/选边缘/做风控。
     """
     q = dict(params or {})
     if real_ip:
@@ -289,8 +290,8 @@ def _norm_song(s, pop=None):
     }
 
 
-def search(keywords, limit=30, offset=0):
-    d = call("/cloudsearch", {"keywords": keywords, "limit": limit, "offset": offset, "type": 1})
+def search(keywords, limit=30, offset=0, real_ip=None):
+    d = call("/cloudsearch", {"keywords": keywords, "limit": limit, "offset": offset, "type": 1}, real_ip=real_ip)
     songs = (((d or {}).get("result") or {}).get("songs")) or []
     return [_norm_song(s) for s in songs]
 
@@ -338,7 +339,7 @@ _NORMALIZERS = {"song": _norm_song, "lyric": _norm_song, "artist": _norm_artist,
                 "album": _norm_album, "playlist": _norm_playlist}
 
 
-def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0):
+def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0, real_ip=None):
     """按需搜索指定类型（并行请求上游），返回结果 + 各类型总数 + 是否还有下一页。
 
     **为什么要「按需」**：实测上游各类型耗时差异极大——
@@ -357,7 +358,7 @@ def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0):
     with ThreadPoolExecutor(max_workers=len(tsel)) as ex:
         futs = {t: ex.submit(call, "/cloudsearch", {
             "keywords": keywords, "limit": limit, "offset": offset,
-            "type": _SEARCH_TYPES[t][0]}) for t in tsel}
+            "type": _SEARCH_TYPES[t][0]}, real_ip=real_ip) for t in tsel}
         raws = {t: (f.result() or {}) for t, f in futs.items()}
 
     out, totals, has_more = {}, {}, {}
@@ -378,7 +379,7 @@ def search_types(keywords, types=_SEARCH_ALL, limit=10, offset=0):
     return out
 
 
-def search_multi(keywords, song_limit=30, aux_limit=6):
+def search_multi(keywords, song_limit=30, aux_limit=6, real_ip=None):
     """一次取回全部类型（歌手/专辑/歌单用较小的 aux 条数）。
 
     供不关心分页的调用方使用；搜索页改用 search_types 按需取。
@@ -387,13 +388,13 @@ def search_multi(keywords, song_limit=30, aux_limit=6):
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=4) as ex:
         f_song = ex.submit(call, "/cloudsearch",
-                           {"keywords": keywords, "limit": song_limit, "offset": 0, "type": 1})
+                           {"keywords": keywords, "limit": song_limit, "offset": 0, "type": 1}, real_ip=real_ip)
         f_art = ex.submit(call, "/cloudsearch",
-                          {"keywords": keywords, "limit": aux_limit, "offset": 0, "type": 100})
+                          {"keywords": keywords, "limit": aux_limit, "offset": 0, "type": 100}, real_ip=real_ip)
         f_alb = ex.submit(call, "/cloudsearch",
-                          {"keywords": keywords, "limit": aux_limit, "offset": 0, "type": 10})
+                          {"keywords": keywords, "limit": aux_limit, "offset": 0, "type": 10}, real_ip=real_ip)
         f_pl = ex.submit(call, "/cloudsearch",
-                         {"keywords": keywords, "limit": 12, "offset": 0, "type": 1000})
+                         {"keywords": keywords, "limit": 12, "offset": 0, "type": 1000}, real_ip=real_ip)
         d_song, d_art, d_alb, d_pl = f_song.result(), f_art.result(), f_alb.result(), f_pl.result()
     return {
         "songs": [_norm_song(s) for s in
@@ -550,7 +551,7 @@ def _flac_streaminfo(buf):
     return (0, 0, 0)
 
 
-def probe_audio(url, timeout=1.5):
+def probe_audio(url, timeout=1.5, strict=False):
     """探测播放地址，返回 (是否音频, {sr,bits,ch})。
 
     踩过的坑：接口层面"有 url"并不代表真的能播——上游可能返回 HTML 错误页
@@ -561,12 +562,16 @@ def probe_audio(url, timeout=1.5):
 
     timeout 默认 1.5s：2KB 头通常 <0.3s 就回；外层再有墙钟护栏，DNS 卡住
     也不会把首播拖成十几秒。探测超时按放行处理，不改变可用性。
+    strict 时用于第三方匹配音源：超时/网络错误也不能视为已验证的音频。
     """
     t0 = time.time()
-    out = _run_with_wall_clock(lambda: _probe_audio_once(url, timeout),
+    fetch = (lambda: _probe_audio_once(url, timeout, strict=True)) if strict else (lambda: _probe_audio_once(url, timeout))
+    out = _run_with_wall_clock(fetch,
                                timeout + 0.3, default=None,
                                gate=_PROBE_GATE, name="cm-audio-probe")
     if out is None:
+        if strict:
+            return (False, {})
         log.warning("音频头探测超时或繁忙 host=%s 已等待 %.1fs（放行）",
                     urllib.parse.urlsplit(url).hostname or "?",
                     time.time() - t0)
@@ -574,7 +579,8 @@ def probe_audio(url, timeout=1.5):
     return out
 
 
-def _probe_audio_once(url, timeout):
+def _probe_audio_once(url, timeout, strict=False):
+    total = 0
     try:
         req = urllib.request.Request(url, headers={
             "User-Agent": "CurrentMusic/1.0",
@@ -583,18 +589,27 @@ def _probe_audio_once(url, timeout):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             head = resp.read(16)
             tail = resp.read(2032)
+            if strict:
+                match = re.search(r"/(\d+)$", resp.headers.get("Content-Range", ""))
+                if match:
+                    total = int(match[1])
+                elif resp.status == 200:
+                    total = int(resp.headers.get("Content-Length", "0"))
     except urllib.error.HTTPError:
         # 明确的服务端拒绝（403/404/410…）= 该地址确实不可用 → 判否
         return (False, {})
     except Exception:  # noqa: BLE001
-        return (True, {})
+        return (not strict, {})
     buf = head + tail
-    ok = any(head.startswith(m) for m in _AUDIO_MAGIC)
+    ok = any(head.startswith(m) for m in _AUDIO_MAGIC) or head[4:8] == b"ftyp"
     info = {}
     if buf.startswith(b"fLaC"):
         sr, bits, ch = _flac_streaminfo(buf)
         if sr:
             info = {"sr": sr, "bits": bits, "ch": ch}
+    if strict and ok:
+        kind = "flac" if head.startswith(b"fLaC") else "wav" if head.startswith(b"RIFF") else "ogg" if head.startswith(b"OggS") else "m4a" if b"ftyp" in head[:8] else "mp3"
+        info.update(type=kind, size=total)
     return (ok, info)
 
 
@@ -629,6 +644,8 @@ def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, t
     it = items[0]
     if not it.get("url"):
         raise NcmError("该歌曲不可播放（版权/地区限制）")
+    if it.get("freeTrialInfo"):
+        raise NcmError("官方接口仅返回试听片段，需尝试备用音源")
     url = _https(it["url"])
     spec = {}
     if probe:
@@ -646,6 +663,43 @@ def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, t
         "sr": spec.get("sr") or 0, "bits": spec.get("bits") or 0, "ch": spec.get("ch") or 0,
     }
     return out
+
+
+def song_url_match(ncm_id, real_ip=None):
+    """灰色曲目补充接口；只有实测收到音频文件头时才返回，不冒充请求的音质档位。"""
+    # 上游默认缓存成功响应两分钟，网页链接也可能被缓存；失败重试/refresh 必须重新匹配。
+    params = {"id": int(ncm_id), "timestamp": _ts()}
+    source = os.environ.get("CM_NCM_MATCH_SOURCE", "").strip()
+    if source:
+        params["source"] = source
+    data = _bounded_call("/song/url/match", params, 20.0, retries=0,
+                         with_cookie=False, real_ip=real_ip)
+    data = data if isinstance(data, dict) else {}
+    url = data.get("proxyUrl") or data.get("data")
+    try:
+        parsed = urllib.parse.urlsplit(url) if isinstance(url, str) else None
+        valid = parsed is not None and parsed.scheme in ("http", "https") and bool(parsed.hostname)
+    except ValueError:
+        valid = False
+    if not valid:
+        raise NcmError("灰色曲目匹配未返回音频地址，请稍后重试")
+    info = data.get('matchInfo')
+    info = info if isinstance(info, dict) else {}
+    expected = info.get('expectedDurationMs') or 0
+    duration = info.get('durationMs') or 0
+    if (info.get('validated') is not True or info.get('validationVersion') != 1 or info.get('url') != url
+            or type(expected) not in (int, float) or type(duration) not in (int, float)
+            or not math.isfinite(expected) or not math.isfinite(duration) or expected <= 0 or duration <= 0
+            or abs(duration - expected) > max(2000, min(10000, expected * .03))):
+        raise NcmError("灰色曲目匹配未通过完整时长校验，请检查上游匹配器部署后重试")
+    url = _https(url)
+    ok, spec = probe_audio(url, timeout=2.5, strict=True)
+    if not ok:
+        raise NcmError("灰色曲目匹配未取得可验证的音频（错误页或网络不可用），请稍后重试")
+    return {"url": url, "br": info.get('br') or 0, "type": info.get('type') or spec.get("type") or "", "size": info.get('size') or spec.get("size") or 0,
+            "level": "matched", "source": "netease-match", "md5": "",
+            "durationMs": duration, "expectedDurationMs": expected, "matchSource": info.get('source') or '',
+            "sr": info.get('sr') or spec.get("sr") or 0, "bits": info.get('bits') or spec.get("bits") or 0, "ch": info.get('ch') or spec.get("ch") or 0}
 
 
 _LRC_TAG = re.compile(r"\[(\d+):(\d+)(?:[.:](\d+))?\]")

@@ -5,6 +5,7 @@ import { api, auth, settings, ncmSongs } from './api.js';
 import { toast, tierLabel } from './ui.js';
 import { resolveSongUrl } from './songurl.js';   // 三级音源回退（P2）
 import { buildEqChain, removeEqChain } from './eq.js';   // 均衡器链（挂进音频图）
+import { updateBrowserMediaSession, updateBrowserMediaState } from './media-session.js';
 
 // 播放实际请求的档位：开了「音效」（杜比全景声/臻音全景声/沉浸环绕声/高清臻音）时
 // 优先用音效档，否则用用户选的音质档。沉浸环绕声的声道类型（c51/ste）作为 immerse 传出。
@@ -64,13 +65,15 @@ function resumeContext() {
 
 function unlockAudio(event) {
   if (!event.isTrusted) return;
+  if (document.hidden && typeof window.NativeApi === 'undefined') return;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
+  if (actx && actx.state === 'running' && graphEl === audio) return;
   try {
     if (!actx || actx.state === 'closed') actx = new AC();
     const ctx = actx;
     // resume() 可能异步完成；此处不创建/替换媒体元素，也不改变播放状态。
-    Promise.resolve(ctx.resume()).then(() => {
+    Promise.resolve(ctx.state === 'running' ? undefined : ctx.resume()).then(() => {
       if (actx !== ctx || ctx.state !== 'running') return;
       vizDisabled = false;
       if (!graphEl && audio.crossOrigin && audio.readyState >= 1) buildGraph(audio);
@@ -82,7 +85,18 @@ function unlockAudio(event) {
   document.addEventListener(type, unlockAudio, { capture: true, passive: true });
 });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) wave.resume();
+  // 切后台不是解码故障：保留媒体元素、EQ 与采样时钟，避免声音中断和增益跳变。
+  player.updateMediaSession();
+  if (!document.hidden) {
+    wave.resume();
+    if (player.wantPlaying && audio.paused && !audio.ended) {
+      resumeTries = 0;
+      scheduleResume();
+    }
+  }
+});
+window.addEventListener('pageshow', () => {
+  if (player.wantPlaying && audio.paused && !audio.ended) { resumeTries = 0; scheduleResume(); }
 });
 
 // 音频图看门狗：**接了图之后声音只从图输出**——上下文一旦不在 running
@@ -109,6 +123,7 @@ function watchGraph() {
 function disposeAudio(old) {
   try { old.pause(); } catch (e) { /* 忽略 */ }
   try { old.removeAttribute('src'); old.src = ''; old.load(); } catch (e) { /* 忽略 */ }
+  old.remove();
 }
 
 function teardownGraph({ keepContext = false } = {}) {
@@ -172,13 +187,18 @@ function fallbackNoViz() {
   if (vizDisabled && !graphEl) return;
   vizDisabled = true;
   const pos = audio.currentTime || 0;
-  const wasPlaying = !audio.paused;
+  const wasPlaying = player.wantPlaying && !audio.ended;
   const url = audio.src;
   const cors = audio.crossOrigin;
+  const old = audio;
+  const volume = old.volume, muted = old.muted, rate = old.playbackRate;
   teardownGraph();
-  disposeAudio(audio);
   const fresh = makeAudio();
   audio = fresh;
+  // 先切换当前元素，再清理旧元素，避免旧 pause/error 事件干扰新播放态。
+  disposeAudio(old);
+  fresh.volume = volume; fresh.muted = muted;
+  fresh.defaultPlaybackRate = rate; fresh.playbackRate = rate;
   fresh.crossOrigin = cors;                 // 下次真实手势仍可恢复安全音源的频谱
   if (url) {
     fresh.src = url;                       // 新元素直出，不再经过图
@@ -218,6 +238,12 @@ function loadUrl(url, pos) {
 function makeAudio() {
   const a = new Audio();
   a.preload = 'auto';
+  a.setAttribute('playsinline', '');
+  a.setAttribute('aria-hidden', 'true');
+  a.style.display = 'none';
+  const attach = () => { if (!a.isConnected) document.body.appendChild(a); };
+  if (document.body) attach();
+  else document.addEventListener('DOMContentLoaded', attach, { once: true });
   bindAudio(a);
   return a;
 }
@@ -854,19 +880,7 @@ export const player = {
         return;
       } catch { /* 桥异常时回退浏览器 MediaSession */ }
     }
-    if (!('mediaSession' in navigator)) return;
-    try {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: this.meta.name,
-        artist: this.meta.artists,
-        album: this.meta.album,
-        artwork: this.meta.pic ? [{ src: this.meta.pic, sizes: '300x300' }] : [],
-      });
-      navigator.mediaSession.setActionHandler('play', () => audio.play());
-      navigator.mediaSession.setActionHandler('pause', () => audio.pause());
-      navigator.mediaSession.setActionHandler('previoustrack', () => this.prev());
-      navigator.mediaSession.setActionHandler('nexttrack', () => this.next());
-    } catch { /* 部分内核不支持 */ }
+    updateBrowserMediaSession(this);
   },
 
   /** 原生 MediaSession 播放态同步（通知按钮态/蓝牙进度）。App 外静默。 */
@@ -875,6 +889,7 @@ export const player = {
     if (b && b.mediaState) {
       try { b.mediaState(!audio.paused, Math.round(audio.currentTime * 1000)); } catch { /* 忽略 */ }
     }
+    updateBrowserMediaState(this);
   },
 
   get audio() { return audio; },
@@ -1085,7 +1100,7 @@ function bindAudio(el) {
     player.wantPlaying = true;
     clearTimeout(resumeTimer); resumeTries = 0;
     errStreak = 0;                     // 真正开始播放了：连续失败计数清零
-    emit('state'); keepAlive(true); player.pushMediaState();
+    emit('state'); keepAlive(true); player.updateMediaSession(); player.pushMediaState();
   });
   el.addEventListener('pause', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
@@ -1099,6 +1114,7 @@ function bindAudio(el) {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
   player.pushMediaState();
 });
+  el.addEventListener('ratechange', () => { if (el === audio) player.pushMediaState(); });
   el.addEventListener('loadedmetadata', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
     // 带 crossOrigin 能走到 loadedmetadata = 该音源 CORS 干净 → 可安全建图
@@ -1166,6 +1182,7 @@ export function stopPlayback() {
   player.wantPlaying = false;
   clearTimeout(resumeTimer);
   keepAlive(false);
+  updateBrowserMediaState(player, 'none');
 }
 // 连续播放失败熔断：error 会 next() 换下一首，但若整队都解析失败
 // （上游风控/断网）会无限循环「解析→失败→换下一首」刷爆接口与提示。
@@ -1173,6 +1190,9 @@ export function stopPlayback() {
 
 // 调试/测试入口
 window.__cmPlayer = { get audio() { return audio; }, player, wave };
+
+// 支持 Audio Session 的浏览器显式声明持续媒体播放，而非可被后台挂起的环境音。
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* 不支持时使用媒体元素 */ }
 
 // MDUI 主色（品牌紫）
 if (mdui.setColorScheme) mdui.setColorScheme('#6750A4');

@@ -35,14 +35,14 @@ export const QUALITY_TIERS = [
   // 后三个属「高解析度/多声道」：对设备解码与重采样要求高，部分机型会有杂音，
   // 标签里直接标出规格，让用户选之前就有预期。
   { key: 'jymaster', label: '超清母带', spec: '192kHz/24bit' },
-  { key: 'jyeffect', label: '臻音全景声', spec: '96kHz/24bit' },
+  { key: 'jyeffect', label: '高清臻音', spec: '96kHz/24bit' },
   { key: 'sky', label: '沉浸环绕声', spec: '6 声道' },
-  { key: 'hires', label: '高清臻音' },
+  { key: 'hires', label: 'Hi-Res' },
   { key: 'lossless', label: '无损 FLAC' },
   { key: 'exhigh', label: '极高 320k' },
   { key: 'standard', label: '标准 128k' },
 ];
-export const tierLabel = k => (QUALITY_TIERS.find(t => t.key === k) || {}).label || k;
+export const tierLabel = k => k === 'matched' ? '匹配音源' : (QUALITY_TIERS.find(t => t.key === k) || {}).label || k;
 
 export function loadingBar() {
   return `<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>`;
@@ -392,15 +392,20 @@ const statusCache = new Map(); // ncm_id -> {liked, faved, count}
 
 async function fetchStatus(ids) {
   const need = ids.filter(i => !statusCache.has(i));
+  const token = auth.token;
   if (need.length) {
     try {
       const st = await api.songsStatus(need);
-      need.forEach(i => statusCache.set(i, {
-        liked: (st.liked || []).includes(i),
-        faved: (st.faved || []).includes(i),
-        // 展示口径统一为网易云红心数；旧服务端没有 ncmCounts 时回退本地计数
-        count: (st.ncmCounts || {})[i] ?? (st.counts || {})[i] ?? 0,
-      }));
+      // A late read must not restore another session or overwrite a completed like.
+      if (auth.token === token) need.forEach(i => {
+        if (statusCache.has(i)) return;
+        statusCache.set(i, {
+          liked: (st.liked || []).includes(i),
+          faved: (st.faved || []).includes(i),
+          // 展示口径统一为网易云红心数；旧服务端没有 ncmCounts 时回退本地计数
+          count: (st.ncmCounts || {})[i] ?? (st.counts || {})[i] ?? 0,
+        });
+      });
     } catch { /* 未登录等情况：保持默认 */ }
   }
   return ids.map(i => statusCache.get(i) || { liked: false, faved: false, count: 0 });
@@ -430,18 +435,67 @@ export async function ensureStatus(ncmId) {
 
 // ---------- 网易云红心状态（会话级缓存，来自绑定账号 likelist） ----------
 
-let _ncmLikedSet = null;
-
-export async function ensureNcmLiked() {
-  if (_ncmLikedSet === null) {
-    try { _ncmLikedSet = new Set((await api.ncmLikelist()).ids || []); }
-    catch { _ncmLikedSet = new Set(); }   // 未绑定/未同步：空集
-  }
-  return _ncmLikedSet;
+let _ncmLikedSet = null, _ncmLikedPromise = null, _ncmLikedToken = '', _ncmLikedAt = 0, _ncmLikedEpoch = 0;
+const _ncmLikeIntents = new Map();
+const ncmLikeId = id => Number(id);
+function ncmLikeSession() {
+  if (_ncmLikedToken !== auth.token) resetNcmLiked();
 }
-export const isNcmLiked = id => !!(_ncmLikedSet && _ncmLikedSet.has(id));
-export function setNcmLiked(id, on) { if (_ncmLikedSet) { on ? _ncmLikedSet.add(id) : _ncmLikedSet.delete(id); } }
-export function resetNcmLiked() { _ncmLikedSet = null; }
+
+export async function ensureNcmLiked(refresh = false) {
+  ncmLikeSession();
+  if (!auth.token) return new Set();
+  if (_ncmLikedPromise) return _ncmLikedPromise;
+  if (_ncmLikedSet !== null && !refresh && Date.now() - _ncmLikedAt < 60000) return _ncmLikedSet;
+  const token = auth.token;
+  const epoch = _ncmLikedEpoch;
+  const request = (async () => {
+    try {
+      const result = await api.ncmLikelist(refresh || _ncmLikedSet !== null);
+      if (auth.token !== token || _ncmLikedToken !== token || _ncmLikedEpoch !== epoch) return new Set();
+      const ids = new Set((result.ids || []).map(ncmLikeId));
+      for (const [id, intent] of _ncmLikeIntents) {
+        if (Date.now() - intent.at > 120000 || ids.has(id) === intent.on) _ncmLikeIntents.delete(id);
+        else intent.on ? ids.add(id) : ids.delete(id);
+      }
+      _ncmLikedSet = ids; _ncmLikedAt = Date.now();
+      return ids;
+    } catch { return _ncmLikedSet || new Set(); } // 失败不缓存为空，下一次可重试。
+  })();
+  _ncmLikedPromise = request;
+  try { return await request; }
+  finally { if (_ncmLikedPromise === request) _ncmLikedPromise = null; }
+}
+export const isNcmLiked = id => {
+  ncmLikeSession();
+  return !!(_ncmLikedSet && _ncmLikedSet.has(ncmLikeId(id)));
+};
+export function setNcmLiked(id, on) {
+  ncmLikeSession(); id = ncmLikeId(id);
+  if (!Number.isSafeInteger(id) || id <= 0) return;
+  if (!_ncmLikedSet) _ncmLikedSet = new Set();
+  on ? _ncmLikedSet.add(id) : _ncmLikedSet.delete(id);
+  _ncmLikeIntents.set(id, { on, at: Date.now() });
+  window.dispatchEvent(new CustomEvent('cm-likechange', { detail: { id, source: 'ncm' } }));
+}
+export function resetNcmLiked() {
+  _ncmLikedSet = _ncmLikedPromise = null;
+  _ncmLikedToken = auth.token; _ncmLikedAt = 0;
+  _ncmLikedEpoch++;
+  _ncmLikeIntents.clear();
+}
+window.addEventListener('cm-authchange', () => {
+  if (_ncmLikedToken !== auth.token) {
+    resetNcmLiked(); resetNcmBound(); statusCache.clear();
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden || !auth.token || _ncmLikedSet === null) return;
+  const token = auth.token;
+  ensureNcmLiked(true).then(() => {
+    if (auth.token === token) window.dispatchEvent(new CustomEvent('cm-likechange', { detail: { source: 'ncm' } }));
+  });
+});
 
 // ---------- 默认红心目标（绑定状态 + 设置） ----------
 
@@ -449,9 +503,14 @@ let _ncmBound = null, _ncmBoundToken = '';
 export async function ensureNcmBound() {
   if (!auth.token) return false;
   if (_ncmBound !== null && _ncmBoundToken === auth.token) return _ncmBound;
-  _ncmBoundToken = auth.token;
-  try { _ncmBound = !!(await api.bindStatus()).bound; }
-  catch { _ncmBound = null; _ncmBoundToken = ''; return false; }   // 网络失败下次重试
+  const token = auth.token;
+  _ncmBoundToken = token;
+  try {
+    const bound = !!(await api.bindStatus()).bound;
+    if (auth.token !== token || _ncmBoundToken !== token) return false;
+    _ncmBound = bound;
+  }
+  catch { if (_ncmBoundToken === token) resetNcmBound(); return false; }   // 网络失败下次重试
   return _ncmBound;
 }
 export function resetNcmBound() { _ncmBound = null; _ncmBoundToken = ''; }
@@ -482,7 +541,7 @@ export async function toggleLikeDefault(song, onChange, sourceOverride) {
     const on = isNcmLiked(song.ncm_id);
     try {
       const r = await api.ncmLike(song, !on);
-      setNcmLiked(song.ncm_id, !on);
+      setNcmLiked(song.ncm_id, typeof r?.liked === 'boolean' ? r.liked : !on);
       if (r && r.count != null && Number.isFinite(Number(r.count))) {
         setStatus(song.ncm_id, { count: Math.max(0, Number(r.count)) });
       } else {
@@ -571,11 +630,11 @@ export function openLikeMenu(song, onChange) {
  * @param offset data-i 的起始下标——追加渲染时传已有条数，保证 data-i 始终是
  *               在**完整数组**里的绝对下标（点击行为依赖它）
  */
-export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride } = {}) {
-  const st = await fetchStatus(songs.map(s => s.ncm_id));
-  const bound = auth.token ? await ensureNcmBound() : false;
+export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride, cached = false } = {}) {
+  const st = cached ? songs.map(s => getStatus(s.ncm_id)) : await fetchStatus(songs.map(s => s.ncm_id));
+  const bound = auth.token ? (cached ? _ncmBoundToken === auth.token && _ncmBound === true : await ensureNcmBound()) : false;
   const source = sourceOverride || (settings.likeMode === 'local' || !bound ? 'local' : 'ncm');
-  if (auth.token && (source === 'ncm' || bound)) await ensureNcmLiked().catch(() => {});
+  if (!cached && auth.token && (source === 'ncm' || bound)) await ensureNcmLiked().catch(() => {});
   return `<div class="cm-songs">` + songs.map((s, i) => {
     const liked = source === 'ncm' ? isNcmLiked(s.ncm_id) : st[i].liked;
     const dot = bound && source === 'local' && isNcmLiked(s.ncm_id);
@@ -605,7 +664,7 @@ export async function songListHTML(songs, { removable = false, offset = 0, likeS
  * 渲染歌曲列表并绑定行为。
  * @param el    容器
  * @param songs 歌曲数组
- * @param opts  { onPlay(i), onRemove(i), from }
+ * @param opts  { onPlay(i), onRemove(i), from, deferStatus }
  *              from > 0 时进入**追加模式**：只把 songs[from..] 插到已有列表末尾，
  *              已有行原样保留（避免「显示更多」时整段重渲染导致已加载内容闪一下）。
  *              此时 songs 必须传**完整数组**——行上的 data-i 是完整数组的绝对下标，
@@ -620,7 +679,9 @@ export async function renderSongList(el, songs, opts = {}) {
   }
   const slice = songs.slice(from);
   if (!slice.length) return [];
-  const html = await songListHTML(slice, { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource });
+  const htmlOptions = { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource };
+  const token = auth.token, mode = settings.likeMode;
+  const html = await songListHTML(slice, { ...htmlOptions, cached: !!opts.deferStatus });
 
   let rows;
   const wrap = el.querySelector('.cm-songs');
@@ -659,6 +720,23 @@ export async function renderSongList(el, songs, opts = {}) {
       opts.onPlay && opts.onPlay(i);
     });
   });
+  if (opts.deferStatus) {
+    // Track data is already available. Slow status/binding/NetEase requests must not
+    // leave the playlist blank or block playback; enrich only these mounted rows.
+    const mounted = el.querySelector('.cm-songs');
+    songListHTML(slice, htmlOptions).then(html => {
+      if (auth.token !== token || settings.likeMode !== mode || el.querySelector('.cm-songs') !== mounted) return;
+      const tmp = document.createElement('div'); tmp.innerHTML = html;
+      const updated = tmp.querySelectorAll('.cm-song');
+      rows.forEach((row, i) => {
+        if (!mounted.contains(row)) return;
+        row.querySelector('.cm-song-like').replaceWith(updated[i].querySelector('.cm-song-like'));
+        row.querySelector('.cm-like-n')?.remove();
+        const count = updated[i].querySelector('.cm-like-n');
+        if (count) row.querySelector('.cm-song-sub').appendChild(count);
+      });
+    }).catch(() => {}); // Optional state may fail; the visible tracks remain usable.
+  }
   return rows;
 }
 

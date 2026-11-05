@@ -47,6 +47,24 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
   const ov = document.createElement('div');
   ov.id = 'commentOverlay';
   document.body.appendChild(ov);
+  document.dispatchEvent(new Event('cm-comments-visibility'));
+  let closing = false;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const entered = reduced ? Promise.resolve() : new Promise(resolve => {
+    const finish = () => { clearTimeout(timer); ov.removeEventListener('animationend', end); resolve(); };
+    const end = event => { if (event.target === ov) finish(); };
+    const timer = setTimeout(finish, 280);
+    ov.addEventListener('animationend', end);
+  });
+  function close() {
+    if (closing) return;
+    closing = true;
+    ov.classList.add('closing');
+    setTimeout(() => {
+      ov.remove();
+      document.dispatchEvent(new Event('cm-comments-visibility'));
+    }, reduced ? 0 : 240);
+  }
 
   let offset = 0, total = 0, more = true, meUid = 0, loading = false, replyTo = null;
   // 三种排序各有独立上游：推荐=实体列表接口（热门+最新），最热=/comment/hot，最新=/comment/new
@@ -73,7 +91,7 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
           <mdui-button variant="filled" id="cmtSend" ${meUid ? '' : 'disabled'}>发送</mdui-button>
         </div>
       </div>`;
-    ov.querySelector('#cmtClose').onclick = () => { ov.classList.add('closing'); setTimeout(() => ov.remove(), 240); };
+    ov.querySelector('#cmtClose').onclick = close;
     ov.querySelector('#cmtSend').onclick = send;
     ov.querySelector('#cmtInput').onkeydown = e => { if (e.key === 'Enter') send(); };
     ov.querySelector('#cmtReplyCancel').onclick = () => setReply(null);
@@ -128,6 +146,7 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
   async function load(reset) {
     if (loading) return;
     loading = true;
+    const requestMode = mode;
     if (reset) { offset = 0; more = true; }
     if (!more) { loading = false; return; }
     try {
@@ -141,6 +160,10 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
       } else {
         d = await api.ncm(path, { id, type, offset, limit: 20 });
       }
+      // 入场期间只合成抽屉，不同时重建评论列表、图片及 MDUI 控件。
+      await entered;
+      if (closing || !ov.isConnected) return;
+      if (requestMode !== mode) { setTimeout(() => load(true), 0); return; }
       meUid = d.userId || meUid;
       total = d.total || ((d.data || {}).total) || 0;
       if (reset) render();
@@ -165,6 +188,7 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
       }
       bindActions();
     } catch (e) {
+      if (closing || !ov.isConnected) return;
       ov.querySelector('#cmtMoreWrap')?.remove();
       toast(`评论加载失败：${e.message}`);
     } finally {

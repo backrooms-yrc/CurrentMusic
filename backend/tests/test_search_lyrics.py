@@ -133,14 +133,16 @@ class LyricSearchTests(unittest.TestCase):
     def test_deadline_is_explicit_pending_and_warmed_result_is_reused(self):
         release=threading.Event()
         def blocked(*args,**kwargs):release.wait(timeout=2);return document()
-        with mock.patch.object(cm_ncm,'call',side_effect=blocked),mock.patch.object(lyrics,'PAGE_TIMEOUT',.005):
-            try:
-                hit=self.enrich()[0]
-                self.assertEqual(hit['lyricContextStatus'],'pending');self.assertTrue(hit['lyricContextRetryable'])
-                self.assertNotEqual(hit['lyric'],hit['lyricMatch'])
-                with lyrics._lock:jobs=list(lyrics._pending.values())
-            finally:release.set()
+        with mock.patch.object(cm_ncm,'call',side_effect=blocked):
+            with mock.patch.object(lyrics,'PAGE_TIMEOUT',.05):
+                try:
+                    hit=self.enrich()[0]
+                    self.assertEqual(hit['lyricContextStatus'],'pending');self.assertTrue(hit['lyricContextRetryable'])
+                    self.assertNotEqual(hit['lyric'],hit['lyricMatch'])
+                    with lyrics._lock:jobs=list(lyrics._pending.values())
+                finally:release.set()
             wait(jobs)
+            # The retry uses its normal budget; a 5 ms deadline also times SQLite/scheduling.
             self.assertTrue(self.enrich()[0]['lyricContextComplete'])
     def test_one_slow_song_does_not_block_another_songs_fallback(self):
         release=threading.Event()
@@ -179,7 +181,7 @@ class LyricSearchRouteTests(unittest.TestCase):
         with mock.patch.object(cm_ncm,'search_types',return_value=partial) as search,mock.patch.object(cm_ncm,'search_multi') as multi:
             url='/ncm/search?keywords=test&type=lyric&offset=30&limit=10'
             status,result=self.call('GET',url);self.assertEqual(status,200)
-            search.assert_called_once_with('test',('lyric',),limit=10,offset=30);multi.assert_not_called()
+            search.assert_called_once_with('test',('lyric',),limit=10,offset=30,real_ip='10.0.0.1');multi.assert_not_called()
             self.call('GET',url);self.assertEqual(search.call_count,2)
             self.assertEqual(self.call('GET','/ncm/search?keywords=test&type=lyric,song')[0],400)
             search.return_value={'songs':[{'ncm_id':1,'lyricContextComplete':True}],'totals':{'song':2},'hasMore':{'song':True}}

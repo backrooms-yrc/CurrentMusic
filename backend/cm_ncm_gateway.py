@@ -157,14 +157,19 @@ def is_media_url_path(path: str) -> bool:
                for p in MEDIA_URL_PREFIXES)
 
 
+def is_search_path(path: str) -> bool:
+    return path in ("/search", "/cloudsearch") or path.startswith("/search/")
+
+
 def should_forward_real_ip(path: str, method: str, tier: int) -> bool:
     """是否把可信客户端 IP 作为 realIP 交给上游。
 
     - 媒体地址族：GET 也要，用于挑选就近 CDN 边缘；
     - 账号写操作（T2/T3 且非 GET）：用于网易云风控与评论 IP 属地。
-    - 公共只读缓存接口（T0/T1 GET）不传，避免缓存按 IP 碎片化和无谓的隐私暴露。
+    - 搜索：地区可能影响检索结果，缓存同时按可信客户端 IP 隔离；
+    - 其余公共只读接口不传。
     """
-    return is_media_url_path(path) or (method != "GET" and int(tier or 0) >= 2)
+    return is_media_url_path(path) or is_search_path(path) or (method != "GET" and int(tier or 0) >= 2)
 
 
 def https_upgrade(obj):

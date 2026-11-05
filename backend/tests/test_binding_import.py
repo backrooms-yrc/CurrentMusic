@@ -104,9 +104,11 @@ class BindingImportTests(unittest.TestCase):
         conn.execute('UPDATE ncm_bindings SET last_sync=100,last_sync_count=3,ncm_liked_pl_id=88 WHERE user_id=?', (self.uid,))
         conn.commit(); conn.close()
         cm_db.cache_set(f'nlikes:{self.uid}', '[99]', 100)
+        cm_db.cache_set(f'nlikes:{self.uid}:42', '[99]', 100)
         self.assertEqual(self.request(self.body)[0], 200)
         self.assertEqual(cm_db.get_binding(self.uid)['ncm_liked_pl_id'], 88)
         self.assertIsNone(cm_db.cache_get(f'nlikes:{self.uid}'))
+        self.assertIsNone(cm_db.cache_get(f'nlikes:{self.uid}:42'))
         self.call.return_value = {'code': 200, 'profile': {'userId': 43}}
         self.assertEqual(self.request({**self.body, 'expectedNcmUid': 43})[0], 200)
         binding = cm_db.get_binding(self.uid)

@@ -41,8 +41,11 @@ class TestRealIpPolicy(unittest.TestCase):
 
     def test_public_reads_do_not_get_realip(self):
         for tier in (0, 1):
-            self.assertFalse(gw.should_forward_real_ip("/search", "GET", tier))
             self.assertFalse(gw.should_forward_real_ip("/song/detail", "GET", tier))
+
+    def test_searches_forward_realip(self):
+        for path in ("/search", "/cloudsearch", "/search/suggest", "/search/hot/detail"):
+            self.assertTrue(gw.should_forward_real_ip(path, "GET", 0))
 
     def test_account_writes_get_realip(self):
         self.assertTrue(gw.should_forward_real_ip("/playlist/create", "POST", 2))

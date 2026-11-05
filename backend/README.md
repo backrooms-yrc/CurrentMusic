@@ -9,6 +9,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
 - 自建账号：用户名/密码、邮箱/手机验证码注册与登录、**邮箱验证码找回/修改密码**、会话与设备管理
 - 按歌词搜索：`type=lyric` 在同次请求内自动补全真实前后文，失败明确显示状态，兼容 X 侧歌词摘要；见 [接口说明](../docs/search-lyrics-api.md)
 - 网易云代理：搜索、详情、歌词、评论、歌单、音质解析、MV/视频、云盘、账号绑定
+- 搜索使用用户 RealIP 并隔离缓存；公开专辑曲库可补充被常规检索省略的精确曲目资料，见 [搜索说明](../docs/search-catalog.md)
 - 逐字歌词：网易云官方 YRC 优先；缺失时由独立 LDDC 服务从 QQ/酷狗/网易云等源补逐字轴，
   最后才回退到自研按行时长估算
 - 播放与社区：最近播放/时长、点赞/收藏、歌单、发现页帖子、公共聊天室（SSE）
@@ -23,6 +24,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
 - 一个 api-enhanced/NetEaseCloudMusicApi 实例（默认 `http://127.0.0.1:3001`），
   并能提供 `/song/url/v1`、`/lyric/new`、`/comment` 等上游接口
 - 可用的网易云 cookie（写到 `CM_NCM_COOKIE` 指向的文件；服务端据此取音源）
+- 解灰匹配需在独立上游部署 [验证挂钩](../docs/playback-sources.md#部署与回归) 并安装系统 ffprobe；普通官方取址无此要求
 - 可选：
   - Pillow + segno + Noto Sans CJK：分享图渲染（缺失时 `/share/song/{id}/image` 返回 503）；
     可执行 `pip install -r deploy/requirements-optional.txt`，并安装 Noto CJK 字体
@@ -69,6 +71,8 @@ python3 backend/cm_server.py
 | `CM_DEFAULT_HOST` | `localhost` | 请求缺少 Host 头时用于生成链接 |
 | `CM_NCM_BASE` | `http://127.0.0.1:3001` | NCM API 基址 |
 | `CM_NCM_COOKIE` | `<CM_DATA_DIR>/ncm-cookie` | 网易云 cookie 文件 |
+| `CM_NCM_MATCH_SOURCE` | 空（上游自动选择） | 官方取址失败后的单个匹配音源；须由上游支持，见 [播放音源说明](../docs/playback-sources.md) |
+| `CM_SEARCH_CATALOG` | `<CM_DATA_DIR>/search-catalog.json` | 可选的公开专辑曲目索引；仅含元数据，不含用户资料或音频 |
 | `CM_AI_KEY` | 空 | DeepSeek API key；空则 AI 降级 |
 | `CM_AI_BASE` | `https://api.deepseek.com/v1` | 模型 API |
 | `CM_AI_MODEL` | `deepseek-flash` | 模型名 |
@@ -123,7 +127,7 @@ python3 tools/check-open-source.py
 - 不要提交 `CM_AI_KEY`、SMTP/SMS 凭据、NCM cookie、数据库或 APK；`.gitignore` 已覆盖常见路径。
 - 反向代理负责 HTTPS 与真实 IP：本服务信任 nginx 覆盖写入的 `X-Real-IP`，不会接受客户端自带的
   `realIP` 参数。
-- 媒体与账号写操作会把 RealIP 传给网易云（见 `docs/realip.md`）；公共只读不传。
+- 搜索、媒体与账号写操作会把用户 RealIP 传给网易云（见 `docs/realip.md`）；搜索缓存按用户 IP 隔离，其余公共只读不传。
 - 所有写接口有频控/权限校验；公开部署前请自行做日志保留、备案与合规评估。
 
 ## 许可证

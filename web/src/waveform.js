@@ -57,10 +57,10 @@ export function createWaveform(canvas, opts) {
   let level = null, peak = null, peakAt = null, peakVel = null, dropVel = null;
   let raf = 0, lastTs = 0;
   let playing = false, hasData = false;
-  let reduced = false, alive = true;
+  let reduced = false, alive = true, suspended = false;
   let u8 = null, bins = binsOf();
   let bandLo = null, bandHi = null, bandGain = null;   // 每根柱：bin 区间 + 倾斜补偿(dB)
-  let bandBins = -1;                      // 生成分箱时用的 bins（变化需重建，否则补偿曲线会偏）
+  let bandBins = -1, bandRate = -1;        // bins/采样率变化都要重建频率轴与倾斜补偿
   let spanDb = opts.tilt != null ? Math.max(0, Math.min(12, +opts.tilt)) : TILT_DB_PER_OCT;
   let minDb = -110, maxDb = -10;          // 分析器档位（由 player 提供）
   let grad = null, gradKey = '';
@@ -125,8 +125,9 @@ export function createWaveform(canvas, opts) {
   function buildBands() {
     const n = bars;
     bandBins = bins;
+    bandRate = rateOf();
     const usable = Math.max(8, Math.floor(bins * 0.72));
-    const hzPerBin = (rateOf() / 2) / Math.max(1, bins);
+    const hzPerBin = (bandRate / 2) / Math.max(1, bins);
     bandLo = new Int32Array(n);
     bandHi = new Int32Array(n);
     bandGain = new Float32Array(n);
@@ -149,7 +150,7 @@ export function createWaveform(canvas, opts) {
     if (wantBins !== bins || !u8 || u8.length !== wantBins) { bins = wantBins; u8 = new Uint8Array(wantBins); }
     hasData = !!read(u8);
     // bins 或柱数任一变化都要重建分箱（否则倾斜补偿按旧频率轴计算）
-    if (!bandLo || bandLo.length !== n || bandBins !== bins) buildBands();
+    if (!bandLo || bandLo.length !== n || bandBins !== bins || bandRate !== rateOf()) buildBands();
 
     const ka = 1 - Math.exp(-dt / ATTACK_MS);
     const kr = 1 - Math.exp(-dt / RELEASE_MS);
@@ -288,7 +289,7 @@ export function createWaveform(canvas, opts) {
   }
 
   function draw() {
-    if (!alive) return;
+    if (!alive || suspended) return;
     if (!cssW) resize();
     if (!cssW) return;
     ctx.clearRect(0, 0, cssW, cssH);
@@ -298,7 +299,7 @@ export function createWaveform(canvas, opts) {
   }
 
   function frame(ts) {
-    if (!alive) return;
+    if (!alive || suspended) return;
     raf = 0;
     if (reduced) { stop(); return; }
     const dt = lastTs ? Math.min(64, Math.max(8, ts - lastTs)) : 16;
@@ -315,7 +316,7 @@ export function createWaveform(canvas, opts) {
   }
 
   function start() {
-    if (!alive) return;
+    if (!alive || suspended) return;
     resize();
     if (!playing || reduced) { draw(); return; }
     lastTs = 0;
@@ -351,6 +352,10 @@ export function createWaveform(canvas, opts) {
 
   return {
     style,
+    setVisible(visible) {
+      suspended = !visible;
+      if (suspended) stop(); else start();
+    },
     setPlaying(on) {
       playing = !!on;
       if (playing && !reduced) {

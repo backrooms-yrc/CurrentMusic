@@ -84,6 +84,25 @@ on('song', applyVolume);
 // 之前这里是一组固定高度的柱子 + CSS 呼吸动画 —— 那与音乐无关，只是看起来在动；
 // 现在只有拿到真实频谱才画起伏，拿不到就画静默基线（不假装有律动）。
 let waveCtl = null;          // 当前播放页的波形控制器（关闭时销毁）
+function playerVisualsVisible() {
+  const ov = overlay();
+  return !document.hidden && !document.getElementById('commentOverlay') && ov && !ov.hidden && !ov.classList.contains('closing');
+}
+function syncPlayerVisuals() {
+  const visible = playerVisualsVisible();
+  if (waveCtl) waveCtl.setVisible(visible);
+  if (!visible) {
+    stopKaraoke();
+    if (springRaf) { cancelAnimationFrame(springRaf); springRaf = 0; }
+  } else {
+    curLyricIdx = -1;
+    syncLyric();
+    if (fullProgress) fullProgress.update();
+    if (player.isPlaying()) startKaraoke();
+  }
+}
+document.addEventListener('cm-comments-visibility', syncPlayerVisuals);
+document.addEventListener('visibilitychange', syncPlayerVisuals);
 function waveformHTML() {
   return `<div class="pl-waveform" id="plWaveform" aria-hidden="true"><canvas id="plWaveCanvas"></canvas></div>`;
 }
@@ -217,8 +236,10 @@ on('song', renderMini);
 on('time', () => {
   // 进度线紧贴迷你播放条上缘。位置/总长一律走 player.posMs()/durMs()：
   // 投屏时它们来自设备上报，直接读 audio 会永远是 0（进度条与歌词卡住）。
-  if (miniProgress) miniProgress.update();
-  if (fullProgress) fullProgress.update();
+  if (!document.hidden && !document.getElementById('commentOverlay')) {
+    if (miniProgress) miniProgress.update();
+    if (fullProgress) fullProgress.update();
+  }
   updateSbRemaining();
   syncLyric();
 });
@@ -636,7 +657,7 @@ function soarSweep(now, line, spans) {
 
 function fireKaraoke() {
   if (!lyricKaraoke) return;
-  if (overlay().hidden) return;
+  if (!playerVisualsVisible()) return;
   // 手机封面视图里歌词区是 display:none：不必每帧给不可见的逐字 span 写样式。
   // 翱翔鸟Music 在窄屏也始终显示歌词，不受这条限制。
   if (!isSoaringBirdTheme() && window.innerWidth < 600 && playerView === 'cover') return;
@@ -712,6 +733,7 @@ function fireKaraoke() {
 }
 
 function startKaraoke() {
+  if (!lyricKaraoke || !playerVisualsVisible() || !player.isPlaying()) return;
   if (karaokeRaf) return;
   const step = () => { karaokeRaf = requestAnimationFrame(step); fireKaraoke(); };
   karaokeRaf = requestAnimationFrame(step);
@@ -806,7 +828,7 @@ function syncLyric(force = false) {
     pushDesktopLyric(i);        // 播放页未打开时也要喂原生悬浮窗
   }
   const box = document.getElementById('plLyric');
-  if (!box) return;
+  if (!box || !playerVisualsVisible()) return;
   if (!changed && !force) return;
   const soar = isSoaringBirdTheme();
   // 翱翔鸟Music 主题：纵深/停位交给 CSS（父级只更新 --active-i），并补 past 状态
@@ -816,8 +838,6 @@ function syncLyric(force = false) {
       const idx = +el.dataset.i;
       el.classList.toggle('is-active', idx === i);
       el.classList.toggle('is-past', idx < i);
-      // 远离当前行的整行模糊在滚动时会反复重绘，是换行/滚动卡顿的主因；
-      // 这些行本来就很淡，直接去掉 blur，肉眼无差但省一大笔合成开销。
       el.classList.toggle('is-far', Math.abs(idx - i) >= 4);
       soarStagger(el, idx, i);
     });
@@ -1106,7 +1126,7 @@ async function openFull() {
             <img id="plCover" src="${esc(m.pic)}" onerror="this.style.visibility='hidden'">
           </div>
           <div class="pl-info">
-            <div class="pl-name">${esc(m.name)}</div>
+            <div class="pl-name" title="${esc(m.name)}">${esc(m.name)}</div>
             <div class="pl-artist" id="plArtist">${artistLineHTML(m)}</div>
             <div class="pl-stats" id="plStats"><mdui-linear-progress style="width:120px"></mdui-linear-progress></div>
           </div>
@@ -1302,6 +1322,7 @@ async function openFull() {
       style: waveStyle(),
     });
     waveCtl.setDbRange(wave.minDb, wave.maxDb);
+    waveCtl.setVisible(playerVisualsVisible());
     waveCtl.setPlaying(player.isPlaying());
     window.__cmWave = waveCtl;          // 调试/测试入口（只读引用）
   }
@@ -1389,6 +1410,7 @@ function closeFull() {
 
 // 设置页切换波形样式 / 频谱倾斜时，若播放页正开着就立刻换（不必重开播放页）
 ['cm-wavestyle', 'cm-wavecfg'].forEach(ev => document.addEventListener(ev, () => {
+  if (ev === 'cm-wavecfg' && waveCtl) { waveCtl.setTilt(waveTilt()); return; }
   const ov = overlay();
   if (!ov || ov.hidden) return;
   const canvas = ov.querySelector('#plWaveCanvas');
@@ -1399,6 +1421,7 @@ function closeFull() {
     tilt: waveTilt(), style: waveStyle(),
   });
   waveCtl.setDbRange(wave.minDb, wave.maxDb);
+  waveCtl.setVisible(playerVisualsVisible());
   waveCtl.setPlaying(player.isPlaying());
   window.__cmWave = waveCtl;
 }));
@@ -1688,6 +1711,7 @@ document.addEventListener('cm-colorscheme-mode', e => {
 });
 // 缓冲进度：progress 事件与 tick 都会驱动，这里保证进度条上的缓冲区间实时更新
 on('buffer', () => {
+  if (document.hidden || document.getElementById('commentOverlay')) return;
   if (miniProgress) miniProgress.update();
   if (fullProgress) fullProgress.update();
 });
@@ -1724,12 +1748,13 @@ function bindArtistLinks(scope) {
 }
 
 /** 按「默认红心目标」同步播放页红心、网易云小圆点与红心数。 */
-async function syncPlayerLike(m) {
+let playerLikeRevision = 0;
+async function syncPlayerLike(m, refresh = true) {
   if (!m) return;
+  const revision = ++playerLikeRevision;
   try {
-    await ensureStatus(m.ncm_id).catch(() => {});   // 同时刷新本地状态与网易云红心数
     const s = await ensureLikeState(m);
-    if (!player.meta || player.meta.ncm_id !== m.ncm_id) return;
+    if (revision !== playerLikeRevision || !player.meta || player.meta.ncm_id !== m.ncm_id) return;
     const btn = document.getElementById('plLike');
     if (btn) {
       btn.classList.toggle('on', s.liked);
@@ -1747,8 +1772,23 @@ async function syncPlayerLike(m) {
     if (badge) badge.hidden = !(s.bound && s.source === 'local' && isNcmLiked(m.ncm_id));
     const stat = document.getElementById('plLikeStat');
     if (stat) stat.innerHTML = `<span class="mi">favorite</span> ${fmtCount(s.count || 0)} 红心`;
+    // 红心先更新；较慢的统计请求只补数量，不能用旧状态覆盖新的点击结果。
+    if (refresh) {
+      const latest = await ensureStatus(m.ncm_id);
+      if (revision === playerLikeRevision && player.meta?.ncm_id === m.ncm_id) {
+        const countNode = document.getElementById('plLikeStat');
+        if (countNode) countNode.innerHTML = `<span class="mi">favorite</span> ${fmtCount(latest.count || 0)} 红心`;
+        if (s.source === 'local' && btn?.isConnected) {
+          btn.classList.toggle('on', latest.liked);
+          btn.querySelector('.material-icons-outlined').textContent = latest.liked ? 'favorite' : 'favorite_border';
+        }
+      }
+    }
   } catch { /* 未绑定/网络失败：保留当前 UI */ }
 }
+window.addEventListener('cm-likechange', event => {
+  if (!event.detail?.id || Number(player.meta?.ncm_id) === event.detail.id) syncPlayerLike(player.meta, false);
+});
 
 function updateSongInfo() {
   const ov = overlay();
@@ -1759,7 +1799,7 @@ function updateSongInfo() {
   const glow = ov.querySelector('.lp-artwork__glow img, .sb-artwork-glow img');
   if (glow) glow.src = m.pic || '';
   const name = ov.querySelector('.pl-name');
-  if (name) name.textContent = m.name;
+  if (name) { name.textContent = m.name; name.title = m.name || ''; }
   const menuTitle = ov.querySelector('.lp-menu__title');
   if (menuTitle) menuTitle.textContent = m.name;
   const artist = ov.querySelector('.pl-artist');

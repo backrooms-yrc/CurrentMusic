@@ -15,8 +15,9 @@ import { api } from '../api.js';
 import { esc, renderSongList, toast } from '../ui.js';
 import { player } from '../player.js';
 import { addToPlaylist } from '../player-ui.js';
+import { loadingMarkup, loadingCycle } from '../loading.js';
+import { searchHistory, recordSearch, removeSearch, clearSearchHistory, syncSearchHistory, watchSearchHistory } from '../search-history.js';
 
-const HIST_KEY = 'cm.searchHistory';
 const BATCH = 10;              // 每个类型每批取的条数（首屏与「显示更多」共用）
 const EASE = 'cubic-bezier(0.05, 0.7, 0.1, 1)';   // 与 app.css 里 cmtIn 同一曲线
 
@@ -29,14 +30,9 @@ const TABS = [
 ];
 const ARR = Object.fromEntries(TABS.map(t => [t.k, t.arr]));
 
-const hist = () => { try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { return []; } };
-const pushHist = kw => {
-  const h = [kw, ...hist().filter(x => x !== kw)].slice(0, 10);
-  localStorage.setItem(HIST_KEY, JSON.stringify(h));
-};
-
 // 搜索结果骨架屏：保留歌曲行结构，避免请求期间结果区跳空
 const searchResultSkeleton = (n = 6) => `<div class="cm-search-result-skeleton" aria-busy="true" aria-label="搜索结果加载中">
+  <div class="cm-expressive-loading cm-search-loading" role="status" aria-label="正在搜索">${loadingMarkup()}</div>
   <div class="cm-skel-list">${Array.from({ length: n }, () => `<div class="cm-skel-song"><div class="sk sk-pic"></div><div class="cm-skel-main"><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div></div>`).join('')}</div>
 </div>`;
 
@@ -82,6 +78,7 @@ export async function render(el, params = []) {
   const sugBox = el.querySelector('#sugBox');
   const histBox = el.querySelector('#histBox');
   const resultBox = el.querySelector('#resultBox');
+  let historyVisible = true;
   const hotBox = document.createElement('div');
   histBox.after(hotBox);
 
@@ -180,39 +177,48 @@ export async function render(el, params = []) {
   }
 
   const renderHist = () => {
-    const h = hist();
+    const h = searchHistory();
     if (!h.length) { histBox.innerHTML = ''; renderHot(); return; }   // 无历史也要出热搜
     histBox.innerHTML = `<div class="cm-sec-head"><h2>搜索历史</h2><span class="cm-sec-more" id="clearHist">清空</span></div>
       <div class="cm-chips">${h.map(k =>
         `<span class="cm-hist"><span class="cm-hist-k" data-k="${esc(k)}">${esc(k)}</span><i class="cm-hist-x" data-x="${esc(k)}"><span class="material-icons-outlined">close</span></i></span>`).join('')}</div>`;
-    histBox.querySelector('#clearHist').onclick = () => { localStorage.removeItem(HIST_KEY); renderHist(); renderHot(); };
+    histBox.querySelector('#clearHist').onclick = () => { clearSearchHistory(); renderHist(); renderHot(); };
     histBox.querySelectorAll('.cm-hist-k').forEach(c => { c.onclick = () => { input.value = c.dataset.k; input.blur(); doSearch(c.dataset.k); }; });
     histBox.querySelectorAll('.cm-hist-x').forEach(x => {
       x.onclick = e => {
         e.stopPropagation();
-        localStorage.setItem(HIST_KEY, JSON.stringify(hist().filter(v => v !== x.dataset.x)));
+        removeSearch(x.dataset.x);
         renderHist();
       };
     });
     renderHot();
   };
+  watchSearchHistory(el, () => { if (historyVisible) renderHist(); });
   renderHist();
+  void syncSearchHistory();
 
   /* ---------- 一次搜索的状态 ---------- */
-  let S = null;                                   // { kw, items, total, more, loaded, loading, cur }
+  let S = null, searchCycle = null;                // { kw, items, total, more, loaded, loading, cur }
   const newState = kw => ({ kw, items: {}, total: {}, more: {}, loaded: {}, loading: {}, cur: 'song' });
 
   const panel = () => resultBox.querySelector('#srchPanel');
   const loadedCount = t => (S.items[t] || []).length;
 
   /** 取某一类型的一页（offset 为 0 时覆盖，否则追加）。返回本次新增条数。 */
-  async function load(t, offset) {
-    const d = await api.search(S.kw, offset, BATCH, t);
+  async function load(t, offset, state = S) {
+    const d = await api.search(state.kw, offset, BATCH, t);
     const got = d[ARR[t]] || [];
-    S.items[t] = offset ? (S.items[t] || []).concat(got) : got;
-    S.total[t] = (d.totals && d.totals[t]) || S.items[t].length;
-    S.more[t] = !!(d.hasMore && d.hasMore[t]);
-    S.loaded[t] = true;
+    state.offsets ||= {};
+    state.offsets[t] = offset + got.length; // 补充的专辑曲目不消耗上游分页位置。
+    if (t === 'song') {
+      if (!offset) state.catalogSongs = d.catalogSongs || [];
+      const all = offset ? (state.items[t] || []).concat(got) : (state.catalogSongs || []).concat(got);
+      const seen = new Set();
+      state.items[t] = all.filter(s => { const id = String(s.ncm_id); if (seen.has(id)) return false; seen.add(id); return true; });
+    } else state.items[t] = offset ? (state.items[t] || []).concat(got) : got;
+    state.total[t] = (d.totals?.[t] ?? state.offsets[t]) + (t === 'song' ? (state.catalogSongs || []).length : 0);
+    state.more[t] = !!(d.hasMore && d.hasMore[t]);
+    state.loaded[t] = true;
     return got.length;
   }
 
@@ -277,13 +283,15 @@ export async function render(el, params = []) {
       if (S.loading[t]) return;
       S.loading[t] = true;
       btn.disabled = true;
-      btn.textContent = '加载中…';
+      btn.innerHTML = `<span class="cm-expressive-loading cm-loading-inline cm-loading-small" aria-hidden="true">${loadingMarkup()}</span> 加载中…`;
       const my = seq;
+      const state = S;
       const before = loadedCount(t);           // 追加前的条数 = 本次渲染的起点
       try {
-        await load(t, before);
+        await load(t, S.offsets?.[t] ?? before);
         if (my !== seq) return;
         renderTabs();
+        if (S.cur !== t) return;
         renderPanel(before, { items: true });  // 只画新增的那一批
       } catch (e) {
         if (my !== seq) return;
@@ -291,7 +299,7 @@ export async function render(el, params = []) {
         btn.disabled = false;
         btn.textContent = `显示更多（${loadedCount(t)}/${S.total[t] || loadedCount(t)}）`;
       } finally {
-        S.loading[t] = false;
+        state.loading[t] = false;
       }
     };
   }
@@ -310,7 +318,7 @@ export async function render(el, params = []) {
       refreshMore('song');
     }
     const rows = await renderSongList(p.querySelector('#songList'), S.items.song || [],
-      { from, onPlay: i => player.playList(S.items.song, i) });
+      { from, deferStatus: true, onPlay: i => player.playList(S.items.song, i) });
     // 追加时动画新增行；首次出结果时也渐入（那时没有面板整体动画）
     if (from) { animateIn(rows); refreshMore('song'); }
     else if (items) animateIn(rows);
@@ -423,11 +431,11 @@ export async function render(el, params = []) {
       try {
         await load(k, 0);
       } catch (e) {
-        if (my !== seq) return;
+        if (my !== seq || S.cur !== k) return;
         panel().innerHTML = `<div class="cm-empty">加载失败：${esc(e.message)}</div>`;
         return;
       }
-      if (my !== seq) return;
+      if (my !== seq || S.cur !== k) return;
       renderTabs();
     }
     renderPanel(0, { items: false });
@@ -446,17 +454,22 @@ export async function render(el, params = []) {
 
   async function doSearch(kw) {
     const my = ++seq;
-    pushHist(kw);
+    if (searchCycle) searchCycle.cancel();
+    historyVisible = true;
+    recordSearch(kw);
     renderHist();
     hotBox.innerHTML = '';   // 有搜索内容后隐藏热搜
     catBox.style.display = 'none';
     resultBox.innerHTML = searchResultSkeleton(6);
+    const cycle = loadingCycle(resultBox.querySelector('.cm-search-loading'));
+    searchCycle = cycle;
     S = newState(kw);
 
     // 首屏只等「单曲」：上游「歌手」实测可达 6s+，没必要让它拖住首屏
     try {
       await load('song', 0);
     } catch (e) {
+      await cycle.finish();
       if (my === seq) resultBox.innerHTML = `<div class="cm-empty">搜索失败：${esc(e.message)}</div>`;
       return;
     }
@@ -469,12 +482,17 @@ export async function render(el, params = []) {
       if (my !== seq) return;
       const hit = TABS.find(t => loadedCount(t.k) > 0);
       if (!hit) {
+        await cycle.finish();
+        if (my !== seq) return;
         resultBox.innerHTML = `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`;
         return;
       }
       S.cur = hit.k;
     }
 
+    await cycle.finish();
+    if (my !== seq || !el.isConnected) return;
+    searchCycle = null;
     renderShell();
     if (!anyResult()) {
       resultBox.innerHTML = `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`;
@@ -495,7 +513,8 @@ export async function render(el, params = []) {
 
   // 输入不触发搜索：只有回车（或点击候选/热搜/历史词条这类明确动作）才发起请求
   input.addEventListener('input', () => {
-    if (!(input.value || '').trim()) { seq++; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; catBox.style.display = ''; renderHist(); renderHot(); return; }
+    historyVisible = !(input.value || '').trim();
+    if (!(input.value || '').trim()) { seq++; if (searchCycle) searchCycle.cancel(); searchCycle = null; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; catBox.style.display = ''; renderHist(); renderHot(); return; }
     // 输入中：候选词独占视野，历史/热搜让位（清空后由上面分支恢复）
     catBox.style.display = 'none';
     histBox.innerHTML = ''; hotBox.innerHTML = '';

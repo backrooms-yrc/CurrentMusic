@@ -24,12 +24,16 @@ GROUPS = {
     'users': '用户与社交', 'ncmbind': '网易云绑定与同步', 'ncm': '音乐与媒体',
     'network': '线路测速', 'rooms': '一起听房间', 'chat': '聊天与 AI', 'ai': '聊天与 AI',
     'admin': '管理接口', 'announcements': '公告', 'posts': '动态', 'playlists': '歌单',
-    'likes': '收藏与红心', 'favs': '收藏与红心', 'songs': '音乐与媒体',
+    'likes': '收藏与红心', 'favs': '收藏与红心', 'songs': '音乐与媒体', 'search': '搜索历史',
     'roaming': '私人漫游', 'share': '分享', 'plays': '播放历史', 'decorations': '头像挂件',
     'download': '客户端与资源', 'x': '客户端与资源', 'cast': '客户端与资源',
 }
 GUIDES = {
+    'song-insights-api': '歌曲音质、副歌与其他版本',
+    'search-history-api': '账号搜索历史与多端同步',
     'search-lyrics-api': '歌词搜索与命中前后文',
+    'search-catalog': '搜索地区与公开曲库补充',
+    'playback-sources': '播放音源与灰色曲目匹配',
     'passkeys-api': '通行密钥登录与绑定',
     'two-factor-api': '登录两步验证', 'passport-api': '通行证完整接入', 'password-api': '密码找回与修改', 'lyrics-api': '歌词与逐字轴',
     'private-roaming-api': '私人漫游', 'play-history-sync': '网易云听歌历史同步',

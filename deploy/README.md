@@ -53,6 +53,14 @@ The backend expects an api-enhanced/NetEaseCloudMusicApi service at `CM_NCM_BASE
 bundled here. The cookie file must contain a logged-in NetEase cookie; protect it like
 a password.
 
+For grey-track matching, install FFmpeg/ffprobe on the upstream node, then run
+`python3 tools/install-ncm-matcher.py --upstream /opt/ncm-api` and restart that
+upstream service. Re-run the installer after upstream updates or dependency
+reinstallation. `--check` verifies the four hooks without changing files.
+See [playback source validation](../docs/playback-sources.md) for duration checks,
+deadlines, compatible response fields, and regression commands. Original upstream
+source backups stay in ignored `data/ncm-matcher-backups/`.
+
 ## LDDC word-by-word lyrics (optional)
 
 CurrentMusic already synthesizes per-character timing from line-level lyrics. For

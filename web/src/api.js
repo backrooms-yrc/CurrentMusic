@@ -334,7 +334,7 @@ export const api = {
   ncmRefresh: () => call('POST', '/ncmbind/refresh', { body: {}, auth: true }),
   syncNcm: () => call('POST', '/ncmbind/sync', { body: {}, auth: true }),
   ncmLike: (meta, like) => call('POST', `/ncmbind/like/${meta.ncm_id}`, { body: { ...meta, like }, auth: true }),
-  ncmLikelist: () => call('GET', '/ncmbind/likelist', { auth: true }),
+  ncmLikelist: (refresh = false) => call('GET', '/ncmbind/likelist' + (refresh ? '?refresh=1' : ''), { auth: true }),
   ncmPhoneCode: (phone, ctcode) => call('POST', '/ncmbind/phone/code', { body: { phone, ctcode }, auth: true }),
   ncmPhoneLogin: (phone, captcha, ctcode) => call('POST', '/ncmbind/phone/login', { body: { phone, captcha, ctcode }, auth: true }),
   comments: (ncmId, offset = 0, limit = 20) => call('GET', `/ncm/comments?id=${ncmId}&offset=${offset}&limit=${limit}`, { auth: true }),
@@ -345,6 +345,10 @@ export const api = {
   commentDelete: (ncmId, commentId) => call('DELETE', `/ncmbind/comment/${ncmId}`, { body: { commentId }, auth: true }),
 
   // NCM 音源
+  searchHistory: () => call('GET', '/search/history', { auth: true }),
+  addSearchHistory: keyword => call('POST', '/search/history', { body: { keyword }, auth: true }),
+  deleteSearchHistory: keyword => call('DELETE', '/search/history', { body: keyword === undefined ? {} : { keyword }, auth: true }),
+  importSearchHistory: keywords => call('POST', '/search/history/import', { body: { keywords }, auth: true }),
   // type 可指定 'song'/'artist'/'album'/'playlist'：只请求需要的类型。
   // 上游各类型耗时差异大（歌手曾达 6s+），而搜索页默认展示「单曲」，
   // 因此按类型分开取，首屏不必等其它类型。省略 type 则返回全部类型（旧行为）。
@@ -400,6 +404,9 @@ export const api = {
   roamingTrash: (id) => call('POST', '/roaming/trash', { body: { id }, auth: true }),
   /** 歌曲百科（服务端已把上游页级结构归一化成「章节 + 字段 + 正文」）。 */
   songWiki: (ncmId) => call('GET', `/song/wiki?id=${ncmId}`),
+  songQualities: (id) => call('GET', `/song/qualities?id=${encodeURIComponent(id)}`),
+  songChorus: (id) => call('GET', `/song/chorus?id=${encodeURIComponent(id)}`),
+  songVersions: (id) => call('GET', `/song/versions?id=${encodeURIComponent(id)}`),
 
   /** 首屏聚合：一次拿回 me/daily/bind/recent（服务端并行取好）。旧服务端没有该端点 → 调用方回退逐个请求。 */
   bootstrap: () => call('GET', '/bootstrap', { auth: true }),

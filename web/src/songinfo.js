@@ -1,9 +1,12 @@
+import './songinfo.css';
 // 歌曲详情抽屉（阶段二）：把「单曲维度」的接口聚到一个面板里
 // 音质档位 / 副歌时间 / 红心数 / 创作者 / 音乐百科 / 相似歌曲 / 乐谱 / 评论统计
-// 数据全部来自 /ncm/* 泛化网关（阶段二已启用的 T0/T1 接口）。
+// 音质、副歌、其他版本使用结构化 API；其他资料沿用 NCM 网关。
 import { api, auth, ncmSongs } from './api.js';
 import { esc, toast } from './ui.js';
 import { player } from './player.js';
+import { isCasting } from './cast.js';
+import { mdui } from './md.js';
 
 const sec = (title, body, extra = '') =>
   `<div class="cm-si-sec"><div class="cm-si-sec-h">${esc(title)}${extra}</div>${body}</div>`;
@@ -11,25 +14,56 @@ const sec = (title, body, extra = '') =>
 const loading = '<div class="cm-si-load"><mdui-circular-progress></mdui-circular-progress></div>';
 const empty = m => `<div class="cm-si-empty">${esc(m)}</div>`;
 
-/** 音质档位：把 {l,m,h,sq,hr,db,jm,je} 映射成「档位 · 码率」 */
-const LEVEL_LABEL = { l: '标准', m: '较高', h: '极高', sq: '无损', hr: '高解析', db: '杜比全景声', jm: '超清母带', je: '沉浸环绕声', sky: '臻音全景声' };
+/** 文件档位只代表资料存在，实际播放档位仍以解析结果为准。 */
 function qualityHTML(d) {
-  const data = d.data || d;
-  const rows = Object.keys(LEVEL_LABEL)
-    .filter(k => data[k])
-    .map(k => {
-      const v = data[k] || {};
-      const br = v.br ? `${Math.round(v.br / 1000)} kbps` : '';
-      const sr = v.sr ? `${(v.sr / 1000).toFixed(1)} kHz` : '';
-      const size = v.size ? `${(v.size / 1024 / 1024).toFixed(1)} MB` : '';
-      return `<div class="cm-si-row"><b>${LEVEL_LABEL[k]}</b><span>${[br, sr, size].filter(Boolean).join(' · ') || '可用'}</span></div>`;
-    });
-  return rows.length ? rows.join('') : empty('该曲无音质详情');
+  const rows = (d.qualities || []).map(v => {
+    const br = v.br ? `${Math.round(v.br / 1000)} kbps` : '';
+    const sr = v.sr ? `${(v.sr / 1000).toFixed(1)} kHz` : '';
+    const size = v.size ? `${(v.size / 1024 / 1024).toFixed(1)} MB` : '';
+    const variants = (v.variants || []).map(x => x.immerseType).join(' / ');
+    return `<div class="cm-si-row"><b>${esc(v.label)}</b><span>${[br, sr, size, esc(variants)].filter(Boolean).join(' · ')}</span></div>`;
+  });
+  return rows.length ? rows.join('') + '<div class="cm-si-empty">以上为音质文件资料，播放时将按版权、账号与设备条件获取实际音质。</div>' : empty('该曲无音质详情');
 }
 
 function fmtTime(ms) {
   const s = Math.max(0, Math.round((ms || 0) / 1000));
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** 等到目标音频就绪再定位；切歌或解析失败时不跳动其他曲目。 */
+export async function seekSongChorus(meta, ms) {
+  if (!Number.isFinite(ms) || ms < 0) return false;
+  const sameSong = () => String(player.meta?.ncm_id) === String(meta.ncm_id);
+  if (!sameSong()) {
+    if (isCasting()) { toast('请先投屏这首歌，再跳到副歌'); return false; }
+    const i = player.queue.findIndex(s => String(s.ncm_id) === String(meta.ncm_id));
+    if (i >= 0) await player.playAt(i);
+    else { player.queue = [meta]; await player.playAt(0); player.persist(); }
+  }
+  if (!sameSong() || player.loading || (!player.urlInfo && !isCasting())) return false;
+  const info = player.urlInfo;
+  if (!isCasting() && player.audio.readyState < 1) {
+    const ready = await new Promise(resolve => {
+      const audio = player.audio;
+      const finish = ok => {
+        clearTimeout(timer);
+        audio.removeEventListener('loadedmetadata', loaded);
+        audio.removeEventListener('error', failed);
+        resolve(ok);
+      };
+      const loaded = () => finish(true), failed = () => finish(false);
+      const timer = setTimeout(failed, 8000);
+      audio.addEventListener('loadedmetadata', loaded, { once: true });
+      audio.addEventListener('error', failed, { once: true });
+    });
+    if (!ready) return false;
+  }
+  if (!sameSong() || player.urlInfo !== info) return false;
+  const end = player.durMs();
+  if (end > 0 && ms >= end) return false;
+  player.seek(ms / 1000);
+  return true;
 }
 
 /**
@@ -88,38 +122,36 @@ export async function openSongInfo(meta) {
   };
 
   // 并行取数：任一失败只影响自己的分区（不整页报错）
-  const [ql, cho, red, cre, wiki, simi, sheet, cinfo, cpr, wikiSum, dynCover, simi2, vec, url302] = await Promise.allSettled([
-    api.ncm('/song/music/detail', { id: sid }),
-    api.ncm('/song/chorus', { id: sid }),
+  const [ql, cho, red, cre, wiki, simi, sheet, cinfo, cpr, wikiSum, dynCover, simi2, vec] = await Promise.allSettled([
+    api.songQualities(sid),
+    api.songChorus(sid),
     api.ncm('/song/red/count', { ids: sid }),
     api.ncm('/song/creators', { id: sid }),
     api.ncm('/song/wiki/info', { id: sid }),
     api.ncm('/song/simi/get', { id: sid }),
     api.ncm('/sheet/list', { id: sid }),
     api.ncm('/comment/info/list', { id: sid, type: 0 }),
-    api.ncm('/song/copyright/rcmd', { id: sid, songid: sid }),
+    api.songVersions(sid),
     api.ncm('/song/wiki/summary', { id: sid }),
     api.ncm('/song/dynamic/cover', { id: sid }),
     // /simi/song 与 /song/simi/get 是两个不同维度的「相似」来源，合并去重后一起展示
     api.ncm('/simi/song', { id: sid, limit: 10, offset: 0 }),
-    // 歌曲向量（相似度模型）与 302 跳转音源
+    // 歌曲向量（相似度模型）
     api.ncm('/playmode/song/vector', { ids: String(sid) }),
-    api.ncm('/song/url/v1/302', { id: sid, level: 'exhigh' }),
   ]);
 
   const parts = [];
 
-  if (ql.status === 'fulfilled') parts.push(sec('音质档位', qualityHTML(ql.value)));
+  parts.push(sec('音质档位', ql.status === 'fulfilled' ? qualityHTML(ql.value) : empty('音质资料暂时不可用，请稍后重试')));
 
-  // 副歌：可一键跳到副歌起点
+  // 每个副歌段落都可选择；未播放此曲时先加载目标音频。
   if (cho.status === 'fulfilled') {
-    const list = (cho.value.chorus || cho.value.data || []);
-    if (list.length) {
-      const c = list[0];
-      parts.push(sec('副歌时间', `<div class="cm-si-row"><b>${fmtTime(c.startTime)} – ${fmtTime(c.endTime)}</b>
-        <a class="cm-si-act" id="siChorus" data-t="${c.startTime || 0}">跳到副歌</a></div>`));
-    } else parts.push(sec('副歌时间', empty('未识别到副歌段落')));
-  }
+    const list = cho.value.segments || [];
+    parts.push(sec('副歌时间', list.length ? list.map(c =>
+      `<div class="cm-si-row"><b>${fmtTime(c.startMs)} – ${fmtTime(c.endMs)}</b>
+        <mdui-button variant="text" class="cm-si-chorus" data-t="${c.startMs}">播放副歌</mdui-button></div>`
+    ).join('') : empty('未识别到副歌段落')));
+  } else parts.push(sec('副歌时间', empty('副歌信息暂时不可用，请稍后重试')));
 
   if (red.status === 'fulfilled') {
     const d = red.value.data || {};
@@ -190,19 +222,16 @@ export async function openSongInfo(meta) {
       : empty('暂无乐谱')));
   }
 
-  // 其他版本（版权受限时最有用的推荐）
+  // 上游 rcmd 才是推荐版本，原曲不会再次作为替代项显示。
   if (cpr.status === 'fulfilled') {
-    const o = (cpr.value.data || {}).originSong;
-    if (o && o.id) {
-      const alt = ncmSongs([o])[0];
-      parts.push(sec('其他版本', alt ? `<div class="cm-si-simi" id="siAlt">
-        <div class="cm-si-simi-i" data-i="0">
-          <img src="${esc(alt.pic)}?param=80y80" loading="lazy" onerror="this.remove()">
-          <div><div class="cm-si-simi-n">${esc(alt.name)}</div><div class="cm-si-simi-a">${esc(alt.artists)}</div></div>
-        </div></div>` : empty('暂无其他版本')));
-      altSongs = alt ? [alt] : [];
-    }
-  }
+    altSongs = cpr.value.songs || [];
+    parts.push(sec('其他版本', altSongs.length ? `<div class="cm-si-simi" id="siAlt">${altSongs.map((alt, i) =>
+      `<button type="button" class="cm-si-simi-i cm-si-version" data-i="${i}">
+        ${alt.pic ? `<img src="${esc(alt.pic)}?param=80y80" loading="lazy" alt="">` : ''}
+        <div><div class="cm-si-simi-n">${esc(alt.name)}</div><div class="cm-si-simi-a">${esc(alt.artists)} · ${esc(alt.album)}</div></div>
+      </button>`).join('')}</div><div class="cm-si-empty">选择其他版本将播放该版本，实际可用性以播放结果为准。</div>`
+      : empty('暂无其他版本推荐')));
+  } else parts.push(sec('其他版本', empty('其他版本推荐暂时不可用，请稍后重试')));
 
   if (cinfo.status === 'fulfilled') {
     const d = ((cinfo.value.data || [])[0]) || {};
@@ -221,23 +250,12 @@ export async function openSongInfo(meta) {
     }
   }
 
-  // 302 直链（/song/url/v1/302）：**这条上游返回的是裸音频流，不是 JSON**。
-  // 走 cm-server 的 JSON 网关必然解码失败（实测 body 以 ID3 开头），所以正确用法是把它
-  // 当媒体地址直接交给播放器 —— 用站点根路径的通用代理（域名根 → ncm-inject → api-enhanced），
-  // 这也是计划 §1 里说明过的拓扑。
-  {
-    const direct = url302.status === 'fulfilled'
-      ? ''
-      : '';
-    void direct;
-    const streamUrl = `${location.origin}/song/url/v1/302?id=${encodeURIComponent(sid)}&level=exhigh`;
-    parts.push(sec('302 直链', `
-      <div class="cm-si-act" id="si302copy">复制媒体地址</div>
-      <div class="cm-si-act" id="si302play">用系统播放器打开</div>
-      <div class="cm-si-empty" style="word-break:break-all">${esc(streamUrl)}</div>
-      <div class="cm-si-empty">上游这条接口返回的是**音频流**（不是 JSON），所以不能经 cm-server 的 JSON 网关取；
-      上面用的是站点根路径的通用代理地址。</div>`));
-  }
+  // 媒体地址仅在用户选择打开时使用，不通过 JSON 接口预取音频流。
+  const stream302 = `${location.origin}/song/url/v1/302?id=${encodeURIComponent(sid)}&level=exhigh`;
+  parts.push(sec('外部播放器', `<div class="cm-si-acts">
+    <mdui-button variant="text" id="si302copy">复制音乐地址</mdui-button>
+    <mdui-button variant="text" id="si302play">用系统播放器打开</mdui-button>
+  </div>`));
 
   // 相似歌曲：可直接播放
   let simiSongs = [];
@@ -295,26 +313,29 @@ export async function openSongInfo(meta) {
 
   body.innerHTML = parts.join('') || empty('暂无详情');
 
-  const stream302 = `${location.origin}/song/url/v1/302?id=${encodeURIComponent(sid)}&level=exhigh`;
-  const copy302 = diag.querySelector('#si302copy');
-  if (copy302) copy302.onclick = () => {
-    try { navigator.clipboard.writeText(stream302); toast('已复制媒体地址'); }
-    catch { toast(stream302.slice(0, 60)); }
+  diag.querySelector('#si302copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(stream302); toast('已复制音乐地址'); }
+    catch { toast('复制失败，请检查浏览器剪贴板权限'); }
   };
-  const play302 = diag.querySelector('#si302play');
-  if (play302) play302.onclick = () => { window.open(stream302, '_blank'); };
+  diag.querySelector('#si302play').onclick = () => window.open(stream302, '_blank', 'noopener');
 
-  // 交互：跳副歌 / 播相似
-  const cho2 = diag.querySelector('#siChorus');
-  if (cho2) cho2.onclick = () => {
-    const ms = Number(cho2.dataset.t) || 0;
-    try { player.seek(ms / 1000); toast(`已跳到副歌 ${fmtTime(ms)}`); } catch { toast('播放器未就绪'); }
-  };
+  diag.querySelectorAll('.cm-si-chorus').forEach(button => {
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const ms = Number(button.dataset.t);
+        const ok = await seekSongChorus(meta, ms);
+        toast(ok ? `已跳到副歌 ${fmtTime(ms)}` : '暂时无法跳转，请等待播放就绪后重试');
+      } catch { toast('暂时无法跳转，请稍后重试'); }
+      finally { button.disabled = false; }
+    };
+  });
   diag.querySelectorAll('#siSimi .cm-si-simi-i').forEach(el => {
     el.onclick = () => { player.playList(simiSongs, +el.dataset.i); diag.open = false; };
   });
-  const altRow = diag.querySelector('#siAlt .cm-si-simi-i');
-  if (altRow) altRow.onclick = () => { player.playList(altSongs, 0); diag.open = false; };
+  diag.querySelectorAll('#siAlt .cm-si-version').forEach(button => {
+    button.onclick = () => { player.playList(altSongs, Number(button.dataset.i)); diag.open = false; };
+  });
   // 乐谱：点开才拉谱面图片（/sheet/preview），避免打开抽屉就下载几十张图
   diag.querySelectorAll('.cm-si-sheet').forEach(el => {
     el.onclick = async () => {

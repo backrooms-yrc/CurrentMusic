@@ -26,8 +26,8 @@ export async function render(el, params) {
       const isNcm = p.source === 'ncm';
       title = p.name;
       badge = isNcm ? '<span class="cm-ncmbadge">网易云</span>' : '';
-      desc = (p.description ? p.description + ' · ' : '') + `共 ${p.tracks.length} 首`;
       songs = p.tracks || [];
+      desc = (p.description ? p.description + ' · ' : '') + `共 ${songs.length} 首`;
       cover = p.cover || '';
       shareKind = 'local-playlist';
       shareSub = 'CurrentMusic 歌单';
@@ -128,6 +128,7 @@ export async function render(el, params) {
   };
 
   await renderSongList(list, songs, {
+    deferStatus: true,
     likeSource: id === 'likes' ? 'local' : undefined,
     onPlay: i => player.playList(songs, i),
     onRemove: removable ? async i => {

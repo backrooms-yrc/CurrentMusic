@@ -48,8 +48,8 @@ export const isCasting = () => S.casting;
 // （用户反馈的"恐怖慢放"即此）。服务端也会按文件头实测规格拦截这类档位。
 const CAST_LADDER = ['lossless', 'exhigh', 'standard'];
 const LEVEL_LABEL = {
-  jymaster: '超清母带', jyeffect: '臻音全景声', sky: '沉浸环绕声',
-  hires: '高清臻音', lossless: '无损', exhigh: '极高 320k', standard: '标准 128k',
+  jymaster: '超清母带', jyeffect: '高清臻音', sky: '沉浸环绕声',
+  hires: 'Hi-Res', lossless: '无损', exhigh: '极高 320k', standard: '标准 128k',
 };
 
 /** 用户偏好：'best'（默认，从最高档开始）或某个具体档位（用户手动指定后不再自动降级）。 */
