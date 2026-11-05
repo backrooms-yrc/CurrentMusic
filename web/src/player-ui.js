@@ -66,21 +66,28 @@ function sbPlayIcon() {
     : (player.isPlaying() ? AM_ICON.pause : AM_ICON.play);
 }
 
-// 音量：CurrentMusic 默认跟随系统；这里把滑块映射到单例 audio，
-// 记住上次值，并在换歌（audio 元素被替换）后重新应用。
+// 滑块属于翱翔鸟主题。离开时恢复进入主题前的媒体音量。
+let volumeBeforeSoaringBird = null;
 function savedVolume() {
   const raw = localStorage.getItem('cm.volume');
   const v = raw == null || raw.trim() === '' ? NaN : Number(raw);
   return Number.isFinite(v) && v >= 0 && v <= 1 ? v : null;
 }
-function applyVolume() {
+function syncThemeVolume() {
   const a = player.audio;
   if (!a) return;
-  const v = savedVolume();
+  let v;
+  if (isSoaringBirdTheme()) {
+    if (volumeBeforeSoaringBird == null) volumeBeforeSoaringBird = a.volume;
+    v = savedVolume();
+  } else {
+    v = volumeBeforeSoaringBird;
+    volumeBeforeSoaringBird = null;
+  }
   if (v == null) return;
   try { a.volume = v; } catch { /* iOS 只读 */ }
 }
-on('song', applyVolume);
+on('song', syncThemeVolume);
 
 // 播放页波形：由**真实音频频谱**驱动（见 waveform.js），占位只有一张 canvas。
 // 之前这里是一组固定高度的柱子 + CSS 呼吸动画 —— 那与音乐无关，只是看起来在动；
@@ -1190,7 +1197,6 @@ async function openFull() {
   if (vol) {
     const paintVol = () => vol.style.setProperty('--vol', (Number(vol.value) * 100) + '%');
     paintVol();
-    applyVolume();
     vol.addEventListener('input', () => {
       const v = Number(vol.value);
       paintVol();
@@ -1890,10 +1896,12 @@ export async function addToPlaylist(songs) {
 }
 
 export function initPlayerUI() {
+  syncThemeVolume();
   renderMini();
   applyDynamicScheme();   // 启动即随上次播放的封面取色（配色为 dynamic 时）
   // 切换皮肤时若播放页正开着：按新主题重建一次结构与背景（其它皮肤走原模板，等价于原样重开）
   document.addEventListener('cm-uipreset', () => {
+    syncThemeVolume();
     const ov = overlay();
     if (ov && !ov.hidden) openFull();
     // 迷你播放条是**按主题生成不同 DOM** 的：切换皮肤后必须强制重建，

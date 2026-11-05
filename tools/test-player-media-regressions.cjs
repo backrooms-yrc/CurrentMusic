@@ -92,6 +92,21 @@ for (let i = 0; i < sampleRate * seconds; i++) pcm.writeInt16LE(Math.round(32767
     assert(unchanged.sameMedia && unchanged.sameEq && unchanged.sameUrl);
     assert.equal(unchanged.volume, .35); assert.equal(unchanged.level, 'lossless'); assert.equal(unchanged.quality, 'lossless');
     assert(Math.abs(unchanged.rmsRatio - 1) < .05, JSON.stringify(unchanged));
+    for (const preset of ['cmx', 'frost', 'glass', 'md3']) {
+      await page.evaluate(() => {
+        localStorage.setItem('cm.volume', '0');
+        MiniTest.setUiPreset('soaringbird');
+      });
+      assert.equal(await page.evaluate(() => MiniTest.player.audio.volume), 0);
+      await page.evaluate(key => MiniTest.setUiPreset(key), preset);
+      assert.deepEqual(await page.evaluate(() => ({
+        volume: MiniTest.player.audio.volume,
+        sameMedia: MiniTest.player.audio === initialMedia,
+        playing: !MiniTest.player.audio.paused,
+        saved: localStorage.getItem('cm.volume'),
+      })), { volume: .35, sameMedia: true, playing: true, saved: '0' });
+    }
+    assert(await page.evaluate(async () => Math.abs(await rms() / beforeRms - 1) < .05), 'leaving the theme must restore audible PCM');
     await page.evaluate(() => MiniTest.player.pause());
     // Frequency compensation must rebuild even when only the sample rate changes.
     await page.addScriptTag({ content: waveCode });

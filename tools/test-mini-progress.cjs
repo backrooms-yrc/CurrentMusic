@@ -13,6 +13,7 @@ const assets = buildSync({ stdin: { resolveDir: root, contents: `
   import { initPlayerUI } from './web/src/player-ui.js';
   export { player, tick, notifyState, setClockSource } from './web/src/player.js';
   export { api, auth, settings } from './web/src/api.js';
+  export { setUiPreset } from './web/src/uipreset.js';
   export { ensureNcmLiked, isNcmLiked, setNcmLiked, resetNcmLiked, resetNcmBound } from './web/src/ui.js';
   export { render as renderSearch } from './web/src/pages/search.js';
   initPlayerUI();
