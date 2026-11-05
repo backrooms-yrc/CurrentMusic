@@ -1,93 +1,155 @@
+<div align="center">
+
+<img src="assets/brand/currentmusic-icon.png" width="96" height="96" alt="CurrentMusic 标志">
+
 # CurrentMusic
 
-![CurrentMusic](assets/brand/currentmusic-icon.png)
+**用浏览器听歌，也可以搭建自己的音乐服务。**
 
-CurrentMusic 的完整开源仓库：Python 后端、Web 播放器、Android WebView 应用、Windows 原生客户端、官网与 API 文档。项目自有代码采用 [MIT](LICENSE) 许可。
+逐字歌词 · 云端歌单 · 多人一起听
 
-- [Web 播放器](https://music.20110208.xyz/app/) · [API 文档](https://music.20110208.xyz/api-docs/)
-- [Android Releases](https://github.com/backrooms-yrc/CurrentMusic/releases) · [更新日志](CHANGELOG.md)
-- [后端部署](backend/README.md) · [Windows 客户端](windows/README.md) · [贡献指南](CONTRIBUTING.md)
+<p>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/backrooms-yrc/CurrentMusic?style=flat-square&amp;color=216359&amp;label=%E7%89%88%E6%9C%AC" alt="最新发布版本"></a>
+  <a href="https://github.com/backrooms-yrc/CurrentMusic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/backrooms-yrc/CurrentMusic/ci.yml?branch=main&amp;style=flat-square&amp;label=CI" alt="主分支构建状态"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-216359?style=flat-square" alt="MIT 许可"></a>
+</p>
 
-公开库保留原前端壳的提交、标签与 Releases；后端和其他组件以经过审查的源码快照加入。历史私有仓库继续保密，不合并其 Git 历史。运行数据、账号 cookie、服务凭据与官方签名密钥不随代码分发。
+**[打开 Web 播放器](https://music.20110208.xyz/app/)** · **[社区客户端 CurrentMusicX](https://github.com/bileizhen/CurrentMusicX)**
 
-## 目录
+[界面预览](#界面预览) · [功能一览](#功能一览) · [自托管与构建](#自托管与构建) · [API 文档](https://music.20110208.xyz/api-docs/)
 
-| 目录 | 内容 |
+</div>
+
+## 界面预览
+
+<p align="center">
+  <a href="docs/screenshots/readme-web-home.png"><img src="docs/screenshots/readme-web-home.png" width="300" alt="CurrentMusic Web 手机首页，显示一键开听、每日推荐与排行榜"></a>
+  <a href="docs/screenshots/readme-web-player.png"><img src="docs/screenshots/readme-web-player.png" width="300" alt="CurrentMusic Web 手机播放页，显示潮汐线封面、音频进度和播放控制"></a>
+</p>
+
+<p align="center"><sub>当前 Web 界面 · 演示曲库 · 点击图片查看原图</sub></p>
+
+<details>
+<summary>查看桌面播放页</summary>
+
+<p align="center">
+  <a href="docs/screenshots/readme-web-desktop.png"><img src="docs/screenshots/readme-web-desktop.png" width="840" alt="CurrentMusic Web 桌面播放页，左侧为封面和播放控制，右侧为歌词"></a>
+</p>
+
+</details>
+
+## 开始使用
+
+- **Web 播放器**可直接在浏览器打开。登录 CurrentMusic 后，可以播放歌曲并同步红心、收藏、歌单和搜索历史。按需绑定网易云账号，即可使用对应的歌单和推荐。
+- **CurrentMusicX** 是社区维护的原生 Android 客户端。安装、兼容性和功能说明见其仓库。
+
+## 功能一览
+
+| 功能 | 支持能力 |
 | --- | --- |
-| `backend/` | 账号、通行密钥、网易云网关、播放/歌单、聊天/房间、通行证与 AI |
-| `web/` | Web 与 Android 共用的前端源码 |
-| `app/` | Java WebView 壳及可重建的前端静态资源 |
-| `windows/` | C# / WinUI 3 原生客户端及安装器源码 |
-| `deploy/` | systemd、Nginx、PHP 入口、环境变量与备份模板 |
-| `site/`、`api-docs/` | 官网与 API 文档站源码 |
-| `tools/`、`docs/` | 构建、验证、维护脚本与接口说明 |
+| **发现音乐** | 分类搜索、按歌词搜歌、每日推荐、排行榜、私人漫游与心动模式。 |
+| **播放与歌词** | 音质选择、自动音源回退、逐字歌词与翻译、音质资料、副歌跳转及版本推荐。 |
+| **整理曲库** | 自建歌单、红心、收藏、最近播放和听歌统计，支持绑定网易云。 |
+| **一起听与分享** | 房间内同步播放和管理队列，生成歌曲链接、方块或沉浸式分享图。 |
+| **外观与交互** | 深浅主题、封面取色、玻璃效果、迷你播放器，以及手机和平板、桌面的响应式布局。 |
+| **账号与交流** | 通行密钥、两步验证、社区动态、聊天室和可选 AI 助手。 |
 
-## 本地启动后端
+## 自托管与构建
 
-需要 Python 3.11+。先在仓库根目录执行：
+### 启动后端
+
+在仓库根目录执行以下命令。后端需要 Python 3.11+。
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-python3 -m pip install -r deploy/requirements-auth.txt
+python3 -m pip install -r deploy/requirements-auth.txt -r deploy/requirements-search.txt
 mkdir -p data
 cp deploy/backend.env.example data/backend.env
-# 编辑 data/backend.env，设置 CM_DATA_DIR/CM_DB 等路径为当前实例的绝对路径。
-# 在初始化和启动之前加载同一份配置。
-set -a; . data/backend.env; set +a
+# 编辑 data/backend.env，将 CM_DATA_DIR、CM_DB 等路径设为当前实例的绝对路径。
+set -a
+. data/backend.env
+set +a
 python3 backend/manage.py init-db
 python3 backend/manage.py create-owner admin --nickname 管理员
 python3 backend/cm_server.py
 ```
 
-后端默认监听 `127.0.0.1:3010`；`GET /health` 可检查存活。创建站长时未提供密码会生成随机密码并仅显示一次。生产部署、外部服务和反向代理配置见 [backend/README.md](backend/README.md) 与 [deploy/README.md](deploy/README.md)。
+后端默认监听 `127.0.0.1:3010`，可用 `GET /health` 检查状态。创建站长时省略密码会生成随机密码并显示一次。
 
-网易云 API 是独立部署的上游服务，通过 `CM_NCM_BASE` 指定；它的源码和登录 cookie 不包含在本仓库。AI、SMTP、SMS、分享图与 LDDC 均按需配置；没有相应配置时对应能力不可用或降级。账号、歌单等本地能力不依赖这些服务。
+音乐功能通过 `CM_NCM_BASE` 连接独立部署的网易云 API。账号、歌单等本地功能可单独运行，AI、邮件、短信、分享图和 LDDC 按需配置。生产部署和反向代理见 [后端说明](backend/README.md) 与 [部署模板](deploy/README.md)。
 
-## Web 与 Android
+### 构建 Web
 
-需要 Node.js 20+；Android 构建另需 JDK 17、Android SDK platform 34 和 build-tools 34.0.0。
+使用 Node.js 20+ 在仓库根目录构建。
 
 ```bash
 npm --prefix web ci
 python3 tools/check-js-refs.py
 npm --prefix web run build
-# 只部署 Web：先同步资源，再切换带内容指纹的 index.html。
 python3 tools/deploy-web.py --target data/app
+```
 
-# Android：版本默认读取 web/src/version.js，也可显式设置 VER_NAME/VER_CODE。
+前端产物写入 `app/src/main/assets/www/`。部署脚本会先同步静态资源，再切换带内容指纹的首页。
+
+<details>
+<summary>Android 壳、官网与文档站构建</summary>
+
+Android 构建需要 JDK 17、Android SDK Platform 34 和 Build Tools 34.0.0，最低支持 Android 7.0（API 24）。
+
+```bash
 export ANDROID_HOME=/path/to/android-sdk
 bash build.sh
 ```
 
-前端产物位于 `app/src/main/assets/www/`；APK 位于 `dist/`。首次 Android 构建会创建本地自签名密钥；自行签名的安装包无法覆盖官方签名版本。签名密码通过 `CM_KS_PASS` 配置，不要提交密钥。Android 最低版本为 7.0（API 24）。客户端可在设置中切换服务器。
-
-## 官网与文档
+APK 写入 `dist/`。版本默认取自 `web/src/version.js`，也可通过 `VER_NAME` 和 `VER_CODE` 设置。首次本地构建会创建自签名密钥，升级时需使用相同签名。签名密码通过 `CM_KS_PASS` 配置，密钥和密码保存在本机。
 
 ```bash
-# 官网复用 web/node_modules，输出到 data/www。
+# 官网复用 Web 依赖，输出到 data/www。
 node site/build.mjs
-# 文档可独立从当前路由和登记表构建。
+
 npm --prefix api-docs ci
 npm --prefix api-docs run build
 npm --prefix api-docs run publish
 ```
 
-如需完整上游参数摘录，构建文档时设置 `NCM_API_DIR` 指向独立的 api-enhanced 源码目录。缺失上游源码时仍生成自有接口、权限登记与专题，明确标注上游资料未附带。见 [文档构建说明](api-docs/README.md)。
+文档从当前后端路由和登记表生成。构建时可用 `NCM_API_DIR` 指定独立的 api-enhanced 源码目录，加入上游接口参数摘录。详见 [文档构建说明](api-docs/README.md)。
 
-## 验证与安全
+</details>
+
+<details>
+<summary>仓库目录</summary>
+
+| 目录 | 内容 |
+| --- | --- |
+| `backend/` | Python 后端、账号、网易云网关、播放、房间、通行证与 AI |
+| `web/` | Web 与 Android 共用界面 |
+| `app/` | Java WebView 壳及前端静态资源 |
+| `windows/` | C# / WinUI 3 原生客户端及安装器源码 |
+| `site/`、`api-docs/` | 官网与 API 文档站 |
+| `deploy/` | systemd、Nginx、环境变量与备份模板 |
+| `tools/`、`docs/` | 构建、验证、维护脚本与接口说明 |
+
+</details>
+
+## 参与贡献
+
+欢迎通过 Issue 反馈问题或提交 PR。提交前按改动范围运行构建与回归检查。后端测试使用临时数据库和数据目录。 [反馈问题](https://github.com/backrooms-yrc/CurrentMusic/issues) · [贡献指南](CONTRIBUTING.md) · [更新日志](CHANGELOG.md)
+
+<details>
+<summary>常用验证命令</summary>
 
 ```bash
-tools/run-tests.sh                  # 强制使用临时数据库与数据目录
+tools/run-tests.sh
 python3 tools/test-api-docs.py
 python3 tools/test-open-source.py
-python3 tools/check-open-source.py   # 检查所有已跟踪文件；只报告位置，不打印密钥
+python3 tools/check-open-source.py
 ```
 
-贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题见 [SECURITY.md](SECURITY.md)，公开边界与迁移记录见 [开源清单](docs/open-source-checklist.md)。媒体与账号写操作的 RealIP 传递方式见 [docs/realip.md](docs/realip.md)。
+</details>
 
-## 许可与第三方资源
+主仓库保留了原公开前端仓库的提交、标签与 Releases，后端及其他组件以审查后的源码快照加入。运行数据和服务凭据保留在部署环境。 [公开边界与迁移记录](docs/open-source-checklist.md) · [安全问题报告](SECURITY.md) · [RealIP 说明](docs/realip.md)
 
-项目自有代码使用 [MIT](LICENSE)。依赖、图标字体、上游文档与可选服务保留各自许可，详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。LDDC 独立安装并通过本机 HTTP 连接，不包含其源码。挂件目录只提供元数据；第三方图片、音乐、用户头像与其他服务内容不属于 MIT 授权范围。
+## 开源与致谢
 
-CurrentMusicX 由社区开发者在 [bileizhen/CurrentMusicX](https://github.com/bileizhen/CurrentMusicX) 独立维护，其仓库与发布流程保持独立。
+项目自有代码采用 MIT。上游文档、依赖、字体和独立服务保留各自许可。LDDC 作为独立服务接入，音乐、封面、用户头像等内容遵循各自授权。 [MIT 许可](LICENSE) · [第三方声明](THIRD_PARTY_NOTICES.md)
