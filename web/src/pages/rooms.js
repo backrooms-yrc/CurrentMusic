@@ -18,7 +18,7 @@ export function render(el, params) {
       <div class="cm-room-hero-t">一起听</div>
       <div class="cm-room-hero-s">多人实时同步播放 · 每间最多 200 人</div>
       <div class="cm-room-hero-acts">
-        <mdui-button variant="filled" id="createRoom"><span class="material-icons-outlined">add</span>创建房间</mdui-button>
+        <mdui-button variant="filled" id="createRoom"><span class="material-icons-outlined" slot="icon" aria-hidden="true">add</span>创建房间</mdui-button>
       </div>
     </div>
     <div class="cm-adminbar">
@@ -30,7 +30,7 @@ export function render(el, params) {
         <mdui-button id="rPublic">房间广场</mdui-button>
         <mdui-button id="rMine">我的房间</mdui-button>
       </div>
-      <mdui-button-icon id="rRefresh" icon="refresh" aria-label="刷新"></mdui-button-icon>
+      <mdui-button-icon id="rRefresh" icon="refresh--outlined" title="刷新房间列表" aria-label="刷新房间列表"></mdui-button-icon>
     </div>
     <p id="roomHint" class="cm-room-hint" hidden>无人活动满 30 分钟后自动归档。归档房间可随时恢复或删除。</p>
     <div id="roomList">${skelGrid(4)}</div>

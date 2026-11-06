@@ -52,9 +52,16 @@ export async function render(el, [roomId] = []) {
   window.addEventListener('cm-authchange', onAuthChange);
   window.addEventListener('storage', onAuthChange);
 
-  const entry = (message, button = '') => {
-    el.innerHTML = `<div class="cm-empty">${esc(message)}<div class="cm-room-actions">
-      <mdui-button href="#/rooms">返回广场</mdui-button>${button}</div></div>`;
+  const entry = (message, { icon = 'headphones', description = '', form = '', action = '' } = {}) => {
+    el.innerHTML = `<section class="cm-room-page cm-room-panel cm-room-gate">
+      <span class="material-icons-outlined cm-room-gate-icon" aria-hidden="true">${icon}</span>
+      <h1>${esc(message)}</h1>
+      ${description ? `<p>${esc(description)}</p>` : ''}
+      ${form}
+      <div class="cm-room-actions">
+        <mdui-button href="#/rooms" icon="arrow_back--outlined">返回广场</mdui-button>${action}
+      </div>
+    </section>`;
   };
 
   el.innerHTML = skelRoom();
@@ -62,8 +69,10 @@ export async function render(el, [roomId] = []) {
     const detail = await roomApi.detail(roomId);
     if (!active) return;
     if (detail.room.archivedAt) {
-      entry(closeMessages[detail.room.archiveReason] || '房间已归档',
-        '<mdui-button variant="filled" id="rReopen">恢复房间</mdui-button>');
+      entry(closeMessages[detail.room.archiveReason] || '房间已归档', {
+        icon: 'archive', description: '恢复后可继续使用原房间和点歌队列。',
+        action: '<mdui-button variant="filled" icon="unarchive--outlined" id="rReopen">恢复房间</mdui-button>',
+      });
       el.querySelector('#rReopen').onclick = async () => {
         try {
           await roomApi.reopen(roomId);
@@ -80,13 +89,16 @@ export async function render(el, [roomId] = []) {
     if (detail.role) {
       enter(detail);
     } else if (detail.room.joinLocked && detail.room.ownerId !== uid) {
-      entry('房间已锁定，暂不接受新成员');
+      entry('房间已锁定', { icon: 'lock', description: '房主暂时关闭了新成员加入。' });
     } else if (detail.room.hasPassword && detail.room.ownerId !== uid) {
-      entry(detail.room.name, `<form class="cm-room-entry" id="rJoin">
-        <mdui-text-field id="rPassword" label="房间密码" maxlength="128" variant="outlined" type="password"></mdui-text-field>
-        <mdui-button type="submit" variant="filled" id="rSubmitJoin">加入</mdui-button>
-        <div id="rJoinError" role="status"></div>
-      </form>`);
+      entry(detail.room.name, {
+        icon: 'lock', description: '输入房主分享的密码后加入一起听。',
+        form: `<form class="cm-room-entry" id="rJoin">
+          <mdui-text-field id="rPassword" label="房间密码" maxlength="128" variant="outlined" type="password"></mdui-text-field>
+          <div id="rJoinError" role="status"></div>
+          <mdui-button type="submit" variant="filled" id="rSubmitJoin">加入房间</mdui-button>
+        </form>`,
+      });
       const form = el.querySelector('#rJoin');
       const password = el.querySelector('#rPassword');
       const submit = el.querySelector('#rSubmitJoin');
@@ -129,52 +141,93 @@ export async function render(el, [roomId] = []) {
     if (!player.audio.paused) player.pause();
 
     el.innerHTML = `
-      <div class="cm-rtop">
-        <div class="cm-rtop-main">
-          <div class="cm-rname"><span id="rName"></span> <span class="cm-tag" id="rMode" hidden></span></div>
-          <div class="cm-rsub">
-            <span>房间号 <b>${esc(room.code)}</b></span>
-            <span id="rMembers"></span>
-            <span id="rSync" class="cm-rsync" role="status">连接中…</span>
+      <div class="cm-room-page">
+        <header class="cm-rtop">
+          <div>
+            <a class="cm-room-back" href="#/rooms"><span class="material-icons-outlined" aria-hidden="true">arrow_back</span>房间广场</a>
+            <h1 class="cm-rname" id="rName"></h1>
+            <div class="cm-rsub">
+              <span class="cm-room-code">房间号 <b>${esc(room.code)}</b></span>
+              <span class="cm-tag" id="rMode" hidden></span>
+            </div>
           </div>
+          <div class="cm-rtop-acts">
+            <mdui-button-icon variant="tonal" icon="share--outlined" id="rShare" title="复制邀请链接" aria-label="复制邀请链接"></mdui-button-icon>
+            <mdui-button-icon variant="tonal" icon="settings--outlined" id="rSettings" title="房间设置" aria-label="房间设置"></mdui-button-icon>
+            <mdui-button-icon variant="tonal" icon="logout--outlined" id="rLeave" title="离开房间" aria-label="离开房间"></mdui-button-icon>
+          </div>
+        </header>
+        <div class="cm-room-layout">
+          <div class="cm-room-main">
+            <section class="cm-rnow" aria-labelledby="rNowHeading">
+              <div class="cm-room-section-head">
+                <h2 id="rNowHeading">正在播放</h2>
+                <span id="rSync" class="cm-rsync" role="status">正在连接…</span>
+              </div>
+              <div class="cm-rnow-track">
+                <div class="cm-rnow-cover" id="rCover">
+                  <span class="material-icons-outlined" aria-hidden="true">music_note</span>
+                </div>
+                <div class="cm-rnow-main">
+                  <div class="cm-rnow-name" id="rTrackName"></div>
+                  <div class="cm-rnow-artist" id="rTrackArtist"></div>
+                </div>
+              </div>
+              <input class="cm-rnow-bar" id="rBar" type="range" min="0" max="1" step="any" value="0"
+                aria-label="播放进度" aria-valuetext="0:00" disabled>
+              <div class="cm-rnow-time"><span id="rCur">0:00</span><span id="rDur">0:00</span></div>
+              <div class="cm-rctrl" id="rControls">
+                <mdui-button-icon icon="skip_previous--outlined" id="rPrev" title="上一首" aria-label="上一首"></mdui-button-icon>
+                <mdui-button-icon variant="filled" icon="play_arrow--outlined" id="rPlay" title="播放" aria-label="播放"></mdui-button-icon>
+                <mdui-button-icon icon="skip_next--outlined" id="rNext" title="下一首" aria-label="下一首"></mdui-button-icon>
+                <span class="cm-rctrl-tip" id="rRole"></span>
+              </div>
+              <div class="cm-rctrl-follow" id="rFollow"><span class="material-icons-outlined" aria-hidden="true">headphones</span>跟随房主或管理员播放</div>
+              <mdui-button id="rEnable" variant="tonal" icon="volume_up--outlined" hidden>开启房间声音</mdui-button>
+            </section>
+            <section class="cm-room-panel" aria-labelledby="rQueueHeading">
+              <div class="cm-room-section-head">
+                <h2 id="rQueueHeading">点歌队列</h2>
+                <mdui-button id="rAddSong" variant="tonal" icon="search--outlined">搜索点歌</mdui-button>
+              </div>
+              <div id="rQueue"></div>
+            </section>
+          </div>
+          <section class="cm-room-panel" aria-labelledby="rMemberHeading">
+            <div class="cm-room-section-head">
+              <h2 id="rMemberHeading">在线成员</h2>
+              <span class="cm-room-online" id="rMembers"></span>
+            </div>
+            <div class="cm-rmembers" id="rMemberList"></div>
+          </section>
         </div>
-        <div class="cm-rtop-acts">
-          <mdui-button-icon icon="share" id="rShare" title="复制邀请链接" aria-label="复制邀请链接"></mdui-button-icon>
-          <mdui-button-icon icon="settings" id="rSettings" title="房间设置" aria-label="房间设置"></mdui-button-icon>
-          <mdui-button-icon icon="logout" id="rLeave" title="离开房间" aria-label="离开房间"></mdui-button-icon>
-        </div>
-      </div>
-      <div class="cm-rnow">
-        <div class="cm-rnow-cover" id="rCover"><span class="material-icons-outlined">music_note</span></div>
-        <div class="cm-rnow-main">
-          <div class="cm-rnow-name" id="rTrackName">等待开始播放…</div>
-          <div class="cm-rnow-artist" id="rTrackArtist"></div>
-          <div class="cm-rnow-bar" id="rBar"><i id="rProg"></i></div>
-          <div class="cm-rnow-time"><span id="rCur">0:00</span><span id="rDur">0:00</span></div>
-        </div>
-      </div>
-      <div class="cm-rctrl" id="rControls">
-        <mdui-button-icon icon="skip_previous" id="rPrev" title="上一首" aria-label="上一首"></mdui-button-icon>
-        <mdui-button-icon icon="play_arrow" id="rPlay" title="播放或暂停" aria-label="播放或暂停"></mdui-button-icon>
-        <mdui-button-icon icon="skip_next" id="rNext" title="下一首" aria-label="下一首"></mdui-button-icon>
-        <span class="cm-rctrl-tip" id="rRole"></span>
-      </div>
-      <div class="cm-rctrl-follow" id="rFollow">跟随房主或管理员播放</div>
-      <mdui-button id="rEnable" variant="tonal" hidden>开启房间声音</mdui-button>
-      <div class="cm-sec-head"><h2>点歌队列</h2>
-        <mdui-button id="rAddSong" variant="text" icon="search">搜索点歌</mdui-button></div>
-      <div id="rQueue"></div>
-      <div class="cm-sec-head"><h2>在线成员</h2></div>
-      <div class="cm-rmembers" id="rMemberList"></div>`;
+      </div>`;
 
     const get = (id) => el.querySelector('#' + id);
+    const progress = get('rBar');
+    let scrubbing = false;
+    let progressDuration = 0;
+    function showProgress(position) {
+      progress.style.setProperty('--room-progress', (progressDuration ? Math.min(100, position / progressDuration * 100) : 0) + '%');
+      const formatted = fmtDur(position);
+      progress.setAttribute('aria-valuetext', formatted);
+      get('rCur').textContent = formatted;
+    }
     const sync = new RoomSync(audio, ({ drift, position, duration }) => {
       const label = get('rSync');
-      const aligned = connected && Math.abs(drift) < 300;
-      label.textContent = connected ? (aligned ? '已同步' : '正在校准') : '正在连接…';
-      label.classList.toggle('ok', aligned);
-      get('rProg').style.width = duration ? Math.min(100, position / duration * 100) + '%' : '0%';
-      get('rCur').textContent = fmtDur(position);
+      const playing = sync.timeline?.playing;
+      const aligned = Math.abs(drift) < 300;
+      let status = '正在连接…';
+      if (connected) status = playing ? (aligned ? '已同步' : '正在校准') : '已连接';
+      if (label.textContent !== status) label.textContent = status;
+      label.classList.toggle('ok', connected && (!playing || aligned));
+      progressDuration = duration;
+      progress.max = duration || 1;
+      progress.disabled = !canControl() || !duration;
+      if (!scrubbing) {
+        progress.value = position;
+        showProgress(position);
+      }
       get('rDur').textContent = fmtDur(duration);
       if (connected && duration && position >= duration) advance();
     }, blocked => { if (active) get('rEnable').hidden = !blocked; });
@@ -190,18 +243,29 @@ export async function render(el, [roomId] = []) {
       if (active && [401, 403, 404].includes(e.status)) exit(e.message);
     }
 
+    const cover = get('rCover');
+    cover.addEventListener('error', e => {
+      if (e.target.tagName === 'IMG') e.target.remove();
+    }, true);
+
     function applyTimeline(tl, seq) {
       if (seq < timelineSeq) return;
       timelineSeq = seq;
       const meta = tl.trackMeta || {};
-      get('rTrackName').textContent = meta.name || '等待开始播放…';
-      get('rTrackArtist').textContent = meta.artists || '';
-      const cover = get('rCover');
-      if (cover.dataset.pic !== (meta.pic || '')) {
-        cover.dataset.pic = meta.pic || '';
-        cover.innerHTML = meta.pic ? `<img src="${esc(meta.pic)}" alt="">` : '<span class="material-icons-outlined">music_note</span>';
+      get('rTrackName').textContent = meta.name || '还没有开始播放';
+      get('rTrackArtist').textContent = meta.artists || (!tl.trackNcmId ? '点一首歌，开启一起听' : '');
+      const pic = meta.pic || '';
+      if ((cover.dataset.pic || '') !== pic) {
+        cover.dataset.pic = pic;
+        cover.querySelector('img')?.remove();
+        if (pic) cover.insertAdjacentHTML('beforeend', `<img src="${esc(pic)}" alt="">`);
       }
-      get('rPlay').setAttribute('icon', tl.playing ? 'pause' : 'play_arrow');
+      if (tl.trackRevision !== sync.timeline?.trackRevision) scrubbing = false;
+      const play = get('rPlay');
+      const label = tl.playing ? '暂停' : '播放';
+      play.setAttribute('icon', tl.playing ? 'pause--outlined' : 'play_arrow--outlined');
+      play.setAttribute('aria-label', label);
+      play.title = label;
       sync.applyTimeline(tl);
     }
 
@@ -215,7 +279,6 @@ export async function render(el, [roomId] = []) {
       get('rMode').hidden = !mode;
       get('rSettings').hidden = !isOwner();
       get('rControls').hidden = !canControl();
-      get('rBar').classList.toggle('seekable', canControl());
       get('rFollow').hidden = canControl();
       get('rRole').textContent = isOwner() ? '房主控播' : '管理员控播';
       const members = d.members || [];
@@ -224,13 +287,14 @@ export async function render(el, [roomId] = []) {
         <div class="cm-rmember">
           ${m.avatar || m.avatarDecoration ? avatarHTML(m, 36) : `<span class="cm-rmember-ph">${esc((m.nickname || '?')[0])}</span>`}
           <div class="cm-rmember-main">
-            <div class="cm-rmember-name">${esc(m.nickname || ('用户' + m.userId))}${userTags(m)}
-              ${m.role === 'owner' ? '<span class="cm-tag admin">房主</span>' : m.role === 'admin' ? '<span class="cm-tag">管理员</span>' : ''}
-              ${m.userId === uid ? '<span class="cm-tag">我</span>' : ''}
+            <div class="cm-rmember-name"><span>${esc(m.nickname || ('用户' + m.userId))}</span>${userTags(m)}</div>
+            <div class="cm-rmember-role">
+              ${m.role === 'owner' ? '<span class="cm-tag admin">房主</span>' : m.role === 'admin' ? '<span class="cm-tag">管理员</span>' : '<span>成员</span>'}
+              ${m.userId === uid ? '<span>· 我</span>' : ''}
             </div>
           </div>
           ${m.userId !== uid && (isOwner() || (canControl() && m.role === 'member'))
-            ? `<mdui-button-icon icon="more_vert" aria-label="成员操作" data-member="${m.userId}"></mdui-button-icon>` : ''}
+            ? `<mdui-button-icon icon="more_vert--outlined" title="成员操作" aria-label="成员操作" data-member="${m.userId}"></mdui-button-icon>` : ''}
         </div>`).join('');
       get('rMemberList').querySelectorAll('[data-member]').forEach(b => {
         b.onclick = () => { dialog = memberMenu(roomId, members.find(m => m.userId === +b.dataset.member), isOwner(), refresh); };
@@ -298,18 +362,24 @@ export async function render(el, [roomId] = []) {
     get('rPlay').onclick = () => control(sync.timeline.playing ? 'pause' : 'play');
     get('rNext').onclick = () => control('next');
     get('rPrev').onclick = () => control('prev');
-    get('rBar').onclick = async (e) => {
-      const duration = sync.timeline.trackMeta?.duration;
-      if (!active || !canControl() || !duration || changing) return;
-      const rect = get('rBar').getBoundingClientRect();
-      const position = Math.round(duration * Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)));
+    progress.oninput = () => {
+      scrubbing = true;
+      showProgress(progress.valueAsNumber);
+    };
+    progress.onblur = () => { scrubbing = false; };
+    progress.onchange = async () => {
+      if (!active || !canControl() || !scrubbing || changing) {
+        scrubbing = false;
+        return;
+      }
       changing = true;
       try {
-        const d = await roomApi.seek(roomId, position);
+        const d = await roomApi.seek(roomId, Math.round(progress.valueAsNumber));
         if (active) applyTimeline(d.timeline, d.seq);
       } catch (err) {
         if (active) toast(err.message);
       } finally {
+        scrubbing = false;
         changing = false;
       }
     };
@@ -381,10 +451,13 @@ function memberMenu(roomId, member, owner, refresh) {
 
 function renderQueue(box, queue, admin, run) {
   if (!queue.length) {
-    box.innerHTML = '<div class="cm-empty small">队列是空的，搜索歌曲开始点歌</div>';
+    box.innerHTML = `<div class="cm-room-empty">
+      <span class="material-icons-outlined" aria-hidden="true">queue_music</span>
+      <strong>队列还是空的</strong><span>搜索歌曲，把想听的歌加进来</span>
+    </div>`;
     return;
   }
-  const button = (action, label, icon, item, index = 0) => `<mdui-button-icon icon="${icon}" title="${label}"
+  const button = (action, label, icon, item, index = 0) => `<mdui-button-icon icon="${icon}--outlined" title="${label}"
     aria-label="${label}" data-act="${action}" data-qid="${item.id}" data-index="${index}"></mdui-button-icon>`;
   const queued = queue.filter(q => q.status === 'queued');
   const row = q => {
@@ -398,7 +471,7 @@ function renderQueue(box, queue, admin, run) {
           ${q.status === 'playing' ? '<span class="cm-tag admin">当前歌曲</span>' : ''}
         </div>
       </div>
-      <div class="cm-room-actions">
+      <div class="cm-rq-actions">
         ${admin && q.status === 'pending' ? button('approve', '采纳', 'check', q) + button('reject', '驳回', 'close', q) : ''}
         ${admin && idx > 0 ? button('up', '上移', 'arrow_upward', q, idx - 1) : ''}
         ${admin && idx >= 0 && idx < queued.length - 1 ? button('down', '下移', 'arrow_downward', q, idx + 1) : ''}
@@ -406,12 +479,14 @@ function renderQueue(box, queue, admin, run) {
       </div>
     </div>`;
   };
-  const section = (title, items) => items.length ? `<h3 class="cm-room-queue-title">${title}（${items.length}）</h3>${items.map(row).join('')}` : '';
+  const section = (title, items) => items.length ? `<div class="cm-rq-group"><h3 class="cm-room-queue-title">${title}<span>${items.length}</span></h3>${items.map(row).join('')}</div>` : '';
   const history = queue.filter(q => q.status === 'played');
   const historyOpen = box.querySelector('details')?.open;
   box.innerHTML = queue.filter(q => q.status === 'playing').map(row).join('')
     + section('待播放', queued) + section('待审批', queue.filter(q => q.status === 'pending'))
-    + (history.length ? `<details ${historyOpen ? 'open' : ''}><summary>播放历史（${history.length}）</summary>${history.map(row).join('')}</details>` : '');
+    + (history.length ? `<details class="cm-rq-history" ${historyOpen ? 'open' : ''}>
+      <summary>播放历史 <span>${history.length}</span></summary>${history.map(row).join('')}
+    </details>` : '');
   box.querySelectorAll('[data-act]').forEach(b => {
     b.onclick = async () => {
       b.disabled = true;
