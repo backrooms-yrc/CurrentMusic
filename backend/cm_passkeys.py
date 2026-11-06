@@ -1,9 +1,10 @@
-"""WebAuthn passkeys: UV required; persistent, single-use, origin/session-bound ceremonies."""
+"""WebAuthn passkeys for explicitly allowed web and Android origins."""
 import base64
 import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import time
 from urllib.parse import urlparse
@@ -17,6 +18,9 @@ from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, ResidentKe
 
 DEFAULT_ORIGINS = {'https://' + h for h in ('music.20110208.xyz', 'music.ctcehs.com',
             'currentmusic.geekertao.com', 'cm.bileizhen.top')}
+ANDROID_ORIGIN = re.compile(r'android:apk-key-hash:([A-Za-z0-9_-]{43})')
+DNS_LABEL = re.compile(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?')
+CHALLENGE_TTL = 300
 
 
 def configured_origins(value=None):
@@ -38,25 +42,60 @@ def configured_origins(value=None):
     return origins
 
 
+def b64(value):
+    return base64.urlsafe_b64encode(value).decode().rstrip('=')
+
+
+def configured_android_origins(web_origins, value=None):
+    if value is None:
+        value = os.environ.get('CM_PASSKEY_ANDROID_ORIGINS', '{}')
+    try:
+        origins = json.loads(value)
+    except ValueError as exc:
+        raise ValueError('CM_PASSKEY_ANDROID_ORIGINS must be a JSON object') from exc
+    if not isinstance(origins, dict):
+        raise ValueError('CM_PASSKEY_ANDROID_ORIGINS must be a JSON object')
+    allowed_rps = {urlparse(origin).hostname for origin in web_origins}
+    for origin, rp in origins.items():
+        match = ANDROID_ORIGIN.fullmatch(origin)
+        if not match or b64(base64.urlsafe_b64decode(match[1] + '=')) != match[1]:
+            raise ValueError('CM_PASSKEY_ANDROID_ORIGINS requires canonical SHA-256 certificate hashes')
+        if not isinstance(rp, str) or rp not in allowed_rps or len(rp) > 253:
+            raise ValueError('Android RP IDs must match a configured HTTPS hostname')
+        labels = rp.split('.')
+        if len(labels) < 2 or labels[-1].isdigit() or not all(DNS_LABEL.fullmatch(label) for label in labels):
+            raise ValueError('Android RP IDs must be DNS domain names')
+    return origins
+
+
 ORIGINS = configured_origins()
+ANDROID_ORIGINS = configured_android_origins(ORIGINS)
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS passkey_users(uid INTEGER PRIMARY KEY, handle BLOB NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS passkeys(id TEXT PRIMARY KEY,uid INTEGER NOT NULL,rp TEXT NOT NULL,
  public_key BLOB NOT NULL,counter INTEGER NOT NULL,name TEXT NOT NULL,created INTEGER NOT NULL,last_used INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS passkey_challenges(id TEXT PRIMARY KEY,kind TEXT NOT NULL,uid INTEGER,
- sid TEXT NOT NULL,origin TEXT NOT NULL,challenge BLOB NOT NULL,expires INTEGER NOT NULL);
+ sid TEXT NOT NULL,origin TEXT NOT NULL,challenge BLOB NOT NULL,expires INTEGER NOT NULL,rp TEXT);
 '''
 Error = cm_2fa.Error
 
-def b64(value):
-    return base64.urlsafe_b64encode(value).decode().rstrip('=')
-
 def connect():
     c = cm_db.connect()
-    c.executescript(SCHEMA)
+    try:
+        c.executescript(SCHEMA)
+        if 'rp' not in {col['name'] for col in c.execute('PRAGMA table_info(passkey_challenges)')}:
+            with c:
+                c.execute('BEGIN IMMEDIATE')
+                if 'rp' not in {col['name'] for col in c.execute('PRAGMA table_info(passkey_challenges)')}:
+                    c.execute('ALTER TABLE passkey_challenges ADD COLUMN rp TEXT')
+    except Exception:
+        c.close()
+        raise
     return c
 
 def origin_check(origin):
+    if origin in ANDROID_ORIGINS:
+        return ANDROID_ORIGINS[origin]
     if origin not in ORIGINS:
         raise Error('请在受支持的 HTTPS 网页入口使用通行密钥', 403)
     return urlparse(origin).hostname
@@ -109,11 +148,11 @@ def begin(origin, uid=None, sid='', password='', factor='', name=''):
         else:
             opts = generate_authentication_options(rp_id=rp, user_verification=UserVerificationRequirement.REQUIRED)
         ident = secrets.token_urlsafe(32)
-        c.execute('INSERT INTO passkey_challenges VALUES(?,?,?,?,?,?,?)',
-            (hashlib.sha256(ident.encode()).hexdigest(), 'register' if uid else 'login', uid,
-             hashlib.sha256(sid.encode()).hexdigest(), origin, opts.challenge, now+300))
+        c.execute('INSERT INTO passkey_challenges(id,kind,uid,sid,origin,challenge,expires,rp) VALUES(?,?,?,?,?,?,?,?)',
+            (hashlib.sha256(ident.encode()).hexdigest(), 'register' if uid is not None else 'login', uid,
+             hashlib.sha256(sid.encode()).hexdigest(), origin, opts.challenge, now + CHALLENGE_TTL, rp))
         c.commit()
-        return {'challengeToken': ident, 'publicKey': json.loads(options_to_json(opts))}
+        return {'challengeToken': ident, 'expiresIn': CHALLENGE_TTL, 'publicKey': json.loads(options_to_json(opts))}
     finally:
         c.close()
 
@@ -124,7 +163,12 @@ def finish(origin, ident, credential, uid=None, sid='', name='', device='', plat
         c.execute('BEGIN IMMEDIATE')
         key = hashlib.sha256(ident.encode()).hexdigest()
         row = c.execute('SELECT * FROM passkey_challenges WHERE id=?', (key,)).fetchone()
-        if not row or row['expires'] < time.time() or row['origin'] != origin or row['uid'] != uid or row['kind'] != ('register' if uid else 'login') or row['sid'] != hashlib.sha256(sid.encode()).hexdigest():
+        kind = 'register' if uid is not None else 'login'
+        if (not row or row['expires'] < time.time() or row['origin'] != origin or row['uid'] != uid
+                or row['kind'] != kind or row['sid'] != hashlib.sha256(sid.encode()).hexdigest()):
+            raise Error('通行密钥请求已过期或不匹配，请重新开始')
+        # Pending legacy HTTPS challenges use the RP derived from their unchanged origin.
+        if row['rp'] != rp and not (row['rp'] is None and origin in ORIGINS):
             raise Error('通行密钥请求已过期或不匹配，请重新开始')
         # Consume before signature validation, including failed attempts.
         c.execute('DELETE FROM passkey_challenges WHERE id=?', (key,)); c.commit()

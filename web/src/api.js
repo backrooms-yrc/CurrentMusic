@@ -306,10 +306,12 @@ export const api = {
   reportListen: (ncmId, body) => call('POST', `/plays/${ncmId}`, { body, auth: true, keepalive: true }),
   recentPlays: (limit = 50) => call('GET', `/plays/recent?limit=${limit}`, { auth: true }),
 
-  // 用户广场 / 公开主页（公开端点）
+  // 等级与试炼
   levelRules: () => call('GET', '/levels/rules'),
+  levelProgress: () => call('GET', '/levels/progress', { auth: true }),
   levelTrial: () => call('GET', '/levels/trial', { auth: true }),
   submitLevelTrial: (answers) => call('POST', '/levels/trial', { body: { answers }, auth: true }),
+  // 用户广场 / 公开主页（公开端点）
   userSquare: (query = '', sort = 'composite', offset = 0, limit = 30, listening = false) =>
     call('GET', `/users/square?query=${encodeURIComponent(query)}&sort=${sort}&offset=${offset}&limit=${limit}`
       + (listening ? '&listening=1' : '')),
@@ -343,6 +345,10 @@ export const api = {
   commentPost: (ncmId, content, commentId) => call('POST', `/ncmbind/comment/${ncmId}`, { body: { content, commentId }, auth: true }),
   commentLike: (ncmId, commentId, like) => call('POST', `/ncmbind/comment-like/${ncmId}`, { body: { commentId, like }, auth: true }),
   commentFloor: (ncmId, cid) => call('GET', `/ncm/comment/floor?id=${ncmId}&cid=${cid}`),
+  commentPage: params => call('GET', `/ncm/comments/page?${new URLSearchParams(params)}`, { auth: true }),
+  commentReplies: params => call('GET', `/ncm/comments/replies?${new URLSearchParams(params)}`, { auth: true }),
+  writeComment: (params, like = false) => call('POST', like ? '/ncm/comment/like' : '/ncm/comment',
+    { auth: true, body: { ...params, confirm: 1 } }),
   hotSearch: () => call('GET', '/ncm/hot'),
   commentDelete: (ncmId, commentId) => call('DELETE', `/ncmbind/comment/${ncmId}`, { body: { commentId }, auth: true }),
 

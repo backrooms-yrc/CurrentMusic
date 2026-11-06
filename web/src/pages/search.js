@@ -1,4 +1,4 @@
-// 搜索页：回车触发搜索 + 历史记录（不做逐字防抖——中间态查询会同时打爆上游与碎片化历史）
+// 搜索建议防抖，明确提交后才搜索并写入历史。
 //
 // 加载策略（本页性能的关键）：
 //   上游四个类型的耗时差异极大（实测 歌手 6.1s / 专辑 4.2s / 单曲 3.0s / 歌单 2.1s），
@@ -11,8 +11,8 @@
 //   · 显示更多：只把**新增条目**阶梯渐入，已有条目保持不动
 //   · TAB 栏就地更新计数而不整块重建，否则指示条的 cmTabIn 动画会被反复重播
 //   · prefers-reduced-motion 下全部跳过
-import { api } from '../api.js';
-import { esc, renderSongList, toast } from '../ui.js';
+import { api, ncmSongs } from '../api.js';
+import { esc, fmtCount, renderSongList, toast } from '../ui.js';
 import { player } from '../player.js';
 import { addToPlaylist } from '../player-ui.js';
 import { loadingMarkup, loadingCycle } from '../loading.js';
@@ -27,8 +27,11 @@ const TABS = [
   { k: 'album', label: '专辑', arr: 'albums' },
   { k: 'artist', label: '歌手', arr: 'artists' },
   { k: 'playlist', label: '歌单', arr: 'playlists' },
+  { k: 'lyric', label: '歌词', arr: 'songs' },
+  { k: 'match', label: '多重匹配' },
 ];
 const ARR = Object.fromEntries(TABS.map(t => [t.k, t.arr]));
+const BACKGROUND_TYPES = ['album', 'artist', 'playlist'];
 
 // 搜索结果骨架屏：保留歌曲行结构，避免请求期间结果区跳空
 const searchResultSkeleton = (n = 6) => `<div class="cm-search-result-skeleton" aria-busy="true" aria-label="搜索结果加载中">
@@ -37,6 +40,7 @@ const searchResultSkeleton = (n = 6) => `<div class="cm-search-result-skeleton" 
 </div>`;
 
 const panelLoading = () => '<div class="cmt-more-loading"><mdui-circular-progress></mdui-circular-progress> 加载中…</div>';
+const playSong = (songs, index) => player.playList(songs, index, { shuffleStart: false });
 
 /** 是否应减少动效。实时查询，用户改系统设置后无需重载页面。 */
 const reduceMotion = () => typeof matchMedia === 'function'
@@ -56,22 +60,29 @@ export async function render(el, params = []) {
   // 翱翔鸟Music：搜索框走 SwiftUI 样式（灰底圆角 + 放大镜），其余皮肤仍是 MD3 outlined
   const sbTheme = document.documentElement.getAttribute('data-ui-preset') === 'soaringbird';
   el.innerHTML = `
-    <div class="cm-search-bar">
+    <form class="cm-search-bar cm-search-submit">
       ${sbTheme
         ? `<label class="sb-search" for="kw">
              <span class="sb-search__icon material-icons-outlined" aria-hidden="true">search</span>
-             <input id="kw" type="search" placeholder="搜索歌曲 / 歌手 / 专辑" autocomplete="off" spellcheck="false" aria-label="搜索歌曲 / 歌手 / 专辑">
+             <input id="kw" type="search" placeholder="搜索歌曲 / 歌手 / 专辑" maxlength="100" enterkeyhint="search" autocomplete="off" spellcheck="false" aria-label="搜索歌曲 / 歌手 / 专辑">
            </label>`
-        : `<mdui-text-field id="kw" label="搜索歌曲 / 歌手 / 专辑" variant="outlined" clearable style="width:100%"></mdui-text-field>`}
-    </div>
+        : `<mdui-text-field id="kw" label="搜索歌曲 / 歌手 / 专辑" variant="outlined" maxlength="100" enterkeyhint="search" clearable></mdui-text-field>`}
+      <button type="submit" class="cm-search-go">搜索</button>
+    </form>
     <div id="sugBox"></div>
     <div id="histBox"></div>
-    <div class="cm-plsort" id="matchRow">
-      <span class="cm-plsort-l"><span class="material-icons-outlined">graphic_eq</span>听歌识曲式匹配</span>
-      <mdui-chip id="matchLocal">本地文件匹配</mdui-chip>
-      <mdui-chip id="matchMulti">多重匹配</mdui-chip>
-    </div>
-    <div id="matchBox"></div>
+    <details id="matchLocal" class="cm-search-local">
+      <summary>本地歌曲信息匹配</summary>
+      <form id="matchForm" class="cm-search-match-form">
+        <label>歌曲标题<input name="title" required placeholder="文件属性中的标题"></label>
+        <label>歌手<input name="artist"></label>
+        <label>专辑<input name="album"></label>
+        <label>时长（秒）<input name="duration" type="number" min="0.01" step="any" required></label>
+        <label>文件 MD5<input name="md5" pattern="[0-9a-fA-F]{32}" maxlength="32" required placeholder="32 位十六进制"></label>
+        <button class="cm-search-go" type="submit">匹配</button>
+      </form>
+      <div id="matchBox"></div>
+    </details>
     <div id="resultBox"></div>`;
 
   const input = el.querySelector('#kw');
@@ -79,7 +90,10 @@ export async function render(el, params = []) {
   const histBox = el.querySelector('#histBox');
   const resultBox = el.querySelector('#resultBox');
   let historyVisible = true;
-  const hotBox = document.createElement('div');
+  const hotBox = document.createElement('section');
+  hotBox.className = 'cm-hot-chart';
+  hotBox.setAttribute('aria-labelledby', 'searchHotTitle');
+  hotBox.hidden = true;
   histBox.after(hotBox);
 
   // 翱翔鸟Music：参考图二的 Apple Music 搜索页 —— 搜索框下方先给「类别浏览」彩色网格。
@@ -117,61 +131,80 @@ export async function render(el, params = []) {
   }
   renderCats();
 
-  // 两个"匹配"接口（/search/match 本地文件匹配、/search/multimatch 多重匹配）：
-  // 上游都要把音频指纹/文件摘要作为入参，浏览器端生成不了，所以这里**只做结果查询**，
-  // 参数由调用方粘贴（例如从桌面端工具算好后带过来），不伪造指纹。
+  // 本地匹配只提交歌曲信息和已有 MD5。
+  const local = el.querySelector('#matchLocal');
+  const matchForm = el.querySelector('#matchForm');
+  const matchButton = matchForm.querySelector('button');
   const matchBox = el.querySelector('#matchBox');
-  const runMatch = async (path, label) => {
-    matchBox.innerHTML = `<div class="cm-pe-field"><label>${label}：粘贴上游需要的指纹/摘要参数</label>
-      <input id="matchArg" placeholder="例如 md5 或 fingerprint（上游要求）"></div>
-      <div class="cm-pe-acts"><mdui-button variant="tonal" id="matchGo">查询</mdui-button></div>
-      <div class="cm-pe-hint" id="matchHint">没有指纹参数时上游会返回参数错误——这是预期行为，不做假数据。</div>`;
-    matchBox.querySelector('#matchGo').onclick = async () => {
-      const arg = matchBox.querySelector('#matchArg').value.trim();
-      const hint = matchBox.querySelector('#matchHint');
-      hint.textContent = '查询中…';
-      try {
-        const d = path === '/search/match'
-          ? await api.ncm('/search/match', { md5: arg })
-          : await api.ncm('/search/multimatch', { md5: arg });
-        hint.textContent = `返回：${JSON.stringify(d).slice(0, 200)}`;
-      } catch (e) { hint.textContent = `失败：${e.message}`; }
-    };
+  matchForm.onsubmit = async e => {
+    e.preventDefault();
+    if (matchButton.disabled) return;
+    const fields = new FormData(matchForm);
+    const query = Object.fromEntries(['title', 'artist', 'album', 'duration', 'md5'].map(k => [k, fields.get(k).trim()]));
+    if (!query.title) { toast('请输入歌曲标题'); return; }
+    matchButton.disabled = true;
+    matchBox.innerHTML = panelLoading();
+    try {
+      const data = await api.ncm('/search/match', query);
+      const songs = ncmSongs(data.result?.songs || []);
+      if (songs.length) await renderSongList(matchBox, songs, { deferStatus: true, onPlay: i => playSong(songs, i) });
+      else matchBox.innerHTML = '<div class="cm-empty">没有匹配到歌曲，请核对文件信息</div>';
+    } catch (e) { matchBox.innerHTML = `<div class="cm-empty">匹配失败：${esc(e.message)}</div>`; }
+    finally { matchButton.disabled = false; }
   };
-  el.querySelector('#matchLocal').onclick = () => runMatch('/search/match', '本地文件匹配');
-  el.querySelector('#matchMulti').onclick = () => runMatch('/search/multimatch', '多重匹配');
 
   // 默认搜索关键词（占位提示）：失败保持原 label，不影响使用
+  let defaultKeyword = '';
   api.searchDefault().then(d => {
-    const k = ((d.data || {}).realkeyword || (d.data || {}).showKeyword || '').trim();
-    if (k) {
-      const hint = `搜索歌曲 / 歌手 / 专辑（试试「${k}」）`;
+    defaultKeyword = (d.data?.realkeyword || d.data?.showKeyword || '').trim();
+    if (defaultKeyword) {
+      const hint = `试试「${d.data?.showKeyword || defaultKeyword}」`;
       if (input.tagName === 'INPUT') input.placeholder = hint;
-      else input.setAttribute('label', hint);
+      else input.setAttribute('placeholder', hint);
     }
   }).catch(() => {});
 
+  let hotRequest;
+  async function hotKeywords() {
+    const detail = await api.searchHotDetail().catch(() => null);
+    const rows = Array.isArray(detail?.data) ? detail.data.filter(item => item?.searchWord) : [];
+    if (rows.length) return rows;
+    const simple = await api.ncm('/search/hot').catch(() => null);
+    return (simple?.result?.hots || []).filter(item => item?.first).map(item => ({ searchWord: item.first }));
+  }
   async function renderHot() {
-    if ((input.value || '').trim() || (hotBox.dataset.for ?? '') !== '') return;
-    hotBox.innerHTML = '<div class="cm-loading"><mdui-linear-progress style="width:120px"></mdui-linear-progress></div>';
-    try {
-      // 优先用「热搜详情」（带热度分与标签）；不可用时回退到简略热搜
-      let chips = '';
-      try {
-        const data = (await api.searchHotDetail()).data || [];
-        chips = data.slice(0, 12).map((x, i) =>
-          `<span class="cm-hot" data-k="${esc(x.searchWord)}"><b>${i + 1}</b>${esc(x.searchWord)}</span>`).join('');
-      } catch { /* 回退 */ }
-      if (!chips) {
-        // 简略热搜的形状是 { result: { hots: [{ first }] } }
-        const hots = ((await api.ncm('/search/hot')).result || {}).hots || [];
-        chips = hots.slice(0, 12).map((x, i) =>
-          `<span class="cm-hot" data-k="${esc(x.first)}"><b>${i + 1}</b>${esc(x.first)}</span>`).join('');
-      }
-      hotBox.innerHTML = chips ? `<div class="cm-sec-head"><h2>热门搜索</h2></div>
-        <div class="cm-chips">${chips}</div>` : '';
-      hotBox.querySelectorAll('.cm-hot').forEach(c => { c.onclick = () => { input.value = c.dataset.k; input.blur(); doSearch(c.dataset.k); }; });
-    } catch { hotBox.innerHTML = ''; }
+    if (!historyVisible || (input.value || '').trim()) return;
+    hotRequest ||= hotKeywords().catch(() => []);
+    const rows = (await hotRequest).slice(0, 12);
+    if (!rows.length || !hotBox.isConnected || !historyVisible || (input.value || '').trim()) return;
+    hotBox.hidden = false;
+    if (hotBox.firstElementChild) return;
+    hotBox.innerHTML = `
+      <header class="cm-hot-head">
+        <span class="material-icons-outlined cm-hot-icon" aria-hidden="true">trending_up</span>
+        <div><h2 id="searchHotTitle">搜索热榜</h2><p>网易云音乐热门搜索</p></div>
+        <span class="cm-hot-count">TOP ${rows.length}</span>
+      </header>
+      <ol class="cm-hot-list" id="searchHotList" role="list">${rows.map(({ searchWord, content, score }, i) => `
+        <li${i >= 6 ? ' hidden' : ''}>
+          <button type="button" class="cm-hot" data-k="${esc(searchWord)}" title="${esc(searchWord)}">
+            <b class="cm-hot-rank">${String(i + 1).padStart(2, '0')}</b>
+            <span class="cm-hot-copy"><strong>${esc(searchWord)}</strong>${content ? `<small>${esc(content)}</small>` : ''}</span>
+            ${Number.isFinite(Number(score)) && Number(score) > 0 ? `<span class="cm-hot-score" title="热度 ${esc(score)}"><span class="material-icons-outlined" aria-hidden="true">local_fire_department</span>${fmtCount(Number(score))}</span>` : ''}
+            <span class="material-icons-outlined cm-hot-arrow" aria-hidden="true">chevron_right</span>
+          </button>
+        </li>`).join('')}</ol>
+      ${rows.length > 6 ? `<button type="button" class="cm-hot-more" aria-controls="searchHotList" aria-expanded="false">展开全部 ${rows.length} 项<span class="material-icons-outlined" aria-hidden="true">expand_more</span></button>` : ''}`;
+    hotBox.querySelectorAll('.cm-hot').forEach(c => { c.onclick = () => doSearch(c.dataset.k); });
+    const more = hotBox.querySelector('.cm-hot-more');
+    const extra = hotBox.querySelectorAll('.cm-hot-list li:nth-child(n+7)');
+    if (more) more.onclick = event => {
+      const expanded = more.getAttribute('aria-expanded') !== 'true';
+      extra.forEach(row => { row.hidden = !expanded; });
+      more.setAttribute('aria-expanded', String(expanded));
+      more.firstChild.textContent = expanded ? '收起榜单' : `展开全部 ${rows.length} 项`;
+      if (expanded && event.detail === 0) extra[0].querySelector('button').focus();
+    };
   }
 
   const renderHist = () => {
@@ -181,7 +214,7 @@ export async function render(el, params = []) {
       <div class="cm-chips">${h.map(k =>
         `<span class="cm-hist"><span class="cm-hist-k" data-k="${esc(k)}">${esc(k)}</span><i class="cm-hist-x" data-x="${esc(k)}"><span class="material-icons-outlined">close</span></i></span>`).join('')}</div>`;
     histBox.querySelector('#clearHist').onclick = () => { clearSearchHistory(); renderHist(); renderHot(); };
-    histBox.querySelectorAll('.cm-hist-k').forEach(c => { c.onclick = () => { input.value = c.dataset.k; input.blur(); doSearch(c.dataset.k); }; });
+    histBox.querySelectorAll('.cm-hist-k').forEach(c => { c.onclick = () => doSearch(c.dataset.k); });
     histBox.querySelectorAll('.cm-hist-x').forEach(x => {
       x.onclick = e => {
         e.stopPropagation();
@@ -197,16 +230,34 @@ export async function render(el, params = []) {
 
   /* ---------- 一次搜索的状态 ---------- */
   let S = null, searchCycle = null;                // { kw, items, total, more, loaded, loading, cur }
-  const newState = kw => ({ kw, items: {}, total: {}, more: {}, loaded: {}, loading: {}, cur: 'song' });
+  const newState = kw => ({ kw, items: {}, total: {}, more: {}, loaded: {}, loading: {}, pending: {}, offsets: {}, cur: 'song' });
 
   const panel = () => resultBox.querySelector('#srchPanel');
   const loadedCount = t => (S.items[t] || []).length;
 
   /** 取某一类型的一页（offset 为 0 时覆盖，否则追加）。返回本次新增条数。 */
   async function load(t, offset, state = S) {
+    if (t === 'match') {
+      const { result = {} } = await api.ncm('/search/multimatch', { keywords: state.kw });
+      const songs = ncmSongs(result.song || result.songs || []);
+      const types = [
+        ['artist', '歌手', 'artist'],
+        ['album', '专辑', 'album'],
+        ['playlist', '歌单', 'ncmpl'],
+      ];
+      state.items.match = songs.map(song => ({ song }));
+      for (const [key, label, route] of types) {
+        for (const item of result[key] || []) {
+          if (/^[1-9]\d*$/.test(String(item.id)) && item.name) {
+            state.items.match.push({ label, name: item.name, href: `#/${route}/${item.id}` });
+          }
+        }
+      }
+      state.loaded.match = true;
+      return;
+    }
     const d = await api.search(state.kw, offset, BATCH, t);
     const got = d[ARR[t]] || [];
-    state.offsets ||= {};
     state.offsets[t] = offset + got.length; // 补充的专辑曲目不消耗上游分页位置。
     if (t === 'song') {
       if (!offset) state.catalogSongs = d.catalogSongs || [];
@@ -214,18 +265,20 @@ export async function render(el, params = []) {
       const seen = new Set();
       state.items[t] = all.filter(s => { const id = String(s.ncm_id); if (seen.has(id)) return false; seen.add(id); return true; });
     } else state.items[t] = offset ? (state.items[t] || []).concat(got) : got;
-    state.total[t] = (d.totals?.[t] ?? state.offsets[t]) + (t === 'song' ? (state.catalogSongs || []).length : 0);
-    state.more[t] = !!(d.hasMore && d.hasMore[t]);
+    const countKey = t === 'lyric' ? 'song' : t;
+    state.total[t] = (d.totals?.[countKey] || state.offsets[t]) + (t === 'song' ? (state.catalogSongs || []).length : 0);
+    state.more[t] = got.length > 0 && !!d.hasMore?.[countKey];
     state.loaded[t] = true;
     return got.length;
   }
 
+  function firstPage(t, state = S) {
+    if (state.loaded[t]) return Promise.resolve();
+    return state.pending[t] ||= load(t, 0, state).finally(() => { delete state.pending[t]; });
+  }
+
   /** TAB 条数：未加载的类型不显示数字（避免先显示 0 再跳变）。 */
   const tabCount = t => (S.loaded[t] ? (S.total[t] || loadedCount(t)) : '');
-
-  /** 已加载且为空的类型不占 TAB 位；当前选中的始终保留。 */
-  const visibleTabs = () => TABS.filter(t =>
-    !S.loaded[t.k] || loadedCount(t.k) > 0 || t.k === S.cur);
 
   /**
    * 绘制 TAB 栏。
@@ -235,12 +288,11 @@ export async function render(el, params = []) {
   function renderTabs() {
     const box = resultBox.querySelector('#srchTabs');
     if (!box) return;
-    const list = visibleTabs();
-    const sig = list.map(t => t.k).join(',');
-    if (box.dataset.sig === sig && box.children.length === list.length) {
-      list.forEach((t, i) => {
+    if (box.children.length === TABS.length) {
+      TABS.forEach((t, i) => {
         const btn = box.children[i];
         btn.classList.toggle('on', t.k === S.cur);
+        btn.setAttribute('aria-pressed', String(t.k === S.cur));
         const n = tabCount(t.k);
         const badge = btn.querySelector('i');
         if (n === '') { if (badge) badge.remove(); }
@@ -249,10 +301,9 @@ export async function render(el, params = []) {
       });
       return;
     }
-    box.dataset.sig = sig;
-    box.innerHTML = list.map(t => {
+    box.innerHTML = TABS.map(t => {
       const n = tabCount(t.k);
-      return `<button class="cm-srchtab${t.k === S.cur ? ' on' : ''}" data-k="${t.k}">${t.label}${n !== '' ? `<i>${n}</i>` : ''}</button>`;
+      return `<button type="button" class="cm-srchtab${t.k === S.cur ? ' on' : ''}" data-k="${t.k}" aria-pressed="${t.k === S.cur}">${t.label}${n !== '' ? `<i>${n}</i>` : ''}</button>`;
     }).join('');
     box.querySelectorAll('.cm-srchtab').forEach(b => { b.onclick = () => selectTab(b.dataset.k); });
   }
@@ -306,19 +357,22 @@ export async function render(el, params = []) {
      约定：from = 0 建容器并画第一批；from > 0 只追加新增条目。
      items 为真时才给条目加渐入动画（切 TAB 由面板整体动画负责，避免双重动效）。 */
 
-  async function renderSongPanel(from, items) {
+  async function renderSongPanel(from, items, type) {
     const p = panel();
+    const songs = S.items[type] || [];
     if (!from) {
-      p.innerHTML = `<div class="cm-sec-head"><h2>单曲</h2>
+      p.innerHTML = `<div class="cm-sec-head"><h2>${type === 'lyric' ? '歌词命中' : '单曲'}</h2>
         <span class="cm-sec-more" id="addAll"><span class="material-icons-outlined">playlist_add</span> 全部收入歌单</span></div>
         <div id="songList"></div>`;
-      p.querySelector('#addAll').onclick = () => addToPlaylist(S.items.song || []);
-      refreshMore('song');
+      p.querySelector('#addAll').onclick = () => addToPlaylist(S.items[type] || []);
+      refreshMore(type);
     }
-    const rows = await renderSongList(p.querySelector('#songList'), S.items.song || [],
-      { from, deferStatus: true, onPlay: i => player.playList(S.items.song, i) });
+    const list = p.querySelector('#songList');
+    const rows = await renderSongList(list, songs,
+      { from, deferStatus: true, showLyric: type === 'lyric', onPlay: i => playSong(S.items[type], i) });
+    if (!list.isConnected || S?.cur !== type) return;
     // 追加时动画新增行；首次出结果时也渐入（那时没有面板整体动画）
-    if (from) { animateIn(rows); refreshMore('song'); }
+    if (from) { animateIn(rows); refreshMore(type); }
     else if (items) animateIn(rows);
   }
 
@@ -400,11 +454,27 @@ export async function render(el, params = []) {
     else if (items) animateIn(els);
   }
 
-  const RENDERERS = { song: renderSongPanel, album: renderAlbumPanel, artist: renderArtistPanel, playlist: renderPlaylistPanel };
+  function renderMatchPanel() {
+    const p = panel();
+    const items = S.items.match;
+    const songs = items.filter(item => item.song).map(item => item.song);
+    p.innerHTML = `<div class="cm-sec-head"><h2>关键词匹配</h2></div>
+      ${songs.length ? '<div id="matchSongs"></div>' : ''}
+      <div class="cm-search-links">${items.filter(item => !item.song).map(item =>
+        `<a href="${item.href}"><small>${item.label}</small><span>${esc(item.name)}</span></a>`).join('')}</div>`;
+    if (songs.length) renderSongList(p.querySelector('#matchSongs'), songs, { deferStatus: true, onPlay: i => playSong(songs, i) });
+  }
+
+  const RENDERERS = { song: renderSongPanel, lyric: renderSongPanel, album: renderAlbumPanel,
+    artist: renderArtistPanel, playlist: renderPlaylistPanel, match: renderMatchPanel };
 
   function renderPanel(from = 0, { items = false } = {}) {
-    const fn = RENDERERS[S.cur];
-    if (fn) fn(from, items);
+    const type = S.cur;
+    if (!loadedCount(type)) {
+      panel().innerHTML = `<div class="cm-empty">没有找到「${esc(S.kw)}」的${type === 'match' ? '匹配结果' : TABS.find(tab => tab.k === type).label}</div>`;
+      return;
+    }
+    RENDERERS[type](from, items, type);
   }
 
   /** 切 TAB：内容按切换方向轻微横移 + 淡入（左右顺序决定方向）。 */
@@ -416,151 +486,170 @@ export async function render(el, params = []) {
       { duration: 230, easing: EASE });
   }
 
-  async function selectTab(k) {
-    if (!S || S.cur === k) return;
+  let tabRun = 0;
+  async function selectTab(k, retry = false) {
+    if (!S || (S.cur === k && !retry)) return;
     const order = TABS.map(t => t.k);
     const dir = order.indexOf(k) > order.indexOf(S.cur) ? 1 : -1;
     S.cur = k;
+    const run = ++tabRun;
     renderTabs();
     if (!S.loaded[k]) {
       // 切到尚未取过的类型：按需取一次（首屏为了速度没有预取完）
       panel().innerHTML = panelLoading();
       const my = seq;
       try {
-        await load(k, 0);
+        await firstPage(k);
       } catch (e) {
-        if (my !== seq || S.cur !== k) return;
-        panel().innerHTML = `<div class="cm-empty">加载失败：${esc(e.message)}</div>`;
+        if (my !== seq || run !== tabRun || !el.isConnected) return;
+        renderSearchError(k, e);
         return;
       }
-      if (my !== seq || S.cur !== k) return;
+      if (my !== seq || run !== tabRun || !el.isConnected) return;
       renderTabs();
     }
     renderPanel(0, { items: false });
     animatePanel(dir);
   }
 
-  function renderShell() {
+  function renderSearchError(type, e) {
+    const p = panel();
+    p.innerHTML = `<div class="cm-empty">加载失败：${esc(e.message)}
+      <mdui-button id="searchRetry" variant="text">重试</mdui-button></div>`;
+    p.querySelector('#searchRetry').onclick = () => selectTab(type, true);
+  }
+
+  function renderShell(error) {
     resultBox.innerHTML = `
       <div class="cm-srchtabs" id="srchTabs"></div>
       <div id="srchPanel"></div>`;
     renderTabs();
-    renderPanel(0, { items: true });   // 首次出结果：条目阶梯渐入
+    if (error) renderSearchError('song', error);
+    else renderPanel(0, { items: true });
   }
 
-  const anyResult = () => TABS.some(t => loadedCount(t.k) > 0);
-
   async function doSearch(kw) {
+    kw = kw.trim().slice(0, 100);
+    if (!kw) { input.focus(); return; }
+    hideSuggestions();
+    input.value = kw;
+    input.blur();
+    if (searchCycle && S?.kw === kw) return;
     const my = ++seq;
     if (searchCycle) searchCycle.cancel();
     historyVisible = true;
     recordSearch(kw);
     renderHist();
-    hotBox.innerHTML = '';   // 有搜索内容后隐藏热搜
+    hotBox.hidden = true;
     catBox.style.display = 'none';
+    local.hidden = true;
     resultBox.innerHTML = searchResultSkeleton(6);
     const cycle = loadingCycle(resultBox.querySelector('.cm-search-loading'));
     searchCycle = cycle;
     S = newState(kw);
 
     // 首屏只等「单曲」：上游「歌手」实测可达 6s+，没必要让它拖住首屏
-    try {
-      await load('song', 0);
-    } catch (e) {
-      await cycle.finish();
-      if (my === seq) resultBox.innerHTML = `<div class="cm-empty">搜索失败：${esc(e.message)}</div>`;
-      return;
-    }
+    let error;
+    try { await firstPage('song'); } catch (e) { error = e; }
     if (my !== seq) return;
-
-    const others = TABS.filter(t => t.k !== 'song').map(t => t.k);
-    if (!loadedCount('song')) {
-      // 单曲为空：先把其余类型取回来再判断，避免先闪一下「没有结果」
-      await Promise.allSettled(others.map(t => load(t, 0)));
-      if (my !== seq) return;
-      const hit = TABS.find(t => loadedCount(t.k) > 0);
-      if (!hit) {
-        await cycle.finish();
-        if (my !== seq) return;
-        resultBox.innerHTML = `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`;
-        return;
-      }
-      S.cur = hit.k;
-    }
-
     await cycle.finish();
     if (my !== seq || !el.isConnected) return;
     searchCycle = null;
-    renderShell();
-    if (!anyResult()) {
-      resultBox.innerHTML = `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`;
-      return;
-    }
-
-    // 首屏已经出内容了，再在后台补齐其余类型（只为填 TAB 计数，不挡首屏）
-    if (loadedCount('song')) {
-      setTimeout(() => {
-        if (my !== seq) return;
-        others.forEach(t => {
-          if (S.loaded[t]) return;
-          load(t, 0).then(() => { if (my === seq) renderTabs(); }).catch(() => {});
-        });
-      }, 300);
-    }
+    renderShell(error);
+    // 歌词与多重匹配只在用户打开对应标签时请求。
+    setTimeout(() => {
+      if (my !== seq || !el.isConnected) return;
+      BACKGROUND_TYPES.forEach(t => {
+        firstPage(t).then(() => { if (my === seq && el.isConnected) renderTabs(); }).catch(() => {});
+      });
+    }, 300);
   }
 
-  // 输入不触发搜索：只有回车（或点击候选/热搜/历史词条这类明确动作）才发起请求
-  input.addEventListener('input', () => {
-    historyVisible = !(input.value || '').trim();
-    if (!(input.value || '').trim()) { seq++; if (searchCycle) searchCycle.cancel(); searchCycle = null; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; catBox.style.display = ''; renderHist(); renderHot(); return; }
-    // 输入中：候选词独占视野，历史/热搜让位（清空后由上面分支恢复）
+  let composing = false;
+  function editQuery() {
+    const kw = (input.value || '').trim();
+    historyVisible = !kw;
+    local.hidden = !!kw;
+    if (!kw) {
+      seq++;
+      if (searchCycle) searchCycle.cancel();
+      searchCycle = null;
+      S = null;
+      resultBox.innerHTML = '';
+      hideSuggestions();
+      catBox.style.display = '';
+      renderHist();
+      return;
+    }
     catBox.style.display = 'none';
-    histBox.innerHTML = ''; hotBox.innerHTML = '';
-    queueSuggest(input.value.trim());
+    histBox.innerHTML = ''; hotBox.hidden = true;
+    queueSuggest(kw);
+  }
+  input.addEventListener('compositionstart', () => { composing = true; hideSuggestions(); });
+  input.addEventListener('compositionend', () => { composing = false; editQuery(); });
+  input.addEventListener('input', e => { if (!composing && !e.isComposing) editQuery(); });
+  const submitSearch = () => doSearch((input.value || '').trim() || defaultKeyword);
+  el.querySelector('.cm-search-submit').addEventListener('submit', e => {
+    e.preventDefault();
+    if (!composing) submitSearch();
   });
   input.addEventListener('keydown', e => {
-    // 回车即搜并收起键盘——iOS 上键盘不收会盖住刚出的搜索结果
-    if (e.key === 'Enter') { const kw = (input.value || '').trim(); if (kw) { sugBox.innerHTML = ''; input.blur(); doSearch(kw); } }
+    if (composing || e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter') { e.preventDefault(); submitSearch(); }
+    if (e.key === 'Escape') hideSuggestions();
+    if (e.key === 'ArrowDown' && sugBox.firstElementChild) {
+      e.preventDefault();
+      sugBox.querySelector('button').focus();
+    }
   });
 
-  /* ---------- 搜索建议：输入防抖 300ms，逐字不发请求 ---------- */
+  /* ---------- 搜索建议 ---------- */
   let sugTimer = null, sugSeq = 0;
-  function queueSuggest(kw) {
+  function hideSuggestions() {
     clearTimeout(sugTimer);
+    sugSeq++;
     sugBox.innerHTML = '';
-    if (!kw) return;
+  }
+  function queueSuggest(kw) {
+    hideSuggestions();
+    const my = sugSeq;
+    const isCurrent = () => my === sugSeq && el.isConnected && (input.value || '').trim() === kw;
     sugTimer = setTimeout(async () => {
-      const my = ++sugSeq;
       try {
-        let words = [];
-        try {
-          const d = await api.searchSuggest(kw);
-          words = (((d || {}).result || {}).allMatch || []).map(x => x.keyword).filter(Boolean);
-        } catch { /* 回退 PC 端 */ }
+        const mobile = await api.searchSuggest(kw).catch(() => null);
+        if (!isCurrent()) return;
+        let words = (mobile?.result?.allMatch || []).map(x => x.keyword).filter(Boolean);
         if (!words.length) {
-          try {
-            const d2 = await api.ncm('/search/suggest/pc', { keywords: kw });
-            words = ((((d2 || {}).data || {}).suggests) || []).map(x => x.keyword || x.name).filter(Boolean);
-          } catch { /* 两路都失败 */ }
+          const pc = await api.ncm('/search/suggest/pc', { keyword: kw });
+          words = (pc?.data?.suggests || []).map(x => x.keyword).filter(Boolean);
         }
-        if (my !== sugSeq) return;                       // 过期响应丢弃
-        words = words.slice(0, 10);
-        if (!words.length || (input.value || '').trim() !== kw) { sugBox.innerHTML = ''; return; }
-        sugBox.innerHTML = `<div class="cm-sug" role="listbox" aria-label="搜索候选">${words.map(w =>
-          `<button type="button" class="cm-sug-item" role="option" data-k="${esc(w)}" aria-label="搜索 ${esc(w)}">` +
+        if (!isCurrent() || !words.length) return;
+        words = [...new Set(words)].slice(0, 10);
+        sugBox.innerHTML = `<div class="cm-sug" role="group" aria-label="搜索候选">${words.map(w =>
+          `<button type="button" class="cm-sug-item" data-k="${esc(w)}" aria-label="搜索 ${esc(w)}">` +
           `<span class="material-icons-outlined">search</span><span class="k">${esc(w)}</span></button>`).join('')}</div>`;
         sugBox.querySelectorAll('[data-k]').forEach(c => {
-          c.onclick = () => { input.value = c.dataset.k; sugBox.innerHTML = ''; input.blur(); doSearch(c.dataset.k); };
+          c.onclick = () => doSearch(c.dataset.k);
+          c.onkeydown = e => {
+            if (e.key === 'Escape') { hideSuggestions(); input.focus(); }
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+              e.preventDefault();
+              const target = e.key === 'ArrowUp' ? c.previousElementSibling || input : c.nextElementSibling;
+              target?.focus();
+            }
+          };
         });
-      } catch { if (my === sugSeq) sugBox.innerHTML = ''; }
+      } catch { if (isCurrent()) sugBox.innerHTML = ''; }
     }, 300);
   }
 
   // 从发现页等入口带关键词直达（#/search?q=xxx）
   const preset = ((params && params.query) || {}).q || '';
-  if (preset.trim()) { input.value = preset.trim(); doSearch(preset.trim()); }
+  if (preset.trim()) doSearch(preset);
 
   // 桌面端自动聚焦。触屏设备上程序化聚焦既弹不出键盘（iOS 需要用户手势），
   // 还会把页面滚到输入框、顶穿固定顶栏——反而添乱，只在有鼠标的设备上聚焦。
-  if (matchMedia('(hover: hover) and (pointer: fine)').matches) setTimeout(() => input.focus(), 100);
+  if (!preset.trim() && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    setTimeout(() => { if (input.isConnected && !S) input.focus(); }, 100);
+  }
 }

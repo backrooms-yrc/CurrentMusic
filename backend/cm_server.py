@@ -1639,6 +1639,11 @@ def _ncm_forward(handler, method, path, q, body):
     if cm_ncm_gateway.is_media_url_path(upstream):
         require_user(handler)
 
+    comment_write = method == "POST" and upstream in ("/comment", "/comment/like")
+    if comment_write:
+        if not isinstance(body, dict):
+            raise ApiError(400, "评论操作需要 JSON 对象")
+        q = {**q, **body}
     cookie = None
     if tier == cm_ncm_registry.T0:
         optional_user(handler)  # 公开只读：游客可用，登录不强制
@@ -1655,7 +1660,7 @@ def _ncm_forward(handler, method, path, q, body):
             log.info("NCM 写操作审计 user=%s path=%s params=%s", u["id"], path,
                      sorted(k for k in q if k != "confirm"))
 
-    params = cm_ncm_gateway.normalize_params(path, q, method)
+    params = _comment_write_params(upstream, q) if comment_write else cm_ncm_gateway.normalize_params(path, q, method)
     # 搜索与音源都受用户网络位置影响；先注入可信 IP，再计算隔离缓存键。
     if cm_ncm_gateway.is_search_path(upstream) or cm_ncm_gateway.is_media_url_path(upstream):
         params["realIP"] = cm_ncm_gateway.client_ip(handler)
@@ -1688,12 +1693,18 @@ def _ncm_forward(handler, method, path, q, body):
                      locals().get("u", {}).get("id", "-"), path, filename, ctype, len(blob))
             out = cm_ncm.call_multipart(upstream, params, field=field, filename=filename,
                                         content_type=ctype, data=blob, cookie=cookie)
+        elif comment_write:
+            out = cm_ncm.post_json(upstream, params, cookie=cookie)
         else:
             out = cm_ncm.call(upstream, params, cookie=cookie)
     except Exception:
         _NCM_BREAKER.record_failure(fam)
         raise
     _NCM_BREAKER.record_success(fam)
+    if comment_write:
+        result = out if isinstance(out, dict) else {}
+        if result.get("code") != 200:
+            raise ApiError(502, str(result.get("message") or result.get("msg") or "网易云评论操作失败"))
 
     if tier == cm_ncm_registry.T0:
         out = cm_ncm_registry.strip_identity(out)
@@ -1704,6 +1715,88 @@ def _ncm_forward(handler, method, path, q, body):
         cm_db.cache_set(ck, json.dumps(out, ensure_ascii=False), ttl)
     jresp(handler, 200, out)
     return True
+
+
+def _comment_resource(type_id, resource_id):
+    if type_id == "5":
+        valid_id = re.fullmatch(r"[A-Za-z0-9]{1,64}", resource_id)
+    elif type_id == "6":
+        valid_id = re.fullmatch(r"A_EV_2_[A-Za-z0-9_-]{1,100}", resource_id)
+        resource_id = resource_id.removeprefix("A_EV_2_")
+    else:
+        valid_id = type_id in ("0", "1", "2", "3", "4") and re.fullmatch(r"[1-9][0-9]{0,19}", resource_id)
+    if not valid_id:
+        raise ApiError(400, "评论资源 id 或 type 无效")
+    return resource_id
+
+
+def _comment_id(value):
+    ident = str(value)
+    if not re.fullmatch(r"[1-9][0-9]{0,19}", ident):
+        raise ApiError(400, "评论 ID 无效")
+    return ident
+
+
+def _comment_write_params(upstream, q):
+    kind = str(q.get("type", "0"))
+    target_field = "threadId" if kind == "6" else "id"
+    target = str(q.get(target_field, ""))
+    _comment_resource(kind, target)
+    action = str(q.get("t", ""))
+    params = {"type": kind, target_field: target, "t": action}
+    if upstream == "/comment/like":
+        if action not in ("0", "1"):
+            raise ApiError(400, "点赞 t 只能为 0 或 1")
+        params["cid"] = _comment_id(q.get("cid"))
+    else:
+        if action not in ("0", "1", "2"):
+            raise ApiError(400, "评论 t 只能为 0、1 或 2")
+        if action in ("0", "2"):
+            params["commentId"] = _comment_id(q.get("commentId"))
+        if action in ("1", "2"):
+            content = q.get("content")
+            if not isinstance(content, str) or not 1 <= len(content.strip()) <= 140:
+                raise ApiError(400, "评论内容需为 1–140 字")
+            params["content"] = content.strip()
+    return params
+
+
+def _ncm_comment_page(handler, q, replies=False):
+    type_id = q.get("type", "0")
+    resource_id = _comment_resource(type_id, q.get("id", ""))
+    try:
+        limit = int(q.get("limit", "20"))
+        page = int(q.get("page", "1"))
+    except ValueError:
+        raise ApiError(400, "评论分页参数无效") from None
+    if not 1 <= limit <= 50 or not 1 <= page <= 1_000_000:
+        raise ApiError(400, "评论分页参数超出范围")
+    cursor = q.get("cursor") or None
+    if cursor is not None and not re.fullmatch(r"[A-Za-z0-9_.:#=+-]{1,128}", cursor):
+        raise ApiError(400, "评论游标无效")
+    if replies:
+        parent_id = _comment_id(q.get("commentId"))
+        fetch = cm_ncm.comment_replies
+        args = (resource_id, int(type_id), parent_id, limit, cursor)
+    else:
+        sort = q.get("sort", "recommended")
+        if sort not in cm_ncm.COMMENT_SORTS or (sort == "latest" and page > 1 and cursor is None):
+            raise ApiError(400, "评论排序或翻页游标无效")
+        fetch = cm_ncm.comment_page
+        args = (resource_id, int(type_id), sort, page, limit, cursor)
+
+    user = optional_user(handler)
+    binding = cm_db.get_binding(user["id"]) if user else None
+    cookie = (binding or {}).get("cookie") or None
+    try:
+        out = fetch(*args, cookie=cookie)
+    except cm_ncm.NcmError as exc:
+        if not cookie or exc.status_code != 401:
+            raise
+        cookie = None
+        out = fetch(*args, cookie=None)
+    out["meUid"] = binding["ncm_uid"] if cookie else 0
+    return jresp(handler, 200, out, cache_control="private, no-store")
 
 
 _ncm_like_pending_lock = threading.Lock()
@@ -2370,10 +2463,10 @@ def route(handler, method):
             ("POST", "/profile/password/code", "Bearer", "向当前账号绑定邮箱发送**修改密码**验证码（未绑定邮箱返回 400；与找回密码共用 reset: 命名空间）"),
             ("PUT", "/profile/password", "Bearer", "修改密码：{oldPassword,newPassword} 或 {emailCode,newPassword}；邮箱验证码方式保留下线其他设备"),
             ('GET', '/auth/passkeys', 'Bearer', '列出本账号通行密钥（不返回公钥）；各 HTTPS 域名独立绑定'),
-            ('POST', '/auth/passkeys/register/options', 'Bearer', '绑定选项 {password,factor}；开启 2FA/密保须验证当前因素；挑战绑定会话和 Origin，5 分钟单次有效'),
+            ('POST', '/auth/passkeys/register/options', 'Bearer', '绑定选项 {password,factor} → {challengeToken,expiresIn,publicKey}；开启 2FA/密保须验证当前因素；挑战绑定会话、Origin 和 RP ID，5 分钟单次有效'),
             ('POST', '/auth/passkeys/register/verify', 'Bearer', '完成绑定 {challengeToken,credential,name}；强制用户验证和可发现凭据'),
-            ('POST', '/auth/passkeys/login/options', '公开', '通行密钥登录选项；强制用户验证'),
-            ('POST', '/auth/passkeys/login/verify', '公开', '{challengeToken,credential,device,platform}；验签成功直接返回 {token,user}，无需额外 2FA 或密保'),
+            ('POST', '/auth/passkeys/login/options', '公开', '通行密钥登录选项 {platform?} → {challengeToken,expiresIn,publicKey}；支持获准的 HTTPS 与 Android APK 签名 Origin，强制用户验证'),
+            ('POST', '/auth/passkeys/login/verify', '公开', '{challengeToken,credential,device,platform}；校验挑战绑定的 Origin、RP ID 及签名，成功返回 {token,user}，无需额外 2FA 或密保'),
             ('POST', '/auth/passkeys/delete', 'Bearer', '撤销 {id,password,factor}；须密码及已启用的二次验证'),
             ("GET", "/auth/security-question", "Bearer", "登录密保状态：{enabled, question, twoFactorEnabled}；不返回答案或哈希"),
             ("POST", "/auth/security-question", "Bearer", "开启密保 {password,question,answer}；与验证器 2FA 互斥；验证当前密码并下线其他设备"),
@@ -2409,8 +2502,9 @@ def route(handler, method):
             ("POST", "/admin/users/{id}/owner", "站长", "设置 / 取消站长（最高角色，仅站长，至少保留一位）"),
             ("GET", "/users/square", "公开", "用户发现广场（含 level、ipRegion）；sort 默认 composite，新增 active、level"),
             ("GET", "/levels/rules", "公开", "活跃积分、等级门槛与试炼规则"),
+            ("GET", "/levels/progress", "Bearer", "当前积分、等级及今日各途径计分次数"),
             ("GET", "/levels/trial", "Bearer", "Lv.6 试炼题目（无答案）"),
-            ("POST", "/levels/trial", "Bearer", "提交 10 道试炼答案 {answers}；达到及格线升至 Lv.6 Plus"),
+            ("POST", "/levels/trial", "Bearer", "提交 50 道试炼答案 {answers}；每题 2 分，60 分及格后升至 Lv.6 Plus"),
             ("GET", "/ncmbind", "Bearer", "网易云绑定状态（bound/profile/stale/lastSync）"),
             ("GET", "/ncmbind/session", "Bearer", "**第三方客户端用**：一次返回 bound/valid/profile/note（不暴露 cookie，登录态由服务端代理）"),
             ("POST", "/ncmbind/import", "Bearer", "同步本机网易云登录至当前账号；服务端验证身份，不返回 cookie；详见第三方登录态同步专题"),
@@ -2426,6 +2520,10 @@ def route(handler, method):
             ("POST", "/artists/{id}/follow", "Bearer", "关注/取关网易云歌手 {on}；写操作透传可信 RealIP"),
             ("POST|DELETE", "/ncmbind/comment/{ncmId}", "Bearer", "发布/回复评论 {content,commentId?} 或删除 {commentId}；透传可信 RealIP（影响 IP 属地/风控）"),
             ("POST", "/ncmbind/comment-like/{ncmId}", "Bearer", "评论点赞/取消 {commentId,like}；透传可信 RealIP"),
+            ("GET", "/ncm/comments/page", "公开 / 可选 Bearer", "网易云推荐、最热与最新评论；type/id/sort/page/limit/cursor，绑定账号时返回本人点赞状态"),
+            ("GET", "/ncm/comments/replies", "公开 / 可选 Bearer", "按 commentId 懒加载回复，nextCursor 向后翻页；不重复返回父评论"),
+            ("POST", "/ncm/comment", "Bearer + 网易云绑定", "JSON {id,type,t,commentId?,content?,threadId?,confirm:1}；t=1 发评、2 回复、0 删除"),
+            ("POST", "/ncm/comment/like", "Bearer + 网易云绑定", "JSON {id,type,cid,t,threadId?,confirm:1}；t=1 点赞、0 取消"),
             ("GET", "/chat/messages", "公开", "公共聊天室：最近消息（含 atts 引用卡片；?before=<id> 向更早翻页，?limit=1~50）"),
             ("POST", "/chat/messages", "Bearer", "发送消息 {content≤500字, image?: 图片文件名, mentions?: [@用户id], atts?: [{type: song|album|artist|playlist, id, name, sub?, pic?}]≤5}（1.5s 频控）。**@CurrentMusicAI 可提问（卡片可选）；按用户保存近 6 轮上下文，服务端异步联网检索后以 AI 账号回复：先发空消息占位，再经 /chat/live 的 edit 事件流式更新（streaming=true），最终内容为 Markdown，可带 ≤3 张 atts 卡片；消息带 image 时图片会作为视觉输入发送给 AI**"),
             ("DELETE", "/chat/messages/{id}", "Bearer", "删除消息（本人或管理员/超管/站长，软删）"),
@@ -3711,6 +3809,13 @@ def route(handler, method):
 
     if path == "/levels/rules" and method == "GET":
         return jresp(handler, 200, cm_levels.rules())
+
+    if path == "/levels/progress" and method == "GET":
+        u = require_user(handler)
+        progress = cm_db.point_progress(u["id"])
+        if progress is None:
+            raise ApiError(401, "登录已失效，请重新登录")
+        return jresp(handler, 200, progress)
 
     if path == "/levels/trial" and method == "GET":
         u = require_user(handler)
@@ -5164,6 +5269,10 @@ def route(handler, method):
         return
 
     # ---- 评论区（列表公开；发送/删除走绑定账号） ----
+    if path == "/ncm/comments/page" and method == "GET":
+        return _ncm_comment_page(handler, q)
+    if path == "/ncm/comments/replies" and method == "GET":
+        return _ncm_comment_page(handler, q, replies=True)
     if path == "/ncm/comments" and method == "GET":
         try:
             ncm_id = int(q.get("id") or 0)

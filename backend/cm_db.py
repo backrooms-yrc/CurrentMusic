@@ -113,6 +113,13 @@ CREATE TABLE IF NOT EXISTS plays (
   -- 领取网易云同步后置 1，失败时放回。
   ncm_synced INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS point_rewards (
+  user_id INTEGER NOT NULL,
+  day_start INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  subject INTEGER NOT NULL,
+  PRIMARY KEY (user_id, day_start, source, subject)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS email_codes (
   email TEXT PRIMARY KEY,
   code TEXT NOT NULL,
@@ -848,20 +855,58 @@ def revoke_token(uid, token=None):
 
 
 _LEVEL_PROMOTION = " ".join(
-    f"WHEN points < {threshold} AND points + {cm_levels.DAILY_POINTS} >= {threshold} THEN {level}"
+    f"WHEN points < {threshold} AND points + :award >= {threshold} THEN {level}"
     for level, threshold in reversed(list(enumerate(cm_levels.THRESHOLDS, 1))) if threshold
 )
+_EARNED_LEVEL = f"MAX(level, CASE {_LEVEL_PROMOTION} ELSE level END)"
+_EARNED_POINTS = f"MIN(points + :award, {cm_levels.MAX_POINTS})"
+
+
+def _reward_points(conn, uid, day_start, source, subject):
+    award, limit = cm_levels.POINT_SOURCES[source]
+    added = conn.execute(
+        """INSERT OR IGNORE INTO point_rewards(user_id, day_start, source, subject)
+           SELECT :uid, :day, :source, :subject
+           WHERE (SELECT COUNT(*) FROM point_rewards
+                  WHERE user_id=:uid AND day_start=:day AND source=:source) < :limit""",
+        {"uid": uid, "day": day_start, "source": source, "subject": subject, "limit": limit},
+    )
+    if added.rowcount:
+        conn.execute(
+            f"UPDATE users SET level={_EARNED_LEVEL}, points={_EARNED_POINTS} WHERE id=:uid",
+            {"award": award, "uid": uid},
+        )
+
+
+def point_progress(uid):
+    day = cm_levels.day_start(int(time.time()))
+    conn = connect()
+    try:
+        conn.execute("BEGIN")
+        user = conn.execute(
+            "SELECT level, points, activity_at FROM users WHERE id=? AND disabled=0", (uid,)
+        ).fetchone()
+        if user is None:
+            return None
+        counts = {source: 0 for source in cm_levels.POINT_SOURCES}
+        counts["visit"] = int(user["activity_at"] >= day)
+        counts.update(conn.execute(
+            """SELECT source, COUNT(*) FROM point_rewards
+               WHERE user_id=? AND day_start=? GROUP BY source""", (uid, day)
+        ).fetchall())
+        return {"level": user["level"], "points": user["points"], "today": counts}
+    finally:
+        conn.close()
 
 
 def _record_activity(conn, uid, now, day_start):
     # 只在越过新门槛时自动升级，保留管理员指定的等级，且自然升级不会降级。
     conn.execute(
-        f"""UPDATE users SET activity_at=?,
-               level=CASE WHEN activity_at<? THEN MAX(level, CASE {_LEVEL_PROMOTION} ELSE level END)
-                          ELSE level END,
-               points=CASE WHEN activity_at<? THEN MIN(points+?, ?) ELSE points END
-             WHERE id=? AND activity_at<? AND disabled=0""",
-        (now, day_start, day_start, cm_levels.DAILY_POINTS, cm_levels.MAX_POINTS, uid, now),
+        f"""UPDATE users SET activity_at=:now,
+               level=CASE WHEN activity_at<:day THEN {_EARNED_LEVEL} ELSE level END,
+               points=CASE WHEN activity_at<:day THEN {_EARNED_POINTS} ELSE points END
+             WHERE id=:uid AND activity_at<:now AND disabled=0""",
+        {"now": now, "day": day_start, "award": cm_levels.DAILY_POINTS, "uid": uid},
     )
 
 
@@ -878,7 +923,7 @@ def user_by_token(token):
         if not r or r["disabled"]:
             return None
         now = int(time.time())
-        day_start = now - (now + 8 * 3600) % 86400  # Asia/Shanghai
+        day_start = cm_levels.day_start(now)
         credit = r["activity_at"] < day_start
         if credit or now - (r["session_last_seen"] or 0) > 60:
             cur = conn.execute("UPDATE sessions SET last_seen=MAX(last_seen, ?) WHERE token_hash=?", (now, th))
@@ -1390,6 +1435,7 @@ def post_create(user_id, content, attachments):
         cur = c.execute(
             "INSERT INTO posts(user_id, content, attachments, created_at) VALUES(?,?,?,?)",
             (int(user_id), content, json.dumps(atts, ensure_ascii=False), now))
+        _reward_points(c, int(user_id), cm_levels.day_start(now), "post", 0)
         c.commit()
         return cur.lastrowid
     finally:
@@ -1460,11 +1506,15 @@ def post_comment_add(user_id, post_id, content):
     now = int(time.time())
     c = connect()
     try:
-        if not c.execute("SELECT 1 FROM posts WHERE id = ?", (int(post_id),)).fetchone():
+        c.execute("BEGIN IMMEDIATE")
+        post = c.execute("SELECT user_id FROM posts WHERE id = ?", (int(post_id),)).fetchone()
+        if post is None:
             raise ValueError("帖子不存在")
         cur = c.execute(
             "INSERT INTO post_comments(post_id, user_id, content, created_at) VALUES(?,?,?,?)",
             (int(post_id), int(user_id), content, now))
+        if post["user_id"] != int(user_id):
+            _reward_points(c, int(user_id), cm_levels.day_start(now), "comment", int(post_id))
         c.commit()
         return cur.lastrowid
     finally:
@@ -1778,6 +1828,22 @@ def record_play(uid, ncm_id):
 
 # 单次上报的上限：前端每 30s 冲一次，正常远小于此；异常值（时钟跳变/双重上报）直接截断
 PLAY_MS_MAX_PER_CALL = 15 * 60 * 1000
+_LATEST_PLAY = ("SELECT rowid FROM plays WHERE user_id=? AND ncm_id=? "
+                "ORDER BY played_at DESC, rowid DESC LIMIT 1")
+
+
+def _reward_play(conn, uid, ncm_id, play_id=None):
+    now = int(time.time())
+    day = cm_levels.day_start(now)
+    target = "?" if play_id is not None else f"({_LATEST_PLAY})"
+    args = (play_id,) if play_id is not None else (uid, ncm_id)
+    # 记录须为当日播放，同时满足累计上报时长与服务端经过时间。
+    row = conn.execute(
+        f"SELECT 1 FROM plays WHERE rowid={target} AND played_at BETWEEN ? AND ? AND ms>=?",
+        (*args, day, now - cm_levels.LISTEN_SECONDS, cm_levels.LISTEN_SECONDS * 1000),
+    ).fetchone()
+    if row:
+        _reward_points(conn, uid, day, "listen", ncm_id)
 
 
 def add_play_ms(uid, ncm_id, ms):
@@ -1795,10 +1861,10 @@ def add_play_ms(uid, ncm_id, ms):
     conn = connect()
     try:
         cur = conn.execute(
-            "UPDATE plays SET ms = COALESCE(ms,0) + ? WHERE rowid = ("
-            " SELECT rowid FROM plays WHERE user_id=? AND ncm_id=?"
-            " ORDER BY played_at DESC, rowid DESC LIMIT 1)",
+            f"UPDATE plays SET ms = COALESCE(ms,0) + ? WHERE rowid = ({_LATEST_PLAY})",
             (add, int(uid), int(ncm_id)))
+        if cur.rowcount:
+            _reward_play(conn, int(uid), int(ncm_id))
         conn.commit()
         return add if cur.rowcount else 0
     finally:
@@ -1813,6 +1879,8 @@ def update_play_total(uid, ncm_id, play_id, ms):
             "UPDATE plays SET ms = MAX(COALESCE(ms,0), ?) WHERE rowid=? AND user_id=? AND ncm_id=?",
             (min(ms, 24 * 60 * 60 * 1000), play_id, uid, ncm_id),
         )
+        if cur.rowcount and ms >= cm_levels.LISTEN_SECONDS * 1000:
+            _reward_play(conn, uid, ncm_id, play_id)
         conn.commit()
         return cur.rowcount > 0
     finally:

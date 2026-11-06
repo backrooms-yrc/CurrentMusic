@@ -1,6 +1,7 @@
 // UI 工具：转义、toast、时长格式、歌曲行渲染（含点赞/收藏状态）、对话框封装。
 import { mdui } from './md.js';
 import { api, auth, decorScale, settings } from './api.js';
+import { levelBadge } from './level-badges.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -630,7 +631,7 @@ export function openLikeMenu(song, onChange) {
  * @param offset data-i 的起始下标——追加渲染时传已有条数，保证 data-i 始终是
  *               在**完整数组**里的绝对下标（点击行为依赖它）
  */
-export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride, cached = false } = {}) {
+export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride, cached = false, showLyric = false } = {}) {
   const st = cached ? songs.map(s => getStatus(s.ncm_id)) : await fetchStatus(songs.map(s => s.ncm_id));
   const bound = auth.token ? (cached ? _ncmBoundToken === auth.token && _ncmBound === true : await ensureNcmBound()) : false;
   const source = sourceOverride || (settings.likeMode === 'local' || !bound ? 'local' : 'ncm');
@@ -639,8 +640,11 @@ export async function songListHTML(songs, { removable = false, offset = 0, likeS
     const liked = source === 'ncm' ? isNcmLiked(s.ncm_id) : st[i].liked;
     const dot = bound && source === 'local' && isNcmLiked(s.ncm_id);
     return `
-    <div class="cm-song" data-i="${offset + i}">
-      ${s.pic ? `<img class="cm-song-pic" src="${esc(s.pic)}" loading="lazy">` : `<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>`}
+    <div class="cm-song" data-i="${offset + i}" data-song-id="${esc(s.ncm_id)}">
+      <div class="cm-song-cover">
+        ${s.pic ? `<img class="cm-song-pic" src="${esc(s.pic)}" loading="lazy">` : `<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>`}
+        <span class="cm-song-loading" role="status" aria-label="正在准备播放" hidden><span class="cm-play-spinner" aria-hidden="true"></span></span>
+      </div>
       <div class="cm-song-main">
         <div class="cm-song-name">${esc(s.name)}</div>
         <div class="cm-song-sub">
@@ -648,8 +652,11 @@ export async function songListHTML(songs, { removable = false, offset = 0, likeS
           ${s.pop ? `<span class="cm-pop" title="网易云热度"><span class="mi">local_fire_department</span>${s.pop}</span>` : ''}
           ${st[i].count ? `<span class="cm-like-n" title="网易云红心数"><span class="mi">favorite</span>${fmtCount(st[i].count)}</span>` : ''}
         </div>
+        ${showLyric ? `<div class="cm-song-lyric">${s.lyricContext?.length
+          ? s.lyricContext.map(line => line.matched ? `<mark>${esc(line.txt)}</mark>` : `<span>${esc(line.txt)}</span>`).join('')
+          : `<span>${esc(s.lyric || s.lyricMatch || '')}</span>`}</div>` : ''}
       </div>
-      ${s.mv ? `<span class="cm-song-mv" data-act="mv" data-i="${offset + i}" title="播放 MV"><span class="material-icons-outlined">smart_display</span></span>` : ''}
+      ${s.mv ? `<button type="button" class="cm-song-mv" data-act="mv" data-i="${offset + i}" title="播放 MV" aria-label="播放 MV"><span class="material-icons-outlined" aria-hidden="true">smart_display</span></button>` : ''}
       <span class="cm-song-dur">${fmtDur(s.duration)}</span>
       <span class="cm-song-like ${liked ? 'on' : ''}" data-act="like" data-i="${offset + i}" title="${source === 'ncm' ? '红心到网易云' : '加入 CurrentMusic 我喜欢'}">
         <span class="material-icons-outlined">${liked ? 'favorite' : 'favorite_border'}</span>
@@ -679,7 +686,7 @@ export async function renderSongList(el, songs, opts = {}) {
   }
   const slice = songs.slice(from);
   if (!slice.length) return [];
-  const htmlOptions = { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource };
+  const htmlOptions = { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource, showLyric: !!opts.showLyric };
   const token = auth.token, mode = settings.likeMode;
   const html = await songListHTML(slice, { ...htmlOptions, cached: !!opts.deferStatus });
 
@@ -698,6 +705,7 @@ export async function renderSongList(el, songs, opts = {}) {
   }
 
   rows.forEach(row => {
+    syncSongLoading(row);
     const i = +row.dataset.i;
     row.addEventListener('click', async e => {
       const act = e.target.closest('[data-act]');
@@ -738,6 +746,18 @@ export async function renderSongList(el, songs, opts = {}) {
     }).catch(() => {}); // Optional state may fail; the visible tracks remain usable.
   }
   return rows;
+}
+
+let pendingSongId = '';
+function syncSongLoading(row) {
+  row.querySelector('.cm-song-loading').hidden = row.dataset.songId !== pendingSongId;
+}
+
+export function setSongLoading(id) {
+  const next = id == null ? '' : String(id);
+  if (next === pendingSongId) return;
+  pendingSongId = next;
+  document.querySelectorAll('.cm-song[data-song-id]').forEach(syncSongLoading);
 }
 
 // ---------- 对话框 ----------
@@ -800,13 +820,8 @@ export function avatarHTML(user, size = 72) {
   return `<span class="cm-ava-box" style="width:${size}px;height:${size}px">${inner}${decor}</span>`;
 }
 
-export function levelLabel(level) {
-  if (level === 7) return 'Lv.6 Plus';
-  return Number.isInteger(level) && level >= 1 && level <= 6 ? `Lv.${level}` : '';
-}
-
 /**
- * 用户身份徽章：站内头衔 + 站长 / 超级管理员 / 管理员。
+ * 用户身份徽章：站内头衔、等级与管理角色。
  * 兼容两种字段命名：广场接口是 snake_case（is_owner/is_super/is_admin），其余接口是 camelCase（isOwner/…）。
  * 头衔在后端已做长度与空白规整，这里仍过一遍 esc()，正文里写 <script> 也不会执行。
  * 返回串自带前导空格（有徽章时），调用处直接 ${userTags(u)} 即可，不用自己补间距。
@@ -815,10 +830,10 @@ export function userTags(u, { role = true } = {}) {
   if (!u) return '';
   const out = [];
   const title = String(u.title || '').trim();
-  const level = levelLabel(u.level);
+  const badge = levelBadge(u.level);
   if (u.isBot || u.is_bot) out.push('<span class="cm-tag ai">AI</span>');
   if (title) out.push(`<span class="cm-tag title">${esc(title)}</span>`);
-  if (level) out.push(`<span class="cm-tag">${level}</span>`);
+  if (badge) out.push(badge);
   if (role) {
     if (u.isOwner || u.is_owner) out.push('<span class="cm-tag owner">站长</span>');
     else if (u.isSuper || u.is_super) out.push('<span class="cm-tag super">超级管理员</span>');

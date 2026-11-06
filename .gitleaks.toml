@@ -26,3 +26,11 @@ condition = "AND"
 paths = ['''(?:^|/)site/(?:index\.html|build\.mjs)$''']
 regexTarget = "secret"
 regexes = ['''^(?:Y4c39DZ\+5qe4El\+EkTtA0oVd/d8fNpeeM6L/zBL66MmmYdzkxbKppptGLY6gKNq3|iqIyjZ7V4UyQaP8wfNUYZ0abTor/9rNpMQy94zUsD178YelEuVY9NYh4Frh8059v|tkLPuDncPR2BE5XghTWEpwhO2/M\+7hPcTn6GWTdVU01lFRAAJLOxdlfoy/RqGpc7|ym67LInlDrTd\+cV6eVQO\+P5dnseCKSCSqGiGN2W378P\+19B/sbWwI4bE2sa5eyR5)$''']
+
+[[allowlists]]
+description = "Public CurrentMusicX release certificate digest in the passkey contract and tests"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(?:^|/)(?:docs/passkeys-api\.md|backend/tests/test_passkeys\.py)$''']
+regexTarget = "secret"
+regexes = ['''^_D5jB5uOaa6nq3NIKEbaCTnWzRLa8K__qpouk_v8zzU$''']

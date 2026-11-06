@@ -2,7 +2,16 @@
 
 ## 活跃积分
 
-使用有效的 CurrentMusic 登录会话访问需要识别账号的 API 时，按北京时间（`Asia/Shanghai`）每天首次访问加 10 分。同一账号在多个设备上访问时共享每日额度。既有账号从 Lv.1 和 0 分开始累计，积分体系启用前的活跃记录不补分。
+同一账号在多个设备上共享每日额度，按北京时间（`Asia/Shanghai`）零点换日。活跃事件成功写入时同步计分，历史记录不批量补分。
+
+| 来源 ID | 获分条件 | 每次积分 | 每日次数上限 |
+| --- | --- | ---: | ---: |
+| `visit` | 首次使用有效登录会话访问需要识别账号的 API | 10 | 1 |
+| `listen` | 当天开始的单次播放，累计上报收听满 60 秒，且服务端距开始播放已过至少 60 秒。同一歌曲每天计一次 | 2 | 5 |
+| `post` | 在发现页成功发布帖子 | 5 | 1 |
+| `comment` | 评论他人的帖子，同一帖子每天计一次 | 2 | 2 |
+
+每天最多可获得 29 分。新版 `playId + totalMs` 和旧版 `ms` 播放上报均可计分。跨零点后继续上报前一天开始的播放只更新播放历史。删除帖子或评论不返还当天计分次数。
 
 | 等级 | 累计积分门槛 |
 | --- | ---: |
@@ -19,12 +28,13 @@
 
 | 方法 | 路径 | 权限 | 请求与响应 |
 | --- | --- | --- | --- |
-| GET | `/cm/levels/rules` | 公开 | 返回 `dailyPoints`、`maxPoints`、`timeZone`、`levels: [{level, points}]` 和 `trial: {level, plusLevel, questionCount, passScore, maxScore}` |
+| GET | `/cm/levels/rules` | 公开 | 返回 `dailyPoints`、`maxPoints`、`timeZone`、`pointSources: [{id, points, dailyLimit}]`、`listenSeconds`、`levels: [{level, points}]` 和 `trial: {level, plusLevel, questionCount, passScore, maxScore}` |
+| GET | `/cm/levels/progress` | Bearer | 返回 `{level, points, today}`，`today` 以来源 ID 为键，值为今日已计分次数。本次有效会话访问计入当日访问次数 |
 | GET | `/cm/levels/trial` | Bearer | 返回 `questions: [{prompt, options}]`，顺序用于提交答案。Lv.1 至 Lv.5 返回 403，Lv.6 Plus 返回 409 |
-| POST | `/cm/levels/trial` | Bearer | JSON 提交 `answers`，含 10 个从 0 开始的选项下标，按题目顺序排列。返回 `{score, passed, level}` |
+| POST | `/cm/levels/trial` | Bearer | JSON 提交 `answers`，含 50 个从 0 开始的选项下标，按题目顺序排列。返回 `{score, passed, level}` |
 | POST | `/cm/admin/users/{id}/progression` | 管理员 Bearer | JSON 提交整数 `points` 和 `level`，返回 `{ok, points, level}` |
 
-试炼共 10 道单选题，每题 10 分。服务器判分，60 分及格。Lv.6 及格后升至 Lv.6 Plus，未及格可再次提交。重复提交已通过的答案仍返回 Lv.6 Plus。试炼答错不扣积分，也不降低等级。答案缺失、数量错误、下标越界或类型错误返回 400，Lv.1 至 Lv.5 提交返回 403。
+试炼共 50 道四选一题，涵盖数字音频、听音与乐理、音源排查、播放同步和账号安全。每题 2 分，满分 100 分，答对至少 30 题（60 分）及格。Lv.6 及格后升至 Lv.6 Plus，未及格可再次提交。重复提交已通过的答案仍返回 Lv.6 Plus。答案缺失、数量错误、下标越界或类型错误返回 400，Lv.1 至 Lv.5 提交返回 403。仍打开旧题目的客户端需重新获取题目。
 
 管理台的 `GET /cm/admin/users` 返回每个用户的 `points` 和 `level`。管理员可独立设置任一账号的积分和等级，包括 Lv.6 Plus。后续活跃积分照常累计，跨过新的积分门槛时可继续升至更高的常规等级。更新不存在的用户返回 404，字段类型或范围错误返回 400。
 

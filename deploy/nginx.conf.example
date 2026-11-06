@@ -15,7 +15,14 @@ server {
     gzip_types application/json application/javascript text/css image/svg+xml;
     gzip_proxied any;
 
+    # Optional Android passkeys. Serve the statement for this RP's domain only.
+    # location = /.well-known/assetlinks.json {
+    #     alias /srv/currentmusic/assetlinks.json;
+    #     types { application/json json; }
+    # }
+
     # API: /cm/foo -> backend /foo
+    # Pass the client's Origin header through to the backend unchanged (nginx default).
     location /cm/ {
         proxy_pass http://127.0.0.1:3010/;
         proxy_http_version 1.1;

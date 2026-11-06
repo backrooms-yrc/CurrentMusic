@@ -35,6 +35,7 @@ GUIDES = {
     'search-history-api': '账号搜索历史与多端同步',
     'search-lyrics-api': '歌词搜索与命中前后文',
     'search-catalog': '搜索地区与公开曲库补充',
+    'ncm-comments-api': '网易云评论排序、回复与点赞',
     'playback-sources': '播放音源与灰色曲目匹配',
     'passkeys-api': '通行密钥登录与绑定',
     'two-factor-api': '登录两步验证', 'passport-api': '通行证完整接入', 'password-api': '密码找回与修改', 'lyrics-api': '歌词与逐字轴',

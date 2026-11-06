@@ -6,7 +6,8 @@
 import { mdui } from '../md.js';
 import { api, auth, settings } from '../api.js';
 import { renderMarkdown } from '../markdown.js';
-import { esc, toast, confirmDialog, promptDialog, userTags, levelLabel, fmtCount, avatarHTML } from '../ui.js';
+import { esc, toast, confirmDialog, promptDialog, userTags, fmtCount, avatarHTML } from '../ui.js';
+import { levelBadge, levelLabel } from '../level-badges.js';
 import { drawLineChart, drawBarChart, drawComboChart, drawDonutChart } from '../admin-charts.js';
 
 const PAGE = 20;
@@ -701,16 +702,20 @@ export async function render(el) {
               const editor = mdui.dialog({
                 headline: `设置「${u.nickname || u.username}」的积分与等级`,
                 body: `<div class="cm-level-editor">
-                  <label>累计积分<input name="points" type="number" min="0" max="${esc(rules.maxPoints)}" step="1" value="${esc(u.points)}" required></label>
-                  <label>等级<select name="level">${levels.map(level =>
-                    `<option value="${level}" ${u.level === level ? 'selected' : ''}>${levelLabel(level)}</option>`).join('')}</select></label>
+                  <label class="cm-level-points">累计积分<input name="points" type="number" min="0" max="${esc(rules.maxPoints)}" step="1" value="${esc(u.points)}" required></label>
+                  <fieldset><legend>等级</legend><div class="cm-level-choices">${levels.map(level =>
+                    `<label class="cm-level-choice">
+                      <input type="radio" name="level" value="${level}" aria-label="${levelLabel(level)}" ${u.level === level ? 'checked' : ''}>
+                      <span aria-hidden="true">${levelBadge(level)}</span>
+                    </label>`).join('')}</div></fieldset>
                 </div>`,
                 actions: [
                   { text: '取消' },
                   { text: '保存', onClick: async () => {
                     const input = editor.querySelector('[name="points"]');
                     if (!input.reportValidity()) return false;
-                    const level = Number(editor.querySelector('[name="level"]').value);
+                    const level = Number(editor.querySelector('[name="level"]:checked')?.value);
+                    if (!Number.isInteger(level)) { toast('请选择等级'); return false; }
                     try {
                       await api.adminSetProgression(id, input.valueAsNumber, level);
                       toast('积分与等级已更新');

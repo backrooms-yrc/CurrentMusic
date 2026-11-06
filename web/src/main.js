@@ -5,6 +5,7 @@ import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './apple-hig.css';   // Apple HIG 设计令牌层（字体/系统色/圆角/阴影/命中区/材质）
 import './app.css';
+import './levels.css';
 import './auth.css';
 import './settings.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
@@ -19,7 +20,7 @@ import { initPullToRefresh } from './ptr.js';
 import { engineChrome, engineOutdated } from './version.js';
 import { player } from './player.js';
 import { initPlayerUI } from './player-ui.js';
-import { initMv } from './mv.js';
+import { closeMv, initMv } from './mv.js';
 import { initCast } from './cast.js';
 import { bootUiPreset } from './uipreset.js';
 import { applyCustomize } from './customize.js';
@@ -326,6 +327,7 @@ function boot() {
   window.__cmHandleBack = function () {
     var cb = document.getElementById('cmtClose');
     if (cb) { cb.click(); return true; }
+    if (closeMv()) return true;
     var ov = document.getElementById('playerOverlay');
     if (ov && !ov.hidden) {
       var pc = document.getElementById('plClose');
