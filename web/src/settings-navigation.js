@@ -94,6 +94,17 @@ export function mountSettingsNavigation(el) {
   };
   function paint() {
     rows.forEach(row => store.appendChild(row)); content.replaceChildren();
+    if (document.documentElement.getAttribute('data-ui-preset') === 'aimo') {
+      try {
+        content.animate([
+          { opacity: 0, transform: 'translateY(10px)' },
+          { opacity: 1, transform: 'translateY(0)' }
+        ], {
+          duration: 220,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
+        });
+      } catch {}
+    }
     const words = search.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
     clear.hidden = !search;
     if (words.length) {

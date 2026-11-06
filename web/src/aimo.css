@@ -1378,6 +1378,45 @@ html[data-ui-preset="aimo"] .cm-auth-layout {
   box-shadow: var(--aimo-shadow-md) !important;
 }
 
+html[data-ui-preset="aimo"] .cm-auth-layout mdui-button {
+  min-height: 46px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-auth-layout #go {
+  margin-top: 8px !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-auth-layout .cm-email-row mdui-button {
+  min-height: 42px !important;
+  font-size: 13px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-auth-links button,
+html[data-ui-preset="aimo"] .cm-auth-switch button {
+  color: var(--aimo-text-secondary) !important;
+  font-family: var(--aimo-font-sans) !important;
+  transition: color 150ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-auth-links button:hover,
+html[data-ui-preset="aimo"] .cm-auth-switch button:hover {
+  color: var(--aimo-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-auth-apk {
+  color: var(--aimo-text-secondary) !important;
+  border-radius: var(--aimo-radius-control) !important;
+  transition: background 150ms ease, color 150ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-auth-apk:hover {
+  color: var(--aimo-text-primary) !important;
+  background: var(--aimo-panel) !important;
+}
+
 html[data-ui-preset="aimo"] .cm-auth-story {
   background: var(--aimo-panel) !important;
   border-right: 1px solid var(--aimo-border-soft);
@@ -1436,38 +1475,117 @@ html[data-ui-preset="aimo"] .cm-tag.owner {
    15. 按钮、开关与交互微动效 (Buttons & Switches)
    -------------------------------------------------------------------------- */
 html[data-ui-preset="aimo"] mdui-button {
-  font-weight: 500;
+  --shape-corner: 999px !important;
+  border-radius: 999px !important;
+  font-family: var(--aimo-font-sans) !important;
+  font-weight: 550 !important;
+  box-shadow: none !important;
+  transition: transform 120ms ease, opacity 120ms ease, background-color 150ms ease, border-color 150ms ease !important;
 }
 
-html[data-ui-preset="aimo"] mdui-button::part(container) {
+html[data-ui-preset="aimo"] mdui-button::part(button) {
   border-radius: 999px !important;
   box-shadow: none !important;
+  font-family: var(--aimo-font-sans) !important;
+  font-weight: 550 !important;
 }
 
 html[data-ui-preset="aimo"] mdui-button:active {
   transform: scale(0.985);
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
-html[data-ui-preset="aimo"] mdui-button[variant="filled"]::part(container) {
-  background: var(--aimo-primary) !important;
+/* 实心主按钮 (filled) */
+html[data-ui-preset="aimo"] mdui-button[variant="filled"] {
+  background-color: var(--aimo-primary) !important;
   color: var(--aimo-primary-text) !important;
 }
 
-html[data-ui-preset="aimo"] mdui-button[variant="filled"]:hover::part(container) {
-  background: var(--aimo-primary-hover) !important;
+html[data-ui-preset="aimo"] mdui-button[variant="filled"]:hover {
+  background-color: var(--aimo-primary-hover) !important;
 }
 
-html[data-ui-preset="aimo"] mdui-button[variant="tonal"]::part(container),
-html[data-ui-preset="aimo"] mdui-button[variant="outlined"]::part(container) {
-  background: var(--aimo-bg-elevated) !important;
+/* 浅色/次级按钮 (tonal) */
+html[data-ui-preset="aimo"] mdui-button[variant="tonal"] {
+  background-color: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  color: var(--aimo-text-primary) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-button[variant="tonal"]:hover {
+  background-color: var(--aimo-bg-elevated) !important;
+  border-color: var(--aimo-border) !important;
+}
+
+/* 轮廓按钮 (outlined) */
+html[data-ui-preset="aimo"] mdui-button[variant="outlined"] {
+  background-color: transparent !important;
   border: 1px solid var(--aimo-border) !important;
   color: var(--aimo-text-primary) !important;
 }
 
-html[data-ui-preset="aimo"] mdui-button[variant="tonal"]:hover::part(container),
-html[data-ui-preset="aimo"] mdui-button[variant="outlined"]:hover::part(container) {
-  background: var(--aimo-panel) !important;
+html[data-ui-preset="aimo"] mdui-button[variant="outlined"]:hover {
+  background-color: var(--aimo-panel) !important;
+}
+
+/* 纯文本按钮 (text) */
+html[data-ui-preset="aimo"] mdui-button[variant="text"] {
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-button[variant="text"]:hover {
+  background-color: var(--aimo-panel) !important;
+}
+
+/* 浮层按钮 (elevated) */
+html[data-ui-preset="aimo"] mdui-button[variant="elevated"] {
+  background-color: var(--aimo-bg-elevated) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  color: var(--aimo-text-primary) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+}
+
+/* 图标按钮 (mdui-button-icon) */
+html[data-ui-preset="aimo"] mdui-button-icon {
+  border-radius: 999px !important;
+  color: var(--aimo-text-primary) !important;
+  transition: background-color 150ms ease, transform 120ms ease !important;
+}
+
+html[data-ui-preset="aimo"] mdui-button-icon:hover {
+  background-color: var(--aimo-panel) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-button-icon:active {
+  transform: scale(0.94);
+}
+
+/* 纸墨胶囊标签 (mdui-chip) */
+html[data-ui-preset="aimo"] mdui-chip {
+  --shape-corner: 999px !important;
+  border-radius: 999px !important;
+  background-color: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  color: var(--aimo-text-primary) !important;
+  font-family: var(--aimo-font-sans) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  transition: all 150ms ease !important;
+}
+
+html[data-ui-preset="aimo"] mdui-chip::part(container) {
+  border-radius: 999px !important;
+}
+
+html[data-ui-preset="aimo"] mdui-chip:hover {
+  background-color: var(--aimo-bg-elevated) !important;
+  border-color: var(--aimo-border) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-chip[selected] {
+  background-color: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  border-color: transparent !important;
 }
 
 /* 开关（mdui-switch）：中性纸墨 track 与无光晕滑块 */
@@ -1680,6 +1798,547 @@ html[data-ui-preset="aimo"] .pl-lyric-line.cur {
 html[data-ui-preset="aimo"] body.player-open #bottomNav,
 html[data-ui-preset="aimo"] body.player-open #mini {
   visibility: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   18. 排行榜专属封面卡片 (Top Charts Editorial Covers)
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] .cm-quickrow {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+  margin-bottom: 28px !important;
+}
+
+@media (max-width: 680px) {
+  html[data-ui-preset="aimo"] .cm-quickrow {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
+
+html[data-ui-preset="aimo"] .cm-quick {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  min-height: 148px !important;
+  padding: 22px 20px 18px !important;
+  border-radius: var(--aimo-radius-surface) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  text-decoration: none !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-quick:hover {
+  transform: translateY(-3px) scale(1.008) !important;
+  box-shadow: var(--aimo-shadow-md) !important;
+  border-color: var(--aimo-border-strong) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-quick:active {
+  transform: translateY(-1px) scale(0.99) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-quick b {
+  font-family: var(--aimo-font-serif) !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  color: #fff !important;
+  margin-top: 4px !important;
+  z-index: 2 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-quick .material-icons-outlined {
+  font-size: 26px !important;
+  z-index: 2 !important;
+}
+
+/* 热歌榜专属封面 */
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"] {
+  background: linear-gradient(145deg, #1f1613 0%, #2f1d14 55%, #150f0c 100%) !important;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"]::before {
+  content: 'HOT 100';
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  font-family: var(--aimo-font-serif);
+  font-size: 58px;
+  font-weight: 800;
+  color: rgba(224, 112, 60, 0.12);
+  letter-spacing: -0.04em;
+  pointer-events: none;
+  z-index: 1;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"]::after {
+  content: 'TOP 01';
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  font-family: var(--aimo-font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #f0966a;
+  background: rgba(224, 112, 60, 0.2);
+  border: 1px solid rgba(224, 112, 60, 0.35);
+  padding: 2px 10px;
+  border-radius: 999px;
+  z-index: 2;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"] .material-icons-outlined {
+  color: #e0703c !important;
+}
+
+/* 飙升榜专属封面 */
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"] {
+  background: linear-gradient(145deg, #121820 0%, #1a2736 55%, #0e1319 100%) !important;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"]::before {
+  content: 'SURGE';
+  position: absolute;
+  right: -6px;
+  top: -8px;
+  font-family: var(--aimo-font-serif);
+  font-size: 58px;
+  font-weight: 800;
+  color: rgba(94, 168, 219, 0.12);
+  letter-spacing: -0.04em;
+  pointer-events: none;
+  z-index: 1;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"]::after {
+  content: 'TOP 02';
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  font-family: var(--aimo-font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #78bfe8;
+  background: rgba(94, 168, 219, 0.2);
+  border: 1px solid rgba(94, 168, 219, 0.35);
+  padding: 2px 10px;
+  border-radius: 999px;
+  z-index: 2;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"] .material-icons-outlined {
+  color: #5ea8db !important;
+}
+
+/* 新歌榜专属封面 */
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"] {
+  background: linear-gradient(145deg, #151a14 0%, #222e1e 55%, #111510 100%) !important;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"]::before {
+  content: 'NEW';
+  position: absolute;
+  right: -4px;
+  top: -8px;
+  font-family: var(--aimo-font-serif);
+  font-size: 58px;
+  font-weight: 800;
+  color: rgba(168, 191, 121, 0.12);
+  letter-spacing: -0.04em;
+  pointer-events: none;
+  z-index: 1;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"]::after {
+  content: 'TOP 03';
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  font-family: var(--aimo-font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #bed68d;
+  background: rgba(168, 191, 121, 0.2);
+  border: 1px solid rgba(168, 191, 121, 0.35);
+  padding: 2px 10px;
+  border-radius: 999px;
+  z-index: 2;
+}
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"] .material-icons-outlined {
+  color: #a8bf79 !important;
+}
+
+/* --------------------------------------------------------------------------
+   19. 发现页面分区导航胶囊条 (Discover Navigation Bar)
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] .cm-anchorbar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 4px 12px !important;
+  margin: -4px 0 16px !important;
+  background: color-mix(in srgb, var(--aimo-bg) 88%, transparent) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid var(--aimo-border-soft) !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+
+html[data-ui-preset="aimo"] .cm-anchorbar::-webkit-scrollbar {
+  display: none !important;
+}
+
+html[data-ui-preset="aimo"] .cm-anchorbar .cm-hot,
+html[data-ui-preset="aimo"] .cm-hot {
+  flex: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 34px !important;
+  padding: 0 16px !important;
+  border-radius: 999px !important;
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  color: var(--aimo-text-secondary) !important;
+  font-family: var(--aimo-font-sans) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.01em !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-anchorbar .cm-hot:hover,
+html[data-ui-preset="aimo"] .cm-hot:hover {
+  background: var(--aimo-bg-elevated) !important;
+  color: var(--aimo-text-primary) !important;
+  border-color: var(--aimo-border) !important;
+  transform: translateY(-1px);
+}
+
+html[data-ui-preset="aimo"] .cm-anchorbar .cm-hot:active,
+html[data-ui-preset="aimo"] .cm-hot:active {
+  transform: scale(0.96) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-anchorbar .cm-hot.on,
+html[data-ui-preset="aimo"] .cm-hot.on {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  border-color: transparent !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  font-weight: 600 !important;
+}
+
+/* --------------------------------------------------------------------------
+   20. 移动端导航栏：在 Aimo 设计下隐藏搜索按钮，保持 4 栏纯净极简对称
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] #bottomNav .navItem[href*="search"],
+html[data-ui-preset="aimo"] #bottomNav .sb-only {
+  display: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   21. 设置页面全面重构优化 (Settings Page Editorial Overhaul)
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] .cm-settings-hub {
+  max-width: 1080px !important;
+  margin: 18px auto 68px !important;
+  --settings-panel: var(--aimo-panel);
+  --settings-line: var(--aimo-border-soft);
+  --settings-muted: var(--aimo-text-secondary);
+}
+
+html[data-ui-preset="aimo"] .cm-settings-header {
+  padding: 16px 8px 28px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-eyebrow {
+  font-family: var(--aimo-font-sans) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.16em !important;
+  color: var(--aimo-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-header h1 {
+  font-family: var(--aimo-font-serif) !important;
+  font-size: 36px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--aimo-text-primary) !important;
+  margin: 8px 0 6px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-header p {
+  color: var(--aimo-text-secondary) !important;
+  font-size: 14.5px !important;
+  line-height: 1.8 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-emblem {
+  width: 64px !important;
+  height: 64px !important;
+  border-radius: var(--aimo-radius-surface) !important;
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  color: var(--aimo-primary) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+}
+
+/* 搜索栏：大圆角与沉入式微框 */
+html[data-ui-preset="aimo"] .cm-settings-search {
+  min-height: 52px !important;
+  padding: 0 18px !important;
+  border-radius: 999px !important;
+  background: var(--aimo-bg-sunken) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: none !important;
+  margin: 0 0 28px !important;
+  transition: border-color 180ms ease, box-shadow 180ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-search:focus-within {
+  border-color: var(--aimo-primary) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--aimo-primary) 15%, transparent) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-search input {
+  color: var(--aimo-text-primary) !important;
+  font-family: var(--aimo-font-sans) !important;
+  font-size: 14px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-search input::placeholder {
+  color: var(--aimo-text-tertiary) !important;
+}
+
+/* 侧边分类栏导航 */
+html[data-ui-preset="aimo"] .cm-settings-sidebar a {
+  border-radius: var(--aimo-radius-control) !important;
+  color: var(--aimo-text-secondary) !important;
+  font-family: var(--aimo-font-sans) !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  padding: 12px 16px !important;
+  min-height: 44px !important;
+  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-sidebar a:hover {
+  background: var(--aimo-panel) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-sidebar a[aria-current] {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  font-weight: 600 !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-sidebar a[aria-current] .material-icons-outlined {
+  color: var(--aimo-primary-text) !important;
+}
+
+/* 面包屑导航 */
+html[data-ui-preset="aimo"] .cm-settings-crumbs {
+  color: var(--aimo-text-secondary) !important;
+  font-size: 12.5px !important;
+  margin-bottom: 20px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-crumbs a {
+  color: var(--aimo-text-secondary) !important;
+  transition: color 150ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-crumbs a:hover {
+  color: var(--aimo-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-crumbs [aria-current] {
+  color: var(--aimo-text-primary) !important;
+  font-weight: 600 !important;
+}
+
+/* 设置分类卡片网格 */
+html[data-ui-preset="aimo"] .cm-settings-card {
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-surface) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  color: var(--aimo-text-primary) !important;
+  padding: 22px 20px !important;
+  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-card:hover {
+  background: var(--aimo-bg-elevated) !important;
+  border-color: var(--aimo-border-strong) !important;
+  transform: translateY(-2px);
+  box-shadow: var(--aimo-shadow-md) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-card>.material-icons-outlined:first-child {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 12px !important;
+  background: var(--aimo-bg-sunken) !important;
+  color: var(--aimo-primary) !important;
+  font-size: 22px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-card h2 {
+  font-family: var(--aimo-font-sans) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-card p,
+html[data-ui-preset="aimo"] .cm-settings-card div>span {
+  color: var(--aimo-text-secondary) !important;
+}
+
+/* 设置项聚合卡片与行列表 */
+html[data-ui-preset="aimo"] .cm-settings-hub .cm-setting-list {
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-surface) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  overflow: hidden !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-hub .cm-setting {
+  padding: 16px 20px !important;
+  min-height: 66px !important;
+  border-bottom: 1px solid var(--aimo-border-soft) !important;
+  color: var(--aimo-text-primary) !important;
+  transition: background 150ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-hub .cm-setting:last-child {
+  border-bottom: none !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-hub .cm-setting[role=button]:hover,
+html[data-ui-preset="aimo"] .cm-settings-hub button.cm-setting:hover {
+  background: var(--aimo-bg-elevated) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-hub .cm-setting-label {
+  font-family: var(--aimo-font-sans) !important;
+  font-weight: 500 !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-hub .cm-setting>i {
+  color: var(--aimo-text-secondary) !important;
+  font-style: normal !important;
+  font-size: 13px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-hub .cm-setting>.cm-setting-chevron {
+  color: var(--aimo-text-tertiary) !important;
+  opacity: 0.6 !important;
+  transition: transform 150ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-hub .cm-setting:hover > .cm-setting-chevron {
+  transform: translateX(2px);
+}
+
+/* 设置中弹出的二级配置弹窗 (Dialogs for Presets, Themes, Glass, Audio, etc.) */
+html[data-ui-preset="aimo"] .cm-more {
+  padding: 4px 2px !important;
+  gap: 10px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-more-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 14px 16px !important;
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-control) !important;
+  color: var(--aimo-text-primary) !important;
+  margin-top: 8px !important;
+  transition: background 150ms ease, border-color 150ms ease, transform 120ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-more-row:hover {
+  background: var(--aimo-bg-elevated) !important;
+  border-color: var(--aimo-border) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-more-row:active {
+  transform: scale(0.99) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-more-t {
+  font-size: 14px !important;
+  font-weight: 550 !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-more-s {
+  font-size: 12px !important;
+  color: var(--aimo-text-secondary) !important;
+  margin-top: 3px !important;
+  line-height: 1.6 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-more-chips {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin: 10px 0 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-more-chips mdui-chip {
+  border-radius: 999px !important;
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-more-chips mdui-chip[selected] {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  border-color: transparent !important;
+}
+
+html[data-ui-preset="aimo"] .cm-qm-item {
+  padding: 14px 16px !important;
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-control) !important;
+  margin-top: 8px !important;
+  color: var(--aimo-text-primary) !important;
+  transition: all 150ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-qm-item:hover {
+  background: var(--aimo-bg-elevated) !important;
+  border-color: var(--aimo-border) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-qm-item .material-icons-outlined {
+  color: var(--aimo-primary) !important;
+}
+
+html[data-ui-preset="aimo"] input[type="range"] {
+  accent-color: var(--aimo-primary) !important;
 }
 
 /* --------------------------------------------------------------------------
