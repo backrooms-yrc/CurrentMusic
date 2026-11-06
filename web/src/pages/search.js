@@ -12,7 +12,7 @@
 //   · TAB 栏就地更新计数而不整块重建，否则指示条的 cmTabIn 动画会被反复重播
 //   · prefers-reduced-motion 下全部跳过
 import { api, ncmSongs } from '../api.js';
-import { esc, renderSongList, toast } from '../ui.js';
+import { esc, fmtCount, renderSongList, toast } from '../ui.js';
 import { player } from '../player.js';
 import { addToPlaylist } from '../player-ui.js';
 import { loadingMarkup, loadingCycle } from '../loading.js';
@@ -90,7 +90,10 @@ export async function render(el, params = []) {
   const histBox = el.querySelector('#histBox');
   const resultBox = el.querySelector('#resultBox');
   let historyVisible = true;
-  const hotBox = document.createElement('div');
+  const hotBox = document.createElement('section');
+  hotBox.className = 'cm-hot-chart';
+  hotBox.setAttribute('aria-labelledby', 'searchHotTitle');
+  hotBox.hidden = true;
   histBox.after(hotBox);
 
   // 翱翔鸟Music：参考图二的 Apple Music 搜索页 —— 搜索框下方先给「类别浏览」彩色网格。
@@ -164,20 +167,44 @@ export async function render(el, params = []) {
   let hotRequest;
   async function hotKeywords() {
     const detail = await api.searchHotDetail().catch(() => null);
-    const words = (detail?.data || []).map(item => item.searchWord).filter(Boolean);
-    if (words.length) return words;
+    const rows = Array.isArray(detail?.data) ? detail.data.filter(item => item?.searchWord) : [];
+    if (rows.length) return rows;
     const simple = await api.ncm('/search/hot').catch(() => null);
-    return (simple?.result?.hots || []).map(item => item.first).filter(Boolean);
+    return (simple?.result?.hots || []).filter(item => item?.first).map(item => ({ searchWord: item.first }));
   }
   async function renderHot() {
     if (!historyVisible || (input.value || '').trim()) return;
     hotRequest ||= hotKeywords().catch(() => []);
-    const words = await hotRequest;
-    if (!el.isConnected || !historyVisible || (input.value || '').trim()) return;
-    hotBox.innerHTML = words.length ? `<div class="cm-sec-head"><h2>热门搜索</h2></div>
-      <div class="cm-chips">${words.slice(0, 12).map((word, i) =>
-        `<button type="button" class="cm-hot" data-k="${esc(word)}"><b>${i + 1}</b>${esc(word)}</button>`).join('')}</div>` : '';
+    const rows = (await hotRequest).slice(0, 12);
+    if (!rows.length || !hotBox.isConnected || !historyVisible || (input.value || '').trim()) return;
+    hotBox.hidden = false;
+    if (hotBox.firstElementChild) return;
+    hotBox.innerHTML = `
+      <header class="cm-hot-head">
+        <span class="material-icons-outlined cm-hot-icon" aria-hidden="true">trending_up</span>
+        <div><h2 id="searchHotTitle">搜索热榜</h2><p>网易云音乐热门搜索</p></div>
+        <span class="cm-hot-count">TOP ${rows.length}</span>
+      </header>
+      <ol class="cm-hot-list" id="searchHotList" role="list">${rows.map(({ searchWord, content, score }, i) => `
+        <li${i >= 6 ? ' hidden' : ''}>
+          <button type="button" class="cm-hot" data-k="${esc(searchWord)}" title="${esc(searchWord)}">
+            <b class="cm-hot-rank">${String(i + 1).padStart(2, '0')}</b>
+            <span class="cm-hot-copy"><strong>${esc(searchWord)}</strong>${content ? `<small>${esc(content)}</small>` : ''}</span>
+            ${Number.isFinite(Number(score)) && Number(score) > 0 ? `<span class="cm-hot-score" title="热度 ${esc(score)}"><span class="material-icons-outlined" aria-hidden="true">local_fire_department</span>${fmtCount(Number(score))}</span>` : ''}
+            <span class="material-icons-outlined cm-hot-arrow" aria-hidden="true">chevron_right</span>
+          </button>
+        </li>`).join('')}</ol>
+      ${rows.length > 6 ? `<button type="button" class="cm-hot-more" aria-controls="searchHotList" aria-expanded="false">展开全部 ${rows.length} 项<span class="material-icons-outlined" aria-hidden="true">expand_more</span></button>` : ''}`;
     hotBox.querySelectorAll('.cm-hot').forEach(c => { c.onclick = () => doSearch(c.dataset.k); });
+    const more = hotBox.querySelector('.cm-hot-more');
+    const extra = hotBox.querySelectorAll('.cm-hot-list li:nth-child(n+7)');
+    if (more) more.onclick = event => {
+      const expanded = more.getAttribute('aria-expanded') !== 'true';
+      extra.forEach(row => { row.hidden = !expanded; });
+      more.setAttribute('aria-expanded', String(expanded));
+      more.firstChild.textContent = expanded ? '收起榜单' : `展开全部 ${rows.length} 项`;
+      if (expanded && event.detail === 0) extra[0].querySelector('button').focus();
+    };
   }
 
   const renderHist = () => {
@@ -513,7 +540,7 @@ export async function render(el, params = []) {
     historyVisible = true;
     recordSearch(kw);
     renderHist();
-    hotBox.innerHTML = '';   // 有搜索内容后隐藏热搜
+    hotBox.hidden = true;
     catBox.style.display = 'none';
     local.hidden = true;
     resultBox.innerHTML = searchResultSkeleton(6);
@@ -555,7 +582,7 @@ export async function render(el, params = []) {
       return;
     }
     catBox.style.display = 'none';
-    histBox.innerHTML = ''; hotBox.innerHTML = '';
+    histBox.innerHTML = ''; hotBox.hidden = true;
     queueSuggest(kw);
   }
   input.addEventListener('compositionstart', () => { composing = true; hideSuggestions(); });

@@ -656,7 +656,7 @@ export async function songListHTML(songs, { removable = false, offset = 0, likeS
           ? s.lyricContext.map(line => line.matched ? `<mark>${esc(line.txt)}</mark>` : `<span>${esc(line.txt)}</span>`).join('')
           : `<span>${esc(s.lyric || s.lyricMatch || '')}</span>`}</div>` : ''}
       </div>
-      ${s.mv ? `<span class="cm-song-mv" data-act="mv" data-i="${offset + i}" title="播放 MV"><span class="material-icons-outlined">smart_display</span></span>` : ''}
+      ${s.mv ? `<button type="button" class="cm-song-mv" data-act="mv" data-i="${offset + i}" title="播放 MV" aria-label="播放 MV"><span class="material-icons-outlined" aria-hidden="true">smart_display</span></button>` : ''}
       <span class="cm-song-dur">${fmtDur(s.duration)}</span>
       <span class="cm-song-like ${liked ? 'on' : ''}" data-act="like" data-i="${offset + i}" title="${source === 'ncm' ? '红心到网易云' : '加入 CurrentMusic 我喜欢'}">
         <span class="material-icons-outlined">${liked ? 'favorite' : 'favorite_border'}</span>

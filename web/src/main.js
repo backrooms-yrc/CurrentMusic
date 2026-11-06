@@ -19,7 +19,7 @@ import { initPullToRefresh } from './ptr.js';
 import { engineChrome, engineOutdated } from './version.js';
 import { player } from './player.js';
 import { initPlayerUI } from './player-ui.js';
-import { initMv } from './mv.js';
+import { closeMv, initMv } from './mv.js';
 import { initCast } from './cast.js';
 import { bootUiPreset } from './uipreset.js';
 import { applyCustomize } from './customize.js';
@@ -311,6 +311,7 @@ function boot() {
   window.__cmHandleBack = function () {
     var cb = document.getElementById('cmtClose');
     if (cb) { cb.click(); return true; }
+    if (closeMv()) return true;
     var ov = document.getElementById('playerOverlay');
     if (ov && !ov.hidden) {
       var pc = document.getElementById('plClose');

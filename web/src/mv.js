@@ -1,85 +1,174 @@
-// MV 播放浮层：歌曲条右侧的「播放 MV」按钮 → 全屏播放对应 MV。
-//
-// 为什么走事件而不是直接 import：ui.js 负责渲染歌曲条，而 player.js 已经 import 了
-// ui.js；若 ui.js 再 import 本模块（本模块需要 player 来暂停音乐）就会形成循环依赖。
-// 所以 ui.js 只派发 `cm-playmv`，本模块监听并处理。
-import { api, auth } from './api.js';
+// MV 详情页和歌曲行浮层共用播放器，歌曲行通过事件传入数据。
+import { api } from './api.js';
 import { esc, toast } from './ui.js';
-import { player } from './player.js';
+import { on, player } from './player.js';
+import './mv.css';
 
-let overlay = null;
-let video = null;
-let resumeAfter = false;      // 打开 MV 前音乐是否在播（关闭后恢复）
-let lastFocus = null;
+let modal = null;
+let activeVideo = null;
 
-function ensureOverlay() {
-  if (overlay && document.body.contains(overlay)) return overlay;
-  overlay = document.createElement('div');
-  overlay.className = 'cm-mv-overlay';
-  overlay.innerHTML = `
-    <div class="cm-mv-box" role="dialog" aria-modal="true" aria-label="MV 播放">
-      <div class="cm-mv-head">
-        <div class="cm-mv-title" id="cmMvTitle">MV</div>
-        <span class="cm-mv-close" id="cmMvClose" title="关闭"><span class="material-icons-outlined">close</span></span>
-      </div>
-      <video class="cm-mv-video" id="cmMvVideo" controls playsinline preload="metadata"></video>
-      <div class="cm-mv-tip" id="cmMvTip">正在解析 MV 地址…</div>
+export function mountMvPlayer(stage, { id, title, cover, autoplay = false }) {
+  stage.innerHTML = `
+    <video class="cm-mv-video" aria-label="${esc(title)}" playsinline preload="metadata"${cover ? ` poster="${esc(cover)}"` : ''}></video>
+    <span class="cm-mv-quality" hidden></span>
+    <button type="button" class="cm-mv-start" aria-label="播放 MV" hidden><span class="material-icons-outlined" aria-hidden="true">play_arrow</span></button>
+    <div class="cm-mv-feedback">
+      <div class="cm-mv-status" role="status"><span class="cm-play-spinner" aria-hidden="true"></span><span></span></div>
+      <button type="button" class="cm-mv-retry" hidden>重新加载</button>
+      <a class="cm-mv-login" href="#/user" hidden>去登录</a>
     </div>`;
-  document.body.appendChild(overlay);
-  video = overlay.querySelector('#cmMvVideo');
-  overlay.querySelector('#cmMvClose').onclick = closeMv;
-  overlay.onclick = e => { if (e.target === overlay) closeMv(); };
-  return overlay;
+  const video = stage.querySelector('video');
+  const quality = stage.querySelector('.cm-mv-quality');
+  const start = stage.querySelector('.cm-mv-start');
+  const status = stage.querySelector('.cm-mv-status');
+  const retry = stage.querySelector('.cm-mv-retry');
+  const login = stage.querySelector('.cm-mv-login');
+  const spinner = status.firstElementChild;
+  const message = status.lastElementChild;
+  let disposed = false;
+  const active = () => !disposed && stage.isConnected;
+
+  function paint(text, action = '') {
+    message.textContent = text;
+    spinner.hidden = !text || !!action;
+    status.hidden = !text;
+    retry.hidden = action !== 'retry';
+    login.hidden = action !== 'login';
+    start.hidden = !!text || !video.paused;
+  }
+
+  function unload() {
+    if (activeVideo === video) activeVideo = null;
+    video.pause();
+    video.controls = false;
+    video.removeAttribute('src');
+    video.load();
+    quality.hidden = true;
+  }
+
+  async function play() {
+    try { await video.play(); }
+    catch {
+      // 系统禁止自动播放时，保留原生控件和居中的播放按钮。
+      if (active() && video.paused && !video.error && video.hasAttribute('src')) paint('');
+    }
+  }
+
+  async function load(shouldPlay) {
+    if (video.hasAttribute('src')) unload();
+    paint('正在获取播放地址…');
+    try {
+      // 上游可降级返回，清晰度以响应中的 r 为准。
+      const { data } = await api.ncm('/mv/url', { id, r: 1080 });
+      if (!active()) return;
+      if (!data?.url) throw new Error('暂无播放地址，可能受版权或地区限制');
+      video.src = data.url;
+      video.controls = true;
+      const resolution = Number(data.r);
+      if (Number.isFinite(resolution) && resolution > 0) {
+        quality.textContent = `${resolution}p`;
+        quality.setAttribute('aria-label', `清晰度 ${resolution}p`);
+        quality.hidden = false;
+      }
+      paint(shouldPlay ? '正在载入视频…' : '');
+      if (shouldPlay) void play();
+    } catch (error) {
+      if (!active()) return;
+      if (error.status === 401) paint('登录 CurrentMusic 后即可观看', 'login');
+      else paint(error.message || '播放地址获取失败', 'retry');
+    }
+  }
+
+  start.onclick = () => { video.focus(); void play(); };
+  retry.onclick = () => { void load(true); };
+  video.onplay = () => {
+    if (!active() || video.paused) return;
+    if (activeVideo && activeVideo !== video) activeVideo.pause();
+    if (player.isPlaying() || player.playPending) player.pause();
+    activeVideo = video;
+    paint(video.readyState < 3 ? '正在缓冲…' : '');
+  };
+  video.onwaiting = () => { if (active() && !video.paused) paint('正在缓冲…'); };
+  video.onplaying = () => { if (active()) paint(''); };
+  video.onpause = () => {
+    if (activeVideo === video && video.paused) activeVideo = null;
+    if (active() && video.paused && !video.error && video.hasAttribute('src')) paint('');
+  };
+  video.onerror = () => {
+    if (!active() || !video.hasAttribute('src')) return;
+    unload();
+    paint('视频播放失败，请重新加载', 'retry');
+  };
+  void load(autoplay);
+  return () => { disposed = true; unload(); };
 }
 
-function onKey(e) {
-  if (e.key === 'Escape') closeMv();
+function keepFocus(event) {
+  if (!modal.overlay.contains(event.target)) modal.close.focus();
 }
 
-export function closeMv() {
-  if (!overlay) return;
-  document.removeEventListener('keydown', onKey);
-  try { if (video) { video.pause(); video.removeAttribute('src'); video.load(); } } catch (e) { /* 忽略 */ }
-  overlay.remove();
-  overlay = null; video = null;
-  if (resumeAfter) { resumeAfter = false; try { player.play && player.play(); } catch (e) { /* 忽略 */ } }
-  if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) { /* 忽略 */ } }
-  lastFocus = null;
-}
-
-/** 打开某首歌的 MV；无 MV / 解析失败都给出明确提示。 */
-export async function openMv(song) {
-  if (!song) return;
-  const mvId = song.mv || 0;
-  if (!mvId) { toast('这首歌没有 MV'); return; }
-  const ov = ensureOverlay();
-  const title = `${song.name || ''}${song.artists ? ' · ' + song.artists : ''}`;
-  ov.querySelector('#cmMvTitle').textContent = title || 'MV';
-  const tip = ov.querySelector('#cmMvTip');
-  tip.textContent = '正在解析 MV 地址…';
-  tip.hidden = false;
-  // 播放 MV 时先暂停音乐，避免两路声音叠在一起；关闭后恢复原来的播放状态
-  resumeAfter = !!(player && player.isPlaying && player.isPlaying());
-  if (resumeAfter) { try { player.pause(); } catch (e) { /* 忽略 */ } }
-  lastFocus = document.activeElement;
-  document.addEventListener('keydown', onKey);
-  try {
-    // r=1080 请求最高档；上游若没有该档会**降级返回**，响应里的 r 是实际档位
-    const d = await api.ncm('/mv/url', { id: mvId, r: 1080 });
-    const it = (d && d.data) || {};
-    const url = it.url || '';
-    if (!url) throw new Error('未取得 MV 地址（可能受版权或地区限制）');
-    video.src = url;
-    tip.hidden = true;
-    const p = video.play();
-    if (p && p.catch) p.catch(() => { /* 自动播放被拦时由用户点播放键 */ });
-  } catch (e) {
-    tip.textContent = `MV 加载失败：${(e && e.message) || '未知错误'}`;
-    tip.hidden = false;
+function onKey(event) {
+  if (event.key === 'Escape' && !document.fullscreenElement) {
+    event.preventDefault();
+    closeMv();
   }
 }
 
-/** 绑定全局监听（由 main.js 调用一次）。 */
+export function closeMv() {
+  if (!modal) return false;
+  const { overlay, dispose, lastFocus, resume, song } = modal;
+  modal = null;
+  document.removeEventListener('keydown', onKey);
+  document.removeEventListener('focusin', keepFocus);
+  window.removeEventListener('hashchange', closeMv);
+  dispose();
+  overlay.remove();
+  if (resume && player.meta === song && !player.isPlaying()) player.play();
+  if (lastFocus?.isConnected) lastFocus.focus();
+  return true;
+}
+
+export function openMv(song) {
+  if (!song?.mv) { toast('这首歌没有 MV'); return; }
+  if (!modal) {
+    const overlay = document.createElement('div');
+    overlay.className = 'cm-mv-overlay';
+    overlay.innerHTML = `
+      <section class="cm-mv-box" role="dialog" aria-modal="true" aria-labelledby="cmMvTitle">
+        <header class="cm-mv-bar">
+          <span class="cm-mv-mark" aria-hidden="true">MV</span>
+          <div class="cm-mv-caption"><h2 id="cmMvTitle"></h2><p></p></div>
+          <button type="button" class="cm-mv-close" aria-label="关闭 MV"><span class="material-icons-outlined" aria-hidden="true">close</span></button>
+        </header>
+        <div class="cm-mv-stage"></div>
+      </section>`;
+    const close = overlay.querySelector('.cm-mv-close');
+    const resume = player.isPlaying() || player.playPending;
+    modal = { overlay, close, lastFocus: document.activeElement, resume, song: player.meta };
+    if (resume) player.pause();
+    document.body.appendChild(overlay);
+    close.onclick = closeMv;
+    overlay.onclick = event => { if (event.target === overlay) closeMv(); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('focusin', keepFocus);
+    window.addEventListener('hashchange', closeMv);
+  } else {
+    modal.dispose();
+  }
+  const title = song.name || 'MV 播放';
+  modal.overlay.querySelector('h2').textContent = title;
+  const artist = modal.overlay.querySelector('p');
+  artist.textContent = song.artists || '';
+  artist.hidden = !song.artists;
+  modal.dispose = mountMvPlayer(modal.overlay.querySelector('.cm-mv-stage'), {
+    id: song.mv, title, cover: song.pic, autoplay: true,
+  });
+  modal.close.focus();
+}
+
 export function initMv() {
-  document.addEventListener('cm-playmv', e => { openMv(e.detail).catch(() => {}); });
+  document.addEventListener('cm-playmv', event => openMv(event.detail));
+  on('state', () => {
+    if (activeVideo && !activeVideo.paused && (player.isPlaying() || player.playPending)) activeVideo.pause();
+  });
 }

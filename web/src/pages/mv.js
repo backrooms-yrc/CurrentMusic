@@ -3,23 +3,23 @@
 // 列表：/mv/all、/mv/first、/mv/exclusive/rcmd、/mv/sublist（T1 账号读）
 // 评论走通用抽屉（CM 类型 1 = MV），与歌曲/专辑/歌单同一套实现。
 import { api, auth } from '../api.js';
-import { esc, toast, fmtCount, skelVideo, skelGrid } from '../ui.js';
+import { esc, toast, fmtCount, fmtDur, skelVideo, skelGrid } from '../ui.js';
 import { openMlog } from '../mlog.js';
+import { mountMvPlayer } from '../mv.js';
 
 const AREAS = ['全部', '内地', '港台', '欧美', '日本', '韩国'];
 const ORDERS = ['上升最快', '最热', '最新', '独家'];
 
-const fmtTime = ms => {
-  const s = Math.round((Number(ms) || 0) / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-};
-
 const mvCard = m => `
-  <div class="cm-plcard" data-mvid="${m.id}">
-    <div class="cm-plcover">${m.cover ? `<img src="${esc(m.cover)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''}<span class="material-icons-outlined">videocam</span></div>
+  <a class="cm-plcard cm-mv-card" href="#/mv/${esc(m.id)}">
+    <div class="cm-plcover cm-cover-16x9">
+      ${m.cover ? `<img src="${esc(m.cover)}?param=400y225" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      <span class="material-icons-outlined" aria-hidden="true">videocam</span>
+      ${m.duration ? `<span class="cm-mv-duration">${fmtDur(m.duration)}</span>` : ''}
+    </div>
     <div class="cm-plname">${esc(m.name)}</div>
     <div class="cm-plsub">${esc(m.artistName || (m.artists || []).map(a => a.name).join(' / '))}${m.playCount ? ` · ${fmtCount(m.playCount)}` : ''}</div>
-  </div>`;
+  </a>`;
 
 /** 通用评论抽屉（与专辑页同一入口，避免把评论模块打进首屏包）。 */
 function openComments(type, id, title) {
@@ -28,27 +28,10 @@ function openComments(type, id, title) {
     .catch(() => toast('评论加载失败'));
 }
 
-/** 挂载一个 <video>（MV 与视频共用）：拿到播放地址后再赋值，缺地址时降级为提示。 */
-function playMedia(box, { load, cover }) {
-  api.ncm(load.path, load.params).then(d => {
-    const url = (d.data || {}).url;
-    if (!url) {
-      box.innerHTML = '<div class="cm-empty small">该资源暂无播放地址（可能受版权或地区限制）</div>';
-      return;
-    }
-    box.innerHTML = `<video class="cm-media" controls playsinline preload="metadata"${cover ? ` poster="${esc(cover)}"` : ''}></video>`;
-    const v = box.querySelector('video');
-    v.src = url;
-    v.onerror = () => { box.innerHTML = '<div class="cm-empty small">播放失败，请稍后重试</div>'; };
-  }).catch(e => {
-    box.innerHTML = `<div class="cm-empty small">播放地址获取失败：${esc(e.message)}</div>`;
-  });
-}
-
 // ---------------- MV 详情 ----------------
 
 async function renderDetail(el, id) {
-  el.innerHTML = skelVideo();
+  el.innerHTML = `<div class="cm-mv-page">${skelVideo()}</div>`;
   let d;
   try {
     d = await api.ncm('/mv/detail', { mvid: id });
@@ -56,32 +39,40 @@ async function renderDetail(el, id) {
     el.innerHTML = `<div class="cm-empty">MV 加载失败：${esc(e.message)}</div>`;
     return;
   }
+  if (!el.isConnected) return;
   const mv = d.data || d;
   if (!mv || !mv.id) { el.innerHTML = '<div class="cm-empty">未找到该 MV</div>'; return; }
-  const meta = [mv.artistName, mv.publishTime, mv.duration ? fmtTime(mv.duration) : '', mv.playCount ? `${fmtCount(mv.playCount)}次播放` : '']
+  const meta = [mv.artistName, mv.publishTime, mv.duration ? fmtDur(mv.duration) : '', mv.playCount ? `${fmtCount(mv.playCount)} 次播放` : '']
     .filter(Boolean).join(' · ');
 
-  el.innerHTML = `
-    <div class="cm-media-box" id="mvBox"></div>
-    <div class="cm-detail-head cm-mv-head">
+  el.firstElementChild.innerHTML = `
+    <div class="cm-mv-stage" id="mvBox"></div>
+    <header class="cm-mv-info">
       <div>
+        <span class="cm-mv-kicker"><span class="material-icons-outlined" aria-hidden="true">smart_display</span>音乐视频</span>
         <h2>${esc(mv.name)}</h2>
-        <div class="cm-detail-sub">${esc(meta)}</div>
-        <div class="cm-detail-sub" id="mvStats"></div>
-        <div class="cm-detail-actions">
-          <mdui-button variant="tonal" id="mvSub"><span class="material-icons-outlined">favorite_border</span>收藏 MV</mdui-button>
-          <mdui-button variant="tonal" id="mvCmt"><span class="material-icons-outlined">comment</span>评论</mdui-button>
-          <mdui-button variant="tonal" id="mvLike"><span class="material-icons-outlined">thumb_up</span>点赞 MV</mdui-button>
-          ${mv.artistId ? `<mdui-button variant="text" id="mvArtist"><span class="material-icons-outlined">person</span>歌手页</mdui-button>` : ''}
-        </div>
+        ${meta ? `<div class="cm-detail-sub">${esc(meta)}</div>` : ''}
+        <div class="cm-detail-sub" id="mvStats" hidden></div>
       </div>
-    </div>
+      <div class="cm-detail-actions">
+        <mdui-button variant="tonal" id="mvSub"><span class="material-icons-outlined" aria-hidden="true">favorite_border</span>收藏 MV</mdui-button>
+        <mdui-button variant="tonal" id="mvCmt"><span class="material-icons-outlined" aria-hidden="true">comment</span>评论</mdui-button>
+        <mdui-button variant="tonal" id="mvLike"><span class="material-icons-outlined" aria-hidden="true">thumb_up</span>点赞 MV</mdui-button>
+        ${mv.artistId ? `<mdui-button variant="text" id="mvArtist"><span class="material-icons-outlined" aria-hidden="true">person</span>歌手页</mdui-button>` : ''}
+      </div>
+    </header>
     ${mv.desc ? `<section class="cm-sec"><div class="cm-sec-head"><h2>MV 介绍</h2></div><div class="cm-al-desc">${esc(mv.desc)}</div></section>` : ''}
-    <section class="cm-sec" id="mvSimiSec" hidden><div class="cm-sec-head"><h2>相似 MV</h2></div><div class="cm-plgrid" id="mvSimi"></div></section>
+    <section class="cm-sec" id="mvSimiSec" hidden><div class="cm-sec-head"><h2>相似 MV</h2></div><div class="cm-plgrid cm-mv-grid" id="mvSimi"></div></section>
     <section class="cm-sec" id="mvMlogSec" hidden><div class="cm-sec-head"><h2>同曲 MLOG</h2></div><div class="cm-hscroll" id="mvMlog"></div></section>
     <section class="cm-sec" id="mvWikiSec" hidden><div class="cm-sec-head"><h2>MV 百科</h2></div><div id="mvWiki"></div></section>`;
 
-  playMedia(el.querySelector('#mvBox'), { load: { path: '/mv/url', params: { id: mv.id, r: 1080 } }, cover: mv.cover });
+  const dispose = mountMvPlayer(el.querySelector('#mvBox'), { id: mv.id, title: mv.name || 'MV 播放', cover: mv.cover });
+  const routeObserver = new MutationObserver(() => {
+    if (el.isConnected) return;
+    routeObserver.disconnect();
+    dispose();
+  });
+  routeObserver.observe(el.parentNode, { childList: true });
   el.querySelector('#mvCmt').onclick = () => openComments(1, mv.id, mv.name);
   const aBtn = el.querySelector('#mvArtist');
   if (aBtn) aBtn.onclick = () => { location.hash = `#/artist/${mv.artistId}`; };
@@ -92,18 +83,21 @@ async function renderDetail(el, id) {
     const b = el.querySelector('#mvSub');
     if (!b) return;
     b.innerHTML = on
-      ? '<span class="material-icons-outlined">favorite</span>已收藏'
-      : '<span class="material-icons-outlined">favorite_border</span>收藏 MV';
+      ? '<span class="material-icons-outlined" aria-hidden="true">favorite</span>已收藏'
+      : '<span class="material-icons-outlined" aria-hidden="true">favorite_border</span>收藏 MV';
     b.setAttribute('variant', on ? 'filled' : 'tonal');
   };
   paintSub(subed);
   api.ncm('/mv/detail/info', { mvid: mv.id }).then(info => {
     const bits = [];
-    if (info.likedCount) bits.push(`收藏 ${fmtCount(info.likedCount)}`);
+    if (info.likedCount) bits.push(`点赞 ${fmtCount(info.likedCount)}`);
     if (info.commentCount) bits.push(`评论 ${fmtCount(info.commentCount)}`);
     if (info.shareCount) bits.push(`分享 ${fmtCount(info.shareCount)}`);
     const box = el.querySelector('#mvStats');
-    if (box) box.textContent = bits.join(' · ');
+    if (box && bits.length) {
+      box.textContent = bits.join(' · ');
+      box.hidden = false;
+    }
   }).catch(() => {});
 
   // 点赞 MV（/resource/like，T2；type=1 表示 MV，上游按资源类型拼 threadId）
@@ -111,7 +105,7 @@ async function renderDetail(el, id) {
     const btn = ev.currentTarget;
     btn.loading = true;
     api.ncm('/resource/like', { type: 1, id: mv.id, t: 1, confirm: 1 })
-      .then(() => { toast('已点赞'); btn.innerHTML = '<span class="material-icons-outlined">thumb_up</span>已点赞'; })
+      .then(() => { toast('已点赞'); btn.innerHTML = '<span class="material-icons-outlined" aria-hidden="true">thumb_up</span>已点赞'; })
       .catch(e => toast(/绑定|401/.test(e.message) ? '需先绑定网易云账号' : e.message))
       .finally(() => { btn.loading = false; });
   };
@@ -137,9 +131,6 @@ async function renderDetail(el, id) {
     const sec = el.querySelector('#mvSimiSec');
     sec.hidden = false;
     el.querySelector('#mvSimi').innerHTML = list.map(mvCard).join('');
-    el.querySelectorAll('#mvSimi .cm-plcard').forEach(c => {
-      c.onclick = () => { location.hash = `#/mv/${c.dataset.mvid}`; };
-    });
   }).catch(() => {});
 
   // 同曲 MLOG：/mlog/music/rcmd 按 mvid 给出关联 MLOG；播放地址走 /mlog/url，
@@ -156,7 +147,7 @@ async function renderDetail(el, id) {
       <div class="cm-card" data-mlog="${esc(f.id)}">
         <img src="${esc(f.cover || mv.cover)}?param=300y300" loading="lazy" onerror="this.classList.add('none')">
         <div class="cm-card-name">${esc(f.name)}</div>
-        <div class="cm-card-sub">${f.duration ? fmtTime(f.duration) : 'MLOG'}</div>
+        <div class="cm-card-sub">${f.duration ? fmtDur(f.duration) : 'MLOG'}</div>
       </div>`).join('');
     el.querySelectorAll('#mvMlog .cm-card').forEach(c => {
       c.onclick = () => openMlog(c.dataset.mlog, mv.cover);
@@ -201,7 +192,7 @@ async function renderList(el, params = {}) {
       ${TABS.map(t => `<button class="cm-sqtab${t.key === state.tab ? ' on' : ''}" data-k="${t.key}">${t.label}</button>`).join('')}
     </div>
     <div id="mvFilter"></div>
-    <div id="mvList" class="cm-plgrid"></div>`;
+    <div id="mvList" class="cm-plgrid cm-mv-grid"></div>`;
 
   el.querySelectorAll('#mvTabs .cm-sqtab').forEach(b => {
     b.onclick = () => {
@@ -255,11 +246,6 @@ async function renderList(el, params = {}) {
       return;
     }
     listBox.insertAdjacentHTML('beforeend', rows.map(mvCard).join(''));
-    listBox.querySelectorAll('.cm-plcard').forEach(c => {
-      if (c.dataset.bound) return;
-      c.dataset.bound = '1';
-      c.onclick = () => { location.hash = `#/mv/${c.dataset.mvid}`; };
-    });
     const more = state.tab === 'all' ? d.hasMore : rows.length >= 30;
     listBox.querySelector('#mvMore')?.remove();
     if (more) {
