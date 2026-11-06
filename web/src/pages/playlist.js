@@ -62,13 +62,14 @@ export async function render(el, params) {
   ];
   const isNcm = kind === 'pl' && badge;
   let sortKey = sessionStorage.getItem('cm.plSort') || (isNcm ? 'desc' : 'asc');
-  const applySort = arr => {
-    if (sortKey === 'desc') return [...arr].reverse();
-    if (sortKey === 'name') return [...arr].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh'));
-    if (sortKey === 'artist') return [...arr].sort((a, b) => (a.artists || '').localeCompare(b.artists || '', 'zh'));
-    return arr;
+  const originalSongs = [...songs];
+  const applySort = (arr, key = sortKey) => {
+    if (key === 'desc') return [...arr].reverse();
+    if (key === 'name') return [...arr].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh'));
+    if (key === 'artist') return [...arr].sort((a, b) => (a.artists || '').localeCompare(b.artists || '', 'zh'));
+    return [...arr];
   };
-  songs = applySort(songs);
+  songs = applySort(originalSongs, sortKey);
 
   el.innerHTML = `
     <div class="cm-plsort" id="plSort">
@@ -95,9 +96,42 @@ export async function render(el, params) {
     <div id="list"></div>
     <section class="cm-sec" id="plSimiSec" hidden><div class="cm-sec-head"><h2>相似歌单</h2></div><div class="cm-plgrid" id="plSimi"></div></section>`;
 
+  const attachSongList = async () => {
+    await renderSongList(list, songs, {
+      deferStatus: true,
+      likeSource: id === 'likes' ? 'local' : undefined,
+      onPlay: i => player.playList(songs, i),
+      onRemove: removable ? async i => {
+        const s = songs[i];
+        try {
+          if (id === 'likes') await api.toggleLike(s);
+          else await api.delPlaylistTracks(+id, [s.ncm_id]);
+          const origIdx = originalSongs.indexOf(s);
+          if (origIdx >= 0) originalSongs.splice(origIdx, 1);
+          songs.splice(i, 1);
+          render(el, params);
+        } catch (e) { toast(e.message); }
+      } : undefined,
+    });
+  };
+
   el.querySelectorAll('#plSort mdui-chip').forEach(ch => {
-    ch.onclick = () => {
-      sessionStorage.setItem('cm.plSort', ch.dataset.k);
+    ch.onclick = async () => {
+      const k = ch.dataset.k;
+      sessionStorage.setItem('cm.plSort', k);
+      const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
+      if (isAimo) {
+        sortKey = k;
+        el.querySelectorAll('#plSort mdui-chip').forEach(c => {
+          if (c === ch) c.setAttribute('selected', '');
+          else c.removeAttribute('selected');
+        });
+        songs = applySort(originalSongs, sortKey);
+        await attachSongList();
+        const playBtn = el.querySelector('#playAll');
+        if (playBtn) playBtn.onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
+        return;
+      }
       render(el, params);
     };
   });
@@ -128,20 +162,7 @@ export async function render(el, params) {
       .catch(e => toast('编辑器加载失败：' + e.message));
   };
 
-  await renderSongList(list, songs, {
-    deferStatus: true,
-    likeSource: id === 'likes' ? 'local' : undefined,
-    onPlay: i => player.playList(songs, i),
-    onRemove: removable ? async i => {
-      const s = songs[i];
-      try {
-        if (id === 'likes') await api.toggleLike(s);
-        else await api.delPlaylistTracks(+id, [s.ncm_id]);
-        songs.splice(i, 1);
-        render(el, params);
-      } catch (e) { toast(e.message); }
-    } : undefined,
-  });
+  await attachSongList();
 
   el.querySelector('#playAll').onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
   const sharePl = el.querySelector('#sharePl');

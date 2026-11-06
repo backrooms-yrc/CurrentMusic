@@ -1309,6 +1309,77 @@ html[data-ui-preset="aimo"] .cm-detail-head h2 {
   margin: 0 0 8px 0 !important;
 }
 
+/* 详情头部操作按钮微调：文字与图标大小适中、严格居中对齐 */
+html[data-ui-preset="aimo"] .cm-detail-actions {
+  display: flex !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+}
+
+html[data-ui-preset="aimo"] .cm-detail-actions mdui-button {
+  height: 36px !important;
+  min-height: 36px !important;
+  font-size: 13px !important;
+  font-weight: 550 !important;
+  line-height: 1 !important;
+  letter-spacing: -0.01em !important;
+  border-radius: 999px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-detail-actions mdui-button::part(button) {
+  padding: 0 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
+}
+
+html[data-ui-preset="aimo"] .cm-detail-actions mdui-button .material-icons-outlined {
+  font-size: 17px !important;
+  width: 17px !important;
+  height: 17px !important;
+  line-height: 17px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* 排序区域 Chip 胶囊美化与居中 */
+html[data-ui-preset="aimo"] .cm-plsort {
+  padding: 2px 0 14px 0 !important;
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plsort-l {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--aimo-text-secondary) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plsort-l .material-icons-outlined {
+  font-size: 15px !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+}
+
+html[data-ui-preset="aimo"] .cm-plsort mdui-chip {
+  --mdui-comp-chip-height: 28px !important;
+  height: 28px !important;
+  font-size: 12px !important;
+  border-radius: 999px !important;
+  transition: all 140ms ease !important;
+}
+
 /* --------------------------------------------------------------------------
    14. 社交、帖子、用户卡片与空状态修复
    -------------------------------------------------------------------------- */
@@ -1506,6 +1577,14 @@ html[data-ui-preset="aimo"] mdui-button::part(button) {
 html[data-ui-preset="aimo"] mdui-button:active {
   transform: scale(0.985);
   opacity: 0.92;
+}
+
+html[data-ui-preset="aimo"] mdui-button .material-icons-outlined {
+  vertical-align: middle !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
 }
 
 /* 实心主按钮 (filled) */
