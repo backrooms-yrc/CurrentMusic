@@ -345,6 +345,10 @@ export const api = {
   commentPost: (ncmId, content, commentId) => call('POST', `/ncmbind/comment/${ncmId}`, { body: { content, commentId }, auth: true }),
   commentLike: (ncmId, commentId, like) => call('POST', `/ncmbind/comment-like/${ncmId}`, { body: { commentId, like }, auth: true }),
   commentFloor: (ncmId, cid) => call('GET', `/ncm/comment/floor?id=${ncmId}&cid=${cid}`),
+  commentPage: params => call('GET', `/ncm/comments/page?${new URLSearchParams(params)}`, { auth: true }),
+  commentReplies: params => call('GET', `/ncm/comments/replies?${new URLSearchParams(params)}`, { auth: true }),
+  writeComment: (params, like = false) => call('POST', like ? '/ncm/comment/like' : '/ncm/comment',
+    { auth: true, body: { ...params, confirm: 1 } }),
   hotSearch: () => call('GET', '/ncm/hot'),
   commentDelete: (ncmId, commentId) => call('DELETE', `/ncmbind/comment/${ncmId}`, { body: { commentId }, auth: true }),
 

@@ -1,54 +1,43 @@
-// 通用评论抽屉（阶段二）：一套组件覆盖 6 个维度
-//   type: 0 歌曲 / 1 MV / 2 歌单 / 3 专辑 / 4 电台节目 / 5 视频 / 6 动态
-// 读：/comment/{music|mv|playlist|album|dj|video|event}（T0，游客可看）
-// 写：/comment（t=0 发表 / 1 删除 / 2 回复）、/comment/like、/hug/comment（T2，需 confirm=1）
-// 楼层：/comment/floor    统计：/comment/info/list    抱一抱列表：/comment/hug/list
-// 举报：/comment/report
-import { api, auth } from './api.js';
-import { esc, toast, skelComments } from './ui.js';
+// 通用网易云评论抽屉。排序与楼层分页使用服务端统一响应。
+import { api } from './api.js';
+import { esc, fmtCount, toast, skelComments } from './ui.js';
 import { renderEmoticons, fmtCmtTime } from './commentutil.js';
 
-// 显式路径表：上游每个维度是独立路由，写清楚比拼接更可读、也便于覆盖率工具识别
-const COMMENT_PATH = {
-  0: '/comment/music', 1: '/comment/mv', 2: '/comment/playlist', 3: '/comment/album',
-  4: '/comment/dj', 5: '/comment/video', 6: '/comment/event',
-};
+const SORTS = { recommended: '推荐', hot: '最热', latest: '最新' };
 export const COMMENT_TYPE = { song: 0, mv: 1, playlist: 2, album: 3, dj: 4, video: 5, event: 6 };
+let dismissComments;
 
-/** 上游原始评论 → 内部结构。上游字段在 hotComments/comments 间一致，此处统一。 */
-function normComment(c) {
-  const u = c.user || {};
-  const be = (c.beReplied && c.beReplied[0]) || null;
-  return {
-    id: c.commentId,
-    uid: u.userId,
-    nickname: u.nickname || '网易云用户',
-    avatar: (u.avatarUrl || '').replace(/^http:/, 'https:'),
-    content: c.content || '',
-    liked: c.likedCount || 0,
-    likedByMe: !!c.liked,
-    time: c.time,
-    beNickname: be ? ((be.user || {}).nickname || '') : '',
-    beContent: be ? (be.content || '') : '',
-    replyCount: (c.showFloorComment && c.showFloorComment.replyCount) || c.replyCount || 0,
-  };
-}
-
-/**
- * 打开评论抽屉。
- * @param {object} o { type, id, title }
- */
 export async function openComments({ type = 0, id, title = '' } = {}) {
-  const path = COMMENT_PATH[type];
-  if (!path || !id) return toast('缺少评论对象');
-
-  const old = document.getElementById('commentOverlay');
-  if (old) old.remove();
+  if (!Object.values(COMMENT_TYPE).includes(type) || !id) return toast('缺少评论对象');
+  dismissComments?.(true);
   const ov = document.createElement('div');
   ov.id = 'commentOverlay';
+  ov.innerHTML = `
+    <div class="cmt-page">
+      <header class="cmt-top">
+        <button type="button" class="pl-btn cmt-action" id="cmtClose" aria-label="关闭评论"><span class="material-icons-outlined" aria-hidden="true">keyboard_arrow_down</span></button>
+        <div class="cmt-title">评论区 · ${esc(title)}</div>
+        <span class="cmt-top-spacer" aria-hidden="true"></span>
+      </header>
+      <div class="cmt-modes" role="group" aria-label="评论排序">
+        ${Object.entries(SORTS).map(([key, label]) =>
+          `<button type="button" class="cmt-mode cmt-action" data-sort="${key}" aria-pressed="false">${label}</button>`).join('')}
+        <span class="cmt-total"></span>
+      </div>
+      <div class="cmt-list" id="cmtList">
+        <div class="cmt-items"></div>
+        <div class="cmt-list-status" role="status"></div>
+        <button type="button" class="cmt-page-more cmt-action" id="cmtMore" hidden></button>
+      </div>
+      <div class="cmt-composer">
+        <div id="cmtReplyBar" hidden><span></span><button type="button" class="cmt-action" id="cmtReplyCancel" aria-label="取消回复"><span class="material-icons-outlined" aria-hidden="true">close</span></button></div>
+        <input id="cmtInput" type="text" maxlength="140" aria-label="网易云评论内容" placeholder="绑定网易云账号后可发评" disabled>
+        <mdui-button variant="filled" id="cmtSend" disabled>发送</mdui-button>
+      </div>
+    </div>`;
   document.body.appendChild(ov);
   document.dispatchEvent(new Event('cm-comments-visibility'));
-  let closing = false;
+
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const entered = reduced ? Promise.resolve() : new Promise(resolve => {
     const finish = () => { clearTimeout(timer); ov.removeEventListener('animationend', end); resolve(); };
@@ -56,266 +45,344 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
     const timer = setTimeout(finish, 280);
     ov.addEventListener('animationend', end);
   });
-  function close() {
-    if (closing) return;
+  let closing = false;
+  const active = () => !closing && ov.isConnected;
+  function close(immediate = false) {
+    if (closing && !immediate) return;
     closing = true;
+    window.removeEventListener('cm-authchange', authChanged);
     ov.classList.add('closing');
-    setTimeout(() => {
+    const remove = () => {
+      if (!ov.isConnected) return;
       ov.remove();
+      if (dismissComments === close) dismissComments = null;
       document.dispatchEvent(new Event('cm-comments-visibility'));
-    }, reduced ? 0 : 240);
+    };
+    if (immediate || reduced) remove();
+    else setTimeout(remove, 240);
+  }
+  function authChanged() { close(true); }
+  window.addEventListener('cm-authchange', authChanged);
+  dismissComments = close;
+
+  const input = ov.querySelector('#cmtInput');
+  const sendButton = ov.querySelector('#cmtSend');
+  const replyBar = ov.querySelector('#cmtReplyBar');
+  const list = ov.querySelector('#cmtList');
+  const items = list.querySelector('.cmt-items');
+  const status = list.querySelector('.cmt-list-status');
+  const moreButton = list.querySelector('#cmtMore');
+  const total = ov.querySelector('.cmt-total');
+  const resource = { type, id };
+  const writeResource = type === COMMENT_TYPE.event ? { type, threadId: id } : resource;
+  const floors = new WeakMap();
+  const reactions = new Map();
+  const liking = new Set();
+  let current, meUid = '', replyTo = null, sending = false;
+
+  function setReply(target) {
+    replyTo = target;
+    replyBar.hidden = !target;
+    replyBar.firstElementChild.textContent = target ? `回复 @${target.nickname}` : '';
+    input.placeholder = target ? `回复 @${target.nickname}…` : meUid
+      ? '以网易云账号发表评论…' : '绑定网易云账号后可发评';
   }
 
-  let offset = 0, total = 0, more = true, meUid = 0, loading = false, replyTo = null;
-  // 三种排序各有独立上游：推荐=实体列表接口（热门+最新），最热=/comment/hot，最新=/comment/new
-  let mode = 'default';
-  const likedSet = new Set(JSON.parse(sessionStorage.getItem('cm.cmtLiked') || '[]'));
-  const saveLiked = () => sessionStorage.setItem('cm.cmtLiked', JSON.stringify([...likedSet]));
+  function updateComposer(uid) {
+    const next = uid ? String(uid) : '';
+    if (meUid === next) return;
+    meUid = next;
+    input.disabled = !meUid;
+    sendButton.disabled = !meUid;
+    if (!meUid) setReply(null);
+    else setReply(replyTo);
+  }
 
-  const render = () => {
-    ov.innerHTML = `
-      <div class="cmt-page">
-        <div class="cmt-top">
-          <span class="pl-btn" id="cmtClose"><span class="material-icons-outlined">keyboard_arrow_down</span></span>
-          <div class="cmt-title">评论区 · ${esc(title)}</div>
-          <span style="width:36px"></span>
-        </div>
-        <div class="cmt-modes">
-          ${[['default', '推荐'], ['hot', '最热'], ['new', '最新']].map(([k, l]) =>
-            `<span class="cmt-mode${k === mode ? ' on' : ''}" data-m="${k}">${l}</span>`).join('')}
-        </div>
-        <div class="cmt-list" id="cmtList">${skelComments(5)}</div>
-        <div class="cmt-composer">
-          <div id="cmtReplyBar" hidden><span></span><i id="cmtReplyCancel"><span class="material-icons-outlined">close</span></i></div>
-          <input id="cmtInput" type="text" maxlength="140" placeholder="${meUid ? '以网易云账号发表评论…' : '绑定网易云账号后可发评'}" ${meUid ? '' : 'disabled'}>
-          <mdui-button variant="filled" id="cmtSend" ${meUid ? '' : 'disabled'}>发送</mdui-button>
-        </div>
-      </div>`;
-    ov.querySelector('#cmtClose').onclick = close;
-    ov.querySelector('#cmtSend').onclick = send;
-    ov.querySelector('#cmtInput').onkeydown = e => { if (e.key === 'Enter') send(); };
-    ov.querySelector('#cmtReplyCancel').onclick = () => setReply(null);
-    ov.querySelectorAll('.cmt-mode').forEach(el => {
-      el.onclick = () => {
-        if (el.dataset.m === mode) return;
-        mode = el.dataset.m;
-        ov.querySelectorAll('.cmt-mode').forEach(x => x.classList.toggle('on', x === el));
-        offset = 0; more = true;
-        const box = ov.querySelector('#cmtList');
-        if (box) box.innerHTML = skelComments(5);
-        load(true);
-      };
-    });
-  };
+  function requireBinding() {
+    if (meUid) return true;
+    toast('请先登录并绑定网易云账号');
+    return false;
+  }
 
-  const cmtHTML = c => {
-    const liked = likedSet.has(c.id) || c.likedByMe;
-    const mine = c.uid && meUid && c.uid === meUid;
+  function icon(name) {
+    return `<span class="material-icons-outlined" aria-hidden="true">${name}</span>`;
+  }
+
+  function rowHTML(c, nested) {
+    const mine = !!meUid && String(c.userId) === meUid;
+    const { liked, count } = reactions.get(c.id) || { liked: c.likedByMe, count: Number(c.liked) || 0 };
+    const replies = Number(c.replyCount) || 0;
     return `
-    <div class="cmt-item" data-cid="${c.id}">
-      ${c.avatar ? `<img src="${esc(c.avatar)}" loading="lazy">` : `<div class="cmt-avaph"></div>`}
-      <div class="cmt-main">
-        <div class="cmt-head">
-          <span class="cmt-nick">${esc(c.nickname)}</span>
-          ${mine ? '<span class="cmt-mine">我</span><span class="cmt-del" title="删除">删除</span>' : ''}
+      <article class="cmt-item${nested ? ' cmt-floor-item' : ''}" data-cid="${esc(c.id)}">
+        ${c.avatar ? `<img src="${esc(c.avatar)}" alt="" loading="lazy">` : `<div class="cmt-avaph">${icon('person')}</div>`}
+        <div class="cmt-main">
+          <div class="cmt-head">
+            <span class="cmt-nick">${esc(c.nickname || '网易云用户')}</span>
+            ${mine ? '<span class="cmt-mine">我</span><button type="button" class="cmt-del cmt-action" data-action="delete">删除</button>' : ''}
+          </div>
+          ${c.beNickname ? `<div class="cmt-be">回复 <strong>@${esc(c.beNickname)}</strong>${c.beContent ? ` · ${renderEmoticons(esc(c.beContent))}` : ' · 原评论已删除'}</div>` : ''}
+          <div class="cmt-content">${renderEmoticons(esc(c.content))}</div>
+          <div class="cmt-foot">
+            <span class="cmt-time">${fmtCmtTime(c.time)}</span>
+            <button type="button" class="cmt-action cmt-reply" data-action="reply">回复</button>
+            ${!nested && type === COMMENT_TYPE.song ? `<button type="button" class="cmt-action cmt-hug" data-action="hug" data-uid="${esc(c.userId)}">抱一抱</button>` : ''}
+            ${nested ? '' : '<button type="button" class="cmt-action cmt-report" data-action="report">举报</button>'}
+            <button type="button" class="cmt-action cmt-like${liked ? ' on' : ''}" data-action="like" data-id="${esc(c.id)}"
+              data-count="${count}" aria-label="点赞 ${count}" aria-pressed="${!!liked}" ${liking.has(c.id) ? 'disabled' : ''}>
+              ${icon(liked ? 'thumb_up' : 'thumb_up_off_alt')}<span class="cmt-like-count">${count ? fmtCount(count) : '赞'}</span>
+            </button>
+          </div>
+          ${nested ? '' : `
+            <button type="button" class="cmt-action cmt-floor-btn" data-action="floor" data-count="${replies}"
+              aria-expanded="false" aria-controls="floor-${esc(c.id)}" ${replies ? '' : 'hidden'}>${icon('expand_more')}<span class="cmt-floor-label">展开 ${fmtCount(replies)} 条回复</span></button>
+            <div class="cmt-floor" id="floor-${esc(c.id)}" data-parent="${esc(c.id)}" hidden>
+              <div class="cmt-floor-items"></div>
+              <div class="cmt-floor-status" role="status"></div>
+              <button type="button" class="cmt-action cmt-floor-more" data-action="floor-more" hidden></button>
+            </div>`}
         </div>
-        ${c.beNickname ? `<div class="cmt-be">回复 @${esc(c.beNickname)}：${esc(c.beContent)}</div>` : ''}
-        <div class="cmt-content">${renderEmoticons(esc(c.content))}</div>
-        <div class="cmt-foot">
-          <span>${fmtCmtTime(c.time)}</span>
-          <span class="cmt-like ${liked ? 'on' : ''}" data-like="${c.id}"><span class="mi">${liked ? 'thumb_up' : 'thumb_up_alt'}</span> ${c.liked || 0}</span>
-          <span class="cmt-reply" data-rep="${c.id}">回复</span>
-          ${type === 0 ? `<span class="cmt-hug" data-hug="${c.id}" data-uid="${c.uid || 0}" title="抱一抱">🤗 抱一抱</span>` : ''}
-          <span class="cmt-report" data-rpt="${c.id}" title="举报">举报</span>
-          ${c.replyCount ? `<span class="cmt-floor-btn" data-floor="${c.id}">查看回复(${c.replyCount})</span>` : ''}
-        </div>
-        <div class="cmt-floor" id="floor-${c.id}" hidden></div>
-      </div>
-    </div>`;
-  };
-
-  function setReply(r) {
-    replyTo = r;
-    const bar = ov.querySelector('#cmtReplyBar');
-    const input = ov.querySelector('#cmtInput');
-    if (!bar || !input) return;
-    if (r) { bar.hidden = false; bar.querySelector('span').textContent = `回复 @${r.nickname}`; input.placeholder = `回复 @${r.nickname}…`; input.focus(); }
-    else { bar.hidden = true; input.placeholder = meUid ? '以网易云账号发表评论…' : '绑定网易云账号后可发评'; }
+      </article>`;
   }
 
-  async function load(reset) {
-    if (loading) return;
-    loading = true;
-    const requestMode = mode;
-    if (reset) { offset = 0; more = true; }
-    if (!more) { loading = false; return; }
+  function appendRows(box, rows, seen, nested = false) {
+    const fresh = rows.filter(row => {
+      if (seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    });
+    if (fresh.length) box.insertAdjacentHTML('beforeend', `<div class="${nested ? 'cmt-floor-batch' : 'cmt-batch'}">${fresh.map(row => rowHTML(row, nested)).join('')}</div>`);
+  }
+
+  function switchSort(sort) {
+    current = { sort, page: 1, cursor: null, more: true, pending: false, seen: new Set() };
+    for (const button of ov.querySelectorAll('[data-sort]')) {
+      const selected = button.dataset.sort === sort;
+      button.classList.toggle('on', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    }
+    list.scrollTop = 0;
+    items.innerHTML = skelComments(5);
+    total.textContent = '';
+    return loadPage(current);
+  }
+
+  async function loadPage(state) {
+    if (state.pending || !state.more) return;
+    state.pending = true;
+    list.setAttribute('aria-busy', 'true');
+    moreButton.hidden = true;
+    status.textContent = state.page > 1 ? '正在加载更多评论…' : '';
     try {
-      const pg = ov.querySelector('#cmtMore');
-      if (pg) pg.outerHTML = '<div class="cmt-more-loading" id="cmtMoreWrap"><mdui-circular-progress></mdui-circular-progress> 加载中…</div>';
-      let d;
-      if (mode === 'hot') {
-        d = await api.ncm('/comment/hot', { id, type, offset, limit: 20 });
-      } else if (mode === 'new') {
-        d = await api.ncm('/comment/new', { id, type, pageNo: Math.floor(offset / 20) + 1, pageSize: 20, sortType: 2 });
-      } else {
-        d = await api.ncm(path, { id, type, offset, limit: 20 });
-      }
-      // 入场期间只合成抽屉，不同时重建评论列表、图片及 MDUI 控件。
+      const data = await api.commentPage({ ...resource, sort: state.sort, page: state.page,
+        ...(state.cursor ? { cursor: state.cursor } : {}) });
       await entered;
-      if (closing || !ov.isConnected) return;
-      if (requestMode !== mode) { setTimeout(() => load(true), 0); return; }
-      meUid = d.userId || meUid;
-      total = d.total || ((d.data || {}).total) || 0;
-      if (reset) render();
-      const box = ov.querySelector('#cmtList');
-      box.querySelectorAll('.cmt-skel').forEach(el => el.remove());
-      const rawList = d.comments || ((d.data || {}).comments) || ((d.data || {}).data) || [];
-      const hot = mode === 'default' ? (d.hotComments || []).map(normComment) : [];
-      const list = (Array.isArray(rawList) ? rawList : []).map(normComment);
-      const html = (offset === 0 && hot.length ? `<div class="cmt-sec">热门评论</div>` + hot.map(cmtHTML).join('') : '')
-        + (offset === 0 ? `<div class="cmt-sec">最新评论（${total}）</div>` : '')
-        + list.map(cmtHTML).join('');
-      const wrapEl = document.createElement('div');
-      wrapEl.className = 'cmt-batch';
-      wrapEl.innerHTML = html;
-      box.appendChild(wrapEl);
-      ov.querySelector('#cmtMoreWrap')?.remove();
-      offset += list.length;
-      more = !!(d.more || (d.data || {}).hasMore);
-      if (more) {
-        box.insertAdjacentHTML('beforeend', `<div class="cm-empty small" id="cmtMore" style="cursor:pointer">加载更多</div>`);
-        box.querySelector('#cmtMore').onclick = () => load(false);
-      }
-      bindActions();
-    } catch (e) {
-      if (closing || !ov.isConnected) return;
-      ov.querySelector('#cmtMoreWrap')?.remove();
-      toast(`评论加载失败：${e.message}`);
+      if (!active() || current !== state) return;
+      updateComposer(data.meUid);
+      if (state.page === 1) items.innerHTML = '';
+      appendRows(items, data.comments, state.seen);
+      total.textContent = data.total ? `${fmtCount(data.total)} 条评论` : '';
+      status.textContent = state.seen.size ? '' : '还没有评论';
+      state.page += 1;
+      state.cursor = data.nextCursor;
+      state.more = data.more;
+      moreButton.textContent = '加载更多评论';
+      moreButton.hidden = !state.more;
+    } catch (error) {
+      if (!active() || current !== state) return;
+      if (state.page === 1) items.innerHTML = '';
+      status.textContent = `评论加载失败 · ${error.message}`;
+      moreButton.textContent = '重新加载';
+      moreButton.hidden = false;
     } finally {
-      loading = false;
+      state.pending = false;
+      if (active() && current === state) list.removeAttribute('aria-busy');
     }
   }
 
-  function bindActions() {
-    ov.querySelectorAll('.cmt-del').forEach(el => {
-      el.onclick = async () => {
-        const cid = +el.closest('.cmt-item').dataset.cid;
-        try {
-          await api.ncm('/comment/delete', { id, type, cid, confirm: 1 });
-          el.closest('.cmt-item').remove();
-          toast('评论已删除');
-        } catch (e) { toast(e.message); }
-      };
-    });
-    ov.querySelectorAll('.cmt-like').forEach(el => {
-      el.onclick = async () => {
-        const cid = +el.dataset.like;
-        const cur = el.classList.contains('on');
-        try {
-          // t：0 点赞 / 1 取消（上游约定）
-          await api.ncm('/comment/like', { id, cid, type, t: cur ? 1 : 0, confirm: 1 });
-          el.classList.toggle('on', !cur);
-          if (cur) likedSet.delete(cid); else likedSet.add(cid);
-          saveLiked();
-          const mi = el.querySelector('.mi');
-          const n = parseInt(el.textContent.replace(/^\D+/, '') || '0', 10);
-          mi.textContent = !cur ? 'thumb_up' : 'thumb_up_alt';
-          el.innerHTML = mi.outerHTML + ' ' + Math.max(0, n + (cur ? -1 : 1));
-        } catch (e) {
-          toast(e.message.includes('绑定') ? '点赞需先绑定网易云账号' : e.message);
-        }
-      };
-    });
-    ov.querySelectorAll('.cmt-reply').forEach(el => {
-      el.onclick = () => {
-        const item = el.closest('.cmt-item');
-        setReply({ id: +el.dataset.rep, nickname: item.querySelector('.cmt-nick').textContent });
-        const box = ov.querySelector('#cmtList');
-        box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
-      };
-    });
-    ov.querySelectorAll('.cmt-hug').forEach(el => {
-      el.onclick = async () => {
-        const cid = +el.dataset.hug;
-        const uid = +el.dataset.uid || 0;
-        try {
-          // 上游 /hug/comment 需要 sid（歌曲 id）+ uid（被抱的用户），故仅歌曲维度可用
-          await api.ncm('/hug/comment', { sid: id, cid, uid, type, confirm: 1 });
-          toast('已抱一抱');
-          showHuggers(cid, uid);
-        } catch (e) { toast(e.message.includes('绑定') ? '需先绑定网易云账号' : e.message); }
-      };
-    });
-    ov.querySelectorAll('.cmt-report').forEach(el => {
-      el.onclick = async () => {
-        const cid = +el.dataset.rpt;
-        const reason = prompt('举报原因（留空取消）', '');
-        if (reason == null) return;
-        try {
-          await api.ncm('/comment/report', { id, cid, reason: reason || '其他', confirm: 1 });
-          toast('已提交举报');
-        } catch (e) { toast(e.message); }
-      };
-    });
-    ov.querySelectorAll('.cmt-floor-btn').forEach(el => {
-      el.onclick = async () => {
-        const cid = +el.dataset.floor;
-        const box = ov.querySelector(`#floor-${cid}`);
-        if (!box) return;
-        if (!box.hidden) { box.hidden = true; return; }
-        box.hidden = false;
-        if (box.dataset.loaded) return;
-        box.innerHTML = '<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>';
-        try {
-          const d = await api.ncm('/comment/floor', { id, parentCommentId: cid, type, limit: 20 });
-          box.dataset.loaded = '1';
-          // 楼层读的是「被回复的评论 + 其回复」，第一条通常是父评论，展示时跳过
-          const list = ((d.data || {}).comments || d.comments || []).map(normComment);
-          box.innerHTML = list.length
-            ? list.map(c => `<div class="cmt-floor-item" data-cid="${c.id}">
-                <div class="cmt-head"><span class="cmt-nick">${esc(c.nickname)}</span><span class="cmt-time">${fmtCmtTime(c.time)}</span></div>
-                <div class="cmt-content">${renderEmoticons(esc(c.content))}</div>
-              </div>`).join('')
-            : '<div class="cm-empty small">没有更多回复</div>';
-        } catch (e) {
-          box.innerHTML = `<div class="cm-empty small">回复加载失败：${esc(e.message)}</div>`;
-        }
-      };
+  function paintFloor(toggle, floor, count = Number(toggle.dataset.count)) {
+    toggle.dataset.count = count;
+    toggle.hidden = !count && floor.hidden;
+    toggle.setAttribute('aria-expanded', String(!floor.hidden));
+    toggle.querySelector('.cmt-floor-label').textContent = floor.hidden ? `展开 ${fmtCount(count)} 条回复` : '收起回复';
+  }
+
+  async function loadFloor(floor) {
+    let state = floors.get(floor);
+    if (!state) {
+      state = { seen: new Set(), cursor: null, more: true, pending: false };
+      floors.set(floor, state);
+      floor.querySelector('.cmt-floor-items').innerHTML = '';
+    }
+    if (state.pending || !state.more) return;
+    state.pending = true;
+    const note = floor.querySelector('.cmt-floor-status');
+    const button = floor.querySelector('.cmt-floor-more');
+    const isCurrent = () => active() && floor.isConnected && floors.get(floor) === state;
+    note.textContent = '正在加载回复…';
+    button.hidden = true;
+    try {
+      const data = await api.commentReplies({ ...resource, commentId: floor.dataset.parent,
+        ...(state.cursor ? { cursor: state.cursor } : {}) });
+      if (!isCurrent()) return;
+      updateComposer(data.meUid);
+      appendRows(floor.querySelector('.cmt-floor-items'), data.comments, state.seen, true);
+      state.cursor = data.nextCursor;
+      state.more = data.more;
+      note.textContent = state.seen.size ? '' : '暂无回复';
+      button.textContent = '加载更多回复';
+      button.hidden = !state.more;
+    } catch (error) {
+      if (!isCurrent()) return;
+      note.textContent = `回复加载失败 · ${error.message}`;
+      button.textContent = '重试加载回复';
+      button.hidden = false;
+    } finally {
+      state.pending = false;
+    }
+  }
+
+  function paintLikes(cid, reaction) {
+    list.querySelectorAll(`[data-action="like"][data-id="${cid}"]`).forEach(button => {
+      button.disabled = liking.has(cid);
+      if (!reaction) return;
+      const { liked, count } = reaction;
+      button.classList.toggle('on', liked);
+      button.dataset.count = count;
+      button.setAttribute('aria-label', `点赞 ${count}`);
+      button.setAttribute('aria-pressed', String(liked));
+      button.querySelector('.material-icons-outlined').textContent = liked ? 'thumb_up' : 'thumb_up_off_alt';
+      button.querySelector('.cmt-like-count').textContent = count ? fmtCount(count) : '赞';
     });
   }
 
-  /** 「谁抱过这条评论」：/comment/hug/list 需要 sid + uid（歌曲维度专属） */
-  async function showHuggers(cid, uid) {
+  async function toggleLike(button, cid) {
+    if (liking.has(cid) || !requireBinding()) return;
+    const liked = button.getAttribute('aria-pressed') !== 'true';
+    const count = Math.max(0, Number(button.dataset.count) + (liked ? 1 : -1));
+    liking.add(cid);
+    paintLikes(cid);
     try {
-      const d = await api.ncm('/comment/hug/list', { sid: id, cid, uid, type, pageSize: 30 });
-      const list = (((d.data || {}).data) || (d.data || {}).users || []);
-      const arr = Array.isArray(list) ? list : [];
-      const names = arr.slice(0, 12).map(u => u.nickname || u.userName || '').filter(Boolean);
-      toast(names.length ? `抱过的有：${names.join('、')}` : '还没有人抱过');
-    } catch { /* 无权/未登录：静默 */ }
+      await api.writeComment({ ...writeResource, cid, t: liked ? 1 : 0 }, true);
+      reactions.set(cid, { liked, count });
+    } catch (error) {
+      if (active()) toast(error.message);
+    } finally {
+      liking.delete(cid);
+      if (active()) paintLikes(cid, reactions.get(cid));
+    }
+  }
+
+  function adjustFloor(floor, delta) {
+    const toggle = floor.previousElementSibling;
+    paintFloor(toggle, floor, Math.max(0, Number(toggle.dataset.count) + delta));
+  }
+
+  async function deleteComment(button, row) {
+    if (!requireBinding() || !confirm('删除这条网易云评论？')) return;
+    button.disabled = true;
+    const cid = row.dataset.cid;
+    try {
+      await api.writeComment({ ...writeResource, t: 0, commentId: cid });
+      if (!active()) return;
+      if (replyTo?.id === cid) setReply(null);
+      const floor = row.closest('.cmt-floor');
+      if (floor) adjustFloor(floor, -1);
+      list.querySelectorAll(`[data-cid="${cid}"]`).forEach(item => item.remove());
+      toast('评论已删除');
+    } catch (error) {
+      if (active()) toast(error.message);
+    } finally {
+      button.disabled = false;
+    }
   }
 
   async function send() {
-    const input = ov.querySelector('#cmtInput');
-    const content = (input.value || '').trim();
+    if (sending || !meUid) return;
+    const draft = input.value;
+    const content = draft.trim();
     if (!content) return;
-    const btn = ov.querySelector('#cmtSend');
-    btn.loading = true;
+    const target = replyTo;
+    sending = true;
+    sendButton.loading = true;
     try {
-      // 发表与回复用各自的上游端点（比统一 /comment + t 参数更明确）
-      if (replyTo) await api.ncm('/comment/reply', { id, type, cid: replyTo.id, content, confirm: 1 });
-      else await api.ncm('/comment/add', { id, type, content, confirm: 1 });
-      input.value = '';
-      toast(replyTo ? '回复已发表（同步网易云）' : '评论已发表（同步网易云）');
-      setReply(null);
-      await load(true);
-    } catch (e) {
-      toast(e.message.includes('绑定') ? '请先在「我的」页绑定网易云账号' : e.message);
+      await api.writeComment({ ...writeResource, content, t: target ? 2 : 1,
+        ...(target ? { commentId: target.id } : {}) });
+      if (!active()) return;
+      if (input.value === draft) input.value = '';
+      if (replyTo === target) setReply(null);
+      if (target) {
+        const floor = list.querySelector(`#floor-${target.parent}`);
+        if (floor) {
+          adjustFloor(floor, 1);
+          floors.delete(floor);
+          if (!floor.hidden) void loadFloor(floor);
+        }
+        toast('回复已同步到网易云');
+      } else {
+        toast('评论已同步到网易云');
+        void switchSort('latest');
+      }
+    } catch (error) {
+      if (active()) toast(error.message);
     } finally {
-      btn.loading = false;
+      sending = false;
+      sendButton.loading = false;
     }
   }
 
-  render();
-  await load(true);
+  async function otherAction(action, cid, button) {
+    if (!requireBinding()) return;
+    try {
+      if (action === 'hug') {
+        await api.ncm('/hug/comment', { sid: id, cid, uid: button.dataset.uid, type, confirm: 1 });
+        toast('已抱一抱');
+        const data = await api.ncm('/comment/hug/list', { sid: id, cid, uid: button.dataset.uid, type, pageSize: 30 });
+        const users = data.data?.data || data.data?.users;
+        const names = Array.isArray(users) ? users.slice(0, 12).map(user => user.nickname || user.userName).filter(Boolean) : [];
+        if (active() && names.length) toast(`抱过的有：${names.join('、')}`);
+      } else {
+        const reason = prompt('举报原因（取消可返回）', '');
+        if (reason === null) return;
+        await api.ncm('/comment/report', { id, cid, reason: reason || '其他', confirm: 1 });
+        toast('已提交举报');
+      }
+    } catch (error) {
+      if (active()) toast(error.message);
+    }
+  }
+
+  ov.querySelector('#cmtClose').onclick = () => close();
+  sendButton.onclick = send;
+  input.onkeydown = event => {
+    if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) void send();
+  };
+  ov.querySelector('#cmtReplyCancel').onclick = () => setReply(null);
+  ov.querySelector('.cmt-modes').onclick = event => {
+    const button = event.target.closest('[data-sort]');
+    if (button && button.dataset.sort !== current.sort) void switchSort(button.dataset.sort);
+  };
+  moreButton.onclick = () => loadPage(current);
+  list.onclick = event => {
+    const button = event.target.closest('button[data-action]');
+    if (!button || button.disabled) return;
+    const action = button.dataset.action;
+    const row = button.closest('.cmt-item');
+    const cid = row.dataset.cid;
+    if (action === 'like') void toggleLike(button, cid);
+    else if (action === 'delete') void deleteComment(button, row);
+    else if (action === 'reply') {
+      if (!requireBinding()) return;
+      const parent = row.closest('.cmt-floor')?.dataset.parent || cid;
+      setReply({ id: cid, parent, nickname: row.querySelector('.cmt-nick').textContent });
+      input.focus();
+    } else if (action === 'floor') {
+      const floor = button.nextElementSibling;
+      floor.hidden = !floor.hidden;
+      paintFloor(button, floor);
+      if (!floor.hidden && !floors.has(floor)) void loadFloor(floor);
+    } else if (action === 'floor-more') void loadFloor(button.closest('.cmt-floor'));
+    else void otherAction(action, cid, button);
+  };
+
+  await switchSort('recommended');
 }

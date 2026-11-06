@@ -38,8 +38,8 @@ for (let i = 0; i < sampleRate * seconds; i++) pcm.writeInt16LE(Math.round(32767
       return route.fulfill({ status: match ? 206 : 200, body: pcm.subarray(start, end + 1), contentType: 'audio/wav',
         headers: { 'accept-ranges': 'bytes', ...(match ? { 'content-range': `bytes ${start}-${end}/${pcm.length}` } : {}) } });
     });
-    await page.route('**/cm/ncm/comment/music?*', route => route.fulfill({ json: {
-      total: 20, more: false, comments: Array.from({ length: 20 }, (_, i) => ({ commentId: i + 1, user: { userId: i + 1, nickname: 'Fixture' }, content: '评论动画回归', likedCount: 0 }))
+    await page.route('**/cm/ncm/comments/page?*', route => route.fulfill({ json: {
+      total: 20, more: false, meUid: 0, comments: Array.from({ length: 20 }, (_, i) => ({ id: String(i + 1), userId: i + 1, nickname: 'Fixture', content: '评论动画回归', liked: 0 }))
     } }));
     await page.evaluate(src => {
       const p = MiniTest.player; MiniTest.setClockSource(null); p.seek = originalSeek; p.bufferPct = originalBuffer;

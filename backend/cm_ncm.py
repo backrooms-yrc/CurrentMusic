@@ -141,7 +141,7 @@ def with_os_pc(ck):
     return ck.rstrip("; ") + "; os=pc"
 
 
-def call(path, params=None, timeout=15.0, retries=1, with_cookie=True, cookie=None, real_ip=None):
+def call(path, params=None, timeout=15.0, retries=1, with_cookie=True, cookie=None, real_ip=None, bypass_cache=False):
     """GET 请求 api-enhanced；默认带服务器 SVIP cookie，可显式换绑定的用户 cookie。
 
     real_ip：仅由服务端从可信请求头解析后传入（客户端参数里的 realIP 会被网关剥离），
@@ -154,10 +154,13 @@ def call(path, params=None, timeout=15.0, retries=1, with_cookie=True, cookie=No
     if ck:
         q["cookie"] = ck
     url = f"{BASE}{path}?{urllib.parse.urlencode(q)}"
+    headers = {"User-Agent": "CurrentMusic/1.0"}
+    if bypass_cache:
+        headers["X-Apicache-Bypass"] = "1"
     last_err = None
     for _ in range(retries + 1):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "CurrentMusic/1.0"})
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
@@ -1109,6 +1112,70 @@ def comment_list(ncm_id, offset=0, limit=20):
     if offset == 0:
         out["hot"] = [_norm_comment(c) for c in ((d or {}).get("hotComments") or [])[:10]]
     return out
+
+
+COMMENT_SORTS = {"recommended": 99, "hot": 2, "latest": 3}
+
+
+def _comment_data(path, params, cookie):
+    response = call(path, params, cookie=cookie, with_cookie=False, bypass_cache=cookie is not None)
+    if not isinstance(response, dict):
+        raise NcmError("网易云评论响应格式无效")
+    if response.get("code") in (301, 401):
+        raise NcmError("网易云绑定已失效，请重新绑定", status_code=401)
+    data = response.get("data")
+    if response.get("code") != 200 or not isinstance(data, dict):
+        raise NcmError("网易云暂时无法返回评论，请稍后重试")
+    return data
+
+
+def _normalize_comment_page(data, cookie, parent_id=None):
+    rows = data.get("comments")
+    if rows is not None and not isinstance(rows, list):
+        raise NcmError("网易云评论列表格式无效")
+    comments = []
+    for comment in rows or []:
+        if not isinstance(comment, dict):
+            continue
+        row = _norm_comment(comment)
+        cid = str(row["id"])
+        if not re.fullmatch(r"[1-9][0-9]{0,19}", cid) or cid == parent_id:
+            continue
+        row["id"] = cid
+        row["likedByMe"] = cookie is not None and comment.get("liked") is True
+        floor = comment.get("showFloorComment") or {}
+        row["replyCount"] = comment.get("replyCount") or floor.get("replyCount") or 0
+        comments.append(row)
+    return {"comments": comments, "total": data.get("totalCount") or 0,
+            "more": bool(data.get("hasMore") and comments), "nextCursor": None}
+
+
+def comment_page(resource_id, type_id, sort, page, limit, cursor=None, cookie=None):
+    params = {"id": resource_id, "type": type_id, "sortType": COMMENT_SORTS[sort],
+              "pageNo": page, "pageSize": limit}
+    if cursor is not None:
+        params["cursor"] = cursor
+    data = _comment_data("/comment/new", params, cookie)
+    result = _normalize_comment_page(data, cookie)
+    if sort == "latest":
+        next_cursor = str(data.get("cursor") or "")
+        result["more"] = result["more"] and next_cursor not in ("", "0", cursor)
+        if result["more"]:
+            result["nextCursor"] = next_cursor
+    return result
+
+
+def comment_replies(resource_id, type_id, parent_id, limit, cursor=None, cookie=None):
+    params = {"id": resource_id, "type": type_id, "parentCommentId": parent_id, "limit": limit}
+    if cursor is not None:
+        params["time"] = cursor
+    data = _comment_data("/comment/floor", params, cookie)
+    result = _normalize_comment_page(data, cookie, parent_id=parent_id)
+    next_cursor = str(data.get("time") or "")
+    result["more"] = result["more"] and next_cursor not in ("", "0", "-1", cursor)
+    if result["more"]:
+        result["nextCursor"] = next_cursor
+    return result
 
 
 def comment_post(cookie, ncm_id, content, comment_id=None, real_ip=None):
