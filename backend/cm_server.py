@@ -1898,23 +1898,23 @@ def route(handler, method):
     if path == "/badges/powered-by.svg" and method == "GET":
         lang = q.get("lang", "zh-CN")
         badges = {
-            "zh-CN": ("强力驱动", "流声引擎", "由流声引擎强力驱动", 72, 144),
-            "en": ("Powered by", "CurrentMusic Engine", "Powered by CurrentMusic Engine", 88, 242),
+            "zh-CN": ("强力驱动", "流声引擎", "由流声引擎强力驱动", 36, 84, 144),
+            "en": ("Powered by", "CurrentMusic Engine", "Powered by CurrentMusic Engine", 36, 102, 242),
         }
         if lang not in badges:
             raise ApiError(400, "lang 须为 zh-CN 或 en")
-        label, name, title, split, width = badges[lang]
+        label, name, title, label_x, name_x, width = badges[lang]
+        with open(os.path.join(os.path.dirname(__file__), "assets", "engine-badge-mark.svg"), encoding="utf-8") as f:
+            mark = f.read().strip()
         data = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="28" viewBox="0 0 {width} 28"
   xml:lang="{lang}" role="img" aria-labelledby="badge-title">
   <title id="badge-title">{title}</title>
-  <defs><clipPath id="badge-shape"><rect width="{width}" height="28" rx="7"/></clipPath></defs>
-  <g clip-path="url(#badge-shape)">
-    <rect width="{width}" height="28" fill="#d3e7d8"/>
-    <rect width="{split}" height="28" fill="#183e34"/>
-  </g>
-  <g font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">
-    <text x="{split / 2:g}" y="18" fill="#f5fff9">{label}</text>
-    <text x="{(split + width) / 2:g}" y="18" fill="#183e34" font-weight="700">{name}</text>
+  <rect x="1" y="2" width="{width - 2}" height="25" rx="12.5" fill="#a6c9ad"/>
+  <rect x="1" y="1" width="{width - 2}" height="24" rx="12" fill="#f3faee" stroke="#a6c9ad"/>
+  <g transform="translate(6 0) scale(.82)">{mark}</g>
+  <g font-family="system-ui, sans-serif">
+    <text x="{label_x}" y="17" fill="#4e6956" font-size="10.5">{label}</text>
+    <text x="{name_x}" y="17.5" fill="#28513e" font-size="11" font-weight="700">{name}</text>
   </g>
 </svg>'''.encode("utf-8")
         handler.send_response(200)

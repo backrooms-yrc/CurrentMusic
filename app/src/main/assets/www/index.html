@@ -59,7 +59,7 @@
       if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
-  <link rel="stylesheet" href="app.css?v=5e37663063">
+  <link rel="stylesheet" href="app.css?v=8b9fe9eee7">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
     #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; inset: 0; z-index: 10000; display: flex;
@@ -164,8 +164,42 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
   <main id="out"></main>
   <template id="engineCredit">
     <footer class="cm-engine-credit">
-      <a class="cm-engine-badge" href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer" aria-label="由流声引擎强力驱动"><span>强力驱动</span><strong>流声引擎</strong></a>
-      <a class="cm-engine-badge" href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer" lang="en" aria-label="Powered by CurrentMusic Engine"><span>Powered by</span><strong>CurrentMusic Engine</strong></a>
+      <a class="cm-engine-badge" href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer" aria-label="由流声引擎强力驱动">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M4 22c0-5 4.2-9 10.6-9 6.1 0 10.4 4 10.4 9 0 3.2-4.1 4.6-10.4 4.6C8.2 26.6 4 25.2 4 22Z" fill="#bce6bf" stroke="#43795d" stroke-width="1.35"/>
+  <path d="M14.8 13.1c-2.8-.4-4.4-2-4.5-4.8 2.8 0 4.6 1.8 4.5 4.8Zm0 0c-.3-3.8 1.8-6.4 5.9-7.3 0 3.8-2.2 6.1-5.9 7.3Z" fill="#81c78f" stroke="#43795d" stroke-width="1.15" stroke-linejoin="round"/>
+  <g fill="#2b5540">
+    <circle cx="10.9" cy="19.8" r="1.05"/>
+    <circle cx="18.4" cy="19.8" r="1.05"/>
+  </g>
+  <path d="M13 21.4q1.65 2.2 3.3 0" fill="none" stroke="#2b5540" stroke-width="1.15" stroke-linecap="round"/>
+  <g fill="#ee9d93">
+    <ellipse cx="8.4" cy="22" rx="1.5" ry=".85"/>
+    <ellipse cx="20.9" cy="22" rx="1.5" ry=".85"/>
+    <ellipse cx="25.5" cy="12" rx="1.7" ry="1.25" transform="rotate(-18 25.5 12)"/>
+    <path d="M26 12V6l4 1v1.6l-2.8-.7V12Z"/>
+  </g>
+</svg>
+        <span>强力驱动</span><strong>流声引擎</strong>
+      </a>
+      <a class="cm-engine-badge" href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer" lang="en" aria-label="Powered by CurrentMusic Engine">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+  <path d="M4 22c0-5 4.2-9 10.6-9 6.1 0 10.4 4 10.4 9 0 3.2-4.1 4.6-10.4 4.6C8.2 26.6 4 25.2 4 22Z" fill="#bce6bf" stroke="#43795d" stroke-width="1.35"/>
+  <path d="M14.8 13.1c-2.8-.4-4.4-2-4.5-4.8 2.8 0 4.6 1.8 4.5 4.8Zm0 0c-.3-3.8 1.8-6.4 5.9-7.3 0 3.8-2.2 6.1-5.9 7.3Z" fill="#81c78f" stroke="#43795d" stroke-width="1.15" stroke-linejoin="round"/>
+  <g fill="#2b5540">
+    <circle cx="10.9" cy="19.8" r="1.05"/>
+    <circle cx="18.4" cy="19.8" r="1.05"/>
+  </g>
+  <path d="M13 21.4q1.65 2.2 3.3 0" fill="none" stroke="#2b5540" stroke-width="1.15" stroke-linecap="round"/>
+  <g fill="#ee9d93">
+    <ellipse cx="8.4" cy="22" rx="1.5" ry=".85"/>
+    <ellipse cx="20.9" cy="22" rx="1.5" ry=".85"/>
+    <ellipse cx="25.5" cy="12" rx="1.7" ry="1.25" transform="rotate(-18 25.5 12)"/>
+    <path d="M26 12V6l4 1v1.6l-2.8-.7V12Z"/>
+  </g>
+</svg>
+        <span>Powered by</span><strong>CurrentMusic Engine</strong>
+      </a>
     </footer>
   </template>
 
@@ -291,6 +325,6 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
       }, 9000);
     })();
   </script>
-  <script src="app.js?v=5e37663063"></script>
+  <script src="app.js?v=8b9fe9eee7"></script>
 </body>
 </html>

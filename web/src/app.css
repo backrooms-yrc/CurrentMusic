@@ -101,23 +101,31 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   margin-top: 24px;
 }
 .cm-engine-badge {
   display: inline-flex;
-  border-radius: 7px;
-  color: #f5fff9;
-  background: #183e34;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px 3px 6px;
+  border: 1px solid #a6c9ad;
+  border-radius: 999px;
+  color: #28513e;
+  background: #f3faee;
+  box-shadow: 0 2px 0 #a6c9ad;
   font-size: calc(12px * var(--cm-fs, 1));
-  line-height: 1.5;
+  line-height: 1.25;
   text-decoration: none;
-  overflow: hidden;
 }
-.cm-engine-badge > * { padding: 5px 10px; }
-.cm-engine-badge strong { color: #183e34; background: #d3e7d8; }
-.cm-engine-badge:hover strong { text-decoration: underline; }
+.cm-engine-badge svg { flex: none; width: 28px; height: 28px; }
+.cm-engine-badge span { color: #4e6956; font-size: calc(10.5px * var(--cm-fs, 1)); }
+.cm-engine-badge:hover { background: #eaf7e5; }
 .cm-engine-badge:focus-visible { outline: 2px solid var(--cm-primary); outline-offset: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .cm-engine-badge svg { transition: transform .18s ease-out; }
+  .cm-engine-badge:hover svg { transform: translateY(-2px) rotate(-9deg); }
+}
 .cm-route-loading-active .cm-engine-credit { display: none; }
 
 /* ---------- 下拉刷新：共享七形态动画 ---------- */
