@@ -68,6 +68,7 @@ python3 backend/cm_server.py
 | `CM_RELEASES_DIR` | `<CM_DATA_DIR>/releases` | APK 更新源目录（可选） |
 | `CM_X_RELEASES_DIR` | `<CM_DATA_DIR>/releases-x` | 第三方客户端镜像目录（可选） |
 | `CM_PASSKEY_ORIGINS` | 官方 HTTPS 入口 | 自托管通行密钥允许的 HTTPS origin，逗号分隔；必须显式列出，不支持通配符 |
+| `CM_PASSKEY_ANDROID_ORIGINS` | `{}` | Android 签名 Origin 到 RP ID 的 JSON 对象；RP ID 必须是获准的 HTTPS 入口的域名。参见[通行密钥接口](../docs/passkeys-api.md) |
 | `CM_DEFAULT_HOST` | `localhost` | 请求缺少 Host 头时用于生成链接 |
 | `CM_NCM_BASE` | `http://127.0.0.1:3001` | NCM API 基址 |
 | `CM_NCM_COOKIE` | `<CM_DATA_DIR>/ncm-cookie` | 网易云 cookie 文件 |
