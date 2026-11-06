@@ -170,6 +170,8 @@ window.addEventListener('hashchange', () => {
   }
 });
 
+let currentRoutePath = '';
+
 async function router({ refresh = false } = {}) {
   const hash = location.hash || '#/home';
   if (needsWelcome() && !/^#\/(welcome|two-factor|security-question|legal)(?:[/?]|$)/.test(hash)) { location.hash = '#/welcome'; return; }
@@ -198,6 +200,14 @@ async function router({ refresh = false } = {}) {
   }
   if (!matched) { location.hash = '#/home'; return; }
   if (params) params.query = query;   // 页面按需读取（大多忽略）
+
+  const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
+  if (isAimo && !refresh && routePath.startsWith('#/settings') && currentRoutePath && currentRoutePath.startsWith('#/settings')) {
+    currentRoutePath = routePath;
+    window.dispatchEvent(new CustomEvent('cm-aimo-settings-navigate', { detail: { routePath, query } }));
+    return;
+  }
+  currentRoutePath = routePath;
 
   document.body.classList.toggle('cm-onboarding-active', needsWelcome() && /^#\/(welcome|two-factor|security-question)$/.test(routePath));
   document.getElementById('pageTitle').textContent = routePath === '#/user' && !auth.token ? '登录与注册' : matched.title;

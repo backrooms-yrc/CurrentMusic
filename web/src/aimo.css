@@ -361,7 +361,7 @@ html[data-ui-preset="aimo"] .cm-search-bar mdui-text-field {
 }
 
 /* 原生输入框、文本域与下拉选择 */
-html[data-ui-preset="aimo"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-ui-preset="aimo"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(#settingsSearch),
 html[data-ui-preset="aimo"] textarea,
 html[data-ui-preset="aimo"] select {
   border-radius: 12px !important;
@@ -374,24 +374,11 @@ html[data-ui-preset="aimo"] select {
   transition: border-color 160ms ease, background 160ms ease;
 }
 
-html[data-ui-preset="aimo"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+html[data-ui-preset="aimo"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(#settingsSearch):focus,
 html[data-ui-preset="aimo"] textarea:focus,
 html[data-ui-preset="aimo"] select:focus {
   border-color: var(--aimo-accent) !important;
   outline: none !important;
-}
-
-/* 设置项搜索栏 */
-html[data-ui-preset="aimo"] .cm-settings-search {
-  border-radius: 12px !important;
-  background: var(--aimo-bg-sunken) !important;
-  border: 1px solid var(--aimo-border-soft) !important;
-  padding: 8px 14px !important;
-}
-
-html[data-ui-preset="aimo"] .cm-settings-search:focus-within {
-  border-color: var(--aimo-accent) !important;
-  box-shadow: none !important;
 }
 
 /* 评论发布输入框 */
@@ -990,16 +977,18 @@ html[data-ui-preset="aimo"] .cm-sec-more:hover {
   color: var(--aimo-text-primary) !important;
 }
 
-/* 快捷功能卡片行：网格对齐 */
+/* 快捷功能卡片行：弹性单行自适应 */
 html[data-ui-preset="aimo"] .cm-quickrow {
-  display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
   gap: 12px !important;
   margin: 0 0 24px 0 !important;
   padding: 0 !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: flex-start !important;
@@ -1007,19 +996,23 @@ html[data-ui-preset="aimo"] .cm-quick {
   text-align: left !important;
   gap: 4px !important;
   padding: 14px 16px !important;
-  min-height: 78px !important;
-  border-radius: var(--aimo-radius-control) !important;
+  min-height: 82px !important;
+  border-radius: var(--aimo-radius-surface) !important;
   background: var(--aimo-bg-elevated) !important;
   border: 1px solid var(--aimo-border-soft) !important;
   box-shadow: var(--aimo-shadow-sm) !important;
   text-decoration: none !important;
   color: var(--aimo-text-primary) !important;
-  transition: transform 120ms var(--aimo-ease), background 160ms ease, border-color 160ms ease;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+  transition: transform 160ms var(--aimo-ease), background 160ms ease, border-color 160ms ease, box-shadow 160ms ease !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick:hover {
   background: var(--aimo-panel) !important;
-  border-color: var(--aimo-border) !important;
+  border-color: var(--aimo-border-strong) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: var(--aimo-shadow-md) !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick:active {
@@ -1028,23 +1021,43 @@ html[data-ui-preset="aimo"] .cm-quick:active {
 }
 
 html[data-ui-preset="aimo"] .cm-quick .material-icons-outlined {
-  font-size: 20px;
-  color: var(--aimo-text-primary);
-  margin-bottom: 2px;
+  font-size: 20px !important;
+  color: var(--aimo-text-primary) !important;
+  margin-bottom: 2px !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick b {
-  font-size: calc(14px * var(--cm-fs, 1));
-  font-weight: 600;
-  color: var(--aimo-text-primary);
-  line-height: 1.25;
+  font-family: var(--aimo-font-sans) !important;
+  font-size: calc(14px * var(--cm-fs, 1)) !important;
+  font-weight: 600 !important;
+  color: var(--aimo-text-primary) !important;
+  line-height: 1.25 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  width: 100% !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick i {
-  color: var(--aimo-text-secondary);
-  font-size: calc(11.5px * var(--cm-fs, 1));
-  font-style: normal;
-  line-height: 1.25;
+  color: var(--aimo-text-secondary) !important;
+  font-size: calc(11.5px * var(--cm-fs, 1)) !important;
+  font-style: normal !important;
+  line-height: 1.25 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  width: 100% !important;
+}
+
+@media (max-width: 680px) {
+  html[data-ui-preset="aimo"] .cm-quickrow {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+  }
+  html[data-ui-preset="aimo"] .cm-quick {
+    flex: 1 1 calc(50% - 5px) !important;
+    min-width: calc(50% - 5px) !important;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -1803,7 +1816,8 @@ html[data-ui-preset="aimo"] body.player-open #mini {
 /* --------------------------------------------------------------------------
    18. 排行榜专属封面卡片 (Top Charts Editorial Covers)
    -------------------------------------------------------------------------- */
-html[data-ui-preset="aimo"] .cm-quickrow {
+html[data-ui-preset="aimo"] .cm-sec:has(a[href*="/ncmpl/"]) .cm-quickrow,
+html[data-ui-preset="aimo"] .cm-quickrow:has(a[href*="/ncmpl/"]) {
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 16px !important;
@@ -1811,13 +1825,17 @@ html[data-ui-preset="aimo"] .cm-quickrow {
 }
 
 @media (max-width: 680px) {
-  html[data-ui-preset="aimo"] .cm-quickrow {
+  html[data-ui-preset="aimo"] .cm-sec:has(a[href*="/ncmpl/"]) .cm-quickrow,
+  html[data-ui-preset="aimo"] .cm-quickrow:has(a[href*="/ncmpl/"]) {
     grid-template-columns: 1fr !important;
     gap: 12px !important;
   }
 }
 
-html[data-ui-preset="aimo"] .cm-quick {
+html[data-ui-preset="aimo"] .cm-quick[href*="/ncmpl/"],
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"],
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"],
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"] {
   position: relative !important;
   display: flex !important;
   flex-direction: column !important;
@@ -1834,17 +1852,26 @@ html[data-ui-preset="aimo"] .cm-quick {
   transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease !important;
 }
 
-html[data-ui-preset="aimo"] .cm-quick:hover {
+html[data-ui-preset="aimo"] .cm-quick[href*="/ncmpl/"]:hover,
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"]:hover,
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"]:hover,
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"]:hover {
   transform: translateY(-3px) scale(1.008) !important;
   box-shadow: var(--aimo-shadow-md) !important;
   border-color: var(--aimo-border-strong) !important;
 }
 
-html[data-ui-preset="aimo"] .cm-quick:active {
+html[data-ui-preset="aimo"] .cm-quick[href*="/ncmpl/"]:active,
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"]:active,
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"]:active,
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"]:active {
   transform: translateY(-1px) scale(0.99) !important;
 }
 
-html[data-ui-preset="aimo"] .cm-quick b {
+html[data-ui-preset="aimo"] .cm-quick[href*="/ncmpl/"] b,
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"] b,
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"] b,
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"] b {
   font-family: var(--aimo-font-serif) !important;
   font-size: 20px !important;
   font-weight: 600 !important;
@@ -1854,7 +1881,10 @@ html[data-ui-preset="aimo"] .cm-quick b {
   z-index: 2 !important;
 }
 
-html[data-ui-preset="aimo"] .cm-quick .material-icons-outlined {
+html[data-ui-preset="aimo"] .cm-quick[href*="/ncmpl/"] .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-quick[href*="3778678"] .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-quick[href*="19723756"] .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-quick[href*="3779629"] .material-icons-outlined {
   font-size: 26px !important;
   z-index: 2 !important;
 }
@@ -2112,13 +2142,48 @@ html[data-ui-preset="aimo"] .cm-settings-search:focus-within {
 }
 
 html[data-ui-preset="aimo"] .cm-settings-search input {
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  min-height: 48px !important;
+  width: 100% !important;
   color: var(--aimo-text-primary) !important;
   font-family: var(--aimo-font-sans) !important;
   font-size: 14px !important;
 }
 
+html[data-ui-preset="aimo"] .cm-settings-search input:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
 html[data-ui-preset="aimo"] .cm-settings-search input::placeholder {
   color: var(--aimo-text-tertiary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-search button {
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--aimo-text-secondary) !important;
+  cursor: pointer !important;
+  border-radius: 50% !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  display: grid !important;
+  place-items: center !important;
+  transition: background 150ms ease, color 150ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-search button:hover {
+  background: var(--aimo-bg-hover) !important;
+  color: var(--aimo-text-primary) !important;
 }
 
 /* 侧边分类栏导航 */
@@ -2207,6 +2272,29 @@ html[data-ui-preset="aimo"] .cm-settings-card h2 {
 html[data-ui-preset="aimo"] .cm-settings-card p,
 html[data-ui-preset="aimo"] .cm-settings-card div>span {
   color: var(--aimo-text-secondary) !important;
+}
+
+/* 分类标题与分区标题 */
+html[data-ui-preset="aimo"] .cm-settings-section > header h2,
+html[data-ui-preset="aimo"] .cm-settings-category-heading h2 {
+  font-family: var(--aimo-font-sans) !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--aimo-text-primary) !important;
+  margin: 0 0 4px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-section > header p,
+html[data-ui-preset="aimo"] .cm-settings-category-heading p {
+  font-size: 13.5px !important;
+  color: var(--aimo-text-secondary) !important;
+  margin: 0 0 14px !important;
+  line-height: 1.6 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-settings-section {
+  margin-bottom: 28px !important;
 }
 
 /* 设置项聚合卡片与行列表 */

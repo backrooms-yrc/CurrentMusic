@@ -68,9 +68,11 @@ export function mountSettingsNavigation(el) {
     }
   });
   const categories = CATEGORIES.map(category => ({ ...category, groups: category.groups.map(group => ({ ...group, items: group.items.filter(id => rows.has(id)) })).filter(group => group.items.length) }));
-  const parts = location.hash.split('?')[0].split('/').slice(2);
-  const category = categories.find(item => item.id === parts[0]);
-  const group = category && category.groups.find(item => item.id === parts[1]);
+  let parts = location.hash.split('?')[0].split('/').slice(2);
+  let category = categories.find(item => item.id === parts[0]);
+  let group = category && category.groups.find(item => item.id === parts[1]);
+  const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
+  let lastNavKey = (category ? category.id : '') + '/' + (group ? group.id : '');
   const query = new URLSearchParams(location.hash.split('?')[1] || '');
   let search = query.get('q') || '';
   const href = (cat, section) => '#/settings' + (cat ? '/' + cat.id : '') + (section ? '/' + section.id : '');
@@ -92,15 +94,19 @@ export function mountSettingsNavigation(el) {
     ids.forEach(id => panel.querySelector('.cm-setting-list').appendChild(rows.get(id)));
     content.appendChild(panel);
   };
-  function paint() {
+  function paint({ animate = false } = {}) {
+    const currentKey = (category ? category.id : '') + '/' + (group ? group.id : '');
+    const needTransition = isAimo && (animate || (currentKey !== lastNavKey && !search));
+    lastNavKey = currentKey;
+
     rows.forEach(row => store.appendChild(row)); content.replaceChildren();
-    if (document.documentElement.getAttribute('data-ui-preset') === 'aimo') {
+    if (needTransition) {
       try {
         content.animate([
-          { opacity: 0, transform: 'translateY(10px)' },
+          { opacity: 0, transform: 'translateY(6px)' },
           { opacity: 1, transform: 'translateY(0)' }
         ], {
-          duration: 220,
+          duration: 180,
           easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
         });
       } catch {}
@@ -121,6 +127,22 @@ export function mountSettingsNavigation(el) {
       summary.textContent = `找到 ${count} 项相关设置`;
       if (!count) content.insertAdjacentHTML('beforeend', `<div class="cm-settings-empty">${icon('search_off')}<h2>没有找到相关设置</h2><p>试试更简短的词，例如“主题”“下载”或“2FA”。</p><button type="button" id="resetSettingsSearch">清除搜索</button></div>`);
       const reset = content.querySelector('#resetSettingsSearch'); if (reset) reset.onclick = () => { input.value = ''; updateSearch(); input.focus(); };
+    } else if (isAimo) {
+      if (category) {
+        content.innerHTML = `<div class="cm-settings-category-heading"><h2>${category.title}</h2><p>${category.description}</p></div>`;
+        const targetGroups = group ? [group] : category.groups;
+        targetGroups.forEach(sec => addRows(category, sec, sec.items, false));
+      } else {
+        const cards = document.createElement('div'); cards.className = 'cm-settings-categories';
+        categories.forEach(item => {
+          const a = document.createElement('a'); a.className = 'cm-settings-card'; a.href = href(item);
+          const count = item.groups.reduce((sum, entry) => sum + entry.items.length, 0);
+          a.innerHTML = `${icon(item.icon)}<div><h2>${item.title}</h2><p>${item.description}</p><span>${count} 项设置 · ${item.groups.map(s => s.title).join(' / ')}</span></div>${icon('chevron_right')}`;
+          cards.appendChild(a);
+        });
+        content.appendChild(cards);
+        content.insertAdjacentHTML('beforeend', '<p class="cm-settings-footnote">找不到想改的选项？试试上方搜索，支持设置名称和常用关键词。</p>');
+      }
     } else if (category && group) {
       addRows(category, group, group.items, false);
     } else {
@@ -143,6 +165,65 @@ export function mountSettingsNavigation(el) {
     history.replaceState(history.state, '', base + (search ? '?q=' + encodeURIComponent(search) : ''));
     paint();
   }
+  function navigateTo(targetHref, { push = true } = {}) {
+    const clean = targetHref.split('?')[0];
+    parts = clean.split('/').slice(2);
+    category = categories.find(item => item.id === parts[0]);
+    group = category && category.groups.find(item => item.id === parts[1]);
+
+    if (push) {
+      history.pushState(null, '', targetHref);
+    }
+
+    if (search) {
+      search = '';
+      input.value = '';
+      clear.hidden = true;
+    }
+
+    const sideLinks = el.querySelectorAll('.cm-settings-sidebar a');
+    sideLinks.forEach(link => {
+      const linkHref = link.getAttribute('href');
+      const isCurrent = (!category && linkHref === '#/settings') ||
+                        (category && linkHref === href(category));
+      if (isCurrent) {
+        link.setAttribute('aria-current', 'page');
+      } else {
+        link.removeAttribute('aria-current');
+      }
+    });
+
+    const crumbs = el.querySelector('.cm-settings-crumbs');
+    if (crumbs) {
+      crumbs.innerHTML = `<a href="#/settings">设置</a>${category ? `${icon('chevron_right')}<a href="${href(category)}" ${!group ? 'aria-current="page"' : ''}>${category.title}</a>` : ''}${group ? `${icon('chevron_right')}<span aria-current="page">${group.title}</span>` : ''}`;
+    }
+
+    paint({ animate: true });
+  }
+
+  if (isAimo) {
+    el.addEventListener('click', event => {
+      const link = event.target.closest('a');
+      if (!link) return;
+      const targetHref = link.getAttribute('href');
+      if (targetHref && targetHref.startsWith('#/settings')) {
+        event.preventDefault();
+        navigateTo(targetHref, { push: true });
+      }
+    });
+
+    const handleAimoSubroute = () => {
+      if (!el.isConnected) {
+        window.removeEventListener('cm-aimo-settings-navigate', handleAimoSubroute);
+        return;
+      }
+      if (location.hash.startsWith('#/settings')) {
+        navigateTo(location.hash, { push: false });
+      }
+    };
+    window.addEventListener('cm-aimo-settings-navigate', handleAimoSubroute);
+  }
+
   input.addEventListener('input', updateSearch);
   input.addEventListener('keydown', event => { if (event.key === 'Escape') { input.value = ''; updateSearch(); } });
   clear.onclick = () => { input.value = ''; updateSearch(); input.focus(); };
