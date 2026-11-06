@@ -33,6 +33,10 @@
   "duration": 269343,
   "url": "https://music.example.com/app/#/song/3340114785",
   "image": "https://music.example.com/cm/share/song/3340114785/image",
+  "images": {
+    "square": "https://music.example.com/cm/share/song/3340114785/image?style=square",
+    "immersive": "https://music.example.com/cm/share/song/3340114785/image?style=immersive"
+  },
   "text": "🎵 Reply - kz / かぐや(cv.夏吉ゆうこ) / 超かぐや姫！\n专辑：超かぐや姫！\n\n在 CurrentMusic 收听：https://music.example.com/app/#/song/3340114785"
 }
 ```
@@ -46,7 +50,8 @@
 | `pic` | 封面（https） |
 | `duration` | 时长（毫秒），仅歌曲 |
 | `url` | 分享链接，见上表落地页 |
-| `image` | 服务端渲染好的分享图直链（1080×1440 JPEG） |
+| `image` | 兼容现有调用方的默认方块封面分享图直链 |
+| `images` | `square` 与 `immersive` 对应的服务端分享图直链（均为 1080×1440 JPEG） |
 | `text` | 可直接复制的分享文案 |
 
 ## 歌单 / 歌手 / 专辑
@@ -61,7 +66,7 @@ GET /cm/share/album/{album_id}
 通用字段：
 
 - `type`：`playlist` / `local-playlist` / `artist` / `album`
-- `name` / `pic` / `sub` / `sub2` / `url` / `text` / `image`
+- `name` / `pic` / `sub` / `sub2` / `url` / `text` / `image` / `images`
 - 歌单额外返回 `creator`（网易云）或 `owner`/`description`（站内）与 `trackCount`；
 - 歌手额外返回 `alias`、`total`（作品数）、`albumTotal`；
 - 专辑额外返回 `artist`、`size`、`publishTime`、`company`。
@@ -80,6 +85,10 @@ GET /cm/share/album/{album_id}
   "sub2": "581 首作品 · 45 张专辑",
   "url": "https://music.example.com/app/#/artist/6452",
   "image": "https://music.example.com/cm/share/artist/6452/image",
+  "images": {
+    "square": "https://music.example.com/cm/share/artist/6452/image?style=square",
+    "immersive": "https://music.example.com/cm/share/artist/6452/image?style=immersive"
+  },
   "text": "🎤 歌手：周杰伦\nJay Chou / 周董\n581 首作品 · 45 张专辑\n\n在 CurrentMusic 查看歌手：https://music.example.com/app/#/artist/6452"
 }
 ```
@@ -100,17 +109,23 @@ GET /cm/share/album/{album_id}
 
 ### 服务端接口（推荐第三方客户端使用）
 
-`GET /cm/share/{type}/{id}/image` — **公开，无需登录**，直接返回 `image/jpeg`：
-1080×1440 卡片，背景取色自封面，含封面、名称/副标题/补充信息、分享链接与二维码。
-版式随 `type` 显示 `MUSIC SHARE` / `PLAYLIST SHARE` / `ARTIST SHARE` / `ALBUM SHARE`。
-按「分享链接 + 版式版本」缓存 7 天，Host 变化不会串图；响应带 `Cache-Control: public, max-age=3600`。
+`GET /cm/share/{type}/{id}/image` 为公开接口，直接返回 1080×1440 `image/jpeg`。可用查询参数 `style` 选择封面版式。
+
+| `style` | 版式 |
+| --- | --- |
+| `square` | 方块封面，搭配封面取色渐变背景。省略 `style` 时使用此版式 |
+| `immersive` | 沉浸式封面，将封面等比铺满并居中裁切，在品牌和文字区域叠加渐暗遮罩 |
+
+`GET /cm/share/song/3340114785/image?style=immersive` 返回该歌曲的沉浸式分享图。其他 `style` 值（含空值）返回 `400`。
+
+两种版式都包含名称、分享链接和二维码。封面无法读取时会绘制渐变占位。服务端按分享链接和版式版本分别缓存 7 天，响应带 `Cache-Control: public, max-age=3600`。反向代理如果缓存此接口，应将公开协议、域名和完整请求 URI（含 `style`）计入缓存键。
 
 依赖 `Pillow`、`segno`、Noto Sans CJK 字体；部署环境缺少任意一项时该接口返回 503
 （其余接口不受影响）。第三方客户端也可以继续用上面的元数据自行绘制。
 
 ### 客户端本地生成
 
-网页/App 仍会用 canvas 实时绘制同一套版式（离线可用）：
+网页和 App 使用 canvas 在本地绘制，生成前可选方块封面或沉浸式封面。封面处理和排版以所选版式为准。
 
 1. 封面加载（网易云 CDN 带 CORS）；从封面 40×40 采样提取主色，作为背景渐变与柔光；
 2. 版式：品牌、封面、名称/副标题/补充信息、分隔线、左侧链接文案、右侧二维码；
@@ -127,8 +142,8 @@ GET /cm/share/album/{album_id}
 ```text
 1. GET /cm/share/{type}/{id}
 2. 用返回的 url / text 打开系统分享或复制
-3. 分享图：直接使用返回的 image 直链（服务端已渲染并缓存）；
-   如需离线/自定义版式，再用 pic 作封面、url 作二维码内容自行绘制
+3. 按所选版式加载 images.square 或 images.immersive；旧客户端仍可读取默认 image。
+   如需离线或自定义版式，可用 pic 作封面、url 作二维码内容自行绘制。
 ```
 
 没有账号的用户也可以直接扫码或打开 `url` 浏览；播放需要登录。

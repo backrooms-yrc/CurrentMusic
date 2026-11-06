@@ -499,11 +499,13 @@ def _share_payload(handler, kind, oid):
         raise ApiError(400, "不支持的分享类型")
 
     share_url = f"{origin}/app/#{landing}"
+    image_url = f"{origin}/cm/share/{kind}/{oid}/image"
     lines += ["", f"{cta}：{share_url}"]
     body.update({
         "type": kind, "sub": sub, "sub2": sub2,
         "url": share_url, "text": "\n".join(lines),
-        "image": f"{origin}/cm/share/{kind}/{oid}/image",
+        "image": image_url,
+        "images": {style: f"{image_url}?style={style}" for style in cm_share.STYLE_VERSIONS},
     })
     return body
 
@@ -2550,13 +2552,13 @@ def route(handler, method):
             ("GET", "/song/qualities", "公开", "歌曲音质文件资料（含沉浸声变体；不保证可播放）；详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/song/chorus", "公开", "副歌段落，startMs/endMs 均为毫秒；详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/song/versions", "公开", "其他版本推荐，排除原曲；由用户选择播放；详见 /api-docs/reference/guide-song-insights-api/"),
-            ("GET", "/share/song/{id}", "公开", "歌曲分享元数据（name/artists/album/pic/duration/url/text/image；无需登录）"),
-            ("GET", "/share/song/{id}/image", "公开", "歌曲分享图（1080×1440 JPEG，封面取色 + 二维码）"),
-            ("GET", "/share/playlist/{id}", "公开", "网易云歌单分享元数据（名称/创建者/曲目数/url/text/image）"),
+            ("GET", "/share/song/{id}", "公开", "歌曲分享元数据（name/artists/album/pic/duration/url/text/image/images；无需登录）"),
+            ("GET", "/share/song/{id}/image", "公开", "歌曲分享图（1080×1440 JPEG，style=square 默认方块封面，style=immersive 全幅封面）"),
+            ("GET", "/share/playlist/{id}", "公开", "网易云歌单分享元数据（名称/创建者/曲目数/url/text/image/images）"),
             ("GET", "/share/local-playlist/{id}", "公开", "CurrentMusic 自建歌单分享元数据"),
             ("GET", "/share/artist/{id}", "公开", "歌手分享元数据（名称/别名/作品数/url/text/image）"),
             ("GET", "/share/album/{id}", "公开", "专辑分享元数据（名称/歌手/发行信息/url/text/image）"),
-            ("GET", "/share/{type}/{id}/image", "公开", "歌单/歌手/专辑分享图（与服务端歌曲分享图同一版式）"),
+            ("GET", "/share/{type}/{id}/image", "公开", "分享图（style=square 或 immersive；歌曲、网易云歌单、站内歌单、歌手和专辑）"),
             ("GET", "/roaming/catalog", "Bearer", "私人漫游模式/场景目录（默认、熟悉、探索、拼图 + 场景）"),
             ("POST", "/roaming/songs", "Bearer+网易云绑定", "{mode,subMode?,limit?,excludeIds?} 取私人漫游推荐歌曲（账号态，不缓存）"),
             ("POST", "/roaming/trash", "Bearer+网易云绑定", "{id} 将歌曲移入网易云私人漫游垃圾桶"),
@@ -4127,10 +4129,13 @@ def route(handler, method):
         if not m:
             raise ApiError(400, "分享 id 格式错误")
         kind, oid = m.group(1), int(m.group(2))
+        style = q.get("style", cm_share.DEFAULT_STYLE)
+        if m.group(3) and style not in cm_share.STYLE_VERSIONS:
+            raise ApiError(400, "分享图 style 必须为 square 或 immersive")
         payload = _share_payload(handler, kind, oid)
         if m.group(3):
             try:
-                fp = cm_share.ensure_image(payload, payload["url"])
+                fp = cm_share.ensure_image(payload, payload["url"], style)
             except cm_share.ShareUnavailable as e:
                 raise ApiError(503, str(e))
             return serve_file(handler, fp, "image/jpeg", cache="public, max-age=3600")

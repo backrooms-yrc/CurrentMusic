@@ -23,6 +23,8 @@ server {
 
     # API: /cm/foo -> backend /foo
     # Pass the client's Origin header through to the backend unchanged (nginx default).
+    # If proxy caching is inherited, disable it for /cm/share/ or key it by
+    # public scheme, Host and full request URI (including the style parameter).
     location /cm/ {
         proxy_pass http://127.0.0.1:3010/;
         proxy_http_version 1.1;
