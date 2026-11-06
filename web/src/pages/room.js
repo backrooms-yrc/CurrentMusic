@@ -1,346 +1,496 @@
-// 房间页：房主控播 + 全员同步跟随 + 点歌审批 + 成员/权限管理
+// 一起听房间：播放、点歌和成员管理。
 import { mdui } from '../md.js';
-import { auth, settings } from '../api.js';
-import { esc, toast, fmtDur, getStatus, renderSongList, avatarHTML, userTags, skelRoom } from '../ui.js';
+import { api, auth } from '../api.js';
+import { esc, toast, fmtDur, renderSongList, avatarHTML, userTags, skelRoom, confirmDialog } from '../ui.js';
 import { roomApi, openEventStream, estimateClockOffset, RoomSync } from '../room.js';
 import { player } from '../player.js';
 
-let cleanup = null;   // 离开页面时清理（SSE/定时器/音频）
+let cleanup = null;
 
-export async function render(el) {
-  if (cleanup) { cleanup(); cleanup = null; }
-  if (!auth.token) { el.innerHTML = '<div class="cm-empty">请先登录</div>'; return; }
+const closeMessages = {
+  idle: '房间长时间无人活动，已自动归档',
+  manual: '房主已归档房间',
+  deleted: '房间已删除',
+  removed: '你已被移出房间',
+  session: '登录已失效',
+  full: '房间已满',
+};
 
-  const roomId = +location.hash.split('/')[2];
-  if (!roomId) { el.innerHTML = '<div class="cm-empty">房间不存在</div>'; return; }
-
-  el.innerHTML = skelRoom();
-  let detail;
-  try {
-    detail = await roomApi.detail(roomId);
-  } catch (e) {
-    el.innerHTML = `<div class="cm-empty">${esc(e.message)}<div style="margin-top:12px"><mdui-button href="#/rooms">返回广场</mdui-button></div></div>`;
+export async function render(el, [roomId] = []) {
+  if (cleanup) cleanup();
+  if (!auth.token) {
+    el.innerHTML = '<div class="cm-empty">请先登录 <mdui-button href="#/user">去登录</mdui-button></div>';
     return;
   }
 
-  // 进房即加入（已在房间内则幂等）
-  let me = (detail.members || []).find(m => m.userId === (auth.user && auth.user.id));
-  if (!me) {
-    try {
-      const j = await roomApi.join(roomId, '');
-      me = { role: j.role, userId: auth.user.id };
-      detail = await roomApi.detail(roomId);
-    } catch (e) {
-      el.innerHTML = `<div class="cm-empty">${esc(e.message)}<div style="margin-top:12px"><mdui-button href="#/rooms">返回广场</mdui-button></div></div>`;
-      return;
+  const roomHash = location.hash;
+  const sessionToken = auth.token;
+  const uid = auth.user?.id;
+  let active = true;
+  let release = () => {};
+  let dialog;
+  function dispose() {
+    active = false;
+    window.removeEventListener('hashchange', onNavigate);
+    window.removeEventListener('cm-authchange', onAuthChange);
+    window.removeEventListener('storage', onAuthChange);
+    if (dialog) dialog.open = false;
+    release();
+    if (cleanup === dispose) cleanup = null;
+  }
+  function onNavigate() {
+    if (location.hash !== roomHash) dispose();
+  }
+  function onAuthChange() {
+    if (auth.token !== sessionToken) {
+      dispose();
+      if (location.hash === roomHash) location.hash = '#/rooms';
     }
   }
-  const isAdmin = me.role === 'owner' || me.role === 'admin';
-  const isOwner = me.role === 'owner';
+  cleanup = dispose;
+  window.addEventListener('hashchange', onNavigate);
+  window.addEventListener('cm-authchange', onAuthChange);
+  window.addEventListener('storage', onAuthChange);
 
-  // 房间音频（独立于本地播放器）
-  const audio = new Audio();
-  audio.preload = 'auto';
-  audio.id = 'roomAudio';
-  audio.style.display = 'none';
-  document.body.appendChild(audio);   // 挂进 DOM 便于调试/媒体会话
-
-  const sync = new RoomSync(audio, roomId);
-  let latestSeq = detail.latestSeq || 0;
-
-  // ---- 页面骨架 ----
-  el.innerHTML = `
-    <div class="cm-rtop">
-      <div class="cm-rtop-main">
-        <div class="cm-rname">${esc(detail.room.name)}
-          ${detail.room.hasPassword ? '<span class="material-icons-outlined" style="font-size:calc(15px * var(--cm-fs, 1))">lock</span>' : ''}
-          ${detail.room.freeMode ? '<span class="cm-tag">自由点歌</span>' : ''}
-        </div>
-        <div class="cm-rsub">
-          <span>房间号 <b id="rCode">${detail.room.code}</b></span>
-          <span id="rMembers">${(detail.members || []).length} 人在线</span>
-          <span id="rSync" class="cm-rsync">同步中…</span>
-        </div>
-      </div>
-      <div class="cm-rtop-acts">
-        <span class="pl-btn" id="rShare" title="复制分享链接"><span class="material-icons-outlined">share</span></span>
-        ${isOwner ? '<span class="pl-btn" id="rSettings" title="房间设置"><span class="material-icons-outlined">settings</span></span>' : ''}
-        <span class="pl-btn" id="rLeave" title="离开房间"><span class="material-icons-outlined">logout</span></span>
-      </div>
-    </div>
-
-    <div class="cm-rnow">
-      <div class="cm-rnow-cover" id="rCover"><span class="material-icons-outlined">music_note</span></div>
-      <div class="cm-rnow-main">
-        <div class="cm-rnow-name" id="rTrackName">等待房主开始播放…</div>
-        <div class="cm-rnow-artist" id="rTrackArtist"></div>
-        <div class="cm-rnow-bar"><i id="rProg"></i></div>
-        <div class="cm-rnow-time"><span id="rCur">0:00</span><span id="rDur">0:00</span></div>
-      </div>
-    </div>
-
-    ${isAdmin ? `<div class="cm-rctrl">
-      <span class="pl-btn big" id="rPrev"><span class="material-icons-outlined">skip_previous</span></span>
-      <span class="pl-btn huge" id="rPlay"><span class="material-icons-outlined">play_circle</span></span>
-      <span class="pl-btn big" id="rNext"><span class="material-icons-outlined">skip_next</span></span>
-      <span class="cm-rctrl-tip">你是${isOwner ? '房主' : '管理员'}，可控制全房播放</span>
-    </div>` : `<div class="cm-rctrl-follow"><span class="material-icons-outlined">headphones</span>已跟随房主播放</div>`}
-
-    <div class="cm-sec-head"><h2>点歌</h2>
-      <span class="cm-sec-more" id="rAddSong"><span class="material-icons-outlined">search</span> 搜索点歌</span></div>
-    <div id="rQueue"></div>
-
-    <div class="cm-sec-head"><h2>成员（<span id="rMemberCount">${(detail.members || []).length}</span>）</h2></div>
-    <div class="cm-rmembers" id="rMemberList"></div>`;
-
-  // ---- 渲染辅助 ----
-  const renderMembers = (members) => {
-    const box = el.querySelector('#rMemberList');
-    el.querySelector('#rMemberCount').textContent = members.length;
-    el.querySelector('#rMembers').textContent = `${members.length} 人在线`;
-    box.innerHTML = members.map(m => `
-      <div class="cm-rmember" data-uid="${m.userId}">
-        ${m.avatar || m.avatarDecoration ? avatarHTML(m, 36) : `<span class="cm-rmember-ph">${esc((m.nickname || '?')[0])}</span>`}
-        <div class="cm-rmember-main">
-          <div class="cm-rmember-name">${esc(m.nickname || ('用户' + m.userId))}${userTags(m)}
-            ${m.role === 'owner' ? '<span class="cm-tag admin">房主</span>' : m.role === 'admin' ? '<span class="cm-tag">管理员</span>' : ''}
-            ${m.userId === (auth.user && auth.user.id) ? '<span class="cm-tag">我</span>' : ''}
-          </div>
-        </div>
-        ${isAdmin && m.role !== 'owner' && m.userId !== (auth.user && auth.user.id)
-          ? `<span class="cm-rmember-act" data-uid="${m.userId}" data-role="${m.role}"><span class="material-icons-outlined">more_vert</span></span>` : ''}
-      </div>`).join('');
-    box.querySelectorAll('.cm-rmember-act').forEach(a => {
-      a.onclick = () => memberMenu(+a.dataset.uid, a.dataset.role);
-    });
+  const entry = (message, button = '') => {
+    el.innerHTML = `<div class="cm-empty">${esc(message)}<div class="cm-room-actions">
+      <mdui-button href="#/rooms">返回广场</mdui-button>${button}</div></div>`;
   };
 
-  const memberMenu = (uid, role) => {
-    const acts = [];
-    if (isOwner) acts.push({ k: role === 'admin' ? 'unadmin' : 'admin', label: role === 'admin' ? '取消管理员' : '设为管理员', icon: 'verified_user' });
-    if (isOwner) acts.push({ k: 'transfer', label: '转让房主', icon: 'swap_horiz' });
-    acts.push({ k: 'kick', label: '移出房间', icon: 'person_remove' });
-    acts.push({ k: 'ban', label: '移出并封禁', icon: 'block' });
-    const diag = mdui.dialog({
-      headline: '成员操作',
-      body: `<div class="cm-qm">${acts.map(a => `<div class="cm-qm-item" data-k="${a.k}"><span class="material-icons-outlined">${a.icon}</span>${a.label}</div>`).join('')}</div>`,
-      actions: [{ text: '取消' }],
-    });
-    setTimeout(() => {
-      diag.querySelectorAll('.cm-qm-item').forEach(it => {
-        it.onclick = async () => {
-          diag.open = false;
-          try {
-            const k = it.dataset.k;
-            if (k === 'kick') { await roomApi.kick(roomId, uid, false); toast('已移出'); }
-            else if (k === 'ban') { await roomApi.kick(roomId, uid, true); toast('已移出并封禁'); }
-            else if (k === 'admin') { await roomApi.setAdmin(roomId, uid, true); toast('已设为管理员'); }
-            else if (k === 'unadmin') { await roomApi.setAdmin(roomId, uid, false); toast('已取消管理员'); }
-            else if (k === 'transfer') { await roomApi.transfer(roomId, uid); toast('已转让房主'); }
-            refresh();
-          } catch (e) { toast(e.message); }
-        };
-      });
-    }, 0);
-  };
-
-  const renderQueue = (queue) => {
-    const box = el.querySelector('#rQueue');
-    if (!queue.length) { box.innerHTML = '<div class="cm-empty small">队列是空的，点右上角搜索点歌</div>'; return; }
-    box.innerHTML = `<div class="cm-songs">${queue.map(q => `
-      <div class="cm-rq ${q.status === 'playing' ? 'playing' : ''}" data-qid="${q.id}">
-        ${q.pic ? `<img class="cm-song-pic" src="${esc(q.pic)}" loading="lazy">` : `<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>`}
-        <div class="cm-song-main">
-          <div class="cm-song-name">${esc(q.name)}</div>
-          <div class="cm-song-sub">
-            <span>${esc(q.artists || '')}</span>
-            <span class="cm-rq-from">${esc(q.requester || '')}${q.mine ? '（我）' : ''}</span>
-            ${q.status === 'pending' ? '<span class="cm-tag">待审批</span>' : q.status === 'playing' ? '<span class="cm-tag admin">播放中</span>' : ''}
-          </div>
-        </div>
-        ${isAdmin && q.status === 'pending' ? `
-          <span class="cm-rq-btn ok" data-act="ok" data-qid="${q.id}"><span class="material-icons-outlined">check</span></span>
-          <span class="cm-rq-btn no" data-act="no" data-qid="${q.id}"><span class="material-icons-outlined">close</span></span>` : ''}
-        ${(q.mine || isAdmin) && q.status !== 'playing' ? `
-          <span class="cm-rq-btn" data-act="del" data-qid="${q.id}"><span class="material-icons-outlined">delete_outline</span></span>` : ''}
-      </div>`).join('')}</div>`;
-    box.querySelectorAll('[data-act]').forEach(b => {
-      b.onclick = async (ev) => {
-        ev.stopPropagation();
-        const qid = +b.dataset.qid;
+  el.innerHTML = skelRoom();
+  try {
+    const detail = await roomApi.detail(roomId);
+    if (!active) return;
+    if (detail.room.archivedAt) {
+      entry(closeMessages[detail.room.archiveReason] || '房间已归档',
+        '<mdui-button variant="filled" id="rReopen">恢复房间</mdui-button>');
+      el.querySelector('#rReopen').onclick = async () => {
         try {
-          if (b.dataset.act === 'ok') { await roomApi.approve(roomId, qid); toast('已采纳'); }
-          else if (b.dataset.act === 'no') { await roomApi.reject(roomId, qid); toast('已驳回'); }
-          else { await roomApi.removeItem(roomId, qid); toast('已移除'); }
-          refresh();
-        } catch (e) { toast(e.message); }
+          await roomApi.reopen(roomId);
+          if (active) render(el, [roomId]);
+        } catch (e) { if (active) toast(e.message); }
       };
-    });
-  };
-
-  const renderNowPlaying = (tl) => {
-    const meta = tl.trackMeta || {};
-    const nameEl = el.querySelector('#rTrackName');
-    const artEl = el.querySelector('#rTrackArtist');
-    const coverEl = el.querySelector('#rCover');
-    if (!tl.trackNcmId || !meta.name) {
-      nameEl.textContent = '等待房主开始播放…';
-      artEl.textContent = '';
       return;
     }
-    if (nameEl.textContent !== meta.name) {
-      nameEl.textContent = meta.name;
-      artEl.textContent = meta.artists || '';
-      coverEl.innerHTML = meta.pic ? `<img src="${esc(meta.pic)}" onerror="this.remove()">` : '<span class="material-icons-outlined">music_note</span>';
-    }
-    const playBtn2 = el.querySelector('#rPlay');
-    if (playBtn2) playBtn2.innerHTML = `<span class="material-icons-outlined">${tl.playing ? 'pause_circle' : 'play_circle'}</span>`;
-  };
-
-  const refresh = async () => {
-    try {
-      const d = await roomApi.detail(roomId);
-      renderMembers(d.members || []);
-      renderQueue(d.queue || []);
-      renderNowPlaying(d.timeline);
-      sync.setTimeline(d.timeline);
-      if (d.timeline.trackNcmId && String(audio.dataset.ncmId) !== String(d.timeline.trackNcmId)) {
-        sync.applyTrack(d.timeline);
-      }
-      latestSeq = Math.max(latestSeq, d.latestSeq || 0);
-    } catch (e) { /* 忽略瞬时错误 */ }
-  };
-
-  // ---- 时钟同步 + 事件流 ----
-  const clock = await estimateClockOffset(roomId, 5);
-  sync.offset = clock.offset;
-  sync.onStatus = ({ drift, position, duration }) => {
-    const box = el.querySelector('#rSync');
-    if (box) {
-      const ms = Math.abs(drift);
-      box.textContent = ms < 300 ? `同步良好（${drift > 0 ? '+' : ''}${drift}ms）` : `校准中（${drift > 0 ? '+' : ''}${drift}ms）`;
-      box.className = 'cm-rsync' + (ms < 300 ? ' ok' : '');
-    }
-    const prog = el.querySelector('#rProg');
-    if (prog && duration) prog.style.width = Math.min(100, (position / duration) * 100) + '%';
-    const cur = el.querySelector('#rCur');
-    if (cur) cur.textContent = fmtDur(position);
-    const dur = el.querySelector('#rDur');
-    if (dur) dur.textContent = fmtDur(duration);
-  };
-
-  sync.applyTrack(detail.timeline);
-  sync.start();
-
-  let stream;
-  const applyTimeline = (tl) => {
-    sync.setTimeline(tl);
-    renderNowPlaying(tl);
-    // 换歌：立即对齐
-    if (tl.trackNcmId && String(audio.dataset.ncmId) !== String(tl.trackNcmId)) {
-      sync.applyTrack(tl);
-    }
-  };
-
-  stream = openEventStream(roomId, latestSeq, {
-    onEvent: (type, payload) => {
-      if (payload && payload.seq) latestSeq = Math.max(latestSeq, payload.seq);
-      const p = (payload && payload.payload) || payload || {};
-      if (p.timeline) applyTimeline(p.timeline);
-      if (['join', 'leave', 'role', 'kick', 'transfer'].includes(type)) {
-        if (type === 'close') { toast('房间已关闭'); location.hash = '#/rooms'; return; }
-        refresh();
-      }
-      if (type === 'queue') refresh();
-      if (type === 'settings') refresh();
-      if (type === 'kick' && p.userId === (auth.user && auth.user.id)) {
-        toast('你已被移出房间');
-        location.hash = '#/rooms';
-      }
-    },
-    onOpen: () => { el.querySelector('#rSync').textContent = '已连接'; },
-    onError: () => { /* 由 EventSource 自动重连；原生桥会在 App 侧重连 */ },
-  });
-
-  const hb = setInterval(() => { roomApi.heartbeat(roomId).catch(() => {}); }, 15000);
-
-  // ---- 交互 ----
-  el.querySelector('#rLeave').onclick = async () => {
-    try { await roomApi.leave(roomId); } catch { /* 忽略 */ }
-    location.hash = '#/rooms';
-  };
-  el.querySelector('#rShare').onclick = async () => {
-    const link = `${location.origin}${location.pathname}#/room/${roomId}`;
-    try {
-      await navigator.clipboard.writeText(`来一起听歌！房间号 ${detail.room.code} ${link}`);
-      toast('分享链接已复制');
-    } catch { toast(`房间号：${detail.room.code}`); }
-  };
-  const playBtn = el.querySelector('#rPlay');
-  if (playBtn) {
-    playBtn.onclick = async () => {
-      try {
-        const tl = sync.timeline || {};
-        if (tl.playing) await roomApi.pause(roomId);
-        else await roomApi.play(roomId, Math.round((audio.currentTime || 0) * 1000));
-        refresh();
-      } catch (e) { toast(e.message); }
+    const join = async (password) => {
+      await roomApi.join(roomId, password);
+      const joined = await roomApi.detail(roomId);
+      if (active) enter(joined);
     };
-    el.querySelector('#rNext').onclick = async () => { try { await roomApi.next(roomId); refresh(); } catch (e) { toast(e.message); } };
-    el.querySelector('#rPrev').onclick = async () => { try { await roomApi.prev(roomId); refresh(); } catch (e) { toast(e.message); } };
+    if (detail.role) {
+      enter(detail);
+    } else if (detail.room.joinLocked && detail.room.ownerId !== uid) {
+      entry('房间已锁定，暂不接受新成员');
+    } else if (detail.room.hasPassword && detail.room.ownerId !== uid) {
+      entry(detail.room.name, `<form class="cm-room-entry" id="rJoin">
+        <mdui-text-field id="rPassword" label="房间密码" maxlength="128" variant="outlined" type="password"></mdui-text-field>
+        <mdui-button type="submit" variant="filled" id="rSubmitJoin">加入</mdui-button>
+        <div id="rJoinError" role="status"></div>
+      </form>`);
+      const form = el.querySelector('#rJoin');
+      const password = el.querySelector('#rPassword');
+      const submit = el.querySelector('#rSubmitJoin');
+      form.onsubmit = async (event) => {
+        event.preventDefault();
+        if (submit.loading) return;
+        const error = el.querySelector('#rJoinError');
+        if (!password.value) { error.textContent = '请输入房间密码'; return; }
+        submit.loading = true;
+        error.textContent = '';
+        try { await join(password.value); }
+        catch (e) { if (active) error.textContent = e.message; }
+        finally { submit.loading = false; }
+      };
+    } else {
+      await join('');
+    }
+  } catch (e) {
+    if (active) entry(e.message);
   }
-  const setBtn = el.querySelector('#rSettings');
-  if (setBtn) setBtn.onclick = () => settingsDialog(roomId, detail.room, refresh);
 
-  el.querySelector('#rAddSong').onclick = () => songPicker(roomId, refresh);
-  renderMembers(detail.members || []);
-  renderQueue(detail.queue || []);
-  renderNowPlaying(detail.timeline);
-  refresh();   // 首屏后主动拉一次（不依赖 SSE 首帧）
+  function enter(detail) {
+    if (!detail.role || !detail.timeline) {
+      entry('房间状态已变化，请重新进入');
+      return;
+    }
+    let room = detail.room;
+    let role = detail.role;
+    let timelineSeq = detail.latestSeq;
+    let connected = false;
+    let refreshing = false;
+    let refreshAgain = false;
+    let changing = false;
+    let renewing = false;
+    let endedRevision;
+    const isOwner = () => role === 'owner';
+    const canControl = () => isOwner() || role === 'admin';
+    const audio = new Audio();
+    audio.preload = 'auto';
+    if (!player.audio.paused) player.pause();
 
-  cleanup = () => {
-    try { stream && stream.close(); } catch { /* 忽略 */ }
-    clearInterval(hb);
-    sync.stop();
-    try { audio.pause(); audio.src = ''; audio.remove(); } catch { /* 忽略 */ }
-    window.__cmSseEvent = null;
-    window.__cmSseState = null;
-  };
+    el.innerHTML = `
+      <div class="cm-rtop">
+        <div class="cm-rtop-main">
+          <div class="cm-rname"><span id="rName"></span> <span class="cm-tag" id="rMode" hidden></span></div>
+          <div class="cm-rsub">
+            <span>房间号 <b>${esc(room.code)}</b></span>
+            <span id="rMembers"></span>
+            <span id="rSync" class="cm-rsync" role="status">连接中…</span>
+          </div>
+        </div>
+        <div class="cm-rtop-acts">
+          <mdui-button-icon icon="share" id="rShare" title="复制邀请链接" aria-label="复制邀请链接"></mdui-button-icon>
+          <mdui-button-icon icon="settings" id="rSettings" title="房间设置" aria-label="房间设置"></mdui-button-icon>
+          <mdui-button-icon icon="logout" id="rLeave" title="离开房间" aria-label="离开房间"></mdui-button-icon>
+        </div>
+      </div>
+      <div class="cm-rnow">
+        <div class="cm-rnow-cover" id="rCover"><span class="material-icons-outlined">music_note</span></div>
+        <div class="cm-rnow-main">
+          <div class="cm-rnow-name" id="rTrackName">等待开始播放…</div>
+          <div class="cm-rnow-artist" id="rTrackArtist"></div>
+          <div class="cm-rnow-bar" id="rBar"><i id="rProg"></i></div>
+          <div class="cm-rnow-time"><span id="rCur">0:00</span><span id="rDur">0:00</span></div>
+        </div>
+      </div>
+      <div class="cm-rctrl" id="rControls">
+        <mdui-button-icon icon="skip_previous" id="rPrev" title="上一首" aria-label="上一首"></mdui-button-icon>
+        <mdui-button-icon icon="play_arrow" id="rPlay" title="播放或暂停" aria-label="播放或暂停"></mdui-button-icon>
+        <mdui-button-icon icon="skip_next" id="rNext" title="下一首" aria-label="下一首"></mdui-button-icon>
+        <span class="cm-rctrl-tip" id="rRole"></span>
+      </div>
+      <div class="cm-rctrl-follow" id="rFollow">跟随房主或管理员播放</div>
+      <mdui-button id="rEnable" variant="tonal" hidden>开启房间声音</mdui-button>
+      <div class="cm-sec-head"><h2>点歌队列</h2>
+        <mdui-button id="rAddSong" variant="text" icon="search">搜索点歌</mdui-button></div>
+      <div id="rQueue"></div>
+      <div class="cm-sec-head"><h2>在线成员</h2></div>
+      <div class="cm-rmembers" id="rMemberList"></div>`;
+
+    const get = (id) => el.querySelector('#' + id);
+    const sync = new RoomSync(audio, ({ drift, position, duration }) => {
+      const label = get('rSync');
+      const aligned = connected && Math.abs(drift) < 300;
+      label.textContent = connected ? (aligned ? '已同步' : '正在校准') : '正在连接…';
+      label.classList.toggle('ok', aligned);
+      get('rProg').style.width = duration ? Math.min(100, position / duration * 100) + '%' : '0%';
+      get('rCur').textContent = fmtDur(position);
+      get('rDur').textContent = fmtDur(duration);
+      if (connected && duration && position >= duration) advance();
+    }, blocked => { if (active) get('rEnable').hidden = !blocked; });
+
+    function exit(message, mine = false) {
+      if (!active) return;
+      if (message) toast(message);
+      dispose();
+      location.hash = mine ? '#/rooms?scope=mine' : '#/rooms';
+    }
+
+    function fail(e) {
+      if (active && [401, 403, 404].includes(e.status)) exit(e.message);
+    }
+
+    function applyTimeline(tl, seq) {
+      if (seq < timelineSeq) return;
+      timelineSeq = seq;
+      const meta = tl.trackMeta || {};
+      get('rTrackName').textContent = meta.name || '等待开始播放…';
+      get('rTrackArtist').textContent = meta.artists || '';
+      const cover = get('rCover');
+      if (cover.dataset.pic !== (meta.pic || '')) {
+        cover.dataset.pic = meta.pic || '';
+        cover.innerHTML = meta.pic ? `<img src="${esc(meta.pic)}" alt="">` : '<span class="material-icons-outlined">music_note</span>';
+      }
+      get('rPlay').setAttribute('icon', tl.playing ? 'pause' : 'play_arrow');
+      sync.applyTimeline(tl);
+    }
+
+    function showDetails(d) {
+      room = d.room;
+      role = d.role;
+      get('rName').textContent = room.name;
+      const mode = [room.hasPassword && '密码房', room.joinLocked && '已锁定', (room.freeMode || !room.needApproval) && '免审批']
+        .filter(Boolean).join(' · ');
+      get('rMode').textContent = mode;
+      get('rMode').hidden = !mode;
+      get('rSettings').hidden = !isOwner();
+      get('rControls').hidden = !canControl();
+      get('rBar').classList.toggle('seekable', canControl());
+      get('rFollow').hidden = canControl();
+      get('rRole').textContent = isOwner() ? '房主控播' : '管理员控播';
+      const members = d.members || [];
+      get('rMembers').textContent = `${members.length} 人在线`;
+      get('rMemberList').innerHTML = members.map(m => `
+        <div class="cm-rmember">
+          ${m.avatar || m.avatarDecoration ? avatarHTML(m, 36) : `<span class="cm-rmember-ph">${esc((m.nickname || '?')[0])}</span>`}
+          <div class="cm-rmember-main">
+            <div class="cm-rmember-name">${esc(m.nickname || ('用户' + m.userId))}${userTags(m)}
+              ${m.role === 'owner' ? '<span class="cm-tag admin">房主</span>' : m.role === 'admin' ? '<span class="cm-tag">管理员</span>' : ''}
+              ${m.userId === uid ? '<span class="cm-tag">我</span>' : ''}
+            </div>
+          </div>
+          ${m.userId !== uid && (isOwner() || (canControl() && m.role === 'member'))
+            ? `<mdui-button-icon icon="more_vert" aria-label="成员操作" data-member="${m.userId}"></mdui-button-icon>` : ''}
+        </div>`).join('');
+      get('rMemberList').querySelectorAll('[data-member]').forEach(b => {
+        b.onclick = () => { dialog = memberMenu(roomId, members.find(m => m.userId === +b.dataset.member), isOwner(), refresh); };
+      });
+      renderQueue(get('rQueue'), d.queue || [], canControl(), async (action, item, index) => {
+        if (action === 'up' || action === 'down') await roomApi.reorder(roomId, item, index);
+        else await roomApi[action](roomId, item);
+        refresh();
+      });
+      applyTimeline(d.timeline, d.latestSeq);
+    }
+
+    async function refresh() {
+      if (!active) return;
+      if (refreshing) { refreshAgain = true; return; }
+      refreshing = true;
+      try {
+        do {
+          refreshAgain = false;
+          const d = await roomApi.detail(roomId);
+          if (!active) return;
+          if (d.room.archivedAt) return exit(closeMessages[d.room.archiveReason]);
+          if (!d.role || !d.timeline) return exit(closeMessages.removed);
+          showDetails(d);
+        } while (refreshAgain);
+      } catch (e) {
+        fail(e);
+      } finally {
+        refreshing = false;
+      }
+    }
+
+    async function renew() {
+      const tl = sync.timeline;
+      if (!tl?.trackNcmId || renewing) return;
+      if (tl.stream && tl.stream.expireAt > Date.now() + sync.offset + 60_000) return;
+      renewing = true;
+      try {
+        const d = await roomApi.renewStream(roomId);
+        if (active) applyTimeline(d.timeline, d.seq);
+      } catch (e) {
+        fail(e);
+      } finally {
+        renewing = false;
+      }
+    }
+
+    async function control(action, { automatic = false } = {}) {
+      if (changing || !active || !canControl()) return;
+      changing = true;
+      try {
+        if (action === 'play') await renew();
+        if (!active) return;
+        const d = await roomApi[action](roomId, sync.timeline?.trackRevision);
+        if (active) { applyTimeline(d.timeline, d.seq); refresh(); }
+      } catch (e) {
+        if (active && !automatic) toast(e.message);
+        refresh();
+      } finally {
+        changing = false;
+      }
+    }
+
+    get('rEnable').onclick = () => sync.resume();
+    get('rPlay').onclick = () => control(sync.timeline.playing ? 'pause' : 'play');
+    get('rNext').onclick = () => control('next');
+    get('rPrev').onclick = () => control('prev');
+    get('rBar').onclick = async (e) => {
+      const duration = sync.timeline.trackMeta?.duration;
+      if (!active || !canControl() || !duration || changing) return;
+      const rect = get('rBar').getBoundingClientRect();
+      const position = Math.round(duration * Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)));
+      changing = true;
+      try {
+        const d = await roomApi.seek(roomId, position);
+        if (active) applyTimeline(d.timeline, d.seq);
+      } catch (err) {
+        if (active) toast(err.message);
+      } finally {
+        changing = false;
+      }
+    };
+    get('rShare').onclick = async () => {
+      const link = `${location.origin}${location.pathname}#/room/${roomId}`;
+      try {
+        await navigator.clipboard.writeText(`来一起听歌！房间号 ${room.code} ${link}`);
+        if (active) toast('邀请链接已复制');
+      } catch { if (active) toast(`房间号 ${room.code}`); }
+    };
+    get('rLeave').onclick = async () => {
+      try { await roomApi.leave(roomId); exit(); }
+      catch (e) { fail(e); if (active) toast(e.message); }
+    };
+    get('rSettings').onclick = () => { dialog = settingsDialog(roomId, room, refresh, exit, (d) => { dialog = d; }); };
+    get('rAddSong').onclick = () => { dialog = songPicker(roomId, refresh); };
+    function advance() {
+      const tl = sync.timeline;
+      if (tl?.playing && canControl() && !changing && endedRevision !== tl.trackRevision) {
+        endedRevision = tl.trackRevision;
+        control('next', { automatic: true });
+      }
+    }
+    audio.addEventListener('ended', advance);
+
+    showDetails(detail);
+    sync.start();
+    const stream = openEventStream(roomId, detail.latestSeq, {
+      onEvent(type, event) {
+        if (type === 'close') return exit(closeMessages[event.payload.reason] || '房间已关闭');
+        if (type === 'kick' && event.payload.userId === uid) return exit(closeMessages.removed);
+        if (type === 'reset') timelineSeq = -1;
+        if (event.payload.timeline) applyTimeline(event.payload.timeline, event.seq);
+        if (['join', 'leave', 'role', 'kick', 'transfer', 'queue', 'settings', 'next', 'prev', 'reset'].includes(type)) refresh();
+      },
+      onOpen() { connected = true; },
+      onError(e) { connected = false; fail(e); },
+    });
+    const hb = setInterval(async () => {
+      try { await roomApi.heartbeat(roomId); }
+      catch (e) { if (e.status === 409) exit(e.message); else fail(e); }
+      if (active) { refresh(); renew(); }
+    }, 25000);
+    release = () => { stream.close(); clearInterval(hb); sync.stop(); };
+    estimateClockOffset(roomId, () => active).then(clock => {
+      if (active && clock.ok) { sync.offset = clock.offset; sync.applyTimeline(sync.timeline); }
+    });
+    renew();
+  }
 }
 
-// ---------------- 房间设置（房主） ----------------
-function settingsDialog(roomId, room, onDone) {
+function memberMenu(roomId, member, owner, refresh) {
+  const run = async (operation) => {
+    try { await operation(); refresh(); }
+    catch (e) { toast(e.message); return false; }
+  };
+  const actions = [
+    { text: '取消' },
+    { text: '移出', onClick: () => run(() => roomApi.kick(roomId, member.userId)) },
+    { text: '移出并封禁', onClick: () => run(() => roomApi.kick(roomId, member.userId, true)) },
+  ];
+  if (owner) actions.push(
+    { text: member.role === 'admin' ? '取消管理员' : '设为管理员',
+      onClick: () => run(() => roomApi.setAdmin(roomId, member.userId, member.role !== 'admin')) },
+    { text: '转让房主', onClick: () => run(() => roomApi.transfer(roomId, member.userId)) },
+  );
+  return mdui.dialog({ headline: '成员操作', body: esc(member.nickname), actions });
+}
+
+function renderQueue(box, queue, admin, run) {
+  if (!queue.length) {
+    box.innerHTML = '<div class="cm-empty small">队列是空的，搜索歌曲开始点歌</div>';
+    return;
+  }
+  const button = (action, label, icon, item, index = 0) => `<mdui-button-icon icon="${icon}" title="${label}"
+    aria-label="${label}" data-act="${action}" data-qid="${item.id}" data-index="${index}"></mdui-button-icon>`;
+  const queued = queue.filter(q => q.status === 'queued');
+  const row = q => {
+    const idx = queued.indexOf(q);
+    return `<div class="cm-rq ${q.status === 'playing' ? 'playing' : ''}">
+      ${q.pic ? `<img class="cm-song-pic" src="${esc(q.pic)}" alt="" loading="lazy">` : '<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>'}
+      <div class="cm-song-main">
+        <div class="cm-song-name">${esc(q.name)}</div>
+        <div class="cm-song-sub"><span>${esc(q.artists || '')}</span>
+          <span class="cm-rq-from">${esc(q.requester || '')}${q.mine ? '（我）' : ''}</span>
+          ${q.status === 'playing' ? '<span class="cm-tag admin">当前歌曲</span>' : ''}
+        </div>
+      </div>
+      <div class="cm-room-actions">
+        ${admin && q.status === 'pending' ? button('approve', '采纳', 'check', q) + button('reject', '驳回', 'close', q) : ''}
+        ${admin && idx > 0 ? button('up', '上移', 'arrow_upward', q, idx - 1) : ''}
+        ${admin && idx >= 0 && idx < queued.length - 1 ? button('down', '下移', 'arrow_downward', q, idx + 1) : ''}
+        ${(q.mine || admin) && q.status !== 'playing' ? button('removeItem', '移除', 'delete_outline', q) : ''}
+      </div>
+    </div>`;
+  };
+  const section = (title, items) => items.length ? `<h3 class="cm-room-queue-title">${title}（${items.length}）</h3>${items.map(row).join('')}` : '';
+  const history = queue.filter(q => q.status === 'played');
+  const historyOpen = box.querySelector('details')?.open;
+  box.innerHTML = queue.filter(q => q.status === 'playing').map(row).join('')
+    + section('待播放', queued) + section('待审批', queue.filter(q => q.status === 'pending'))
+    + (history.length ? `<details ${historyOpen ? 'open' : ''}><summary>播放历史（${history.length}）</summary>${history.map(row).join('')}</details>` : '');
+  box.querySelectorAll('[data-act]').forEach(b => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try { await run(b.dataset.act, +b.dataset.qid, +b.dataset.index); }
+      catch (e) { toast(e.message); }
+      finally { b.disabled = false; }
+    };
+  });
+}
+
+function settingsDialog(roomId, room, refresh, exit, setDialog) {
+  const toggle = (id, label, checked) => `<div class="cm-more-row"><span>${label}</span><mdui-switch
+    id="${id}" aria-label="${label}" ${checked ? 'checked' : ''}></mdui-switch></div>`;
   const diag = mdui.dialog({
     headline: '房间设置',
     body: `<div class="cm-form">
-      <div class="cm-more-row" style="padding:4px 0">
-        <div><div class="cm-more-t">自由点歌</div><div class="cm-more-s">开启后全员免审批</div></div>
-        <mdui-switch id="sFree" ${room.freeMode ? 'checked' : ''}></mdui-switch>
+      <mdui-text-field id="sName" label="房间名称" value="${esc(room.name)}" maxlength="60" variant="outlined"></mdui-text-field>
+      ${toggle('sFree', '自由点歌', room.freeMode)}
+      ${toggle('sApproval', '普通成员点歌需审批', room.needApproval)}
+      ${toggle('sPublic', '在房间广场展示', room.isPublic)}
+      ${toggle('sLock', '禁止新成员加入', room.joinLocked)}
+      ${toggle('sChangePw', '修改或移除密码', false)}
+      <mdui-text-field id="sPw" label="新密码（留空移除）" maxlength="128" variant="outlined" type="password" disabled></mdui-text-field>
+      <div class="cm-room-actions">
+        <mdui-button id="sBans" variant="text">封禁名单</mdui-button>
+        <mdui-button id="sArchive" variant="text">归档房间</mdui-button>
+        <mdui-button id="sDelete" variant="text">永久删除</mdui-button>
       </div>
-      <div class="cm-more-row" style="padding:4px 0">
-        <div><div class="cm-more-t">公开房间</div><div class="cm-more-s">在广场展示</div></div>
-        <mdui-switch id="sPublic" ${room.isPublic ? 'checked' : ''}></mdui-switch>
-      </div>
-      <div class="cm-more-row" style="padding:4px 0">
-        <div><div class="cm-more-t">房间锁定</div><div class="cm-more-s">禁止新成员加入</div></div>
-        <mdui-switch id="sLock" ${room.joinLocked ? 'checked' : ''}></mdui-switch>
-      </div>
-      <mdui-text-field id="sPw" label="房间密码（留空=无密码）" variant="outlined" type="password" style="width:100%"></mdui-text-field>
     </div>`,
     actions: [{ text: '取消' }, {
       text: '保存',
-      onClick: () => roomApi.settings(roomId, {
-        freeMode: diag.querySelector('#sFree').checked,
-        isPublic: diag.querySelector('#sPublic').checked,
-        joinLocked: diag.querySelector('#sLock').checked,
-        needApproval: !diag.querySelector('#sFree').checked,
-        password: (diag.querySelector('#sPw').value || '').trim(),
-      }).then(() => { toast('设置已保存'); onDone && onDone(); }).catch(e => { toast(e.message); return false; }),
+      async onClick() {
+        const fields = {
+          name: get('sName').value.trim(), freeMode: get('sFree').checked,
+          isPublic: get('sPublic').checked, joinLocked: get('sLock').checked,
+          needApproval: get('sApproval').checked,
+        };
+        if (get('sChangePw').checked) fields.password = get('sPw').value.trim();
+        try { await roomApi.settings(roomId, fields); refresh(); toast('设置已保存'); }
+        catch (e) { toast(e.message); return false; }
+      },
     }],
   });
+  const get = id => diag.querySelector('#' + id);
+  get('sChangePw').addEventListener('change', () => { get('sPw').disabled = !get('sChangePw').checked; });
+  get('sArchive').onclick = () => {
+    diag.open = false;
+    setDialog(confirmDialog({ title: '归档房间', body: '结束当前听歌，保留房间号、设置和队列。房主可以从「我的房间」恢复。',
+      onOk: async () => { await roomApi.close(roomId); exit('房间已归档', true); } }));
+  };
+  get('sDelete').onclick = () => {
+    diag.open = false;
+    setDialog(confirmDialog({ title: '永久删除房间', body: '房间、成员记录和点歌队列将永久删除。',
+      onOk: async () => { await roomApi.delete(roomId); exit('房间已删除', true); } }));
+  };
+  get('sBans').onclick = async () => {
+    try {
+      const { bans } = await roomApi.bans(roomId);
+      if (!diag.open) return;
+      diag.open = false;
+      const list = mdui.dialog({
+        headline: '封禁名单',
+        body: bans.length ? bans.map(b => `<div class="cm-more-row">
+          <span>${esc(b.nickname || ('用户 ' + b.userId))}</span>
+          <mdui-button variant="text" data-unban="${b.userId}">解除封禁</mdui-button></div>`).join('') : '当前没有封禁成员',
+        actions: [{ text: '关闭' }],
+      });
+      setDialog(list);
+      list.querySelectorAll('[data-unban]').forEach(button => {
+        button.onclick = async () => {
+          try { await roomApi.unban(roomId, +button.dataset.unban); button.closest('.cm-more-row').remove(); }
+          catch (e) { toast(e.message); }
+        };
+      });
+    } catch (e) { toast(e.message); }
+  };
+  return diag;
 }
 
-// ---------------- 搜索点歌 ----------------
 function songPicker(roomId, onDone) {
   const diag = mdui.dialog({
     headline: '搜索点歌',
@@ -352,40 +502,39 @@ function songPicker(roomId, onDone) {
   });
   const input = diag.querySelector('#pkKw');
   const box = diag.querySelector('#pkRes');
-  let timer = null;
+  let timer;
+  let generation = 0;
+  let submitting = false;
   input.addEventListener('input', () => {
     clearTimeout(timer);
-    const kw = (input.value || '').trim();
+    const run = ++generation;
+    const kw = input.value.trim();
     if (!kw) { box.innerHTML = '<div class="cm-empty small">输入关键词开始搜索</div>'; return; }
     timer = setTimeout(async () => {
       box.innerHTML = '<div class="cm-loading small"><mdui-circular-progress></mdui-circular-progress></div>';
       try {
-        // 只取单曲：这里只用 d.songs，没必要让房间点歌去等上游最慢的「歌手」（实测 6s+）
-          const d = await (await import('../api.js')).api.search(kw, 0, 20, 'song');
+        const d = await api.search(kw, 0, 20, 'song');
+        if (run !== generation || !diag.open) return;
         const songs = d.songs || [];
         if (!songs.length) { box.innerHTML = '<div class="cm-empty small">没有找到结果</div>'; return; }
-        // onPlay 置空：点行行为完全由下方 onclick 接管（避免重复入队）
-        await renderSongList(box, songs, { onPlay: () => {} });
-        // 点行 = 点歌
-        box.querySelectorAll('.cm-song').forEach((row, i) => {
-          row.onclick = async (ev) => {
-            const likeEl = ev.target.closest('[data-act="like"]');
-            if (likeEl) return;
-            const s = songs[i];
-            try {
-              const r = await roomApi.queueAdd(roomId, {
-                ncm_id: s.ncm_id, name: s.name, artists: s.artists, pic: s.pic, duration: s.duration,
-              });
-              toast(r.auto ? `已加入队列：${s.name}` : `已提交审批：${s.name}`);
-              diag.open = false;
-              onDone && onDone();
-            } catch (e) { toast(e.message); }
-          };
-        });
+        await renderSongList(box, songs, { deferStatus: true, onPlay: async (index) => {
+          if (submitting || !diag.open || run !== generation) return;
+          const song = songs[index];
+          submitting = true;
+          try {
+            const r = await roomApi.queueAdd(roomId, {
+              ncm_id: song.ncm_id, name: song.name, artists: song.artists, pic: song.pic, duration: song.duration,
+            });
+            toast(r.auto ? '已加入队列' : '已提交审批');
+            diag.open = false;
+            onDone();
+          } catch (e) { toast(e.message); }
+          finally { submitting = false; }
+        } });
       } catch (e) {
-        box.innerHTML = `<div class="cm-empty small">搜索失败：${esc(e.message)}</div>`;
+        if (run === generation && diag.open) box.innerHTML = `<div class="cm-empty small">搜索失败：${esc(e.message)}</div>`;
       }
     }, 420);
   });
-  setTimeout(() => input.focus(), 200);
+  return diag;
 }

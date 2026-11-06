@@ -43,7 +43,7 @@ GUIDES = {
     'currentmusic-ai': '聊天 AI 与 SSE', 'share-api': '分享元数据与图片',
     'engine-badge-api': '流声引擎署名徽章',
     'realip': 'RealIP 规则', 'third-party-ncm-sync': '第三方客户端绑定同步',
-    'rooms-design': '听歌房协议与设计参考', 'network-lines-api': '线路测速',
+    'rooms-design': '一起听房间 API 与同步协议', 'network-lines-api': '线路测速',
 }
 
 
@@ -202,6 +202,8 @@ def auth(node):
 def endpoint_text(method, path, node, title, access=None):
     permission = access or auth(node)
     text = [f'## {method} /cm{path}', '', title, '', f'**权限**：{permission}。', '']
+    if path.startswith('/rooms'):
+        text += ['请求与响应细节见[一起听房间 API 与同步协议](guide-rooms-design.md)。', '']
     if method == 'PATCH':
         text += ['> 路由分支含 PATCH 别名，但当前 HTTP Handler 没有实现 do_PATCH；公网请使用同路径的 PUT，PATCH 不作为可用入口承诺。', '']
     path_params = re.findall(r'\{([^}]+)\}', path)
@@ -307,8 +309,6 @@ def build(output, upstream):
             text = src.read_text()
             text = re.sub(r'\]\((?:\./|docs/)?([a-z0-9-]+)\.md(#[^)]*)?\)',
                           lambda m: '](' + ('guide-' if m[1] in GUIDES else '') + m[1] + '.md' + (m[2] or '') + ')', text)
-            if name=='rooms-design':
-                text = '> 这是一份设计参考；实际路由索引与当前实现优先。\n\n'+text
             (output/f'guide-{name}.md').write_text(text)
             sidebar.append(f'  - [{title}](guide-{name}.md)')
     build_upstream(output, upstream, sidebar, endpoint_index, manifest)

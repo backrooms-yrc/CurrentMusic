@@ -1289,50 +1289,23 @@ def require_user(handler):
     return u
 
 
-def _get_room(handler, ident):
-    """按 id 或 code 取房间（须存在且未关闭）。"""
-    room = cm_rooms.get_room(code=ident) if not ident.isdigit() else cm_rooms.get_room(room_id=int(ident))
-    if not room:
-        room = cm_rooms.get_room(code=ident)   # 可能是短 id 但实际是 code
-    if not room:
-        raise ApiError(404, "房间不存在或已关闭")
-    return room
-
-
-def _require_role(handler, room, min_role):
-    """校验当前用户在指定房间的角色。min_role: owner > admin > member"""
-    u = require_user(handler)
-    member = cm_rooms.get_member(room["id"], u["id"])
-    if not member:
-        raise ApiError(403, "请先加入房间")
-    role = member["role"]
-    if min_role == "owner" and role != "owner":
-        raise ApiError(403, "需要房主权限")
-    if min_role == "admin" and role not in ("owner", "admin"):
-        raise ApiError(403, "需要房主或管理员权限")
-    return member
-
-
-def _room_out(room, uid, brief=False):
-    d = {
+def _room_out(room):
+    return {
         "id": room["id"], "code": room["code"], "name": room["name"],
         "ownerId": room["owner_id"], "isPublic": bool(room["is_public"]),
         "freeMode": bool(room["free_mode"]), "needApproval": bool(room["need_approval"]),
         "joinLocked": bool(room["join_locked"]), "hasPassword": bool(room["password_hash"]),
-        "maxMembers": room["max_members"],
+        "maxMembers": room["max_members"], "archivedAt": room["closed_at"],
+        "archiveReason": room["archive_reason"],
     }
-    if not brief:
-        d["timeline"] = cm_rooms.get_timeline(room)
-    return d
 
 
 def _member_out(m, decor=""):
     return {"userId": m["user_id"], "role": m["role"], "nickname": m["nickname"],
             "avatar": m["avatar"], "avatarDecoration": decor or "",
-            "title": m.get("title") or "",            # 站内头衔（list_members 里 join users 带出）
+            "title": m.get("title") or "",
             "isAdmin": bool(m.get("is_admin")), "isSuper": bool(m.get("is_super")),
-            "isOwner": bool(m.get("is_owner")),
-            "muted": bool(m["muted"])}
+            "isOwner": bool(m.get("is_owner")), "muted": bool(m["muted"])}
 
 
 def _queue_out(item, uid):
@@ -1343,10 +1316,141 @@ def _queue_out(item, uid):
             "mine": item["requested_by"] == uid}
 
 
-def _event_out(e):
-    return {"seq": e["seq"], "type": e["type"],
-            "payload": json.loads(e["payload"]) if isinstance(e["payload"], str) else e["payload"],
-            "createdAt": e["created_at"]}
+def _resolve_room_stream(handler, ncm_id, level=""):
+    real_ip = cm_ncm_gateway.client_ip(handler)
+    try:
+        level, probed = (level, None) if level else best_level(ncm_id, real_ip=real_ip)
+        result = probed or cm_ncm.song_url(ncm_id, level, real_ip=real_ip)
+        if result.get("url"):
+            return {"stream_url": result["url"], "stream_level": result.get("level") or level,
+                    "stream_expire_at": cm_rooms.now_ms() + 1_100_000}
+    except Exception:  # 上游失败时保留当前时间轴和队列，允许重试。
+        log.warning("房间音源解析失败 song=%s", ncm_id)
+    raise cm_rooms.RoomError(502, "暂时无法获取歌曲音源")
+
+
+def _room_playback(handler, ident, uid, action, body):
+    if action in ("prev", "next"):
+        revision = body.get("trackRevision")
+        if revision is not None:
+            revision = cm_rooms.integer(revision, "曲目版本")
+        with cm_rooms.transaction() as conn:
+            snapshot, _ = cm_rooms.require_room(conn, ident, uid, permission="admin")
+            if revision is not None and revision != snapshot["track_revision"]:
+                raise cm_rooms.RoomError(409, "曲目已变化，请重试")
+            target = cm_rooms.queue_target(conn, snapshot["id"], action)
+        stream = _resolve_room_stream(handler, target["ncm_id"]) if target else None
+        with cm_rooms.transaction(write=True) as conn:
+            room, _ = cm_rooms.require_room(conn, ident, uid, permission="admin")
+            if room["id"] != snapshot["id"] or room["track_revision"] != snapshot["track_revision"] \
+                    or cm_rooms.queue_target(conn, room["id"], action) != target:
+                raise cm_rooms.RoomError(409, "曲目或队列已变化，请重试")
+            return cm_rooms.switch_track(conn, room, uid, action, target, stream)
+
+    with cm_rooms.transaction(write=True) as conn:
+        room, _ = cm_rooms.require_room(conn, ident, uid, permission="admin")
+        if not room["track_ncm_id"]:
+            raise cm_rooms.RoomError(409, "当前无曲目，请先选择下一首")
+        now = cm_rooms.now_ms()
+        pos = cm_rooms.position(room, now)
+        position_requested = action == "seek" or (action == "play" and "position" in body)
+        if position_requested:
+            pos = cm_rooms.integer(body.get("position"), "播放位置")
+            pos = cm_rooms.position(dict(room, base_position=pos, playing=0), now)
+        playing = action == "play" or (action == "seek" and bool(room["playing"]))
+        if action == "play" and pos and not position_requested:
+            duration = (cm_rooms.timeline(room)["trackMeta"] or {}).get("duration") or 0
+            if duration and pos >= duration:
+                pos = 0
+        if action == "play" and not room["stream_url"]:
+            raise cm_rooms.RoomError(409, "请先获取歌曲音源")
+        return cm_rooms.playback(conn, room, uid, action, {
+            "base_position": pos, "base_at": now + (cm_rooms.PREBUFFER_MS if action == "play" else 0),
+            "playing": int(playing),
+        })
+
+
+def _room_renew(handler, ident, uid):
+    with cm_rooms.transaction() as conn:
+        snapshot, _ = cm_rooms.require_room(conn, ident, uid, permission="member")
+        if not snapshot["track_ncm_id"]:
+            raise cm_rooms.RoomError(400, "当前无曲目")
+        if snapshot["stream_url"] and snapshot["stream_expire_at"] > cm_rooms.now_ms() + 60_000:
+            return {"timeline": cm_rooms.timeline(snapshot), "seq": cm_rooms.latest_seq(conn, snapshot["id"])}
+    stream = _resolve_room_stream(handler, snapshot["track_ncm_id"], snapshot["stream_level"])
+    with cm_rooms.transaction(write=True) as conn:
+        room, _ = cm_rooms.require_room(conn, ident, uid, permission="member")
+        if room["id"] != snapshot["id"] or room["track_revision"] != snapshot["track_revision"]:
+            raise cm_rooms.RoomError(409, "曲目已变化，请重试")
+        if room["stream_expire_at"] != snapshot["stream_expire_at"]:
+            return {"timeline": cm_rooms.timeline(room), "seq": cm_rooms.latest_seq(conn, room["id"])}
+        return cm_rooms.playback(conn, room, uid, "track", stream)
+
+
+def _room_event_feed(handler, user, room_id, since, wait, sse):
+    """同一套游标与权限规则用于 SSE 和长轮询。"""
+    if getattr(handler, "head_only", False):
+        return jresp(handler, 200, {"events": []})
+    deadline = time.monotonic() + (3600 if sse else wait)
+    next_heartbeat = time.monotonic() + 15
+    if sse:
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Access-Control-Allow-Origin", "*")
+        handler.send_header("X-Accel-Buffering", "no")
+        handler.end_headers()
+
+    try:
+        while True:
+            now = time.monotonic()
+            touch = now >= next_heartbeat
+            terminal = None
+            if touch and not cm_db.user_by_token(user["_token"]):
+                terminal = "session"
+            with cm_rooms.transaction(write=touch and not terminal) as conn:
+                room = cm_rooms.room_by_ident(conn, str(room_id))
+                # 仅按稳定 ID 校验，避免已删除房间的 ID 被当成别的房间号。
+                if not room or room["id"] != room_id:
+                    terminal = "deleted"
+                elif room["closed_at"]:
+                    terminal = room["archive_reason"] or "manual"
+                else:
+                    member = cm_rooms.get_member(conn, room_id, user["id"])
+                    if not member:
+                        terminal = "removed"
+                    elif touch and not terminal:
+                        try:
+                            cm_rooms.heartbeat(conn, room, member)
+                        except cm_rooms.RoomError:
+                            terminal = "full"
+                if terminal:
+                    latest = max(since, cm_rooms.latest_seq(conn, room_id))
+                    events = [{"seq": latest, "type": "close", "payload": {"reason": terminal},
+                               "createdAt": int(time.time())}]
+                else:
+                    events, latest = cm_rooms.event_batch(conn, room_id, since)
+            if not sse and (events or now >= deadline):
+                return jresp(handler, 200, {"events": events, "latestSeq": latest,
+                                           "serverTime": cm_rooms.now_ms()})
+            if sse:
+                if events:
+                    for event in events:
+                        data = json.dumps(event, ensure_ascii=False)
+                        handler.wfile.write(
+                            f"id: {event['seq']}\nevent: {event['type']}\ndata: {data}\n\n".encode())
+                        since = event["seq"]
+                else:
+                    handler.wfile.write(b": ping\n\n")
+                handler.wfile.flush()
+                if terminal or now >= deadline:
+                    return
+            if touch:
+                next_heartbeat = now + 15
+            if not sse or not events or since >= latest:
+                time.sleep(1)
+    except OSError:
+        return
 
 
 def me_username(handler):
@@ -2523,6 +2627,36 @@ def route(handler, method):
             ("GET", "/auth/sessions", "Bearer", "在线设备列表 {max:null,sessions}；数量不限，超过 5 台时客户端提示风险"),
             ("DELETE", "/auth/sessions/{id}", "Bearer", "下线指定设备"),
             ("DELETE", "/auth/sessions/others", "Bearer", "下线其他设备"),
+            ("GET", "/rooms", "Bearer", "房间广场或本人拥有的活跃与归档房间"),
+            ("POST", "/rooms", "Bearer", "创建房间并加入为房主"),
+            ("GET", "/rooms/search", "Bearer", "以六位房间号查找活跃房间"),
+            ("GET", "/rooms/{id}", "Bearer", "房间详情，成员可见实时状态与队列"),
+            ("DELETE", "/rooms/{id}", "房主 Bearer", "永久删除房间及相关记录"),
+            ("POST", "/rooms/{id}/join", "Bearer", "加入或重连房间"),
+            ("POST", "/rooms/{id}/leave", "Bearer", "退出房间成员身份"),
+            ("POST", "/rooms/{id}/close", "房主 Bearer", "手动归档房间"),
+            ("POST", "/rooms/{id}/reopen", "房主 Bearer", "恢复房间并重新加入"),
+            ("POST", "/rooms/{id}/settings", "房主 Bearer", "局部更新房间设置"),
+            ("POST", "/rooms/{id}/kick", "房主或房间管理员 Bearer", "移出成员或封禁"),
+            ("POST", "/rooms/{id}/transfer", "房主 Bearer", "转让房主"),
+            ("POST", "/rooms/{id}/admins", "房主 Bearer", "设置或取消管理员"),
+            ("GET", "/rooms/{id}/bans", "房主 Bearer", "查看封禁名单"),
+            ("DELETE", "/rooms/{id}/bans/{id2}", "房主 Bearer", "解除封禁"),
+            ("GET", "/rooms/{id}/queue", "成员 Bearer", "读取可见队列"),
+            ("POST", "/rooms/{id}/queue", "成员 Bearer", "点歌或提交审批"),
+            ("POST", "/rooms/{id}/queue/reorder", "房主或房间管理员 Bearer", "移动待播条目"),
+            ("POST", "/rooms/{id}/queue/{id2}/approve", "房主或房间管理员 Bearer", "采纳待审条目"),
+            ("POST", "/rooms/{id}/queue/{id2}/reject", "房主或房间管理员 Bearer", "驳回待审条目"),
+            ("DELETE", "/rooms/{id}/queue/{id2}", "提交者或控播角色 Bearer", "移除队列条目"),
+            ("POST", "/rooms/{id}/play", "房主或房间管理员 Bearer", "播放或继续播放"),
+            ("POST", "/rooms/{id}/pause", "房主或房间管理员 Bearer", "暂停播放"),
+            ("POST", "/rooms/{id}/seek", "房主或房间管理员 Bearer", "调整播放位置"),
+            ("POST", "/rooms/{id}/next", "房主或房间管理员 Bearer", "播放下一首"),
+            ("POST", "/rooms/{id}/prev", "房主或房间管理员 Bearer", "播放上一首"),
+            ("POST", "/rooms/{id}/stream/renew", "成员 Bearer", "续签当前音源"),
+            ("GET", "/rooms/{id}/events", "成员 Bearer", "SSE 或长轮询房间事件"),
+            ("POST", "/rooms/{id}/sync", "成员 Bearer", "读取服务器时钟与时间轴"),
+            ("POST", "/rooms/{id}/heartbeat", "成员 Bearer", "刷新在线状态"),
             ("GET", "/announcements", "公开", "站内公告（客户端每次打开拉取并弹窗，置顶在前）"),
             ("GET", "/ncm/lyric", "公开", "歌词归一化：{lines:[{t,txt,trans,roma,w?,words?,wSynth?}],isYrc,source,wordLevel}；t/w 单位为毫秒，w=[起始,字/词]；官方 YRC 优先，LDDC 候选须与已有官方 LRC 正文相符，否则返回官方 LRC 和估算逐字轴（wSynth）。详见 /api-docs/reference/guide-lyrics-api/"),
             ("GET", "/admin/announcements", "管理员", "公告管理列表（含已移除；带 canEdit 权限标记）"),
@@ -2952,6 +3086,8 @@ def route(handler, method):
 
             raise cm_passport.PassportError("unsupported_grant_type",
                                             f"不支持的 grant_type：{grant_type or '(空)'}")
+        except cm_rooms.RoomError as e:
+            jresp(self, e.status, {"error": str(e)})
         except cm_passport.PassportError as e:
             cm_db.passport_event("token.error", cid, 0, ip,
                                  handler.headers.get("User-Agent", ""), f"{e.error}:{e.desc}")
@@ -4611,334 +4747,233 @@ def route(handler, method):
         return None
 
     # ---- 多人实时听歌房 ----
+    if path.startswith("/rooms") and method in ("POST", "DELETE"):
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            raise ApiError(400, "房间请求体必须是 JSON 对象")
+
     if path == "/rooms" and method == "POST":
         u = require_user(handler)
-        name = str((body or {}).get("name") or "").strip()[:60]
-        if not name:
-            raise ApiError(400, "房间名不能为空")
-        room = cm_rooms.create_room(
-            u["id"], name,
-            password=str((body or {}).get("password") or ""),
-            is_public=bool((body or {}).get("isPublic", True)),
-            free_mode=bool((body or {}).get("freeMode", False)),
-            need_approval=bool((body or {}).get("needApproval", True)),
-        )
-        cm_rooms.emit_event(room["id"], "created", {"roomId": room["id"], "name": name})
-        log.info("创建房间 uid=%s room=%s(%s)", u["id"], name, room["code"])
-        return jresp(handler, 200, {"room": _room_out(room, u["id"])})
+        changes = cm_rooms.settings_fields(body)
+        if "name" not in changes:
+            raise ApiError(400, "缺少房间名")
+        with cm_rooms.transaction(write=True) as conn:
+            room = cm_rooms.create_room(conn, u, changes)
+        return jresp(handler, 200, {"room": dict(_room_out(room), timeline=cm_rooms.timeline(room))})
 
     if path == "/rooms" and method == "GET":
-        require_user(handler)
-        d = cm_rooms.list_public_rooms(
-            q.get("query") or "", min(int(q.get("limit") or 20), 50), max(int(q.get("offset") or 0), 0)
-        )
-        return jresp(handler, 200, d)
+        u = require_user(handler)
+        scope = q.get("scope") or "public"
+        if scope not in ("public", "mine"):
+            raise ApiError(400, "scope 只能为 public 或 mine")
+        limit = cm_rooms.integer(q.get("limit") or 20, "分页大小", minimum=1, maximum=50)
+        offset = cm_rooms.integer(q.get("offset") or 0, "分页偏移")
+        with cm_rooms.transaction() as conn:
+            data = cm_rooms.list_rooms(conn, u["id"], scope, (q.get("query") or "")[:60], limit, offset)
+        return jresp(handler, 200, data)
 
     if path == "/rooms/search" and method == "GET":
-        require_user(handler)
+        u = require_user(handler)
         code = (q.get("code") or "").strip()
-        if not code:
-            raise ApiError(400, "缺少房间号")
-        room = cm_rooms.get_room(code=code)
-        if not room:
-            raise ApiError(404, "房间不存在或已关闭")
-        return jresp(handler, 200, {"room": _room_out(room, require_user(handler)["id"], brief=True)})
+        if not re.fullmatch(r"[0-9]{6}", code):
+            raise ApiError(400, "房间号必须为 6 位数字")
+        with cm_rooms.transaction() as conn:
+            room, member = cm_rooms.require_room(conn, code, u["id"], by_code=True)
+        return jresp(handler, 200, {"room": _room_out(room), "role": member["role"] if member else None})
 
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)", path)
-    if m:
-        room = _get_room(handler, m.group(1))
-        if method == "GET":
-            uid = require_user(handler)["id"]
-            members = cm_rooms.list_members(room["id"])
-            queue = cm_rooms.queue_list(room["id"])
-            decors = cm_db.decor_of_users([mm["user_id"] for mm in members])   # 一次查库
-            return jresp(handler, 200, {
-                "room": _room_out(room, uid),
-                "members": [_member_out(mm, decors.get(mm["user_id"], "")) for mm in members],
-                "timeline": cm_rooms.get_timeline(room),
-                "queue": [_queue_out(i, uid) for i in queue],
-                "latestSeq": cm_rooms.get_latest_seq(room["id"]),
-                "serverTime": int(time.time() * 1000),
-            })
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/join", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        if cm_rooms.is_banned(room["id"], u["id"]):
-            raise ApiError(403, "你已被该房间封禁")
-        if room["join_locked"]:
-            raise ApiError(403, "房间已锁定，暂不接受加入")
-        if not cm_rooms.verify_room_password(room, str((body or {}).get("password") or "")):
-            raise ApiError(403, "房间密码错误")
-        role, joined = cm_rooms.join_room(room["id"], u["id"], u["nickname"], u["avatar"] or "")
-        if role is None:
-            raise ApiError(409, "房间已满")
-        if joined:
-            seq = cm_rooms.emit_event(room["id"], "join", {"userId": u["id"], "nickname": u["nickname"]})
-        else:
-            seq = cm_rooms.get_latest_seq(room["id"])
-        room = cm_rooms.get_room(room_id=room["id"])
-        return jresp(handler, 200, {
-            "role": role,
-            "room": _room_out(room, u["id"]),
-            "timeline": cm_rooms.get_timeline(room),
-            "latestSeq": seq,
-            "serverTime": int(time.time() * 1000),
-        })
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/leave", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        cm_rooms.leave_room(room["id"], u["id"])
-        cm_rooms.emit_event(room["id"], "leave", {"userId": u["id"]})
-        return jresp(handler, 200, {"ok": True})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/close", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        _require_role(handler, room, "owner")
-        cm_rooms.close_room(room["id"])
-        cm_rooms.emit_event(room["id"], "close", {"by": u["id"]})
-        return jresp(handler, 200, {"ok": True})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/kick", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        _require_role(handler, room, "admin")
-        target_id = int((body or {}).get("userId") or 0)
-        if target_id == room["owner_id"]:
-            raise ApiError(400, "不能踢出房主")
-        cm_rooms.kick_member(room["id"], target_id, u["id"],
-                             str((body or {}).get("reason") or ""),
-                             bool((body or {}).get("ban")))
-        cm_rooms.emit_event(room["id"], "kick", {"userId": target_id, "by": u["id"]})
-        return jresp(handler, 200, {"ok": True})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/transfer", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        _require_role(handler, room, "owner")
-        target = int((body or {}).get("userId") or 0)
-        if not cm_rooms.get_member(room["id"], target):
-            raise ApiError(404, "目标不在房间内")
-        cm_rooms.set_role(room["id"], target, "owner")
-        cm_rooms.set_role(room["id"], u["id"], "admin")
-        cm_rooms.emit_event(room["id"], "transfer", {"from": u["id"], "to": target})
-        return jresp(handler, 200, {"ok": True})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/admins", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        _require_role(handler, room, "owner")
-        target = int((body or {}).get("userId") or 0)
-        on = bool((body or {}).get("on", True))
-        if not cm_rooms.get_member(room["id"], target):
-            raise ApiError(404, "目标不在房间内")
-        cm_rooms.set_role(room["id"], target, "admin" if on else "member")
-        cm_rooms.emit_event(room["id"], "role", {"userId": target, "role": "admin" if on else "member"})
-        return jresp(handler, 200, {"ok": True})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/settings", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        _require_role(handler, room, "owner")
-        cm_rooms.update_room_settings(room["id"], body or {})
-        cm_rooms.emit_event(room["id"], "settings", body or {})
-        return jresp(handler, 200, {"ok": True})
-
-    # ---- 播放控制 ----
-    for action in ("play", "pause", "next", "prev"):
-        m = re.fullmatch(rf"/rooms/([a-z0-9]+)/{action}", path)
-        if m and method == "POST":
-            u = require_user(handler)
-            room = _get_room(handler, m.group(1))
-            _require_role(handler, room, "admin")
-            if action == "play":
-                pos = int((body or {}).get("position") or 0)
-                room = cm_rooms.set_timeline(room["id"], base_position=pos, playing=True, prebuffer=True)
-            elif action == "pause":
-                elapsed = room["base_position"] + (int(time.time()*1000) - room["base_at"]) if room["playing"] else room["base_position"]
-                room = cm_rooms.set_timeline(room["id"], base_position=max(0, elapsed), playing=False)
-            elif action in ("next", "prev"):
-                item = cm_rooms.queue_pop_next(room["id"])
-                if item:
-                    from cm_ncm import _norm_song
-                    meta = {"ncm_id": item["ncm_id"], "name": item["name"], "artists": item["artists"],
-                            "pic": item["pic"], "duration": item["duration"]}
-                    try:
-                        # 与 /ncm/song/url 同逻辑：auto 先探测最佳档位，再取流
-                        # （探测已取到该档位的完整结果时直接复用，不再重复请求上游）。
-                        # real_ip 用触发切歌者的 IP——上游据此挑就近 CDN 边缘；此前
-                        # 漏传 = 按源站（洛杉矶）选节点，国内房间全员摊上海外线
-                        actor_ip = cm_ncm_gateway.client_ip(handler)
-                        lv, probed = best_level(item["ncm_id"], real_ip=actor_ip)
-                        s = probed or cm_ncm.song_url(item["ncm_id"], lv, real_ip=actor_ip)
-                        room = cm_rooms.set_timeline(room["id"], track_ncm_id=item["ncm_id"],
-                                                      track_meta=meta, stream_level=s["level"],
-                                                      stream_url=s["url"],
-                                                      stream_expire_at=int(time.time()*1000)+1100000,
-                                                      base_position=0, playing=True, prebuffer=True)
-                    except Exception as e:  # noqa: BLE001
-                        log.warning("房间切歌解析失败 room=%s song=%s: %s", room["id"], item["ncm_id"], e)
-                        room = cm_rooms.set_timeline(room["id"], track_ncm_id=item["ncm_id"],
-                                                      track_meta=meta, base_position=0, playing=False)
-                else:
-                    room = cm_rooms.set_timeline(room["id"], playing=False)
-            tl = cm_rooms.get_timeline(room)
-            seq = cm_rooms.emit_event(room["id"], action, {"by": u["id"], "timeline": tl})
-            return jresp(handler, 200, {"timeline": tl, "seq": seq})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/seek", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        _require_role(handler, room, "admin")
-        pos = max(0, int((body or {}).get("position") or 0))
-        room = cm_rooms.set_timeline(room["id"], base_position=pos, playing=room["playing"])
-        tl = cm_rooms.get_timeline(room)
-        cm_rooms.emit_event(room["id"], "seek", {"by": u["id"], "timeline": tl})
-        return jresp(handler, 200, {"timeline": tl})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/stream/renew", path)
-    if m and method == "POST":
-        require_user(handler)
-        room = _get_room(handler, m.group(1))
-        if room["track_ncm_id"]:
-            try:
-                lv = room["stream_level"]
-                probed = None
-                actor_ip = cm_ncm_gateway.client_ip(handler)   # 续期者 IP：边缘就近（同切歌路径）
-                if not lv:
-                    lv, probed = best_level(room["track_ncm_id"], real_ip=actor_ip)
-                s = probed or cm_ncm.song_url(room["track_ncm_id"], lv, real_ip=actor_ip)
-                elapsed = room["base_position"] + (int(time.time()*1000) - room["base_at"]) if room["playing"] else room["base_position"]
-                room = cm_rooms.set_timeline(room["id"], stream_url=s["url"], stream_level=s["level"],
-                                              stream_expire_at=int(time.time()*1000)+1100000,
-                                              base_position=max(0, elapsed))
-                tl = cm_rooms.get_timeline(room)
-                cm_rooms.emit_event(room["id"], "track", {"timeline": tl})
-                return jresp(handler, 200, {"timeline": tl})
-            except Exception as e:
-                raise ApiError(502, f"续签失败: {e}")
-        raise ApiError(400, "当前无曲目")
-
-    # ---- 队列 ----
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/queue", path)
-    if m:
-        room = _get_room(handler, m.group(1))
-        u = require_user(handler)
-        member = cm_rooms.get_member(room["id"], u["id"])
-        if not member:
-            raise ApiError(403, "请先加入房间")
-        if method == "GET":
-            is_admin = member["role"] in ("owner", "admin")
-            items = cm_rooms.queue_list(room["id"], include_pending=is_admin)
-            return jresp(handler, 200, {"queue": [_queue_out(i, u["id"]) for i in items]})
-        if method == "POST":
-            if member.get("muted"):
-                raise ApiError(403, "你已被禁言")
-            meta = (body or {}).get("meta") or (body or {})
-            if not meta.get("ncm_id") or not meta.get("name"):
-                raise ApiError(400, "缺少歌曲信息")
-            auto = room["free_mode"] or member["role"] in ("owner", "admin")
-            item = cm_rooms.queue_add(room["id"], meta, u["id"], auto_approve=auto)
-            seq = cm_rooms.emit_event(room["id"], "queue", {"action": "add", "item": _queue_out(item, u["id"])})
-            return jresp(handler, 200, {"item": _queue_out(item, u["id"]), "auto": auto})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/queue/(\d+)/(approve|reject)", path)
-    if m and method == "POST":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        _require_role(handler, room, "admin")
-        cm_rooms.queue_review(int(m.group(2)), room["id"], m.group(3) == "approve", u["id"])
-        cm_rooms.emit_event(room["id"], "queue", {"action": m.group(3), "qid": int(m.group(2))})
-        return jresp(handler, 200, {"ok": True})
-
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/queue/(\d+)", path)
-    if m and method == "DELETE":
-        u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        member = cm_rooms.get_member(room["id"], u["id"])
-        if not member:
-            raise ApiError(403, "请先加入房间")
-        cm_rooms.queue_remove(int(m.group(2)), room["id"])
-        cm_rooms.emit_event(room["id"], "queue", {"action": "remove", "qid": int(m.group(2))})
-        return jresp(handler, 200, {"ok": True})
-
-    # ---- 信令（SSE / 长轮询） ----
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/events", path)
+    m = re.fullmatch(r"/rooms/([0-9]+)", path)
     if m and method == "GET":
         u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        # 未加入房间的（如广场预览）也允许读取，但不能心跳
-        member = cm_rooms.get_member(room["id"], u["id"])
-        since = int(q.get("since") or 0)
-        if q.get("sse") == "1":
-            # ── SSE 长连接：先补发积压事件，再持续推送 ──
-            handler.send_response(200)
-            handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
-            handler.send_header("Cache-Control", "no-cache")
-            handler.send_header("Access-Control-Allow-Origin", "*")
-            handler.send_header("X-Accel-Buffering", "no")   # 让 nginx 不缓冲
-            handler.end_headers()
-            last = since
-            deadline = time.time() + 3600
-            try:
-                handler.wfile.write(f"retry: 3000\n\n".encode("utf-8"))
-                handler.wfile.flush()
-                while time.time() < deadline:
-                    if member:
-                        cm_rooms.heartbeat(room["id"], u["id"])
-                    events = cm_rooms.get_events_since(room["id"], last)
-                    if events:
-                        for e in events:
-                            data = json.dumps(_event_out(e), ensure_ascii=False)
-                            handler.wfile.write(
-                                f"id: {e['seq']}\nevent: {e['type']}\ndata: {data}\n\n".encode("utf-8"))
-                            last = e["seq"]
-                    else:
-                        handler.wfile.write(b": ping\n\n")
-                    handler.wfile.flush()
-                    time.sleep(1.5)
-            except (BrokenPipeError, ConnectionResetError, OSError):
-                pass
-            return
-        if q.get("wait"):
-            # ── 长轮询：最多挂起 wait 秒，有事件即返回（App 旧版/受限环境回退）──
-            wait = min(int(q.get("wait") or 0), 30)
-            deadline = time.time() + wait
-            while time.time() < deadline:
-                if member:
-                    cm_rooms.heartbeat(room["id"], u["id"])
-                events = cm_rooms.get_events_since(room["id"], since)
-                if events:
-                    break
-                time.sleep(1.0)
-        events = cm_rooms.get_events_since(room["id"], since)
-        return jresp(handler, 200, {"events": [_event_out(e) for e in events],
-                                    "latestSeq": cm_rooms.get_latest_seq(room["id"]),
-                                    "serverTime": int(time.time() * 1000)})
+        uid = u["id"]
+        with cm_rooms.transaction() as conn:
+            room, member = cm_rooms.require_room(conn, m.group(1), uid, archived=True)
+            in_room = bool(member and not room["closed_at"])
+            tl = cm_rooms.timeline(room) if in_room else None
+            members = cm_rooms.list_members(conn, room["id"]) if in_room else []
+            queue = cm_rooms.queue_list(conn, room["id"], uid, member["role"]) if in_room else []
+            seq = cm_rooms.latest_seq(conn, room["id"]) if in_room else 0
+        decors = cm_db.decor_of_users([mm["user_id"] for mm in members])
+        return jresp(handler, 200, {
+            "room": dict(_room_out(room), timeline=tl),
+            "role": member["role"] if in_room else None,
+            "members": [_member_out(mm, decors.get(mm["user_id"], "")) for mm in members],
+            "timeline": tl, "queue": [_queue_out(item, uid) for item in queue],
+            "latestSeq": seq, "serverTime": cm_rooms.now_ms(),
+        })
 
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/sync", path)
-    if m and method == "POST":
-        require_user(handler)
-        room = _get_room(handler, m.group(1))
-        return jresp(handler, 200, {"serverNow": int(time.time() * 1000),
-                                    "timeline": cm_rooms.get_timeline(room)})
+    if m and method == "DELETE":
+        u = require_user(handler)
+        with cm_rooms.transaction(write=True) as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), u["id"], permission="owner", archived=True)
+            cm_rooms.delete_room(conn, room["id"])
+        return jresp(handler, 200, {"ok": True})
 
-    m = re.fullmatch(r"/rooms/([a-z0-9]+)/heartbeat", path)
+    m = re.fullmatch(r"/rooms/([0-9]+)/join", path)
     if m and method == "POST":
         u = require_user(handler)
-        room = _get_room(handler, m.group(1))
-        cm_rooms.heartbeat(room["id"], u["id"])
-        return jresp(handler, 200, {"ok": True, "latestSeq": cm_rooms.get_latest_seq(room["id"])})
+        uid = u["id"]
+        password = body.get("password", "")
+        if not isinstance(password, str) or len(password) > 128:
+            raise ApiError(400, "房间密码最多 128 个字符")
+        with cm_rooms.transaction() as conn:
+            snapshot, member = cm_rooms.require_room(conn, m.group(1), uid)
+        checked = bool(snapshot["password_hash"] and snapshot["owner_id"] != uid and not member
+                       and cm_rooms.verify_password(snapshot, password))
+        with cm_rooms.transaction(write=True) as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), uid)
+            role = cm_rooms.join_room(conn, room, u, password_checked=checked and (
+                room["id"], room["salt"], room["password_hash"]
+            ) == (snapshot["id"], snapshot["salt"], snapshot["password_hash"]))
+            seq = cm_rooms.latest_seq(conn, room["id"])
+        tl = cm_rooms.timeline(room)
+        return jresp(handler, 200, {"role": role, "room": dict(_room_out(room), timeline=tl),
+                                    "timeline": tl, "latestSeq": seq, "serverTime": cm_rooms.now_ms()})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/leave", path)
+    if m and method == "POST":
+        u = require_user(handler)
+        with cm_rooms.transaction(write=True) as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), u["id"])
+            cm_rooms.leave_room(conn, room, u["id"])
+        return jresp(handler, 200, {"ok": True})
+
+    for action in ("close", "reopen"):
+        m = re.fullmatch(rf"/rooms/([0-9]+)/{action}", path)
+        if m and method == "POST":
+            u = require_user(handler)
+            with cm_rooms.transaction(write=True) as conn:
+                room, _ = cm_rooms.require_room(conn, m.group(1), u["id"], permission="owner", archived=True)
+                if action == "reopen":
+                    cm_rooms.reopen_room(conn, room, u)
+                elif not room["closed_at"]:
+                    cm_rooms.archive_room(conn, room, "manual", u["id"])
+                room = cm_rooms.room_by_ident(conn, str(room["id"]))
+            return jresp(handler, 200, {"ok": True, "room": _room_out(room)})
+
+    for action in ("kick", "transfer", "admins"):
+        m = re.fullmatch(rf"/rooms/([0-9]+)/{action}", path)
+        if m and method == "POST":
+            u = require_user(handler)
+            target = cm_rooms.integer(body.get("userId"), "用户 ID", minimum=1)
+            with cm_rooms.transaction(write=True) as conn:
+                room, actor = cm_rooms.require_room(conn, m.group(1), u["id"],
+                                                    permission="admin" if action == "kick" else "owner")
+                cm_rooms.manage_member(conn, room, actor or {"user_id": u["id"], "role": "owner"},
+                                       target, action, on=body.get("on", True) in (True, 1),
+                                       ban=body.get("ban") in (True, 1), reason=str(body.get("reason") or "")[:200])
+            return jresp(handler, 200, {"ok": True})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/bans", path)
+    if m and method == "GET":
+        u = require_user(handler)
+        with cm_rooms.transaction() as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), u["id"], permission="owner")
+            bans = cm_rooms.list_bans(conn, room["id"])
+        return jresp(handler, 200, {"bans": bans})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/bans/([0-9]+)", path)
+    if m and method == "DELETE":
+        u = require_user(handler)
+        target = cm_rooms.integer(m.group(2), "用户 ID", minimum=1)
+        with cm_rooms.transaction(write=True) as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), u["id"], permission="owner")
+            conn.execute("DELETE FROM room_bans WHERE room_id=? AND user_id=?", (room["id"], target))
+        return jresp(handler, 200, {"ok": True})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/settings", path)
+    if m and method == "POST":
+        u = require_user(handler)
+        changes = cm_rooms.settings_fields(body)
+        with cm_rooms.transaction(write=True) as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), u["id"], permission="owner")
+            if changes:
+                cm_rooms.update_room(conn, room["id"], dict(changes, updated_at=int(time.time())))
+                cm_rooms.emit_event(conn, room["id"], "settings", {})
+                room = cm_rooms.room_by_ident(conn, str(room["id"]))
+        return jresp(handler, 200, {"ok": True, "room": _room_out(room)})
+
+    for action in ("play", "pause", "seek", "next", "prev"):
+        m = re.fullmatch(rf"/rooms/([0-9]+)/{action}", path)
+        if m and method == "POST":
+            u = require_user(handler)
+            return jresp(handler, 200, _room_playback(handler, m.group(1), u["id"], action, body))
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/stream/renew", path)
+    if m and method == "POST":
+        u = require_user(handler)
+        return jresp(handler, 200, _room_renew(handler, m.group(1), u["id"]))
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/queue", path)
+    if m and method == "GET":
+        u = require_user(handler)
+        with cm_rooms.transaction() as conn:
+            room, member = cm_rooms.require_room(conn, m.group(1), u["id"], permission="member")
+            items = cm_rooms.queue_list(conn, room["id"], u["id"], member["role"])
+        return jresp(handler, 200, {"queue": [_queue_out(i, u["id"]) for i in items]})
+
+    if m and method == "POST":
+        u = require_user(handler)
+        meta = cm_rooms.song_meta(body.get("meta", body))
+        with cm_rooms.transaction(write=True) as conn:
+            room, member = cm_rooms.require_room(conn, m.group(1), u["id"], permission="member")
+            item, auto = cm_rooms.queue_add(conn, room, member, meta)
+        return jresp(handler, 200, {"item": _queue_out(item, u["id"]), "auto": auto})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/queue/reorder", path)
+    if m and method == "POST":
+        u = require_user(handler)
+        qid = cm_rooms.integer(body.get("qid"), "条目 ID", minimum=1)
+        index = cm_rooms.integer(body.get("index"), "队列位置")
+        with cm_rooms.transaction(write=True) as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), u["id"], permission="admin")
+            cm_rooms.queue_reorder(conn, room["id"], qid, index)
+        return jresp(handler, 200, {"ok": True})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/queue/([0-9]+)/(approve|reject)", path)
+    if m and method == "POST":
+        u = require_user(handler)
+        qid = cm_rooms.integer(m.group(2), "条目 ID", minimum=1)
+        with cm_rooms.transaction(write=True) as conn:
+            room, member = cm_rooms.require_room(conn, m.group(1), u["id"], permission="admin")
+            cm_rooms.queue_change(conn, room["id"], member, qid, m.group(3))
+        return jresp(handler, 200, {"ok": True})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/queue/([0-9]+)", path)
+    if m and method == "DELETE":
+        u = require_user(handler)
+        qid = cm_rooms.integer(m.group(2), "条目 ID", minimum=1)
+        with cm_rooms.transaction(write=True) as conn:
+            room, member = cm_rooms.require_room(conn, m.group(1), u["id"], permission="member")
+            cm_rooms.queue_change(conn, room["id"], member, qid, "remove")
+        return jresp(handler, 200, {"ok": True})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/events", path)
+    if m and method == "GET":
+        u = require_user(handler)
+        since = cm_rooms.integer(handler.headers.get("Last-Event-ID") or q.get("since") or 0, "事件游标")
+        wait = cm_rooms.integer(q.get("wait") or 0, "等待秒数", maximum=30)
+        sse = q.get("sse") == "1"
+        with cm_rooms.transaction() as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), u["id"], permission="member")
+        return _room_event_feed(handler, u, room["id"], since, wait, sse)
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/sync", path)
+    if m and method == "POST":
+        u = require_user(handler)
+        with cm_rooms.transaction() as conn:
+            room, _ = cm_rooms.require_room(conn, m.group(1), u["id"], permission="member")
+            tl = cm_rooms.timeline(room)
+        return jresp(handler, 200, {"serverNow": tl["serverNow"], "timeline": tl})
+
+    m = re.fullmatch(r"/rooms/([0-9]+)/heartbeat", path)
+    if m and method == "POST":
+        u = require_user(handler)
+        with cm_rooms.transaction(write=True) as conn:
+            room, member = cm_rooms.require_room(conn, m.group(1), u["id"], permission="member")
+            cm_rooms.heartbeat(conn, room, member)
+            seq = cm_rooms.latest_seq(conn, room["id"])
+        return jresp(handler, 200, {"ok": True, "latestSeq": seq})
 
     # ---- 管理员面板（均需 is_admin） ----
     if path == "/admin/overview" and method == "GET":
@@ -5461,6 +5496,8 @@ class Handler(BaseHTTPRequestHandler):
             route(self, method)
         except ApiError as e:
             jresp(self, e.code, {"error": e.msg})
+        except cm_rooms.RoomError as e:
+            jresp(self, e.status, {"error": str(e)})
         except cm_passport.PassportError as e:
             # 通行证协议错误：按 OAuth 的 error/error_description 形状返回（第三方据此分支）
             jresp(self, e.status, {"error": e.error, "error_description": e.desc})
@@ -5518,6 +5555,15 @@ def _cache_housekeeping():
         time.sleep(6 * 3600)
 
 
+def _room_housekeeping():
+    while True:
+        try:
+            cm_rooms.archive_idle_rooms()
+        except Exception:
+            log.exception("归档空闲听歌房失败")
+        time.sleep(cm_rooms.SWEEP_SECONDS)
+
+
 def main():
     cm_db.init()
     _rc = cm_db.connect()
@@ -5531,6 +5577,7 @@ def main():
     cm_cast.cleanup_stale_parts()
     threading.Thread(target=_cache_housekeeping, name="cm-cache-housekeeping",
                      daemon=True).start()
+    threading.Thread(target=_room_housekeeping, name="cm-room-housekeeping", daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     srv.daemon_threads = True
     log.info("CurrentMusic 后端启动 %s:%s db=%s", HOST, PORT, cm_db.DB_PATH)

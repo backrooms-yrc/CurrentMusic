@@ -33,6 +33,11 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn((method,path),found)
         for method, path in [('GET', '/search/history'), ('POST', '/search/history'), ('DELETE', '/search/history'), ('POST', '/search/history/import')]:
             self.assertIn((method, path), found)
+        for method, path in [('DELETE', '/rooms/{id}'), ('POST', '/rooms/{id}/close'),
+                             ('POST', '/rooms/{id}/reopen'), ('GET', '/rooms/{id}/bans'),
+                             ('DELETE', '/rooms/{id}/bans/{id2}'), ('POST', '/rooms/{id}/queue/reorder'),
+                             ('GET', '/rooms/{id}/events')]:
+            self.assertIn((method, path), found)
         fields=docs.params(found['POST','/playlists/{id}/tracks'])
         self.assertIn(('JSON body','songs'),fields)
 
@@ -58,6 +63,8 @@ class DocumentationTests(unittest.TestCase):
             self.assertNotIn('\n+  --header', ''.join(f.read_text() for f in output.glob('*.md')))
             self.assertTrue((output/'licenses/docsify-MIT.txt').is_file())
             self.assertTrue((output/'guide-song-insights-api.md').is_file())
+            self.assertIn('超时归档与恢复', (output/'guide-rooms-design.md').read_text())
+            self.assertEqual(sum(item['group']=='一起听房间' for item in manifest), 30)
 
 
 if __name__=='__main__':unittest.main()
