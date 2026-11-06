@@ -3,6 +3,7 @@
 import { api, auth, ncmSongs } from './api.js';
 import { esc, toast, skelGrid } from './ui.js';
 import { player } from './player.js';
+import { getAimoChartCover } from './aimo-charts.js';
 
 const fmtPlay = n => {
   const v = Number(n) || 0;
@@ -169,7 +170,7 @@ export async function mountDiscover(el) {
     const groups = (v2R.status === 'fulfilled' ? (v2R.value.data || []) : [])
       .filter(g => (g.list || []).length);
     const norm = t => ({
-      id: t.id, name: t.name, pic: t.coverUrl || t.coverImgUrl,
+      id: t.id, name: t.name, pic: getAimoChartCover(t.id, t.name) || t.coverUrl || t.coverImgUrl,
       sub: `${t.updateFrequency || ''}${t.trackCount ? ` · ${t.trackCount} 首` : ''}`,
     });
     const tabs = [{ key: 'all', label: '全部榜单', items: all.map(norm) }]

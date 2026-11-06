@@ -29,7 +29,7 @@ export async function render(el, params) {
       badge = isNcm ? '<span class="cm-ncmbadge">网易云</span>' : '';
       songs = p.tracks || [];
       desc = (p.description ? p.description + ' · ' : '') + `共 ${songs.length} 首`;
-      cover = getAimoChartCover(id) || p.cover || '';
+      cover = getAimoChartCover(id, p.name) || p.cover || '';
       shareKind = 'local-playlist';
       shareSub = 'CurrentMusic 歌单';
       owner = !isNcm && p.user_id === (auth.user && auth.user.id);
@@ -42,7 +42,7 @@ export async function render(el, params) {
       const p = await api.ncmPlaylist(id);
       title = p.name || '排行榜'; desc = `网易云 · 共 ${p.trackCount || (p.songs || []).length} 首`;
       songs = p.songs || [];
-      cover = getAimoChartCover(id) || p.cover || '';
+      cover = getAimoChartCover(id, p.name) || p.cover || '';
       shareKind = 'playlist';
       shareSub = p.creator || '网易云歌单';
     } else {
