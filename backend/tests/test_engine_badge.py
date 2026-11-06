@@ -32,8 +32,8 @@ class EngineBadgeTests(unittest.TestCase):
 
     def test_public_svg_languages_and_embed_headers(self):
         for query, lang, title in (
-            ("", "zh-CN", "由流声引擎强力驱动"),
-            ("?lang=zh-CN", "zh-CN", "由流声引擎强力驱动"),
+            ("", "zh-CN", "由 流声引擎 强力驱动"),
+            ("?lang=zh-CN", "zh-CN", "由 流声引擎 强力驱动"),
             ("?lang=en", "en", "Powered by CurrentMusic Engine"),
         ):
             with self.subTest(lang=lang, query=query):
@@ -48,6 +48,8 @@ class EngineBadgeTests(unittest.TestCase):
                 self.assertEqual(svg.tag, "{http://www.w3.org/2000/svg}svg")
                 self.assertEqual(svg.attrib["{http://www.w3.org/XML/1998/namespace}lang"], lang)
                 self.assertEqual(svg.findtext("{http://www.w3.org/2000/svg}title"), title)
+                labels = svg.findall(".//{http://www.w3.org/2000/svg}text")
+                self.assertEqual(" ".join("".join(label.itertext()) for label in labels), title)
 
     def test_head_matches_get_without_a_body(self):
         _, get_headers, _ = self.request(query="?lang=en")

@@ -1897,13 +1897,18 @@ def route(handler, method):
 
     if path == "/badges/powered-by.svg" and method == "GET":
         lang = q.get("lang", "zh-CN")
-        badges = {
-            "zh-CN": ("强力驱动", "流声引擎", "由流声引擎强力驱动", 36, 84, 144),
-            "en": ("Powered by", "CurrentMusic Engine", "Powered by CurrentMusic Engine", 36, 102, 242),
-        }
-        if lang not in badges:
+        if lang == "zh-CN":
+            title = "由 流声引擎 强力驱动"
+            width = 144
+            text = ('<text x="34" y="17" fill="#4e6956" font-size="10.5">由 '
+                    '<tspan fill="#28513e" font-size="11" font-weight="700">流声引擎</tspan> 强力驱动</text>')
+        elif lang == "en":
+            title = "Powered by CurrentMusic Engine"
+            width = 242
+            text = ('<text x="36" y="17" fill="#4e6956" font-size="10.5">Powered by</text>\n'
+                    '    <text x="102" y="17.5" fill="#28513e" font-size="11" font-weight="700">CurrentMusic Engine</text>')
+        else:
             raise ApiError(400, "lang 须为 zh-CN 或 en")
-        label, name, title, label_x, name_x, width = badges[lang]
         with open(os.path.join(os.path.dirname(__file__), "assets", "engine-badge-mark.svg"), encoding="utf-8") as f:
             mark = f.read().strip()
         data = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="28" viewBox="0 0 {width} 28"
@@ -1913,8 +1918,7 @@ def route(handler, method):
   <rect x="1" y="1" width="{width - 2}" height="24" rx="12" fill="#f3faee" stroke="#a6c9ad"/>
   <g transform="translate(6 0) scale(.82)">{mark}</g>
   <g font-family="system-ui, sans-serif">
-    <text x="{label_x}" y="17" fill="#4e6956" font-size="10.5">{label}</text>
-    <text x="{name_x}" y="17.5" fill="#28513e" font-size="11" font-weight="700">{name}</text>
+    {text}
   </g>
 </svg>'''.encode("utf-8")
         handler.send_response(200)
