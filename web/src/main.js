@@ -315,8 +315,13 @@ function boot() {
   // 启动自动检测更新（延迟启动，不与首屏渲染抢资源）
   setTimeout(() => { checkUpdate({ silent: true }).catch(() => {}); }, 1500);
 
-  // 系统深浅色切换时（Android 壳转发 cmthemechange），auto 模式即时跟随
+  // 浏览器与 Android 壳的系统主题变化都交给现有主题设置处理。
   window.addEventListener('cmthemechange', applyTheme);
+  if (!window.NativeApi) {
+    const browserTheme = window.matchMedia('(prefers-color-scheme: dark)');
+    if (browserTheme.addEventListener) browserTheme.addEventListener('change', applyTheme);
+    else browserTheme.addListener(applyTheme);
+  }
 
   // Android 系统返回统一入口（壳调用）：关闭浮层（带动画）→ 原生历史栈返回（吃到后退动画）→ 逐级回首页
   window.__cmHandleBack = function () {

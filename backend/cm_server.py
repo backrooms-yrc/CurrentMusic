@@ -12,6 +12,7 @@ import secrets
 import sys
 import threading
 import time
+from base64 import b64encode
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
@@ -2004,22 +2005,30 @@ def route(handler, method):
         if lang == "zh-CN":
             title = "由 流声引擎 强力驱动"
             width = 144
-            text = ('<text x="34" y="17" fill="#4e6956" font-size="10.5">由 '
-                    '<tspan fill="#28513e" font-size="11" font-weight="700">流声引擎</tspan> 强力驱动</text>')
+            text = ('<text class="badge-label" x="34" y="17" fill="#4e6956" font-size="10.5">由 '
+                    '<tspan class="badge-name" fill="#28513e" font-size="11" font-weight="700">流声引擎</tspan> 强力驱动</text>')
         elif lang == "en":
             title = "Powered by CurrentMusic Engine"
             width = 242
-            text = ('<text x="36" y="17" fill="#4e6956" font-size="10.5">Powered by</text>\n'
-                    '    <text x="102" y="17.5" fill="#28513e" font-size="11" font-weight="700">CurrentMusic Engine</text>')
+            text = ('<text class="badge-label" x="36" y="17" fill="#4e6956" font-size="10.5">Powered by</text>\n'
+                    '    <text class="badge-name" x="102" y="17.5" fill="#28513e" font-size="11" font-weight="700">CurrentMusic Engine</text>')
         else:
             raise ApiError(400, "lang 须为 zh-CN 或 en")
         with open(os.path.join(os.path.dirname(__file__), "assets", "engine-badge-mark.svg"), encoding="utf-8") as f:
             mark = f.read().strip()
+        style = """@media (prefers-color-scheme: dark) {
+  .badge-shadow { fill: #13251d; }
+  .badge-base { fill: #24382e; stroke: #577865; }
+  .badge-label { fill: #bcd6c1; }
+  .badge-name { fill: #def3e1; }
+}"""
+        style_hash = b64encode(hashlib.sha256(style.encode("utf-8")).digest()).decode("ascii")
         data = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="28" viewBox="0 0 {width} 28"
   xml:lang="{lang}" role="img" aria-labelledby="badge-title">
   <title id="badge-title">{title}</title>
-  <rect x="1" y="2" width="{width - 2}" height="25" rx="12.5" fill="#a6c9ad"/>
-  <rect x="1" y="1" width="{width - 2}" height="24" rx="12" fill="#f3faee" stroke="#a6c9ad"/>
+  <style>{style}</style>
+  <rect class="badge-shadow" x="1" y="2" width="{width - 2}" height="25" rx="12.5" fill="#a6c9ad"/>
+  <rect class="badge-base" x="1" y="1" width="{width - 2}" height="24" rx="12" fill="#f3faee" stroke="#a6c9ad"/>
   <g transform="translate(6 0) scale(.82)">{mark}</g>
   <g font-family="system-ui, sans-serif">
     {text}
@@ -2030,7 +2039,7 @@ def route(handler, method):
         handler.send_header("Cache-Control", "public, max-age=3600")
         handler.send_header("Access-Control-Allow-Origin", "*")
         handler.send_header("Cross-Origin-Resource-Policy", "cross-origin")
-        handler.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+        handler.send_header("Content-Security-Policy", f"default-src 'none'; style-src 'sha256-{style_hash}'; sandbox")
         handler.send_header("Content-Length", str(len(data)))
         handler.end_headers()
         handler.wfile.write(data)

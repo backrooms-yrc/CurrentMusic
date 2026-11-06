@@ -105,22 +105,36 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
   margin-top: 24px;
 }
 .cm-engine-badge {
+  --cm-engine-bg: #f3faee;
+  --cm-engine-hover: #eaf7e5;
+  --cm-engine-edge: #a6c9ad;
+  --cm-engine-shadow: #a6c9ad;
+  --cm-engine-label: #4e6956;
+  --cm-engine-name: #28513e;
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 3px 12px 3px 6px;
-  border: 1px solid #a6c9ad;
+  border: 1px solid var(--cm-engine-edge);
   border-radius: 999px;
-  color: #28513e;
-  background: #f3faee;
-  box-shadow: 0 2px 0 #a6c9ad;
+  color: var(--cm-engine-name);
+  background: var(--cm-engine-bg);
+  box-shadow: 0 2px 0 var(--cm-engine-shadow);
   font-size: calc(12px * var(--cm-fs, 1));
   line-height: 1.25;
   text-decoration: none;
 }
+.mdui-theme-dark .cm-engine-badge {
+  --cm-engine-bg: #24382e;
+  --cm-engine-hover: #2c4637;
+  --cm-engine-edge: #577865;
+  --cm-engine-shadow: #13251d;
+  --cm-engine-label: #bcd6c1;
+  --cm-engine-name: #def3e1;
+}
 .cm-engine-badge svg { flex: none; width: 28px; height: 28px; }
-.cm-engine-badge span { color: #4e6956; font-size: calc(10.5px * var(--cm-fs, 1)); }
-.cm-engine-badge:hover { background: #eaf7e5; }
+.cm-engine-badge span { color: var(--cm-engine-label); font-size: calc(10.5px * var(--cm-fs, 1)); }
+.cm-engine-badge:hover { background: var(--cm-engine-hover); }
 .cm-engine-badge:focus-visible { outline: 2px solid var(--cm-primary); outline-offset: 3px; }
 @media (prefers-reduced-motion: no-preference) {
   .cm-engine-badge svg { transition: transform .18s ease-out; }

@@ -1,3 +1,5 @@
+from base64 import b64encode
+import hashlib
 import http.client
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -50,6 +52,10 @@ class EngineBadgeTests(unittest.TestCase):
                 self.assertEqual(svg.findtext("{http://www.w3.org/2000/svg}title"), title)
                 labels = svg.findall(".//{http://www.w3.org/2000/svg}text")
                 self.assertEqual(" ".join("".join(label.itertext()) for label in labels), title)
+                style = svg.findtext("{http://www.w3.org/2000/svg}style")
+                self.assertIn("prefers-color-scheme: dark", style)
+                digest = b64encode(hashlib.sha256(style.encode("utf-8")).digest()).decode("ascii")
+                self.assertIn(f"style-src 'sha256-{digest}'", headers["Content-Security-Policy"])
 
     def test_head_matches_get_without_a_body(self):
         _, get_headers, _ = self.request(query="?lang=en")
