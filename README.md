@@ -14,7 +14,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-216359?style=flat-square" alt="MIT 许可"></a>
 </p>
 
-**[打开 Web 播放器](https://music.20110208.xyz/app/)** · **[社区客户端 CurrentMusicX](https://github.com/bileizhen/CurrentMusicX)**
+**[打开 CurrentMusic 流声屿](https://music.20110208.xyz/app/)** · **[社区客户端 CurrentMusicX](https://github.com/bileizhen/CurrentMusicX)** · **[流声引擎官网](https://music.20110208.xyz/home/engine/)**
 
 [界面预览](#界面预览) · [功能一览](#功能一览) · [自托管与构建](#自托管与构建) · [API 文档](https://music.20110208.xyz/api-docs/)
 

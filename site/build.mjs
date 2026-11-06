@@ -51,6 +51,8 @@ const LOCAL = [
   ['assets/apple-touch-icon.png', 'home/assets/apple-touch-icon.png'],
   ['assets/og-cover.svg', 'home/assets/og-cover.svg'],   // 封面源文件（矢量）
   ['assets/og-cover.jpg', 'home/assets/og-cover.jpg'],   // 社交分享封面（1200×630，平台兼容性更好）
+  ['engine/index.html', 'home/engine/index.html'],
+  ['engine/styles.css', 'home/engine/styles.css'],
 ];
 
 /** 必须出现在页面里的关键内容（缺任何一条都算构建失败） */
@@ -64,7 +66,8 @@ const REQUIRED_IN_HTML = [
   'CurrentMusicX', 'bileizhen',
   '精美的 UI，流畅的动画，为您带来最佳的音乐体验。',
   '概念版', 'Android WebView', '显示异常、版式错乱、性能降低',
-  'CurrentMusic Web 网页端', '随时随地，打开网页，想听即听',
+  'CurrentMusic 流声屿', '随时随地，打开网页，想听即听',
+  '流声引擎官网',
   'CurrentStation 控制台', '将你的应用免费接入 CurrentMusic',
   // 联系我们的两个群
   '1106353813', 'Current 系项目 QQ 交流群', '200+ 人',
@@ -132,7 +135,7 @@ log('\n[2/4] 改写资源路径并写入指纹');
 {
   const { createHash } = await import('node:crypto');
   const hash = async f => createHash('sha1').update(await readFile(join(OUT, f))).digest('hex').slice(0, 10);
-  const [css, js] = await Promise.all([hash('home/styles.css'), hash('home/app.js')]);
+  const [css, js, engineCss] = await Promise.all([hash('home/styles.css'), hash('home/app.js'), hash('home/engine/styles.css')]);
 
   const file = join(OUT, 'home/index.html');
   let html = await readFile(file, 'utf8');
@@ -148,6 +151,12 @@ log('\n[2/4] 改写资源路径并写入指纹');
   await writeFile(file, html);
   check(html !== before, 'index.html 资源路径已改写为 ' + ASSET_PREFIX,
     `styles.css=${css} app.js=${js}`);
+
+  const engineFile = join(OUT, 'home/engine/index.html');
+  const engineHtml = await readFile(engineFile, 'utf8');
+  const engineEntry = engineHtml.replace('href="styles.css"', `href="styles.css?v=${engineCss}"`);
+  check(engineEntry !== engineHtml, '流声引擎样式已写入指纹', engineCss);
+  await writeFile(engineFile, engineEntry);
 
   // app.js 里的静态 import 同样要带上命名空间。
   // 注意这里是「裸导入」（import './x' 无 from），别写成 from '...' 匹配不到。

@@ -196,7 +196,11 @@ async function router({ refresh = false } = {}) {
   if (params) params.query = query;   // 页面按需读取（大多忽略）
 
   document.body.classList.toggle('cm-onboarding-active', needsWelcome() && /^#\/(welcome|two-factor|security-question)$/.test(routePath));
-  document.getElementById('pageTitle').textContent = routePath === '#/user' && !auth.token ? '登录与注册' : matched.title;
+  const pageTitle = document.getElementById('pageTitle');
+  const isHome = matched.page === home;
+  pageTitle.classList.toggle('cm-home-title', isHome && !window.NativeApi?.versionCode);
+  pageTitle.textContent = isHome ? document.title
+    : routePath === '#/user' && !auth.token ? '登录与注册' : matched.title;
   document.querySelectorAll('#bottomNav .navItem').forEach(a => {
     const active = a.getAttribute('href') === routePath.split('/').slice(0, 2).join('/')
       || (a.getAttribute('href') === '#/library' && /^#\/(pl|ncmpl)\//.test(routePath));
@@ -212,6 +216,10 @@ async function router({ refresh = false } = {}) {
 }
 
 function boot() {
+  if (window.NativeApi?.versionCode) {
+    document.title = 'CurrentMusic';
+    document.querySelectorAll('[data-web-brand]').forEach(el => { el.textContent = document.title; });
+  }
   applyTheme();
   bootColorScheme();   // 配色方案（默认动态取色，取色随播放封面变化）
   bootFontScale();     // 字体大小（默认标准；不跟随系统字号，见 ui.js FONT_SCALES）

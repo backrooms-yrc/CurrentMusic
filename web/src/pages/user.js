@@ -178,9 +178,9 @@ function passwordResetDialog(onDone) {
 function renderAuth(el) {
   el.innerHTML = `
     <section class="cm-auth-layout cm-login-layout">
-      <aside class="cm-auth-story">${authArt('music')}<span class="cm-auth-eyebrow">YOUR MUSIC, YOUR MOMENT</span><h1>让喜欢的旋律，<br>回到你的生活里。</h1><p>收藏每一次心动，发现下一首喜欢。<br>用一个账号，连接你的音乐世界。</p><span class="cm-auth-brand">CurrentMusic <span>·</span> CurrentStation 通行证</span></aside>
+      <aside class="cm-auth-story">${authArt('music')}<span class="cm-auth-eyebrow">YOUR MUSIC, YOUR MOMENT</span><h1>让喜欢的旋律，<br>回到你的生活里。</h1><p>收藏每一次心动，发现下一首喜欢。<br>用一个账号，连接你的音乐世界。</p><span class="cm-auth-brand">${esc(document.title)} <span>·</span> CurrentStation 通行证</span></aside>
       <div class="cm-auth cm-auth-panel">
-      <div class="cm-auth-logo"><img src="brand-icon.png?v=sage1" alt="CurrentMusic" width="64" height="64"></div>
+      <div class="cm-auth-logo"><img src="brand-icon.png?v=sage1" alt="${esc(document.title)}" width="64" height="64"></div>
       <div class="cm-auth-kicker">CURRENTSTATION 通行证</div><h2 class="cm-auth-title" id="authTitle">欢迎回来</h2>
       <p class="cm-auth-description" id="authDescription">登录账号，继续你的音乐时光。</p>
       <div class="cm-auth-form">

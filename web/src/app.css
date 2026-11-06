@@ -3996,6 +3996,18 @@ html[data-ui-preset="cmx"] #pageTitle {
   letter-spacing: -.035em;
   line-height: 1.1;
 }
+@media (max-width: 960px) {
+  #pageTitle.cm-home-title, html[data-ui-preset="cmx"] #pageTitle.cm-home-title {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+    font-size: calc(clamp(13px, 4vw, 28px) * var(--cm-fs, 1));
+    line-height: 1.15;
+  }
+  body.cm-has-account #pageTitle.cm-home-title {
+    font-size: calc(clamp(11px, 6vw - 8px, 24px) * var(--cm-fs, 1));
+  }
+}
 html[data-ui-preset="cmx"] #topSearch,
 html[data-ui-preset="cmx"] #topAction {
   width: 40px; height: 40px; box-sizing: border-box;
@@ -5559,7 +5571,7 @@ html[data-ui-preset="soaringbird"] .sb-sidebar__brand {
 }
 html[data-ui-preset="soaringbird"] .sb-sidebar__brand img { width: 25px; height: 25px; flex: none; }
 html[data-ui-preset="soaringbird"] .sb-sidebar__brand span {
-  font-size: calc(16px * var(--cm-fs, 1)); font-weight: 600; letter-spacing: -.02em; white-space: nowrap;
+  font-size: calc(16px * var(--cm-fs, 1)); font-weight: 600; letter-spacing: -.02em;
 }
 html[data-ui-preset="soaringbird"] .sb-sidebar__scroll { flex: 1; overflow-y: auto; padding: 0 9px; scrollbar-width: none; }
 html[data-ui-preset="soaringbird"] .sb-sidebar__scroll::-webkit-scrollbar { width: 0; }

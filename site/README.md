@@ -13,6 +13,7 @@ site/
 ├── index.html          # 页面主体（单页，全部区块与文案）
 ├── styles.css          # 站点样式（颜色/圆角/阴影/动效均取自 MDUI 设计令牌）
 ├── app.js              # 交互：主题、抽屉导航、复制、平滑滚动、滚动定位、入场动画
+├── engine/             # 流声引擎独立官网（静态 HTML 和 CSS）
 ├── assets/
 │   ├── favicon.svg     # 站点图标
 │   ├── og-cover.svg    # 社交分享封面源文件（矢量）
@@ -31,6 +32,7 @@ site/
 ```
 data/www/
 ├── home/index.html     # 首页（对外 URL：/）
+├── home/engine/        # 流声引擎官网（对外 URL：/home/engine/）
 └── home/**             # 资源（对外 URL：/home/...）
 ```
 
@@ -90,7 +92,8 @@ location = / {
 | 路径 | 内容 |
 | --- | --- |
 | `/` | 本官网（产物 `data/www`，线上 `/www/wwwroot/music.20110208.xyz/home/`） |
-| `/app` | CurrentMusic Web 网页端（`data/app`） |
+| `/app` | CurrentMusic 流声屿 Web 播放器（`data/app`） |
+| `/home/engine/` | 流声引擎官网，与主站共用 `/home/` 的静态部署 |
 | `/station` | CurrentStation 控制台（`backend/station.html`，反代后端 3010） |
 | `/developer`、`/ui-preview/` | 其他既有页面，官网不接管 |
 

@@ -8,7 +8,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>CurrentMusic</title>
+  <title>CurrentMusic 流声屿</title>
   <link rel="icon" href="brand-icon.png?v=sage1" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=sage1">
   <script>
@@ -59,7 +59,7 @@
       if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
-  <link rel="stylesheet" href="app.css?v=3fb6771407">
+  <link rel="stylesheet" href="app.css?v=b9d1dfd41a">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
     #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; inset: 0; z-index: 10000; display: flex;
@@ -152,8 +152,8 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
   </script>
 
   <header id="topbar">
-    <div id="brandLock"><img src="brand-icon.png?v=sage1" alt="" width="32" height="32"><b>CurrentMusic</b></div>
-    <div id="pageTitle">CurrentMusic</div>
+    <div id="brandLock"><img src="brand-icon.png?v=sage1" alt="" width="32" height="32"><b data-web-brand>CurrentMusic 流声屿</b></div>
+    <div id="pageTitle" data-web-brand>CurrentMusic 流声屿</div>
     <div id="topActs">
       <a id="topSearch" href="#/search" class="material-icons-outlined" title="搜索">search</a>
       <span id="topAction" class="material-icons-outlined" title="设置">settings</span>
@@ -164,8 +164,8 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
   <main id="out"></main>
   <template id="engineCredit">
     <footer class="cm-engine-credit">
-      <div>由 <a href="https://github.com/backrooms-yrc/CurrentMusic/tree/main/backend#readme" target="_blank" rel="noopener noreferrer">流声引擎</a> 强力驱动。</div>
-      <div lang="en">Powered by <a href="https://github.com/backrooms-yrc/CurrentMusic/tree/main/backend#readme" target="_blank" rel="noopener noreferrer">CurrentMusic Engine</a>.</div>
+      <div>由 <a href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer">流声引擎</a> 强力驱动。</div>
+      <div lang="en">Powered by <a href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer">CurrentMusic Engine</a>.</div>
     </footer>
   </template>
 
@@ -176,7 +176,7 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
     <div class="sb-sidebar__top">
       <a class="sb-sidebar__brand" href="#/home">
         <img src="brand-icon.png?v=sage1" alt="" width="25" height="25">
-        <span>CurrentMusic</span>
+        <span data-web-brand>CurrentMusic 流声屿</span>
       </a>
     </div>
     <div class="sb-sidebar__scroll">
@@ -291,6 +291,6 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
       }, 9000);
     })();
   </script>
-  <script src="app.js?v=3fb6771407"></script>
+  <script src="app.js?v=b9d1dfd41a"></script>
 </body>
 </html>
