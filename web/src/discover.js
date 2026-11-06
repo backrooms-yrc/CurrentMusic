@@ -20,14 +20,18 @@ const cardShell = (id, title) => `
 
 /** 歌单卡片网格（复用现有 .cm-plgrid/.cm-plcard 样式，不新增默认皮肤样式）。 */
 function playlistsHTML(list) {
-  return `<div class="cm-plgrid">${list.map(pl => `
+  return `<div class="cm-plgrid">${list.map(pl => {
+    const aimoCover = getAimoChartCover(pl.id, pl.name);
+    const coverSrc = aimoCover || (pl.pic ? (pl.pic.startsWith('data:') ? pl.pic : `${esc(pl.pic)}?param=300y300`) : '');
+    return `
     <div class="cm-plcard" data-id="${pl.id}">
       <div class="cm-plcover">${
-        pl.pic ? `<img src="${esc(pl.pic)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''
+        coverSrc ? `<img src="${coverSrc}" loading="lazy" onerror="this.remove()">` : ''
       }<span class="material-icons-outlined">queue_music</span></div>
       <div class="cm-plname">${esc(pl.name)}</div>
       <div class="cm-plsub">${pl.sub || ''}</div>
-    </div>`).join('')}</div>`;
+    </div>`;
+  }).join('')}</div>`;
 }
 
 export async function mountDiscover(el) {

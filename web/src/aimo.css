@@ -1712,6 +1712,13 @@ html[data-ui-preset="aimo"] mdui-chip.selected {
   background: var(--aimo-primary) !important;
   color: var(--aimo-primary-text) !important;
   border-color: var(--aimo-primary) !important;
+  --mdui-color-on-secondary-container: var(--aimo-primary-text) !important;
+}
+
+html[data-ui-preset="aimo"] mdui-chip[selected]::part(selected-icon),
+html[data-ui-preset="aimo"] mdui-chip[selected]::part(icon) {
+  color: var(--aimo-primary-text) !important;
+  fill: var(--aimo-primary-text) !important;
 }
 
 html[data-ui-preset="aimo"] mdui-chip::part(container) {
@@ -2474,4 +2481,19 @@ html[data-ui-preset="aimo"] input[type="range"] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Aimo 设计规范：去除 Material Design (Android) 点击涟漪/波澜动效
+   还原纯粹、轻盈、即时的高级杂志交互质感
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] mdui-ripple,
+html[data-ui-preset="aimo"] mdui-ripple::part(surface),
+html[data-ui-preset="aimo"] .mdui-ripple-wave,
+html[data-ui-preset="aimo"] .wave {
+  display: none !important;
+  opacity: 0 !important;
+  animation: none !important;
+  transition: none !important;
+  pointer-events: none !important;
 }
