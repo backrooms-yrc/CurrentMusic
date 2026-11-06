@@ -1,7 +1,7 @@
 import { createLoadingIndicator, loadingCycle, enhanceLoading } from './loading.js';
 // A single route owner: interrupted navigations cancel their animation and never reset the new page's scroll.
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-export function createPageMotion(container) {
+export function createPageMotion(container, footer) {
   let generation = 0, exit = null, observer = null, indicator = null, cycle = null;
   const animations = new Set();
   function animate(node, frames, duration) {
@@ -36,6 +36,7 @@ export function createPageMotion(container) {
     const wrap = document.createElement('div');
     wrap.className = 'cm-page cm-route-page' + (back ? ' cm-page-back' : '');
     container.replaceChildren(wrap);
+    if (footer) container.appendChild(footer);
     container.scrollTop = 0;
     // Fade in asynchronously inserted content, including in-page tab/filter changes.
     observer = new MutationObserver(records => {

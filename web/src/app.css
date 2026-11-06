@@ -97,6 +97,16 @@ body {
 body.no-mini #out { bottom: var(--cm-nav-h); }
 body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-bottom), var(--safe-b, 0px))); }
 
+.cm-engine-credit {
+  margin-top: 24px;
+  text-align: center;
+  font-size: calc(12px * var(--cm-fs, 1));
+  line-height: 1.6;
+  color: rgb(var(--mdui-color-on-surface-variant, 73, 69, 79));
+}
+.cm-engine-credit a { color: inherit; text-decoration: underline; }
+.cm-route-loading-active .cm-engine-credit { display: none; }
+
 /* ---------- 下拉刷新：共享七形态动画 ---------- */
 #ptrInd {
   position: fixed; left: 50%; margin-left: -19px;

@@ -204,7 +204,10 @@ async function router({ refresh = false } = {}) {
     if (active) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  if (!showPage) showPage = createPageMotion(out());
+  if (!showPage) {
+    const footer = window.NativeApi?.versionCode ? null : document.getElementById('engineCredit').content.firstElementChild;
+    showPage = createPageMotion(out(), footer);
+  }
   await showPage(wrap => matched.page.render(wrap, params), navDirection === 'back', { refresh });
 }
 

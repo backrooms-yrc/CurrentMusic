@@ -59,7 +59,7 @@
       if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
-  <link rel="stylesheet" href="app.css?v=4c5755ef8d">
+  <link rel="stylesheet" href="app.css?v=3fb6771407">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
     #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; inset: 0; z-index: 10000; display: flex;
@@ -162,6 +162,12 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
   <a id="topAccount" href="#/user" aria-label="我的账号" hidden></a>
 
   <main id="out"></main>
+  <template id="engineCredit">
+    <footer class="cm-engine-credit">
+      <div>由 <a href="https://github.com/backrooms-yrc/CurrentMusic/tree/main/backend#readme" target="_blank" rel="noopener noreferrer">流声引擎</a> 强力驱动。</div>
+      <div lang="en">Powered by <a href="https://github.com/backrooms-yrc/CurrentMusic/tree/main/backend#readme" target="_blank" rel="noopener noreferrer">CurrentMusic Engine</a>.</div>
+    </footer>
+  </template>
 
   <div id="mini"></div>
 
@@ -285,6 +291,6 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
       }, 9000);
     })();
   </script>
-  <script src="app.js?v=4c5755ef8d"></script>
+  <script src="app.js?v=3fb6771407"></script>
 </body>
 </html>
