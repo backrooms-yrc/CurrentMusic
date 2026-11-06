@@ -98,13 +98,26 @@ body.no-mini #out { bottom: var(--cm-nav-h); }
 body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-bottom), var(--safe-b, 0px))); }
 
 .cm-engine-credit {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
   margin-top: 24px;
-  text-align: center;
-  font-size: calc(12px * var(--cm-fs, 1));
-  line-height: 1.6;
-  color: rgb(var(--mdui-color-on-surface-variant, 73, 69, 79));
 }
-.cm-engine-credit a { color: inherit; text-decoration: underline; }
+.cm-engine-badge {
+  display: inline-flex;
+  border-radius: 7px;
+  color: #f5fff9;
+  background: #183e34;
+  font-size: calc(12px * var(--cm-fs, 1));
+  line-height: 1.5;
+  text-decoration: none;
+  overflow: hidden;
+}
+.cm-engine-badge > * { padding: 5px 10px; }
+.cm-engine-badge strong { color: #183e34; background: #d3e7d8; }
+.cm-engine-badge:hover strong { text-decoration: underline; }
+.cm-engine-badge:focus-visible { outline: 2px solid var(--cm-primary); outline-offset: 3px; }
 .cm-route-loading-active .cm-engine-credit { display: none; }
 
 /* ---------- 下拉刷新：共享七形态动画 ---------- */

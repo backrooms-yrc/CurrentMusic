@@ -26,7 +26,7 @@ GROUPS = {
     'admin': '管理接口', 'announcements': '公告', 'posts': '动态', 'playlists': '歌单',
     'likes': '收藏与红心', 'favs': '收藏与红心', 'songs': '音乐与媒体', 'search': '搜索历史',
     'roaming': '私人漫游', 'share': '分享', 'plays': '播放历史', 'decorations': '头像挂件',
-    'download': '客户端与资源', 'x': '客户端与资源', 'cast': '客户端与资源',
+    'download': '客户端与资源', 'x': '客户端与资源', 'cast': '客户端与资源', 'badges': '客户端与资源',
 }
 GUIDES = {
     'user-levels-api': '用户等级、试炼与发现排序',
@@ -41,6 +41,7 @@ GUIDES = {
     'two-factor-api': '登录两步验证', 'passport-api': '通行证完整接入', 'password-api': '密码找回与修改', 'lyrics-api': '歌词与逐字轴',
     'private-roaming-api': '私人漫游', 'play-history-sync': '网易云听歌历史同步',
     'currentmusic-ai': '聊天 AI 与 SSE', 'share-api': '分享元数据与图片',
+    'engine-badge-api': '流声引擎署名徽章',
     'realip': 'RealIP 规则', 'third-party-ncm-sync': '第三方客户端绑定同步',
     'rooms-design': '听歌房协议与设计参考', 'network-lines-api': '线路测速',
 }

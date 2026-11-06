@@ -1895,6 +1895,39 @@ def route(handler, method):
     if path == "/health" and method == "GET":
         return jresp(handler, 200, {"ok": True, "now": int(time.time())})
 
+    if path == "/badges/powered-by.svg" and method == "GET":
+        lang = q.get("lang", "zh-CN")
+        badges = {
+            "zh-CN": ("强力驱动", "流声引擎", "由流声引擎强力驱动", 72, 144),
+            "en": ("Powered by", "CurrentMusic Engine", "Powered by CurrentMusic Engine", 88, 242),
+        }
+        if lang not in badges:
+            raise ApiError(400, "lang 须为 zh-CN 或 en")
+        label, name, title, split, width = badges[lang]
+        data = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="28" viewBox="0 0 {width} 28"
+  xml:lang="{lang}" role="img" aria-labelledby="badge-title">
+  <title id="badge-title">{title}</title>
+  <defs><clipPath id="badge-shape"><rect width="{width}" height="28" rx="7"/></clipPath></defs>
+  <g clip-path="url(#badge-shape)">
+    <rect width="{width}" height="28" fill="#d3e7d8"/>
+    <rect width="{split}" height="28" fill="#183e34"/>
+  </g>
+  <g font-family="system-ui, sans-serif" font-size="12" text-anchor="middle">
+    <text x="{split / 2:g}" y="18" fill="#f5fff9">{label}</text>
+    <text x="{(split + width) / 2:g}" y="18" fill="#183e34" font-weight="700">{name}</text>
+  </g>
+</svg>'''.encode("utf-8")
+        handler.send_response(200)
+        handler.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+        handler.send_header("Cache-Control", "public, max-age=3600")
+        handler.send_header("Access-Control-Allow-Origin", "*")
+        handler.send_header("Cross-Origin-Resource-Policy", "cross-origin")
+        handler.send_header("Content-Security-Policy", "default-src 'none'; sandbox")
+        handler.send_header("Content-Length", str(len(data)))
+        handler.end_headers()
+        handler.wfile.write(data)
+        return
+
     # ======================== 弹窗公告（v1.28.22） ========================
     # 客户端每次打开网页/App 都会拉 /announcements 并弹窗；管理员在管理后台增删改。
     # 公开读、写需管理员；普通管理员只能改自己发布的，超管可改全部。
@@ -2451,6 +2484,7 @@ def route(handler, method):
         base = base_url(handler)
         own = [
             ("GET", "/health", "公开", "服务健康检查"),
+            ("GET", "/badges/powered-by.svg", "公开", "流声引擎署名徽章，返回 SVG；lang 可选 zh-CN（默认）或 en。嵌入示例 /api-docs/reference/guide-engine-badge-api/"),
             ("GET", "/network/lines", "公开", "主站及全部 CDN 镜像线路与服务端 HTTPS 测速结果；measure=0 仅目录；结果缓存 60 秒，perspective=server，不代表用户网络延迟。详细文档 /api-docs/reference/guide-network-lines-api/"),
             ("GET", "/network/probe", "公开", "浏览器线路测速探针：返回 service=CurrentMusic，支持 CORS；页面 /app/auto 从用户设备直接测量 HTTPS 请求耗时"),
             ("GET", "/network/docs", "公开", "兼容入口，302 跳转至 /api-docs/reference/guide-network-lines-api/"),

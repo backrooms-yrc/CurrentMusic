@@ -59,7 +59,7 @@
       if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
-  <link rel="stylesheet" href="app.css?v=b9d1dfd41a">
+  <link rel="stylesheet" href="app.css?v=5e37663063">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
     #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; inset: 0; z-index: 10000; display: flex;
@@ -164,8 +164,8 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
   <main id="out"></main>
   <template id="engineCredit">
     <footer class="cm-engine-credit">
-      <div>由 <a href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer">流声引擎</a> 强力驱动。</div>
-      <div lang="en">Powered by <a href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer">CurrentMusic Engine</a>.</div>
+      <a class="cm-engine-badge" href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer" aria-label="由流声引擎强力驱动"><span>强力驱动</span><strong>流声引擎</strong></a>
+      <a class="cm-engine-badge" href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer" lang="en" aria-label="Powered by CurrentMusic Engine"><span>Powered by</span><strong>CurrentMusic Engine</strong></a>
     </footer>
   </template>
 
@@ -291,6 +291,6 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
       }, 9000);
     })();
   </script>
-  <script src="app.js?v=b9d1dfd41a"></script>
+  <script src="app.js?v=5e37663063"></script>
 </body>
 </html>
