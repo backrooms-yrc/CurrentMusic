@@ -97,7 +97,10 @@ export async function dismissBoot() {
   if (!boot.isConnected) return;
   if (reduced() || !boot.animate) { boot.remove(); return; }
   boot.setAttribute('aria-hidden', 'true'); boot.style.pointerEvents = 'none';
-  const animation = boot.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out' });
-  animation.onfinish = () => boot.remove();
-  animation.oncancel = () => boot.remove();
+  await new Promise(resolve => {
+    const animation = boot.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out' });
+    const finish = () => { boot.remove(); resolve(); };
+    animation.onfinish = finish;
+    animation.oncancel = finish;
+  });
 }

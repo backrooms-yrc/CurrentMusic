@@ -8,16 +8,22 @@ const user = { id: 1, username: 'fixture', nickname: '音乐朋友', avatar: 'fi
 const picture = '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" rx="60" fill="#6750a4"/><circle cx="60" cy="42" r="20" fill="#fff"/><path d="M24 100a36 36 0 0 1 72 0" fill="#fff"/></svg>';
 const decoration = '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><circle cx="60" cy="60" r="56" fill="none" stroke="#edb64a" stroke-width="7"/></svg>';
 
-async function fixture(browser, { width = 390, height = 844, preset = 'cmx', reduced = false, stored = false, fallback = false, broken = false } = {}) {
+async function fixture(browser, { width = 390, height = 844, preset = 'cmx', reduced = false, stored = false, fallback = false, broken = false, initialUser = user } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  let currentUser = { ...user }, delayMe = 0;
+  let currentUser = { ...initialUser }, delayMe = 0;
   await page.addInitScript(({ preset, stored, fallback, user }) => {
     localStorage.setItem('cm.recReset', 'rec-1.28.74');
     localStorage.setItem('cm.uiPreset', preset);
     if (stored) { localStorage.setItem('cm.token', 'fixture-session'); localStorage.setItem('cm.user', JSON.stringify(user)); }
-  }, { preset, stored, fallback, user });
+    const animate = Element.prototype.animate;
+    window.accountFlights = [];
+    Element.prototype.animate = function (...args) {
+      if (this.id === 'topAccount') accountFlights.push({ bootVisible: !!document.getElementById('boot') });
+      return animate.apply(this, args);
+    };
+  }, { preset, stored, user: initialUser });
   await page.route('**/*', async route => {
     const u = new URL(route.request().url());
     if (u.pathname.startsWith('/app/')) {
@@ -63,7 +69,7 @@ async function landed(page, role = '站长') {
   assert(geometry.y >= 0 && geometry.y < 100);
   assert(geometry.titleRight < geometry.avatarLeft, 'title must leave room for avatar and decoration');
   assert(geometry.actsLeft > geometry.avatarRight, 'actions must leave room for avatar and decoration');
-  assert.equal((await page.locator('#topAccount .cm-top-tags').innerText()).trim(), role);
+  assert.equal((await page.locator('#topAccount .cm-tag:is(.owner, .super, .admin)').allTextContents()).join(''), role);
   assert.equal(await page.locator('#topAccount .cm-decor img').count(), 1);
 }
 
@@ -96,14 +102,21 @@ async function landed(page, role = '站长') {
       }
     }
     const f = await fixture(browser, { stored: true, width: 320 }), { page } = f;
-    await landed(page);
-    assert.equal(await page.locator('.cm-account-flying').count(), 0, 'restored login must not replay arrival');
+    for (let i = 0; i < 2; i++) {
+      await page.waitForFunction(() => document.getElementById('topAccount').classList.contains('cm-account-flying'));
+      await landed(page);
+      assert.deepEqual(await page.evaluate(() => accountFlights), [{ bootVisible: false }], 'startup flight must play once after the boot overlay');
+      if (i === 0) {
+        await page.reload();
+        await page.addScriptTag({ content: controls });
+      }
+    }
     for (const [fields, role] of [[{ isSuper: true, isAdmin: true }, '超级管理员'], [{ isAdmin: true }, '管理员'], [{}, '']]) {
       const updated = { ...user, isOwner: false, isSuper: false, isAdmin: false, ...fields, avatar: 'changed.png', avatarDecoration: 'changed' };
       f.setUser(updated);
       await page.evaluate(u => AccountTest.auth.updateUser(u, AccountTest.auth.token), updated);
       await landed(page, role);
-      assert.equal(await page.locator('.cm-account-flying').count(), 0, 'profile refresh must not replay arrival');
+      assert.equal(await page.evaluate(() => accountFlights.length), 1, 'profile refresh must not replay arrival');
       assert((await page.locator('#topAccount .cm-avatar').getAttribute('src')).includes('changed.png'));
     }
     await page.locator('#topAccount').click();
@@ -121,8 +134,29 @@ async function landed(page, role = '站长') {
     assert.equal(await page.locator('.cm-account-flying, .cm-account-arriving').count(), 0);
     assert.equal(await page.locator('body.cm-has-account').count(), 0);
     assert.deepEqual(f.errors, []);
-    console.log('PASS restored session, narrow layout, roles, avatar/decoration refresh, account navigation, stale response protection and logout during animation');
+    console.log('PASS arrival on open and reload, narrow layout, roles, avatar/decoration refresh, account navigation, stale response protection and logout during animation');
     await f.context.close();
+
+    const title = '流声屿年度最佳音乐分享荣誉会员奖';
+    const titled = { ...user, title, level: 7, isOwner: false, isBot: true };
+    for (const [width, preset] of [[240, 'md3'], [390, 'cmx'], [521, 'cmx'], [1440, 'cmx']]) {
+      const f = await fixture(browser, { width, preset, stored: true, reduced: true, initialUser: titled });
+      await landed(f.page, '超级管理员');
+      const tag = f.page.locator('#topAccount .cm-tag.title');
+      assert.equal(await tag.innerText(), title);
+      assert(await tag.evaluate(el => el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight), 'title must fit without clipping');
+      const bounds = await f.page.evaluate(() => {
+        const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
+        return { tags: rect('.cm-top-tags'), acts: rect('#topActs'), title: rect('#pageTitle'), content: rect('#out') };
+      });
+      assert(bounds.tags.left >= 0 && bounds.tags.right <= width && bounds.tags.bottom <= bounds.content.top);
+      assert(bounds.tags.top >= bounds.acts.bottom || bounds.tags.right <= bounds.acts.left);
+      assert(bounds.tags.top >= bounds.title.bottom || bounds.tags.left >= bounds.title.right);
+      assert.deepEqual(await f.page.evaluate(() => accountFlights), [], 'reduced motion must also apply on startup');
+      assert.deepEqual(f.errors, []);
+      console.log('PASS full custom title alongside level and role badges:', preset, width);
+      await f.context.close();
+    }
 
     const resized = await fixture(browser, { width: 240, height: 240 });
     await login(resized.page);

@@ -237,10 +237,9 @@ function boot() {
   initRipple();
   initImageFade();   // 全局图片加载动画（骨架微光 → 渐显）
   warmDecorScales(); // 预热头像挂件比例表（本地缓存即时可用，后台校验版本号）
-  initTopAccount();
   window.__cmBooted = true;   // 供 index.html 的启动诊断判定
   initExpressiveLoading();
-  dismissBoot();
+  initTopAccount(dismissBoot());
 
   document.getElementById('topAction').onclick = () => { location.hash = '#/settings'; };   // 齿轮直达设置页
 

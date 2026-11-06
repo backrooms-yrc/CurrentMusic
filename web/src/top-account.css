@@ -13,20 +13,19 @@ html[data-ui-preset="cmx"] #topAccount {
 }
 .cm-top-avatar { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; flex: none; }
 .cm-top-avatar > .cm-avatar { display: block; }
-.cm-top-tags { display: flex; align-items: center; justify-content: center; gap: 3px; max-width: 108px; line-height: 1; }
+.cm-top-tags { display: flex; align-items: center; justify-content: center; gap: 3px; width: max-content; max-width: 108px; line-height: 1; }
 .cm-top-tags:empty { display: none; }
 #topAccount .cm-top-tags .cm-tag {
   flex: none; font-size: 9px; line-height: 12px; padding: 0 5px; border-radius: 5px;
 }
-/* 顶栏优先展示角色；自定义头衔仍保留在入口的完整名称中。 */
-#topAccount .cm-top-tags .cm-tag.title { max-width: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#topAccount .cm-top-tags .cm-tag.title { flex: 0 1 auto; min-width: 0; text-align: center; overflow-wrap: break-word; }
 #topAccount:focus-visible { outline: 2px solid var(--cm-primary); outline-offset: 2px; }
 #topAccount.cm-account-arriving { visibility: hidden; }
 #topAccount.cm-account-flying { z-index: 9990; pointer-events: none; will-change: transform, opacity; }
 
 /* 为中央头像与挂件留出独立空间，长页面名不会挤入账号区域。 */
 body.cm-has-account #topbar {
-  display: grid; grid-template-columns: minmax(0, calc(50vw - var(--cm-account-header-left, 0px) - 78px)) minmax(0, 1fr);
+  display: grid; grid-template-columns: minmax(0, calc(50vw - var(--cm-account-header-left, 0px) - var(--cm-account-slot, 78px))) minmax(0, 1fr);
 }
 body.cm-has-account #brandLock { display: none; }
 body.cm-has-account #pageTitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -42,6 +41,16 @@ body.cm-has-account #topActs { justify-self: end; max-width: calc(50vw - 70px); 
 }
 @media (max-width: 380px) {
   body.cm-has-account .cm-dl-apk-top { display: none; }
+}
+@media (min-width: 521px) {
+  body.cm-has-account-title { --cm-account-slot: 154px; }
+  body.cm-has-account-title .cm-top-tags { max-width: 256px; }
+}
+/* 窄屏徽章在顶栏按钮下方单独占一行，长头衔可在行内换行。 */
+@media (max-width: 520px) {
+  body.cm-has-account-title { --cm-account-badge-space: 32px; }
+  body.cm-has-account-title #topAccount { height: auto; padding-top: 2px; gap: 0; }
+  body.cm-has-account-title .cm-top-tags { margin-top: 18px; max-width: calc(100vw - 24px); }
 }
 @media (max-width: 300px) {
   body.cm-has-account #topbar { padding-left: 8px; padding-right: 8px; }
