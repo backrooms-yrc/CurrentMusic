@@ -701,11 +701,17 @@ html[data-ui-preset="aimo"] .sk-ava {
     align-items: center !important;
   }
 
+  /* 桌面端迷你播放器进度条：居中紧凑定位，杜绝通栏贯穿超长条 */
   html[data-ui-preset="aimo"] .cm-mini-prog {
-    left: clamp(24px, 3.5vw, 44px) !important;
-    right: clamp(24px, 3.5vw, 44px) !important;
-    top: -1px !important;
-    height: 2px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: min(440px, 40vw) !important;
+    max-width: 440px !important;
+    top: 0 !important;
+    height: 14px !important;
+    margin-top: -7px !important;
+    z-index: 5 !important;
   }
 }
 
@@ -805,11 +811,17 @@ html[data-ui-preset="aimo"] .sk-ava {
     align-items: center !important;
   }
 
+  /* 移动端迷你播放器进度条：定界在曲目信息与操作区之间，避免全屏贯通 */
   html[data-ui-preset="aimo"] .cm-mini-prog {
-    left: 0 !important;
-    right: 0 !important;
-    top: -1px !important;
-    height: 2px !important;
+    left: calc(16px + 40px + 12px) !important;
+    right: calc(16px + 80px + 12px) !important;
+    width: auto !important;
+    max-width: 360px !important;
+    transform: none !important;
+    top: 0 !important;
+    height: 14px !important;
+    margin-top: -7px !important;
+    z-index: 5 !important;
   }
 
   /* 移动顶栏 */
@@ -1778,23 +1790,83 @@ html[data-ui-preset="aimo"] .cm-mini-ph {
   object-fit: cover !important;
 }
 
+html[data-ui-preset="aimo"] .cm-mini-name,
 html[data-ui-preset="aimo"] .cm-mini-t {
+  font-family: var(--aimo-font-serif) !important;
   font-weight: 600 !important;
   color: var(--aimo-text-primary) !important;
   font-size: calc(13.5px * var(--cm-fs, 1)) !important;
 }
 
+html[data-ui-preset="aimo"] .cm-mini-sub,
 html[data-ui-preset="aimo"] .cm-mini-s {
+  font-family: var(--aimo-font-sans) !important;
   color: var(--aimo-text-secondary) !important;
   font-size: calc(11.5px * var(--cm-fs, 1)) !important;
 }
 
-html[data-ui-preset="aimo"] .cm-mini-prog {
-  background: var(--aimo-border-soft) !important;
+html[data-ui-preset="aimo"] .cm-mini-btn {
+  color: var(--aimo-text-primary) !important;
+  transition: transform 120ms var(--aimo-ease), opacity 120ms ease;
 }
 
-html[data-ui-preset="aimo"] .cm-mini-prog i {
+html[data-ui-preset="aimo"] .cm-mini-btn:hover {
+  color: var(--aimo-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-btn:active {
+  transform: scale(0.92);
+}
+
+/* 进度槽规整：重置高度与绝对坐标，消除旧系统 24px 偏移与通栏大条 */
+html[data-ui-preset="aimo"] .cm-mini-prog {
+  background: transparent !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-track {
+  position: absolute !important;
+  top: 6px !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 2.5px !important;
+  border-radius: 999px !important;
+  background: var(--aimo-border-soft) !important;
+  overflow: hidden !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-track i {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  height: 100% !important;
   background: var(--aimo-primary) !important;
+  border-radius: 999px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-track #miniBuf {
+  background: var(--aimo-border) !important;
+  opacity: 0.55 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-thumb {
+  top: 7px !important;
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 50% !important;
+  background: var(--aimo-primary) !important;
+  border: 2px solid var(--aimo-bg-elevated) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-time {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  font-family: var(--aimo-font-mono) !important;
+  font-size: 11px !important;
+  font-variant-numeric: tabular-nums !important;
+  border-radius: 6px !important;
+  padding: 3px 7px !important;
+  box-shadow: var(--aimo-shadow-md) !important;
 }
 
 /* 播放器全屏界面 */
@@ -1879,11 +1951,19 @@ html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge .material-icons-outlined 
   color: var(--aimo-primary-text) !important;
 }
 
+/* 歌词视窗：高对比度纸墨极简排版与浅色/深色模式适配 */
+html[data-ui-preset="aimo"] .pl-lyric {
+  font-family: var(--aimo-font-sans);
+}
+
 html[data-ui-preset="aimo"] .pl-lyric-line {
-  color: var(--aimo-text-tertiary);
-  opacity: 0.5;
+  color: var(--aimo-text-secondary) !important;
+  opacity: 0.65;
   font-size: calc(18px * var(--cm-fs, 1));
   line-height: 2.2;
+  transition: color var(--aimo-motion) var(--aimo-ease),
+              opacity var(--aimo-motion) var(--aimo-ease),
+              font-size var(--aimo-motion) var(--aimo-ease);
 }
 
 html[data-ui-preset="aimo"] .pl-lyric-line.cur {
@@ -1891,7 +1971,75 @@ html[data-ui-preset="aimo"] .pl-lyric-line.cur {
   font-family: var(--aimo-font-serif);
   font-weight: 600;
   opacity: 1;
-  font-size: calc(23px * var(--cm-fs, 1));
+  font-size: calc(24px * var(--cm-fs, 1));
+  animation: none !important;
+}
+
+/* 逐字歌词（K歌滚动渐变）浅色/深色自适应：使用语义文字颜色代币，彻底解决浅色模式下纯白渐变不可读问题 */
+html[data-ui-preset="aimo"] .pl-lyric-line.cur .lyr .ch {
+  background-image: linear-gradient(90deg,
+    var(--aimo-text-primary) 0%,
+    var(--aimo-text-primary) calc(var(--p, 0) * 100%),
+    color-mix(in srgb, var(--aimo-text-primary) 35%, transparent) calc(var(--p, 0) * 100%)) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  color: transparent !important;
+}
+
+html[data-ui-preset="aimo"] .pl-lyric-line.cur .lyr .ch.sweep {
+  text-shadow: 0 0 6px color-mix(in srgb, var(--aimo-text-primary) 28%, transparent) !important;
+}
+
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  html[data-ui-preset="aimo"] .pl-lyric-line.cur .lyr .ch {
+    color: var(--aimo-text-secondary) !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+  html[data-ui-preset="aimo"] .pl-lyric-line.cur .lyr .ch.on {
+    color: var(--aimo-text-primary) !important;
+    text-shadow: none !important;
+  }
+}
+
+/* 歌词翻译：高对比度衬底与层级 */
+html[data-ui-preset="aimo"] .pl-lyric-trans {
+  color: var(--aimo-text-secondary) !important;
+  font-family: var(--aimo-font-sans);
+  font-size: calc(14px * var(--cm-fs, 1));
+  font-weight: 400;
+  opacity: 0.85 !important;
+  margin-top: 4px;
+}
+
+html[data-ui-preset="aimo"] .pl-lyric-line.cur .pl-lyric-trans {
+  color: var(--aimo-text-primary) !important;
+  opacity: 0.92 !important;
+  font-weight: 500;
+}
+
+/* 歌词顶部工具栏与控制按钮：适配 Aimo 纸墨底色 */
+html[data-ui-preset="aimo"] .pl-lyric-tools {
+  background: linear-gradient(var(--aimo-bg) 40%, transparent) !important;
+}
+
+html[data-ui-preset="aimo"] .pl-lyric-mode {
+  background: var(--aimo-bg-elevated) !important;
+  color: var(--aimo-text-secondary) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: var(--aimo-shadow-sm) !important;
+  font-family: var(--aimo-font-sans);
+  font-weight: 500;
+}
+
+html[data-ui-preset="aimo"] .pl-lyric-mode:active {
+  background: var(--aimo-bg-sunken) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .pl-lyric-empty {
+  color: var(--aimo-text-tertiary) !important;
+  font-family: var(--aimo-font-serif);
 }
 
 html[data-ui-preset="aimo"] body.player-open #bottomNav,
