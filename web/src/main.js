@@ -28,6 +28,9 @@ import { initAnnouncements } from './announce.js';
 import { initNavDrop } from './navdrop.js';
 import { initTopAccount } from './top-account.js';
 import { autoEnhanceAimoSegmented } from './aimo-segmented.js';
+import { initAimoDialogMotion } from './aimo-dialog.js';
+
+initAimoDialogMotion();
 
 // 手表小屏兜底：watch.css 用 mdui-dialog::part(panel) 压掉面板自带 min-width:280px，
 // 但 ::part() 需要 Chrome 73+；老 WebView（构建目标 chrome58）上该规则失效，

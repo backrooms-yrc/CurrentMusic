@@ -213,19 +213,16 @@ html[data-ui-preset="aimo"] #topbar.scrolled {
 }
 
 /* --------------------------------------------------------------------------
-   4. 模态框与弹窗抽屉规范与出现动画 (Modal Dialog & Action Sheets)
+   4. 模态框与弹窗抽屉规范 (Modal Dialog & Action Sheets)
+   动效由 aimo-dialog.js 通过 Web Animations API 统一精确调度：
+   - 桌面端：微升微缩浮入，关闭时放大淡出 (scale 1 -> 1.08, opacity 1 -> 0)
+   - 移动端：底部抽屉贴底，打开上划展开，关闭顺滑下滑 (translateY 0 -> 100%)
    -------------------------------------------------------------------------- */
 /* 弹窗遮罩层：高斯模糊遮罩 */
 html[data-ui-preset="aimo"] mdui-dialog::part(overlay) {
   background-color: rgba(20, 18, 14, 0.45) !important;
   -webkit-backdrop-filter: blur(5px) !important;
   backdrop-filter: blur(5px) !important;
-  animation: aimoBackdropIn 0.2s ease forwards !important;
-}
-
-@keyframes aimoBackdropIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 /* 桌面/通用模态弹窗面板：大圆角中性表面与微浮层投影 */
@@ -235,18 +232,8 @@ html[data-ui-preset="aimo"] mdui-dialog::part(panel) {
   border: 1px solid var(--aimo-border-soft) !important;
   box-shadow: var(--aimo-shadow-lg) !important;
   color: var(--aimo-text-primary) !important;
-  animation: aimoModalIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both !important;
-}
-
-@keyframes aimoModalIn {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  transform-origin: center center !important;
+  will-change: transform, opacity;
 }
 
 html[data-ui-preset="aimo"] mdui-dialog::part(headline) {
@@ -279,13 +266,9 @@ html[data-ui-preset="aimo"] mdui-dialog::part(body) {
     border-bottom: none !important;
     border-top: 1px solid var(--aimo-border-soft) !important;
     padding: 20px 18px calc(18px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
-    animation: aimoSheetIn 280ms cubic-bezier(0.32, 0.72, 0.22, 1) forwards !important;
+    transform-origin: bottom center !important;
+    will-change: transform, opacity;
   }
-}
-
-@keyframes aimoSheetIn {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
 }
 
 /* 更多抽屉（.cm-more-dialog）面板背景彻底剥离原主题浅紫/暗紫硬编码 */
