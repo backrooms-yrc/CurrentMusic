@@ -20,6 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("CM_DATA_DIR", os.path.join(ROOT, "data"))
 BASE = os.environ.get("CM_NCM_BASE", "http://127.0.0.1:3001")
 COOKIE_PATH = os.environ.get("CM_NCM_COOKIE", os.path.join(DATA_DIR, "ncm-cookie"))
+LYRIC_CACHE_VERSION = "v17"
 
 _cookie_lock = threading.Lock()
 _cookie_cache = (0.0, "")
@@ -956,8 +957,8 @@ def lyric(ncm_id):
     """归一化歌词：官方 YRC → LDDC 逐字源 → 自研逐字估算。
 
     网易云官方 YRC 始终优先；没有官方逐字数据时，才向本机 LDDC 桥接服务
-    询问逐字歌词（QQ/酷狗/网易云等源），最后才使用按行时长估算的 ``w``。
-    LDDC 不可用/没匹配时行为与旧版完全一致，不影响歌词可用性。
+    询问逐字歌词（QQ/酷狗/网易云等源）。有官方 LRC 正文时用它复核候选歌词，
+    候选不可用或复核未通过时使用官方 LRC 和按行时长估算的 ``w``。
     """
     try:
         d = call("/lyric/new", {"id": int(ncm_id)}, timeout=20.0, retries=1)

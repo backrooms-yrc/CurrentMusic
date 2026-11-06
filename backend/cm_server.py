@@ -2524,7 +2524,7 @@ def route(handler, method):
             ("DELETE", "/auth/sessions/{id}", "Bearer", "下线指定设备"),
             ("DELETE", "/auth/sessions/others", "Bearer", "下线其他设备"),
             ("GET", "/announcements", "公开", "站内公告（客户端每次打开拉取并弹窗，置顶在前）"),
-            ("GET", "/ncm/lyric", "公开", "歌词归一化：{lines:[{t,txt,trans,roma,w?,words?,wSynth?}],isYrc,source,wordLevel}；t/w 单位为毫秒，w=[起始,字/词]；官方 YRC → LDDC 逐字 → 按行时长估算（wSynth）"),
+            ("GET", "/ncm/lyric", "公开", "歌词归一化：{lines:[{t,txt,trans,roma,w?,words?,wSynth?}],isYrc,source,wordLevel}；t/w 单位为毫秒，w=[起始,字/词]；官方 YRC 优先，LDDC 候选须与已有官方 LRC 正文相符，否则返回官方 LRC 和估算逐字轴（wSynth）。详见 /api-docs/reference/guide-lyrics-api/"),
             ("GET", "/admin/announcements", "管理员", "公告管理列表（含已移除；带 canEdit 权限标记）"),
             ("GET", "/admin/overview", "管理员", "管理台概览：总量、注册与播放趋势、角色计数、用户来源 sourceCounts {web,x,other}（按最近一次成功登录或注册归类）"),
             ("GET", "/admin/clients", "管理员", "客户端版本：CurrentMusic 与 CurrentMusicX 的版本/大小/发布时间/更新说明/历史/下载数"),
@@ -3934,7 +3934,7 @@ def route(handler, method):
         else:
             # 缓存键必须含「类型 + 偏移 + 条数」：旧键 srch2:<kw> 不含这些，
             # 一旦分页就会互相覆盖（同一关键词翻第 2 页会拿到第 1 页的缓存）。
-            prefix = "srch-lyric:v2" if tsel == ["lyric"] else "srch3"
+            prefix = "srch-lyric:v3" if tsel == ["lyric"] else "srch3"
             ckey = f"srch-ip:v1:{ip_key}:{catalog_revision}:{prefix}:{keywords}:{','.join(tsel)}:{offset}:{limit}"
             build = lambda: cm_ncm.search_types(keywords, tuple(tsel), limit=limit, offset=offset, real_ip=real_ip)   # noqa: E731
 
@@ -4255,22 +4255,10 @@ def route(handler, method):
 
     if path == "/ncm/lyric" and method == "GET":
         ncm_id = int(q.get("id") or 0)
-        key = f"lyric:v16:{ncm_id}"  # v16：双语合并加误判阈值 + 保留制作名单 + 匹配复核；旧缓存失效
+        key = f"lyric:{cm_ncm.LYRIC_CACHE_VERSION}:{ncm_id}"
         cached = cm_db.cache_get(key)
         if cached:
             return jresp(handler, 200, json.loads(cached))
-        # v14 是引入双语合并前的稳定缓存：直接在本机升级格式，
-        # 避免升级当天全量歌词 cache miss、把每个用户都拖进 8~10s 的 LDDC 冷请求。
-        old = cm_db.cache_get(f"lyric:v14:{ncm_id}")
-        if old:
-            try:
-                out = json.loads(old)
-                out["lines"] = cm_lddc.merge_bilingual(out.get("lines") or [])
-                out["lines"] = cm_lddc.finalize_lines(out.get("lines") or [])
-                cm_db.cache_set(key, json.dumps(out, ensure_ascii=False), cm_lddc.cache_ttl(out))
-                return jresp(handler, 200, out)
-            except (ValueError, TypeError):
-                pass
         out = cm_ncm.lyric(ncm_id)
         cm_db.cache_set(key, json.dumps(out, ensure_ascii=False), cm_lddc.cache_ttl(out))
         return jresp(handler, 200, out)
@@ -5149,7 +5137,7 @@ def route(handler, method):
     m = re.fullmatch(r"/cast/(\d+)\.lrc", path)
     if m and method == "GET":
         ncm_id = int(m.group(1))
-        key = f"castlrc:{ncm_id}"
+        key = f"castlrc:{cm_ncm.LYRIC_CACHE_VERSION}:{ncm_id}"
         cached = cm_db.cache_get(key)
         if cached is None:
             try:

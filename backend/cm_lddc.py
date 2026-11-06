@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
+from difflib import SequenceMatcher
 
 log = logging.getLogger("cm.lddc")
 
@@ -509,7 +510,7 @@ def finalize_lines(lines):
 
 
 def merge_with_base(base, external):
-    """用 LDDC 逐字歌词替换主轨，同时从网易云结果补齐缺失的翻译/罗马音。
+    """复核 LDDC 正文后替换主轨，从网易云结果补齐缺失的翻译/罗马音。
 
     只在 LDDC 完全没给逐字轴的某一行才回填网易云的估算轴，并保留 ``wSynth``
     标记；LDDC 的实际时间轴永不覆盖。
@@ -517,6 +518,23 @@ def merge_with_base(base, external):
     if not external or not external.get("lines"):
         return None
     base_lines = (base or {}).get("lines") or []
+
+    def lyric_keys(lines):
+        return [key for line in merge_bilingual(lines)
+                if not _CREDIT_HINT.match(line["txt"])
+                and (key := _simplify(line["txt"]))]
+
+    # 同歌手的不同语言版本可能共享曲名、时长和制作名单。用两轨正文的有序
+    # 行匹配复核，避免仅凭一段共同的副歌或制作名单就替换整首网易云歌词。
+    official = lyric_keys(base_lines)
+    if official:
+        candidate = lyric_keys(external["lines"])
+        alignment = SequenceMatcher(None, official, candidate, autojunk=False)
+        matched_lines = sum(block.size for block in alignment.get_matching_blocks())
+        # 分别要求超过半数，避免只包含其中一段的候选通过。
+        if matched_lines * 2 <= max(len(official), len(candidate)):
+            return None
+
     by_text = defaultdict(list)
     for line in base_lines:
         key = _simplify(line.get("txt"))

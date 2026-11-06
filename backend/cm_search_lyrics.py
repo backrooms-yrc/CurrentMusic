@@ -60,18 +60,16 @@ def _parse_document(raw):
 
 
 def _cached_documents(song_id):
-    for version in ('v16', 'v14'):
-        try:
-            raw = cm_db.cache_get(f'lyric:{version}:{song_id}')
-            data = json.loads(raw) if raw else {}
-            if not isinstance(data, dict) or not isinstance(data.get('lines', []), list):
-                continue
+    try:
+        raw = cm_db.cache_get(f'lyric:{cm_ncm.LYRIC_CACHE_VERSION}:{song_id}')
+        data = json.loads(raw) if raw else {}
+        if isinstance(data, dict) and isinstance(data.get('lines'), list):
             lines = [(line.get('t'), clean(line.get('txt'))[:1000])
-                     for line in data.get('lines', []) if isinstance(line, dict) and clean(line.get('txt'))]
+                     for line in data['lines'] if isinstance(line, dict) and clean(line.get('txt'))]
             if lines:
                 return [dict(source='currentmusic:cache', lines=lines[:2000])]
-        except (ValueError, TypeError):
-            continue
+    except (ValueError, TypeError):
+        pass
     return []
 
 

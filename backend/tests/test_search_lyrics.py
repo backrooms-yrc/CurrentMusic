@@ -87,10 +87,17 @@ class LyricSearchTests(unittest.TestCase):
         finally:release.set();timer.cancel()
     def test_ready_normalized_cache_avoids_network(self):
         lines=[{'t':1000,'txt':'前一句'},{'t':2000,'txt':'测试命中行'},{'t':3000,'txt':'后一句'}]
-        cm_db.cache_set('lyric:v16:1',json.dumps({'lines':lines}),600)
+        cm_db.cache_set(f'lyric:{cm_ncm.LYRIC_CACHE_VERSION}:1',json.dumps({'lines':lines}),600)
         with mock.patch.object(cm_ncm,'call') as call:
             hit=self.enrich()[0];self.assertTrue(hit['lyricContextComplete']);call.assert_not_called()
             self.assertEqual(hit['lyricContextSource'],'currentmusic:cache')
+    def test_old_normalized_lyrics_do_not_supply_context(self):
+        for version in ('v14', 'v16'):
+            stale = {'lines': [{'t': 1000, 'txt': '错版上一句'}, {'t': 2000, 'txt': '测试命中行'}]}
+            cm_db.cache_set(f'lyric:{version}:1', json.dumps(stale), 600)
+        with mock.patch.object(cm_ncm, 'call', return_value=document()):
+            hit = self.enrich()[0]
+        self.assertEqual(hit['lyric'], '前一句 · 测试命中行 · 后一句')
     def test_lrc_does_not_hide_complete_yrc(self):
         data=document('[00:00]测试命中行');data['yrc']={'lyric':TEXT}
         with mock.patch.object(cm_ncm,'call',return_value=data) as call:
@@ -187,3 +194,21 @@ class LyricSearchRouteTests(unittest.TestCase):
             search.return_value={'songs':[{'ncm_id':1,'lyricContextComplete':True}],'totals':{'song':2},'hasMore':{'song':True}}
             self.call('GET',url);self.call('GET',url);self.assertEqual(search.call_count,3)
             self.call('GET','/ncm/search?keywords=test&type=song&offset=30&limit=10');self.assertEqual(search.call_count,4)
+
+    def test_lyric_route_replaces_stale_external_version_with_official_lrc(self):
+        wrong = {'source': 'lddc:kg', 'wordLevel': True, 'lines': [
+            {'t': 1000, 'txt': '錯版第一句'}, {'t': 2000, 'txt': '錯版第二句'},
+        ]}
+        for version in ('v14', 'v16'):
+            cm_db.cache_set(f'lyric:{version}:1', json.dumps(wrong), 600)
+        with (mock.patch.object(cm_ncm, 'call', return_value=document()) as upstream,
+              mock.patch.object(cm_ncm, 'song_detail', return_value=[{'ncm_id': 1}]),
+              mock.patch.object(cm_ncm.cm_lddc, 'fetch', return_value=wrong)):
+            status, result = self.call('GET', '/ncm/lyric?id=1')
+            self.assertEqual(self.call('GET', '/ncm/lyric?id=1'), (status, result))
+            upstream.assert_called_once()
+        self.assertEqual(status, 200)
+        self.assertEqual(result['source'], 'ncm:lrc')
+        self.assertFalse(result['wordLevel'])
+        self.assertEqual([line['txt'] for line in result['lines']], ['前一句', '测试命中行', '后一句', '最后一句'])
+        self.assertTrue(all(line['wSynth'] for line in result['lines']))
