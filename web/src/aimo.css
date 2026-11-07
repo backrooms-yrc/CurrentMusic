@@ -1010,8 +1010,8 @@ html[data-ui-preset="aimo"] .cm-quick {
   justify-content: center !important;
   text-align: left !important;
   gap: 4px !important;
-  padding: 14px 16px !important;
-  min-height: 82px !important;
+  padding: var(--cm-quick-padding, 14px 16px) !important;
+  min-height: var(--cm-quick-min-height, 82px) !important;
   border-radius: var(--aimo-radius-surface) !important;
   background: var(--aimo-bg-elevated) !important;
   border: 1px solid var(--aimo-border-soft) !important;
