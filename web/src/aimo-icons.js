@@ -1,10 +1,55 @@
+/*! @license SVG paths adapted from Lucide and Feather.
+ISC License
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+---
+
+The following Lucide icons are derived from the Feather project:
+
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+
+The MIT License (MIT) (for the icons listed above)
+
+Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 // ==========================================================================
 // Aimo 设计主题：Lucide 风格细线 SVG 图标注入器
 // 来源：参考项目 (aimo-account / aimo-chat 规范，stroke-width 1.75，round 端点)
 // 约束：仅在 html[data-ui-preset="aimo"] 下激活生效，非 Aimo 主题自动退回原生
 // ==========================================================================
 
-const isAimo = () => document.documentElement.getAttribute('data-ui-preset') === 'aimo';
+export const isAimo = () => document.documentElement.getAttribute('data-ui-preset') === 'aimo';
 
 export const AIMO_ICONS = {
   search: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>`,
@@ -17,14 +62,13 @@ export const AIMO_ICONS = {
   pause: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><rect x="6" y="4" width="4" height="16" fill="currentColor"></rect><rect x="14" y="4" width="4" height="16" fill="currentColor"></rect></svg>`,
   prev: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>`,
   next: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>`,
+  order: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"></path></svg>`,
   repeat: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg>`,
   repeatOne: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path><path d="M11 10h1v4"></path></svg>`,
   shuffle: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"></path><path d="m18 2 4 4-4 4"></path><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"></path><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"></path><path d="m18 14 4 4-4 4"></path></svg>`,
   heart: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>`,
   heartFilled: `<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path></svg>`,
   queue: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M21 15V6"></path><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"></path><path d="M12 12H3"></path><path d="M16 6H3"></path><path d="M12 18H3"></path></svg>`,
-  volume: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`,
-  volumeMute: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="22" y1="9" x2="16" y2="15"></line><line x1="16" y1="9" x2="22" y2="15"></line></svg>`,
   close: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
   chevronDown: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
 
@@ -58,7 +102,7 @@ export const AIMO_ICONS = {
 };
 
 export function injectSlot(el, iconKey) {
-  if (!el) return;
+  if (!el || !isAimo()) return;
   const svg = AIMO_ICONS[iconKey];
   if (!svg) return;
 
@@ -67,20 +111,13 @@ export function injectSlot(el, iconKey) {
     slot = document.createElement('span');
     slot.className = 'aimo-icon-slot';
     slot.setAttribute('aria-hidden', 'true');
-    // 清除原生元素内残留的字体文本节点（如 "military_tech", "favorite", "search" 等），根除重影
-    for (let i = el.childNodes.length - 1; i >= 0; i--) {
-      const node = el.childNodes[i];
-      if (node.nodeType === 3) {
-        node.textContent = '';
-      }
-    }
     el.prepend(slot);
   }
   if (slot.__iconKey !== iconKey) {
     slot.innerHTML = svg;
     slot.__iconKey = iconKey;
   }
-  el.setAttribute('data-aimo-icon-ready', '1');
+  if (!el.hasAttribute('data-aimo-icon-ready')) el.setAttribute('data-aimo-icon-ready', '1');
 }
 
 export function syncAimoIcons() {
@@ -119,20 +156,7 @@ export function syncAimoIcons() {
     });
   }
 
-  // 3. 播放传输控制核心大键 (全屏与迷你条)
-  const plPlay = document.getElementById('plPlay');
-  if (plPlay) {
-    const text = plPlay.textContent || '';
-    const isPlaying = text.includes('pause') || plPlay.classList.contains('playing') || plPlay.querySelector('svg')?.getAttribute('viewBox')?.includes('18');
-    injectSlot(plPlay, isPlaying ? 'pause' : 'play');
-  }
-
-  const plPlaySm = document.getElementById('plPlaySm');
-  if (plPlaySm) {
-    const text = plPlaySm.textContent || '';
-    const isPlaying = text.includes('pause') || plPlaySm.classList.contains('playing');
-    injectSlot(plPlaySm, isPlaying ? 'pause' : 'play');
-  }
+  // 3. 全屏播放器的固定图标，播放状态由播放器直接渲染。
 
   const plPrev = document.getElementById('plPrev');
   if (plPrev) injectSlot(plPrev, 'prev');
@@ -158,32 +182,7 @@ export function syncAimoIcons() {
   const plMore = document.getElementById('plMore');
   if (plMore) injectSlot(plMore, 'moreHorizontal');
 
-  const plAskAi = document.getElementById('plAskAi');
-  if (plAskAi) {
-    const ic = plAskAi.querySelector('.pl-ai-ava') || plAskAi;
-    injectSlot(ic, 'bot');
-  }
-
-  const plMode = document.getElementById('plMode');
-  if (plMode) {
-    const modeText = plMode.textContent || '';
-    let modeKey = 'repeat';
-    if (modeText.includes('one')) modeKey = 'repeatOne';
-    else if (modeText.includes('shuffle')) modeKey = 'shuffle';
-    injectSlot(plMode, modeKey);
-  }
-
-  const plLike = document.getElementById('plLike');
-  if (plLike) {
-    const isLiked = plLike.classList.contains('on') || plLike.classList.contains('liked') || plLike.textContent.includes('favorite');
-    injectSlot(plLike, isLiked ? 'heartFilled' : 'heart');
-  }
-
-  const plVolIcon = document.getElementById('plVolIcon');
-  if (plVolIcon) {
-    const isMute = plVolIcon.textContent?.trim()?.includes('off') || plVolIcon.textContent?.trim()?.includes('mute');
-    injectSlot(plVolIcon, isMute ? 'volumeMute' : 'volume');
-  }
+  injectSlot(document.querySelector('#plAskAi .pl-ai-ava.material-icons-outlined'), 'bot');
 
   // 4. “我的”页面 (User Profile) 全量图标替换
   const quickCards = [
@@ -271,29 +270,32 @@ export function syncAimoIcons() {
 
 let syncTimer = 0;
 function scheduleSync() {
-  if (!isAimo()) return;
-  cancelAnimationFrame(syncTimer);
+  if (!isAimo() || syncTimer) return;
   syncTimer = requestAnimationFrame(() => {
+    syncTimer = 0;
     syncAimoIcons();
   });
 }
 
 export function initAimoIcons() {
   syncAimoIcons();
-  document.addEventListener('cm-uipreset', syncAimoIcons);
+  document.addEventListener('cm-uipreset', scheduleSync);
   window.addEventListener('hashchange', scheduleSync);
-  window.addEventListener('cm-play-state', scheduleSync);
 
   // 监听全屏播放器与主路由挂载点，异步内容装载完成即时无缝换装
   const ov = document.getElementById('playerOverlay');
   if (ov && typeof MutationObserver !== 'undefined') {
     const mo = new MutationObserver(() => scheduleSync());
-    mo.observe(ov, { attributes: true, attributeFilter: ['hidden', 'class'], childList: true, subtree: true });
+    mo.observe(ov, { childList: true });
   }
 
   const outEl = document.getElementById('out');
   if (outEl && typeof MutationObserver !== 'undefined') {
-    const moOut = new MutationObserver(() => scheduleSync());
+    const moOut = new MutationObserver(records => {
+      const hasNewContent = records.some(record => Array.from(record.addedNodes).some(node =>
+        node.nodeType === 1 && !node.closest('.aimo-icon-slot')));
+      if (hasNewContent) scheduleSync();
+    });
     moOut.observe(outEl, { childList: true, subtree: true });
   }
 

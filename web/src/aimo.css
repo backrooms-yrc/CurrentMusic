@@ -662,7 +662,7 @@ html[data-ui-preset="aimo"] .sk-ava {
     display: block !important;
   }
 
-  html[data-ui-preset="aimo"] #bottomNav .navItem span:not(.nav-ic) {
+  html[data-ui-preset="aimo"] #bottomNav .navItem > span:not(.nav-ic) {
     color: inherit !important;
     font-size: 11px !important;
     line-height: 1.2 !important;
@@ -2880,6 +2880,10 @@ html[data-ui-preset="aimo"] #topAccount {
   }
 }
 
+html[data-ui-preset="aimo"] #topAccount[hidden] {
+  display: none !important;
+}
+
 html[data-ui-preset="aimo"] #topAccount:hover {
   transform: scale(1.06) !important;
   border-color: var(--aimo-border) !important;
@@ -3254,13 +3258,13 @@ html[data-ui-preset="aimo"] .cm-decor-banner span {
 }
 
 /* 全局内容常规超链接统一：杜绝彩色蓝字 */
-html[data-ui-preset="aimo"] a:not([class]):not(#topbar a):not(#bottomNav a) {
+html[data-ui-preset="aimo"] #out a:not([class]) {
   color: var(--aimo-text-primary) !important;
   text-decoration: underline !important;
   text-underline-offset: 3px !important;
 }
 
-html[data-ui-preset="aimo"] a:not([class]):hover {
+html[data-ui-preset="aimo"] #out a:not([class]):hover {
   opacity: 0.8 !important;
 }
 

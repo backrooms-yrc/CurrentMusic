@@ -39,6 +39,7 @@ export function enhanceAimoSegmented(container) {
   let startCenter = 0;
   let suppressClickUntil = 0;
   let moveRaf = null;
+  let dragX = 0;
 
   const getActiveButton = () => {
     const list = getButtons();
@@ -153,11 +154,12 @@ export function enhanceAimoSegmented(container) {
     }
     if (moved) {
       if (e.cancelable) e.preventDefault();
+      dragX = e.clientX;
       if (!moveRaf) {
         moveRaf = requestAnimationFrame(() => {
           moveRaf = null;
-          if (!dragging) return;
-          const currentCenter = startCenter + dx / layoutScale();
+          if (!dragging || !isAimoActive()) return;
+          const currentCenter = startCenter + (dragX - startX) / layoutScale();
           const geo = getInterpolatedGeometry(currentCenter);
           if (geo) applyGeometry(geo, false);
         });
@@ -166,15 +168,16 @@ export function enhanceAimoSegmented(container) {
   };
 
   const onPointerFinish = (e) => {
+    if (!dragging || e.pointerId !== pointerId) return;
     if (moveRaf) {
       cancelAnimationFrame(moveRaf);
       moveRaf = null;
     }
-    if (!dragging || e.pointerId !== pointerId) return;
     dragging = false;
     pointerId = null;
     container.classList.remove('dragging');
 
+    if (!isAimoActive()) return;
     if (e.type !== 'pointerup') {
       sync(true);
       return;
@@ -218,11 +221,11 @@ export function enhanceAimoSegmented(container) {
     ro.observe(container);
   }
 
-  // 仅监听容器直系状态类变化，避免任何递归开销
+  // 程序也会切换按钮的激活类，监听分段控件内的变化。
   const mo = new MutationObserver(() => {
-    if (!dragging) requestAnimationFrame(() => sync(true));
+    if (!dragging && isAimoActive()) requestAnimationFrame(() => sync(true));
   });
-  mo.observe(container, { childList: true, attributes: true, attributeFilter: ['class'] });
+  mo.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 }
 
 export function autoEnhanceAimoSegmented() {
@@ -242,10 +245,16 @@ export function autoEnhanceAimoSegmented() {
   document.addEventListener('cm-uipreset', scan);
   window.addEventListener('hashchange', requestScan);
 
-  // 仅在主视图容器 #out 发生直属子树替换时按需增强，彻底解绑 document.body 全局高频监听
+  // 主视图内的异步渲染也可能替换分段控件。
   const outEl = document.getElementById('out');
   if (outEl && typeof MutationObserver !== 'undefined') {
-    const observer = new MutationObserver(requestScan);
-    observer.observe(outEl, { childList: true });
+    const selector = '.cm-sqtabs, .cm-atabs';
+    const observer = new MutationObserver(records => {
+      if (!isAimoActive()) return;
+      const hasNewTabs = records.some(record => Array.from(record.addedNodes).some(node =>
+        node.nodeType === 1 && (node.matches(selector) || node.querySelector(selector))));
+      if (hasNewTabs) requestScan();
+    });
+    observer.observe(outEl, { childList: true, subtree: true });
   }
 }
