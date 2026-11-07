@@ -10,6 +10,7 @@ import './auth.css';
 import './settings.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
 import './top-account.css';
+import './aimo.css';
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
 import { mdui } from './md.js';
 import { toast, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
@@ -27,6 +28,10 @@ import { initGlass } from './glass.js';
 import { initAnnouncements } from './announce.js';
 import { initNavDrop } from './navdrop.js';
 import { initTopAccount } from './top-account.js';
+import { autoEnhanceAimoSegmented } from './aimo-segmented.js';
+import { initAimoDialogMotion } from './aimo-dialog.js';
+
+initAimoDialogMotion();
 
 // 手表小屏兜底：watch.css 用 mdui-dialog::part(panel) 压掉面板自带 min-width:280px，
 // 但 ::part() 需要 Chrome 73+；老 WebView（构建目标 chrome58）上该规则失效，
@@ -195,6 +200,14 @@ async function router({ refresh = false } = {}) {
   if (!matched) { location.hash = '#/home'; return; }
   if (params) params.query = query;   // 页面按需读取（大多忽略）
 
+  if (!refresh && matched.page === settingsPage && document.documentElement.getAttribute('data-ui-preset') === 'aimo') {
+    const mounted = out().firstElementChild;
+    const hub = mounted && mounted.style.pointerEvents !== 'none' && mounted.querySelector('.cm-settings-hub');
+    if (hub && !hub.dispatchEvent(
+      new CustomEvent('cm-aimo-settings-navigate', { cancelable: true, detail: hash })
+    )) return;
+  }
+
   document.body.classList.toggle('cm-onboarding-active', needsWelcome() && /^#\/(welcome|two-factor|security-question)$/.test(routePath));
   const pageTitle = document.getElementById('pageTitle');
   const isHome = matched.page === home;
@@ -269,6 +282,7 @@ function boot() {
   applyCustomize();          // 个性化：自定义背景图 + 玻璃效果值（写到 <html> 内联）
   initGlass();               // 液体玻璃折射（frost/cmx 皮肤 + 支持的内核）
   initNavDrop();             // 底栏液态玻璃「水滴」指示器（frost/cmx 皮肤）
+  autoEnhanceAimoSegmented();// Aimo 风格分段滑动/拖拽选择器增强
   // 一次性强制重置（逻辑在 index.html 的行内脚本里，必须早于首帧）：
   // 这次是全员切换到 CurrentMusicX 风格，人人都提示一句怎么改回。
   if (window.__cmRecReset) toast('界面风格已切换为「CurrentMusicX 风格」，可在 设置 → 外观 改回');

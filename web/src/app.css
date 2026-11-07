@@ -2558,6 +2558,7 @@ html[data-ui-preset="glass"] .cm-qrbox {
     linear-gradient(135deg, rgba(255, 255, 255, .85), rgba(210, 225, 255, .8));
 }
 .cm-swatch.md3 { background: linear-gradient(135deg, #6750a4, #d0bcff); }
+.cm-swatch.aimo { background: linear-gradient(135deg, #191918 0 50%, #fafaf9 50% 100%); border-color: rgba(25, 25, 24, .45); }
 .cm-swatch.cmx { background: linear-gradient(135deg, #f5f6f8 0 45%, #ffffff 45% 72%, #0a84ff 72% 100%); border-color: rgba(10,132,255,.55); }
 .cm-swatch.soaringbird { background: linear-gradient(135deg, #fa233b 0 42%, #ffffff 42% 72%, #1d1d1f 72% 100%); border-color: rgba(250,35,59,.55); }
 

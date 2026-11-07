@@ -3,6 +3,7 @@
 import { api, auth, ncmSongs } from './api.js';
 import { esc, toast, skelGrid } from './ui.js';
 import { player } from './player.js';
+import { getAimoChartCover } from './aimo-charts.js';
 
 const fmtPlay = n => {
   const v = Number(n) || 0;
@@ -18,15 +19,19 @@ const cardShell = (id, title) => `
   </section>`;
 
 /** 歌单卡片网格（复用现有 .cm-plgrid/.cm-plcard 样式，不新增默认皮肤样式）。 */
-function playlistsHTML(list) {
-  return `<div class="cm-plgrid">${list.map(pl => `
+function playlistsHTML(list, charts = false) {
+  return `<div class="cm-plgrid">${list.map(pl => {
+    const aimoCover = charts && getAimoChartCover(pl.id, pl.name);
+    const coverSrc = aimoCover || (pl.pic ? `${pl.pic}?param=300y300` : '');
+    return `
     <div class="cm-plcard" data-id="${pl.id}">
       <div class="cm-plcover">${
-        pl.pic ? `<img src="${esc(pl.pic)}?param=300y300" loading="lazy" onerror="this.remove()">` : ''
+        coverSrc ? `<img src="${esc(coverSrc)}" loading="lazy" onerror="this.remove()">` : ''
       }<span class="material-icons-outlined">queue_music</span></div>
       <div class="cm-plname">${esc(pl.name)}</div>
       <div class="cm-plsub">${pl.sub || ''}</div>
-    </div>`).join('')}</div>`;
+    </div>`;
+  }).join('')}</div>`;
 }
 
 export async function mountDiscover(el) {
@@ -179,7 +184,7 @@ export async function mountDiscover(el) {
       s.innerHTML = `<div class="cm-sec-head"><h2>排行榜</h2></div>
         <div class="cm-chips">${tabs.map((t, i) =>
           `<span class="cm-hot${i === idx ? ' on' : ''}" data-i="${i}">${esc(t.label)}</span>`).join('')}</div>`
-        + playlistsHTML(tabs[idx].items.slice(0, 12));
+        + playlistsHTML(tabs[idx].items.slice(0, 12), true);
       s.querySelectorAll('[data-i]').forEach(c => { c.onclick = () => draw(+c.dataset.i); });
       s.querySelectorAll('.cm-plcard').forEach(c => { c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.id}`; }; });
     };

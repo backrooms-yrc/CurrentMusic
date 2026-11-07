@@ -14,6 +14,7 @@ export const DEFAULT_PRESET = 'cmx';
 
 export const UI_PRESETS = [
   { key: 'cmx', name: 'CurrentMusicX 风格', desc: '默认 · 浅灰底 · 白色大圆角卡片 · 折射液态玻璃底栏', swatch: 'cmx' },
+  { key: 'aimo', name: 'Aimo 设计', desc: '中性纸墨 · 严谨档案风格 · 衬线大字与胶囊质感', swatch: 'aimo' },
   { key: 'soaringbird', name: '翱翔鸟Music', desc: 'Apple Music 风格 · 流体封面背景 · 逐字羽化歌词', swatch: 'soaringbird' },
   { key: 'frost', name: '简约玻璃', desc: '玻璃浮层 · 卡片磨砂白 + 发丝线', swatch: 'frost' },
   { key: 'md3', name: 'Material 3', desc: '原版样式（Material 3 · 无玻璃）', swatch: 'md3' },
@@ -39,7 +40,7 @@ export function applyUiPreset(key) {
   // md3 是**基础样式**（不带 data-ui-preset 属性，皮肤规则一行都不匹配）；
   // frost/glass 靠属性作用域生效。默认值改为 frost 后不能再用
   // 「key !== DEFAULT_PRESET 就打属性」的写法——那会把 md3 也打成属性。
-  if (key === 'frost' || key === 'glass' || key === 'cmx' || key === 'soaringbird') el.setAttribute('data-ui-preset', key);
+  if (key === 'frost' || key === 'glass' || key === 'cmx' || key === 'soaringbird' || key === 'aimo') el.setAttribute('data-ui-preset', key);
   else el.removeAttribute('data-ui-preset');
 }
 

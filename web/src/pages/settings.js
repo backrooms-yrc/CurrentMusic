@@ -278,7 +278,7 @@ export async function render(el) {
         <div class="cm-more-chips">${picks.map(p =>
           `<mdui-chip ${p.key === cur ? 'selected' : ''} data-k="${p.key}"><i class="cm-swatch ${p.swatch}"></i>${p.name}</mdui-chip>`).join('')}</div>
         <div class="cm-more-s" style="margin-top:10px">${esc((UI_PRESETS.find(p => p.key === cur) || {}).desc || '')}</div>
-        <div class="cm-more-s" style="margin-top:6px">「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影。Material 3 为无玻璃的原版样式。CurrentMusicX 风格采用浅灰底、白色大圆角卡片、蓝色强调和悬浮胶囊导航（默认风格不受影响）。</div>
+        <div class="cm-more-s" style="margin-top:6px">「Aimo 设计」采用中性纸墨底色、沉稳黑白主操作、衬线大字标题与严谨档案微排版。「简约玻璃」把玻璃只用在顶栏/底栏/弹窗等浮层，内容卡片走磨砂白 + 发丝线、不用投影。Material 3 为无玻璃的原版样式。CurrentMusicX 风格采用浅灰底、白色大圆角卡片、蓝色强调和悬浮胶囊导航（默认风格不受影响）。</div>
       </div>`,
       actions: [{ text: '关闭' }],
     });

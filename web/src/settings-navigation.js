@@ -69,17 +69,19 @@ export function mountSettingsNavigation(el) {
   });
   const categories = CATEGORIES.map(category => ({ ...category, groups: category.groups.map(group => ({ ...group, items: group.items.filter(id => rows.has(id)) })).filter(group => group.items.length) }));
   const parts = location.hash.split('?')[0].split('/').slice(2);
-  const category = categories.find(item => item.id === parts[0]);
-  const group = category && category.groups.find(item => item.id === parts[1]);
+  let category = categories.find(item => item.id === parts[0]);
+  let group = category && category.groups.find(item => item.id === parts[1]);
+  const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
   const query = new URLSearchParams(location.hash.split('?')[1] || '');
   let search = query.get('q') || '';
   const href = (cat, section) => '#/settings' + (cat ? '/' + cat.id : '') + (section ? '/' + section.id : '');
   const icon = name => `<span class="material-icons-outlined" aria-hidden="true">${name}</span>`;
+  const crumbsHTML = () => `<a href="#/settings">设置</a>${category ? `${icon('chevron_right')}<a href="${href(category)}" ${!group ? 'aria-current="page"' : ''}>${category.title}</a>` : ''}${group ? `${icon('chevron_right')}<span aria-current="page">${group.title}</span>` : ''}`;
   el.innerHTML = `<section class="cm-settings-hub">
     <header class="cm-settings-header"><div><span class="cm-settings-eyebrow">MAKE IT YOURS</span><h1>设置</h1><p>把音乐空间，调成你喜欢的样子。</p></div><div class="cm-settings-emblem" aria-hidden="true">${icon('tune')}</div></header>
     <div class="cm-settings-search"><label for="settingsSearch">${icon('search')}<span class="cm-sr-only">搜索全部设置</span></label><input id="settingsSearch" type="search" autocomplete="off" placeholder="搜索设置，例如：音质、主题、两步验证" value="${esc(search)}"><button type="button" id="clearSettingsSearch" aria-label="清除搜索">${icon('close')}</button></div>
     <div class="cm-settings-layout"><nav class="cm-settings-sidebar" aria-label="设置分类"><a href="#/settings" ${!category ? 'aria-current="page"' : ''}>${icon('dashboard')}<span>全部设置</span></a>${categories.map(cat => `<a href="${href(cat)}" ${cat === category ? 'aria-current="page"' : ''}>${icon(cat.icon)}<span>${cat.title}</span></a>`).join('')}</nav>
-    <div class="cm-settings-main"><nav class="cm-settings-crumbs" aria-label="当前位置"><a href="#/settings">设置</a>${category ? `${icon('chevron_right')}<a href="${href(category)}" ${!group ? 'aria-current="page"' : ''}>${category.title}</a>` : ''}${group ? `${icon('chevron_right')}<span aria-current="page">${group.title}</span>` : ''}</nav>
+    <div class="cm-settings-main"><nav class="cm-settings-crumbs" aria-label="当前位置">${crumbsHTML()}</nav>
     <div id="settingsContent"></div></div></div><div id="settingsStore" hidden></div></section>`;
   const store = el.querySelector('#settingsStore');
   rows.forEach(row => store.appendChild(row));
@@ -110,6 +112,10 @@ export function mountSettingsNavigation(el) {
       summary.textContent = `找到 ${count} 项相关设置`;
       if (!count) content.insertAdjacentHTML('beforeend', `<div class="cm-settings-empty">${icon('search_off')}<h2>没有找到相关设置</h2><p>试试更简短的词，例如“主题”“下载”或“2FA”。</p><button type="button" id="resetSettingsSearch">清除搜索</button></div>`);
       const reset = content.querySelector('#resetSettingsSearch'); if (reset) reset.onclick = () => { input.value = ''; updateSearch(); input.focus(); };
+    } else if (isAimo && category) {
+      content.innerHTML = `<div class="cm-settings-category-heading"><h2>${category.title}</h2><p>${category.description}</p></div>`;
+      const sections = group ? [group] : category.groups;
+      sections.forEach(section => addRows(category, section, section.items, false));
     } else if (category && group) {
       addRows(category, group, group.items, false);
     } else {
@@ -132,6 +138,31 @@ export function mountSettingsNavigation(el) {
     history.replaceState(history.state, '', base + (search ? '?q=' + encodeURIComponent(search) : ''));
     paint();
   }
+  if (isAimo) {
+    const crumbs = el.querySelector('.cm-settings-crumbs');
+    const sideLinks = el.querySelectorAll('.cm-settings-sidebar a');
+    let transition;
+    el.querySelector('.cm-settings-hub').addEventListener('cm-aimo-settings-navigate', event => {
+      event.preventDefault();
+      const [path, query] = event.detail.split('?');
+      const [, , categoryId, groupId] = path.split('/');
+      category = categories.find(item => item.id === categoryId);
+      group = category && category.groups.find(item => item.id === groupId);
+      input.value = search = new URLSearchParams(query || '').get('q') || '';
+      sideLinks.forEach(link => {
+        if (link.getAttribute('href') === href(category)) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+      });
+      crumbs.innerHTML = crumbsHTML();
+      paint();
+      if (transition) transition.cancel();
+      if (content.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        transition = content.animate([{ opacity: 0, transform: 'translateY(6px)' },
+          { opacity: 1, transform: 'none' }], { duration: 180, easing: 'cubic-bezier(.22,1,.36,1)' });
+      }
+    });
+  }
+
   input.addEventListener('input', updateSearch);
   input.addEventListener('keydown', event => { if (event.key === 'Escape') { input.value = ''; updateSearch(); } });
   clear.onclick = () => { input.value = ''; updateSearch(); input.focus(); };
