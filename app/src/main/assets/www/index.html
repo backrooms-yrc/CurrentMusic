@@ -60,7 +60,7 @@
       if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
-  <link rel="stylesheet" href="app.css?v=deff5d75d6">
+  <link rel="stylesheet" href="app.css?v=b7a11431de">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
     #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; inset: 0; z-index: 10000; display: flex;
@@ -68,6 +68,7 @@
       background: rgb(var(--mdui-color-surface, 247, 242, 250)); }
     #boot .cm-loading-indicator { width: 64px; height: 64px; }
     @media (prefers-color-scheme: dark) { #boot { background: #141218; background: rgb(var(--mdui-color-surface, 20, 18, 24)); } }
+    html[data-ui-preset="aimo"] #boot { display: none !important; }
   </style>
 </head>
 <body>
@@ -145,6 +146,7 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
     // Record the first displayed animation cycle before the main bundle arrives.
     (function () {
       var boot = document.getElementById('boot');
+      if (document.documentElement.getAttribute('data-ui-preset') === 'aimo') { if (boot) boot.remove(); return; }
       boot.setAttribute('data-loading-start', String(performance.now()));
       boot.addEventListener('animationstart', function (event) {
         if (event.animationName === 'cmIndicatorMorph') boot.setAttribute('data-loading-start', String(performance.now()));
@@ -326,6 +328,6 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
       }, 9000);
     })();
   </script>
-  <script src="app.js?v=deff5d75d6"></script>
+  <script src="app.js?v=b7a11431de"></script>
 </body>
 </html>

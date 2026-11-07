@@ -58,18 +58,24 @@ export function initAimoDialogMotion() {
         if (!isCurrent()) return;
       }
       if (canAnimate && hasUpdated && !reduced) {
+        panel.style.willChange = 'transform, opacity';
+        overlay.style.willChange = 'opacity';
+
         const panelFrames = mobile
           ? [{ transform: 'translateY(100%)' }, { transform: 'translateY(0)' }]
           : opening
-            ? [{ transform: 'translateY(12px) scale(.96)', opacity: 0 }, { transform: 'none', opacity: 1 }]
-            : [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.08)', opacity: 0 }];
+            ? [{ transform: 'translateY(10px) scale(.97)', opacity: 0 }, { transform: 'none', opacity: 1 }]
+            : [{ transform: 'none', opacity: 1 }, { transform: 'scale(1.05)', opacity: 0 }];
         if (mobile && !opening) panelFrames.reverse();
         const fade = opening ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }];
-        const duration = mobile ? (opening ? 280 : 240) : (opening ? 220 : 180);
+        const duration = mobile ? (opening ? 260 : 220) : (opening ? 200 : 160);
         await Promise.all([
           animateTo(panel, panelFrames, { duration, easing: mobile ? 'cubic-bezier(.32,.72,.22,1)' : 'cubic-bezier(.22,1,.36,1)' }),
-          animateTo(overlay, fade, { duration: duration - 20, easing: 'linear' }),
+          animateTo(overlay, fade, { duration, easing: 'linear' }),
         ]);
+
+        panel.style.willChange = '';
+        overlay.style.willChange = '';
         if (!isCurrent()) return;
       }
 

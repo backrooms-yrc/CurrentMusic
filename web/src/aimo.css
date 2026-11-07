@@ -36,10 +36,10 @@ html[data-ui-preset="aimo"] {
   --aimo-danger-soft: #f5dfda;
 
   /* 阴影系统：精简柔和，去处彩色光晕与厚重杂色 */
-  --aimo-shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.09);
-  --aimo-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
-  --aimo-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.12);
-  --aimo-shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.04);
+  --aimo-shadow-popover: none;
+  --aimo-shadow-md: none;
+  --aimo-shadow-lg: none;
+  --aimo-shadow-sm: none;
 
   /* 形态与动效几何 */
   --aimo-radius-button: 999px;
@@ -114,10 +114,10 @@ html[data-ui-preset="aimo"].mdui-theme-dark {
   --aimo-danger: #d9705a;
   --aimo-danger-soft: #3b2521;
 
-  --aimo-shadow-popover: 0 14px 34px rgba(0, 0, 0, 0.42);
-  --aimo-shadow-md: 0 6px 20px rgba(0, 0, 0, 0.32);
-  --aimo-shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.48);
-  --aimo-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.22);
+  --aimo-shadow-popover: none;
+  --aimo-shadow-md: none;
+  --aimo-shadow-lg: none;
+  --aimo-shadow-sm: none;
 
   --cm-primary: var(--aimo-primary);
 
@@ -205,9 +205,9 @@ html[data-ui-preset="aimo"] #topbar {
 
 /* 滚动时与背景交融并显露结构分割线 */
 html[data-ui-preset="aimo"] #topbar.scrolled {
-  background: color-mix(in srgb, var(--aimo-bg) 86%, transparent) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
-  backdrop-filter: blur(14px) !important;
+  background: var(--aimo-bg) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
   border-bottom: 1px solid var(--aimo-border-soft) !important;
   box-shadow: none !important;
 }
@@ -220,9 +220,9 @@ html[data-ui-preset="aimo"] #topbar.scrolled {
    -------------------------------------------------------------------------- */
 /* 弹窗遮罩层：高斯模糊遮罩 */
 html[data-ui-preset="aimo"] mdui-dialog::part(overlay) {
-  background-color: rgba(20, 18, 14, 0.45) !important;
-  -webkit-backdrop-filter: blur(5px) !important;
-  backdrop-filter: blur(5px) !important;
+  background-color: rgba(0, 0, 0, 0.35) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 /* 桌面/通用模态弹窗面板：大圆角中性表面与微浮层投影 */
@@ -632,13 +632,7 @@ html[data-ui-preset="aimo"] .sk-ava {
     z-index: 30 !important;
   }
 
-  /* 账号入口在桌面端于剩余可用视口精确居中对齐 */
-  html[data-ui-preset="aimo"] #topAccount {
-    left: calc(50vw + 36px) !important;
-  }
-  html[data-ui-preset="aimo"] body.cm-has-account #topbar {
-    --cm-account-header-left: calc(72px + max(env(safe-area-inset-left), var(--safe-l, 0px)));
-  }
+  /* 桌面端顶栏账号入口收拢至右上角，由全局 topAccount 规则管理 */
 
   /* 桌面主滚动容器：严格从 72px 处开始，并与顶栏对齐内边距 */
   html[data-ui-preset="aimo"] #out {
@@ -2031,7 +2025,8 @@ html[data-ui-preset="aimo"] .pl-lyric-line.cur .pl-lyric-trans {
 
 /* 歌词顶部工具栏与控制按钮：适配 Aimo 纸墨底色 */
 html[data-ui-preset="aimo"] .pl-lyric-tools {
-  background: linear-gradient(var(--aimo-bg) 40%, transparent) !important;
+  background: var(--aimo-bg) !important;
+  border-bottom: 1px solid var(--aimo-border-soft) !important;
 }
 
 html[data-ui-preset="aimo"] .pl-lyric-mode {
@@ -2136,7 +2131,8 @@ html[data-ui-preset="aimo"] .cm-quick[href*="3779629"] .material-icons-outlined 
 
 /* 热歌榜专属封面 */
 html[data-ui-preset="aimo"] .cm-quick[href*="3778678"] {
-  background: linear-gradient(145deg, #1f1613 0%, #2f1d14 55%, #150f0c 100%) !important;
+  background: #8F3B30 !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
 }
 html[data-ui-preset="aimo"] .cm-quick[href*="3778678"]::before {
   content: 'HOT 100';
@@ -2158,7 +2154,8 @@ html[data-ui-preset="aimo"] .cm-quick[href*="3778678"] .material-icons-outlined 
 
 /* 飙升榜专属封面 */
 html[data-ui-preset="aimo"] .cm-quick[href*="19723756"] {
-  background: linear-gradient(145deg, #121820 0%, #1a2736 55%, #0e1319 100%) !important;
+  background: #1E293B !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
 }
 html[data-ui-preset="aimo"] .cm-quick[href*="19723756"]::before {
   content: 'SURGE';
@@ -2180,7 +2177,8 @@ html[data-ui-preset="aimo"] .cm-quick[href*="19723756"] .material-icons-outlined
 
 /* 新歌榜专属封面 */
 html[data-ui-preset="aimo"] .cm-quick[href*="3779629"] {
-  background: linear-gradient(145deg, #151a14 0%, #222e1e 55%, #111510 100%) !important;
+  background: #2A3A2F !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
 }
 html[data-ui-preset="aimo"] .cm-quick[href*="3779629"]::before {
   content: 'NEW';
@@ -2213,8 +2211,8 @@ html[data-ui-preset="aimo"] .cm-anchorbar {
   padding: 10px 4px 12px !important;
   margin: -4px 0 16px !important;
   background: color-mix(in srgb, var(--aimo-bg) 88%, transparent) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
   border-bottom: 1px solid var(--aimo-border-soft) !important;
   overflow-x: auto !important;
   scrollbar-width: none !important;
@@ -2654,3 +2652,133 @@ html[data-ui-preset="aimo"] .cm-rip {
   transition: none !important;
   pointer-events: none !important;
 }
+
+
+/* --------------------------------------------------------------------------
+   账号入口在 Aimo 设计主题下收拢至顶栏右上角（对齐 AimoChat topbar-actions 规范）
+   -------------------------------------------------------------------------- */
+html[data-ui-preset="aimo"] #topAccount {
+  position: fixed !important;
+  top: calc(10px + max(env(safe-area-inset-top), var(--safe-t, 0px))) !important;
+  right: clamp(20px, 3vw, 40px) !important;
+  left: auto !important;
+  margin-left: 0 !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  background: var(--aimo-bg-sunken) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  z-index: 35 !important;
+  overflow: hidden !important;
+  transform-origin: 50% 50% !important;
+  transition: transform 120ms var(--aimo-ease), border-color 160ms ease !important;
+}
+
+@media (max-width: 899px) {
+  html[data-ui-preset="aimo"] #topAccount {
+    right: 14px !important;
+  }
+}
+
+html[data-ui-preset="aimo"] #topAccount:hover {
+  transform: scale(1.06) !important;
+  border-color: var(--aimo-border) !important;
+}
+
+html[data-ui-preset="aimo"] #topAccount:active {
+  transform: scale(0.94) !important;
+}
+
+html[data-ui-preset="aimo"] #topAccount .cm-top-avatar {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 50% !important;
+}
+
+html[data-ui-preset="aimo"] #topAccount .cm-top-avatar > .cm-avatar {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 50% !important;
+  display: block !important;
+}
+
+/* Aimo 顶栏保持纯净圆头像，不堆叠标签 */
+html[data-ui-preset="aimo"] #topAccount .cm-top-tags {
+  display: none !important;
+}
+
+/* 顶栏操作区在 Aimo 下为右上角头像预留间距，标题自然自适应，按钮间距严谨呼吸 */
+html[data-ui-preset="aimo"] body.cm-has-account #topActs {
+  margin-right: calc(clamp(20px, 3vw, 40px) + 36px + 12px) !important;
+  max-width: none !important;
+}
+
+@media (max-width: 899px) {
+  html[data-ui-preset="aimo"] body.cm-has-account #topActs {
+    margin-right: 62px !important;
+  }
+}
+
+html[data-ui-preset="aimo"] body.cm-has-account #topbar {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+/* --------------------------------------------------------------------------
+   Aimo 风格细线 SVG 图标统一规格 (Lucide-style Outline Icons)
+   -------------------------------------------------------------------------- */
+.aimo-icon-slot {
+  display: none;
+}
+
+html[data-ui-preset="aimo"] .aimo-icon-slot {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  vertical-align: middle !important;
+  color: inherit !important;
+  line-height: 1 !important;
+}
+
+html[data-ui-preset="aimo"] .aimo-icon {
+  width: 20px !important;
+  height: 20px !important;
+  stroke: currentColor !important;
+  stroke-width: 1.75 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+  display: block !important;
+  flex: none !important;
+}
+
+/* 播放传输控制核心大键 */
+html[data-ui-preset="aimo"] #plPlay .aimo-icon,
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge .aimo-icon {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+/* 顶部与导航条微图标 */
+html[data-ui-preset="aimo"] #topSearch .aimo-icon,
+html[data-ui-preset="aimo"] #topAction .aimo-icon,
+html[data-ui-preset="aimo"] #bottomNav .aimo-icon {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* 当 Aimo 细线图标就绪时，隐藏原 Material Icons 字体图标 */
+html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > .material-icons-outlined,
+html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > .material-icons {
+  display: none !important;
+}
+

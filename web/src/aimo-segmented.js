@@ -4,6 +4,7 @@
 // 1. 视差滑动指示器（尺寸与位置跟随激活项几何无级形变）
 // 2. 指针拖动与跟手吸附（支持触摸与鼠标，拖过阈值松手平滑吸附到目标项）
 // 3. 严格限定在 html[data-ui-preset="aimo"] 生效
+// 4. 彻底移除全局 DOM 监听，采用局部与 RAF 节流，消除主线程卡顿
 // ==========================================================================
 
 const isAimoActive = () => document.documentElement.getAttribute('data-ui-preset') === 'aimo';
@@ -35,6 +36,7 @@ export function enhanceAimoSegmented(container) {
   let startX = 0;
   let startCenter = 0;
   let suppressClickUntil = 0;
+  let moveRaf = null;
 
   const getActiveButton = () => {
     const list = getButtons();
@@ -149,13 +151,23 @@ export function enhanceAimoSegmented(container) {
     }
     if (moved) {
       if (e.cancelable) e.preventDefault();
-      const currentCenter = startCenter + dx;
-      const geo = getInterpolatedGeometry(currentCenter);
-      if (geo) applyGeometry(geo, false);
+      if (!moveRaf) {
+        moveRaf = requestAnimationFrame(() => {
+          moveRaf = null;
+          if (!dragging) return;
+          const currentCenter = startCenter + dx;
+          const geo = getInterpolatedGeometry(currentCenter);
+          if (geo) applyGeometry(geo, false);
+        });
+      }
     }
   };
 
   const onPointerFinish = (e) => {
+    if (moveRaf) {
+      cancelAnimationFrame(moveRaf);
+      moveRaf = null;
+    }
     if (!dragging || e.pointerId !== pointerId) return;
     dragging = false;
     pointerId = null;
@@ -190,12 +202,13 @@ export function enhanceAimoSegmented(container) {
   });
   container.addEventListener('pointerleave', e => {
     if (!moved && e.pointerId === pointerId) {
+      if (moveRaf) { cancelAnimationFrame(moveRaf); moveRaf = null; }
       dragging = false;
       pointerId = null;
     }
   });
 
-  // 尺寸与 DOM 变动同步
+  // 尺寸变动同步
   if (typeof ResizeObserver !== 'undefined') {
     const ro = new ResizeObserver(() => {
       if (!dragging) sync(false);
@@ -203,22 +216,34 @@ export function enhanceAimoSegmented(container) {
     ro.observe(container);
   }
 
+  // 仅监听容器直系状态类变化，避免任何递归开销
   const mo = new MutationObserver(() => {
     if (!dragging) requestAnimationFrame(() => sync(true));
   });
-  mo.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  mo.observe(container, { childList: true, attributes: true, attributeFilter: ['class'] });
 }
 
 export function autoEnhanceAimoSegmented() {
+  let scanRaf = null;
   const scan = () => {
+    scanRaf = null;
     if (!isAimoActive()) return;
     const tabs = document.querySelectorAll('.cm-sqtabs, .cm-atabs');
     tabs.forEach(enhanceAimoSegmented);
   };
+  const requestScan = () => {
+    if (!isAimoActive() || scanRaf) return;
+    scanRaf = requestAnimationFrame(scan);
+  };
+
   scan();
   document.addEventListener('cm-uipreset', scan);
-  if (typeof MutationObserver !== 'undefined') {
-    const observer = new MutationObserver(scan);
-    observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+  window.addEventListener('hashchange', requestScan);
+
+  // 仅在主视图容器 #out 发生直属子树替换时按需增强，彻底解绑 document.body 全局高频监听
+  const outEl = document.getElementById('out');
+  if (outEl && typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(requestScan);
+    observer.observe(outEl, { childList: true });
   }
 }

@@ -31,6 +31,7 @@ import { initNavDrop } from './navdrop.js';
 import { initTopAccount } from './top-account.js';
 import { autoEnhanceAimoSegmented } from './aimo-segmented.js';
 import { initAimoDialogMotion } from './aimo-dialog.js';
+import { initAimoIcons } from './aimo-icons.js';
 
 initAimoDialogMotion();
 
@@ -284,6 +285,7 @@ function boot() {
   initGlass();               // 液体玻璃折射（frost/cmx 皮肤 + 支持的内核）
   initNavDrop();             // 底栏液态玻璃「水滴」指示器（frost/cmx 皮肤）
   autoEnhanceAimoSegmented();// Aimo 风格分段滑动/拖拽选择器增强
+  initAimoIcons();          // Aimo 风格细线图标规范注入
   // 一次性强制重置（逻辑在 index.html 的行内脚本里，必须早于首帧）：
   // 这次是全员切换到 CurrentMusicX 风格，人人都提示一句怎么改回。
   if (window.__cmRecReset) toast('界面风格已切换为「CurrentMusicX 风格」，可在 设置 → 外观 改回');

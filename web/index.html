@@ -68,6 +68,7 @@
       background: rgb(var(--mdui-color-surface, 247, 242, 250)); }
     #boot .cm-loading-indicator { width: 64px; height: 64px; }
     @media (prefers-color-scheme: dark) { #boot { background: #141218; background: rgb(var(--mdui-color-surface, 20, 18, 24)); } }
+    html[data-ui-preset="aimo"] #boot { display: none !important; }
   </style>
 </head>
 <body>
@@ -76,6 +77,7 @@
     // Record the first displayed animation cycle before the main bundle arrives.
     (function () {
       var boot = document.getElementById('boot');
+      if (document.documentElement.getAttribute('data-ui-preset') === 'aimo') { if (boot) boot.remove(); return; }
       boot.setAttribute('data-loading-start', String(performance.now()));
       boot.addEventListener('animationstart', function (event) {
         if (event.animationName === 'cmIndicatorMorph') boot.setAttribute('data-loading-start', String(performance.now()));
