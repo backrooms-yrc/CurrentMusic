@@ -2,10 +2,11 @@ import { api, auth } from './api.js';
 import { avatarHTML, userTags, userTagsText } from './ui.js';
 
 // 独立于路由挂载；页面切换、滚动与登录后的跳转不会销毁顶部账号。
-export function initTopAccount() {
+export function initTopAccount(bootDismissed) {
   const account = document.getElementById('topAccount');
   if (!account) return;
   let owner = '', markup = '', flight = null, timer = 0, resizeTimer = 0, generation = 0;
+  let startupToken = window.NativeApi?.versionCode ? '' : auth.token;
 
   function settle() {
     generation++;
@@ -17,18 +18,23 @@ export function initTopAccount() {
 
   async function arrive() {
     settle();
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !account.animate) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !account.animate || !account.getClientRects().length) {
+      startupToken = '';
+      return;
+    }
     const own = generation;
     account.classList.add('cm-account-arriving');
     // 等头像/挂件加载，但图片失败或慢网不能卡住账号入口。
-    await Promise.race([
+    const imagesReady = Promise.race([
       Promise.all(Array.from(account.querySelectorAll('img')).map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
         img.addEventListener('load', resolve, { once: true });
         img.addEventListener('error', resolve, { once: true });
       }))),
       new Promise(resolve => setTimeout(resolve, 650)),
     ]);
+    await Promise.all([bootDismissed, imagesReady]);
     if (own !== generation || account.hidden) return;
+    startupToken = '';
     const r = account.querySelector('.cm-top-avatar').getBoundingClientRect();
     account.style.transformOrigin = `50% ${r.top - account.getBoundingClientRect().top + r.height / 2}px`;
     const dx = innerWidth / 2 - (r.left + r.width / 2);
@@ -48,19 +54,22 @@ export function initTopAccount() {
   }
 
   function sync(event) {
-    const user = auth.token && auth.user;
+    const token = auth.token;
+    if (startupToken !== token) startupToken = '';
+    const user = token && auth.user;
     const nextOwner = user ? user.username : '';
     if (nextOwner !== owner) settle();
     owner = nextOwner;
     account.hidden = !user;
     document.body.classList.toggle('cm-has-account', !!user);
+    document.body.classList.toggle('cm-has-account-title', !!(user && String(user.title || '').trim()));
     if (!user) { settle(); account.innerHTML = ''; markup = ''; return; }
     const html = `<span class="cm-top-avatar" aria-hidden="true">${avatarHTML(user, 34)}</span><span class="cm-top-tags">${userTags(user)}</span>`;
     if (html !== markup) { account.innerHTML = html; markup = html; }
     const label = [user.nickname || user.username, userTagsText(user), '我的账号'].filter(Boolean).join(' · ');
     account.setAttribute('aria-label', label);
     account.title = label;
-    if (event && event.detail && event.detail.login) arrive();
+    if (event?.detail?.login || (startupToken && !document.hidden && !account.classList.contains('cm-account-arriving'))) arrive();
   }
 
   const refresh = () => { if (auth.token) api.me().catch(() => {}); };
@@ -78,7 +87,7 @@ export function initTopAccount() {
     }
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) settle(); else refresh();
+    if (document.hidden) settle(); else { sync(); refresh(); }
   });
   sync();
   refresh();

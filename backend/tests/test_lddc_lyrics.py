@@ -154,6 +154,23 @@ class TestMerge(unittest.TestCase):
         self.assertIsNone(L.merge_with_base(self.base, None))
         self.assertIsNone(L.merge_with_base(self.base, {"lines": []}))
 
+    def test_rejects_different_version_despite_shared_credits_and_refrain(self):
+        credits = [{"t": 0, "txt": "作曲：同一作曲者"}, {"t": 1, "txt": "编曲：同一编曲者"}]
+        base = {"lines": credits + [
+            {"t": 1000, "txt": "走过这条街"}, {"t": 3000, "txt": "想起那场雨"},
+            {"t": 5000, "txt": "等你回来"},
+        ]}
+        external = {"lines": credits + [
+            {"t": 1000, "txt": "落雨喺條街"}, {"t": 3000, "txt": "諗起嗰一晚"},
+            {"t": 5000, "txt": "等你回来"},
+        ]}
+        self.assertIsNone(L.merge_with_base(base, external))
+
+    def test_accepts_external_when_official_has_only_credits(self):
+        base = {"lines": [{"t": 0, "txt": "作曲：某人"}]}
+        external = {"source": "lddc:kg", "lines": self.base["lines"]}
+        self.assertEqual(L.merge_with_base(base, external)["source"], "lddc:kg")
+
 
 class TestCacheTtl(unittest.TestCase):
     def test_official_and_lddc_cache_longer(self):

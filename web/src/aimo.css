@@ -416,7 +416,10 @@ html[data-ui-preset="aimo"] .cm-atabs {
 }
 
 /* 滑动指示器滑块：在激活项下方平滑平移与变形 */
+.cm-sqtabs-indicator { display: none; }
+html[data-ui-preset="aimo"] .cm-aimo-segmented > .cm-atab-ind { display: none; }
 html[data-ui-preset="aimo"] .cm-sqtabs-indicator {
+  display: block;
   position: absolute !important;
   left: 0 !important;
   top: 3px !important;
@@ -2636,9 +2639,7 @@ html[data-ui-preset="aimo"] input[type="range"] {
    还原纯粹、轻盈、即时的高级杂志交互质感
    -------------------------------------------------------------------------- */
 html[data-ui-preset="aimo"] mdui-ripple,
-html[data-ui-preset="aimo"] mdui-ripple::part(surface),
-html[data-ui-preset="aimo"] .mdui-ripple-wave,
-html[data-ui-preset="aimo"] .wave {
+html[data-ui-preset="aimo"] .cm-rip {
   display: none !important;
   opacity: 0 !important;
   animation: none !important;

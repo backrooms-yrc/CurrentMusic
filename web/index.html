@@ -8,7 +8,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>CurrentMusic</title>
+  <title>CurrentMusic 流声屿</title>
   <link rel="icon" href="brand-icon.png?v=sage1" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=sage1">
   <script>
@@ -83,8 +83,8 @@
   </script>
 
   <header id="topbar">
-    <div id="brandLock"><img src="brand-icon.png?v=sage1" alt="" width="32" height="32"><b>CurrentMusic</b></div>
-    <div id="pageTitle">CurrentMusic</div>
+    <div id="brandLock"><img src="brand-icon.png?v=sage1" alt="" width="32" height="32"><b data-web-brand>CurrentMusic 流声屿</b></div>
+    <div id="pageTitle" data-web-brand>CurrentMusic 流声屿</div>
     <div id="topActs">
       <a id="topSearch" href="#/search" class="material-icons-outlined" title="搜索">search</a>
       <span id="topAction" class="material-icons-outlined" title="设置">settings</span>
@@ -93,6 +93,18 @@
   <a id="topAccount" href="#/user" aria-label="我的账号" hidden></a>
 
   <main id="out"></main>
+  <template id="engineCredit">
+    <footer class="cm-engine-credit">
+      <a class="cm-engine-badge" href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer" aria-label="由 流声引擎 强力驱动">
+        <!-- CM_ENGINE_BADGE_MARK -->
+        <span>由</span> <strong>流声引擎</strong> <span>强力驱动</span>
+      </a>
+      <a class="cm-engine-badge" href="https://music.20110208.xyz/home/engine/" target="_blank" rel="noopener noreferrer" lang="en" aria-label="Powered by CurrentMusic Engine">
+        <!-- CM_ENGINE_BADGE_MARK -->
+        <span>Powered by</span><strong>CurrentMusic Engine</strong>
+      </a>
+    </footer>
+  </template>
 
   <div id="mini"></div>
 
@@ -101,7 +113,7 @@
     <div class="sb-sidebar__top">
       <a class="sb-sidebar__brand" href="#/home">
         <img src="brand-icon.png?v=sage1" alt="" width="25" height="25">
-        <span>CurrentMusic</span>
+        <span data-web-brand>CurrentMusic 流声屿</span>
       </a>
     </div>
     <div class="sb-sidebar__scroll">

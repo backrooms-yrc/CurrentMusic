@@ -34,7 +34,7 @@ const HOT_COVER_SVG = `
   <rect width="400" height="400" fill="url(#hotBg)"/>
   <rect width="400" height="400" fill="url(#hotGlow1)"/>
   <rect width="400" height="400" fill="url(#hotGlow2)"/>
-  
+
   <!-- 声学共振同心圆弧环 -->
   <g stroke="rgba(255,255,255,0.04)" fill="none" stroke-width="1.2">
     <circle cx="280" cy="140" r="140"/>
@@ -42,10 +42,10 @@ const HOT_COVER_SVG = `
     <circle cx="280" cy="140" r="70"/>
     <circle cx="280" cy="140" r="35"/>
   </g>
-  
+
   <!-- 艺术背景大水印 -->
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="82" font-weight="900" fill="rgba(224,105,58,0.11)" text-anchor="end" letter-spacing="-3">HOT</text>
-  
+
   <!-- 标题与排版区 -->
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#e0693a"/>
@@ -78,17 +78,17 @@ const SURGE_COVER_SVG = `
   <rect width="400" height="400" fill="url(#surgeBg)"/>
   <rect width="400" height="400" fill="url(#surgeGlow1)"/>
   <rect width="400" height="400" fill="url(#surgeGlow2)"/>
-  
+
   <!-- 向上气流上升几何线与破晓光影 -->
   <g stroke="rgba(255,255,255,0.05)" stroke-width="1.5" stroke-dasharray="4 6">
     <line x1="240" y1="360" x2="350" y2="170"/>
     <line x1="200" y1="380" x2="310" y2="190"/>
     <line x1="160" y1="400" x2="270" y2="210"/>
   </g>
-  
+
   <!-- 艺术背景大水印 -->
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="78" font-weight="900" fill="rgba(94,168,219,0.11)" text-anchor="end" letter-spacing="-3">SURGE</text>
-  
+
   <!-- 标题与排版区 -->
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#5ea8db"/>
@@ -116,15 +116,15 @@ const NEW_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#newBg)"/>
   <rect width="400" height="400" fill="url(#newGlow)"/>
-  
+
   <!-- 别致星芒与罗盘细线 -->
   <g transform="translate(290, 135)" fill="rgba(201,190,139,0.14)">
     <polygon points="0,-40 8,-12 36,-16 16,8 28,34 2,18 -18,32 -12,6 -36,-4 -10,-14"/>
   </g>
-  
+
   <!-- 艺术背景大水印 -->
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="82" font-weight="900" fill="rgba(168,191,121,0.11)" text-anchor="end" letter-spacing="-3">NEW</text>
-  
+
   <!-- 标题与排版区 -->
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#a8bf79"/>
@@ -152,16 +152,16 @@ const ORIGINAL_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#origBg)"/>
   <rect width="400" height="400" fill="url(#origGlow)"/>
-  
+
   <!-- 黑胶母带轨迹弧线 -->
   <g stroke="rgba(216,160,230,0.08)" fill="none" stroke-width="1.5">
     <circle cx="280" cy="140" r="100"/>
     <circle cx="280" cy="140" r="65"/>
     <circle cx="280" cy="140" r="30"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="70" font-weight="900" fill="rgba(196,134,212,0.1)" text-anchor="end">ORIGIN</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#c486d4"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#c486d4" stroke-width="1.5" stroke-linecap="round"/>
@@ -188,14 +188,14 @@ const GUOFENG_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#gfBg)"/>
   <rect width="400" height="400" fill="url(#gfRed)"/>
-  
+
   <!-- 传统八角金石窗棂细线 -->
   <g stroke="rgba(255,255,255,0.04)" stroke-width="1.2" fill="none">
     <rect x="230" y="80" width="90" height="90" rx="8" transform="rotate(45 275 125)"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="76" font-weight="900" fill="rgba(214,92,79,0.11)" text-anchor="end">FOLK</text>
-  
+
   <g transform="translate(32, 230)">
     <rect x="2" y="2" width="16" height="16" rx="3" fill="none" stroke="#d65c4f" stroke-width="1.8"/>
     <line x1="26" y1="10" x2="48" y2="10" stroke="#d65c4f" stroke-width="1.5" stroke-linecap="round"/>
@@ -222,14 +222,14 @@ const ELECTRO_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#elecBg)"/>
   <rect width="400" height="400" fill="url(#elecGlow)"/>
-  
+
   <!-- 脉冲声学波形折线 -->
   <g fill="none" stroke="rgba(0,210,196,0.18)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M160 150 L200 120 L240 170 L280 100 L320 155 L350 130"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="70" font-weight="900" fill="rgba(0,210,196,0.11)" text-anchor="end">EDM</text>
-  
+
   <g transform="translate(32, 230)">
     <polygon points="4,3 15,10 4,17" fill="#00d2c4"/>
     <line x1="22" y1="10" x2="44" y2="10" stroke="#00d2c4" stroke-width="1.5" stroke-linecap="round"/>
@@ -256,7 +256,7 @@ const RAP_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#rapBg)"/>
   <rect width="400" height="400" fill="url(#rapGold)"/>
-  
+
   <!-- 均衡器节奏柱 -->
   <g fill="rgba(212,175,55,0.09)">
     <rect x="235" y="115" width="7" height="45" rx="3.5"/>
@@ -266,9 +266,9 @@ const RAP_COVER_SVG = `
     <rect x="295" y="95" width="7" height="65" rx="3.5"/>
     <rect x="310" y="125" width="7" height="35" rx="3.5"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="74" font-weight="900" fill="rgba(212,175,55,0.11)" text-anchor="end">RAP</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#d4af37"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#d4af37" stroke-width="1.5" stroke-linecap="round"/>
@@ -295,13 +295,13 @@ const ACG_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#acgBg)"/>
   <rect width="400" height="400" fill="url(#acgGlow)"/>
-  
+
   <g transform="translate(290, 135)" fill="rgba(240,114,164,0.14)">
     <polygon points="0,-32 10,-8 34,-6 14,10 22,34 0,18 -22,34 -14,10 -34,-6 -10,-8"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="74" font-weight="900" fill="rgba(240,114,164,0.11)" text-anchor="end">ACG</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#f072a4"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#f072a4" stroke-width="1.5" stroke-linecap="round"/>
@@ -328,15 +328,15 @@ const ROCK_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#rockBg)"/>
   <rect width="400" height="400" fill="url(#rockGlow)"/>
-  
+
   <!-- 重金属断裂斜切线 -->
   <g stroke="rgba(230,57,70,0.18)" stroke-width="2.5" stroke-linecap="round">
     <line x1="250" y1="90" x2="330" y2="180"/>
     <line x1="270" y1="80" x2="350" y2="170"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="74" font-weight="900" fill="rgba(230,57,70,0.11)" text-anchor="end">ROCK</text>
-  
+
   <g transform="translate(32, 230)">
     <polygon points="10,2 2,14 9,14 6,22 17,9 10,9" fill="#e63946"/>
     <line x1="24" y1="10" x2="46" y2="10" stroke="#e63946" stroke-width="1.5" stroke-linecap="round"/>
@@ -363,14 +363,14 @@ const CLASSICAL_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#clsBg)"/>
   <rect width="400" height="400" fill="url(#clsGlow)"/>
-  
+
   <g stroke="rgba(212,175,55,0.08)" fill="none" stroke-width="1.5">
     <ellipse cx="280" cy="140" rx="70" ry="110" transform="rotate(-25 280 140)"/>
     <ellipse cx="280" cy="140" rx="40" ry="70" transform="rotate(-25 280 140)"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="70" font-weight="900" fill="rgba(212,175,55,0.1)" text-anchor="end">OPUS</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#dfc670"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#dfc670" stroke-width="1.5" stroke-linecap="round"/>
@@ -397,7 +397,7 @@ const MINYAO_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#myBg)"/>
   <rect width="400" height="400" fill="url(#myGlow)"/>
-  
+
   <!-- 原木音孔与吉他琴弦弧光 -->
   <g stroke="rgba(196,154,91,0.12)" fill="none" stroke-width="1.2">
     <ellipse cx="280" cy="140" rx="85" ry="60"/>
@@ -405,9 +405,9 @@ const MINYAO_COVER_SVG = `
     <line x1="160" y1="140" x2="360" y2="140"/>
     <line x1="160" y1="155" x2="360" y2="155"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="74" font-weight="900" fill="rgba(196,154,91,0.11)" text-anchor="end">FOLK</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#c49a5b"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#c49a5b" stroke-width="1.5" stroke-linecap="round"/>
@@ -434,14 +434,14 @@ const WESTERN_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#westBg)"/>
   <rect width="400" height="400" fill="url(#westGlow)"/>
-  
+
   <g stroke="rgba(255,255,255,0.05)" fill="none" stroke-width="1.2">
     <circle cx="280" cy="140" r="110"/>
     <line x1="170" y1="140" x2="390" y2="140"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="70" font-weight="900" fill="rgba(79,137,184,0.11)" text-anchor="end">WEST</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#6ba7d6"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#6ba7d6" stroke-width="1.5" stroke-linecap="round"/>
@@ -468,12 +468,12 @@ const JAPANESE_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#jpBg)"/>
   <rect width="400" height="400" fill="url(#jpGlow)"/>
-  
+
   <circle cx="280" cy="140" r="75" fill="none" stroke="rgba(226,115,135,0.12)" stroke-width="1.5"/>
   <circle cx="280" cy="140" r="8" fill="rgba(226,115,135,0.2)"/>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="70" font-weight="900" fill="rgba(226,115,135,0.1)" text-anchor="end">J-POP</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#e27387"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#e27387" stroke-width="1.5" stroke-linecap="round"/>
@@ -500,13 +500,13 @@ const KOREAN_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#krBg)"/>
   <rect width="400" height="400" fill="url(#krGlow)"/>
-  
+
   <g fill="none" stroke="rgba(182,95,201,0.15)" stroke-width="1.5">
     <polygon points="280,75 330,140 280,205 230,140"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="70" font-weight="900" fill="rgba(182,95,201,0.1)" text-anchor="end">K-POP</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#c478d6"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#c478d6" stroke-width="1.5" stroke-linecap="round"/>
@@ -533,15 +533,15 @@ const BILLBOARD_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#bbBg)"/>
   <rect width="400" height="400" fill="url(#bbGlow)"/>
-  
+
   <g stroke="rgba(229,184,105,0.12)" fill="none" stroke-width="1.2">
     <circle cx="280" cy="140" r="105"/>
     <circle cx="280" cy="140" r="90"/>
     <circle cx="280" cy="140" r="45"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="64" font-weight="900" fill="rgba(229,184,105,0.12)" text-anchor="end">GLOBAL</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#e5b869"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#e5b869" stroke-width="1.5" stroke-linecap="round"/>
@@ -568,16 +568,16 @@ const VIP_COVER_SVG = `
   </defs>
   <rect width="400" height="400" fill="url(#vipBg)"/>
   <rect width="400" height="400" fill="url(#vipGlow)"/>
-  
+
   <g stroke="rgba(204,167,98,0.1)" fill="none" stroke-width="1.2">
     <circle cx="280" cy="140" r="115"/>
     <circle cx="280" cy="140" r="95"/>
     <circle cx="280" cy="140" r="75"/>
     <circle cx="280" cy="140" r="55"/>
   </g>
-  
+
   <text x="372" y="105" font-family="'Cinzel', 'Noto Serif SC', serif" font-size="78" font-weight="900" fill="rgba(204,167,98,0.11)" text-anchor="end">VIP</text>
-  
+
   <g transform="translate(32, 230)">
     <circle cx="10" cy="10" r="4" fill="#cca762"/>
     <line x1="20" y1="10" x2="42" y2="10" stroke="#cca762" stroke-width="1.5" stroke-linecap="round"/>
@@ -653,7 +653,7 @@ function matchHandcraftedCover(name = '') {
 export function getAimoChartCover(chartId, chartName = '') {
   if (!isAimoActive()) return null;
   const idStr = String(chartId || '');
-  if (CHART_COVERS[idStr]) {
+  if (Object.prototype.hasOwnProperty.call(CHART_COVERS, idStr)) {
     return CHART_COVERS[idStr];
   }
   if (chartName) {

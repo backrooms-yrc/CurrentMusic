@@ -18,9 +18,10 @@ export function enhanceAimoSegmented(container) {
   if (buttons.length < 2) return;
 
   container.__aimoSegInit = true;
+  container.classList.add('cm-aimo-segmented');
 
   // 确保指示器滑块存在
-  let indicator = container.querySelector(':scope > .cm-sqtabs-indicator');
+  let indicator = Array.from(container.children).find(child => child.classList.contains('cm-sqtabs-indicator'));
   if (!indicator) {
     indicator = document.createElement('span');
     indicator.className = 'cm-sqtabs-indicator';
@@ -112,20 +113,20 @@ export function enhanceAimoSegmented(container) {
   // 监听按钮点击以触发滑动动画
   container.addEventListener('click', (e) => {
     if (!isAimoActive()) return;
-    if (performance.now() < suppressClickUntil) {
+    if (e.isTrusted && e.detail > 0 && performance.now() < suppressClickUntil) {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       return;
     }
     const btn = e.target.closest(itemSelector);
     if (!btn || !container.contains(btn)) return;
     // 延迟一帧让页面现有的 classList 切换生效
     requestAnimationFrame(() => sync(true));
-  });
+  }, true);
 
   // 指针拖拽事件
   container.addEventListener('pointerdown', (e) => {
-    if (!isAimoActive()) return;
+    if (!isAimoActive() || !e.isPrimary) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const active = getActiveButton();
     if (!active) return;
@@ -160,7 +161,7 @@ export function enhanceAimoSegmented(container) {
     pointerId = null;
     container.classList.remove('dragging');
 
-    if (e.type === 'pointercancel') {
+    if (e.type !== 'pointerup') {
       sync(true);
       return;
     }
@@ -183,6 +184,13 @@ export function enhanceAimoSegmented(container) {
   container.addEventListener('pointermove', onPointerMove);
   container.addEventListener('pointerup', onPointerFinish);
   container.addEventListener('pointercancel', onPointerFinish);
+  container.addEventListener('lostpointercapture', onPointerFinish);
+  container.addEventListener('pointerleave', e => {
+    if (!moved && e.pointerId === pointerId) {
+      dragging = false;
+      pointerId = null;
+    }
+  });
 
   // 尺寸与 DOM 变动同步
   if (typeof ResizeObserver !== 'undefined') {
@@ -205,6 +213,7 @@ export function autoEnhanceAimoSegmented() {
     tabs.forEach(enhanceAimoSegmented);
   };
   scan();
+  document.addEventListener('cm-uipreset', scan);
   if (typeof MutationObserver !== 'undefined') {
     const observer = new MutationObserver(scan);
     observer.observe(document.body || document.documentElement, { childList: true, subtree: true });

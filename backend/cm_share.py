@@ -8,8 +8,8 @@
   · segno（python3-segno，Debian 包）
   · Noto Sans CJK 字体（/usr/share/fonts/opentype/noto/*.ttc，SC 面 index=2）
 
-版式与客户端保持一致：1080×1440、封面取色背景、封面/歌名/歌手/专辑、链接文案、
-二维码（4 模块静区）。图片按「分享链接 + 版式版本」缓存 7 天，Host 变化不会串图。
+提供方块与沉浸式封面，均为 1080×1440，含分享链接与二维码（4 模块静区）。
+图片按分享链接与版式版本缓存 7 天。
 """
 from __future__ import annotations
 
@@ -31,7 +31,8 @@ except Exception:  # noqa: BLE001 依赖缺失时接口降级为 503
     _DEPS = False
 
 W, H = 1080, 1440
-STYLE = "v1.28.68"
+DEFAULT_STYLE = "square"
+STYLE_VERSIONS = {DEFAULT_STYLE: "v1.28.68", "immersive": "immersive-v1"}
 CACHE_TTL = 7 * 86400
 CACHE_MAX = 240
 SHARE_LABELS = {
@@ -44,6 +45,7 @@ SHARE_LABELS = {
 FONT_REG = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
 FONT_BOLD = "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"
 FONT_MONO = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+BRAND_ICON = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "brand", "apple-touch-icon.png")
 SC_INDEX = 2
 SHARE_DIR = os.environ.get("CM_SHARE_DIR",
                            os.path.join(os.path.dirname(cm_db.DB_PATH), "share"))
@@ -108,13 +110,13 @@ def _background(hue):
     return Image.alpha_composite(img.convert("RGBA"), glow).convert("RGB")
 
 
-def _fetch_cover(url):
+def _fetch_cover(url, size):
     """只抓网易云封面 CDN；不跟随重定向，格式/像素受限（防 SSRF 与解压炸弹）。"""
     if not url:
         return None
     try:
         sep = "&" if "?" in url else "?"
-        data, ctype = cm_net.fetch(url + sep + "param=800y800",
+        data, ctype = cm_net.fetch(url + sep + f"param={size}y{size}",
                                    allowed_suffixes=("music.126.net",),
                                    timeout=6.0, max_bytes=8 * 1024 * 1024)
         if not ctype.startswith("image/"):
@@ -165,11 +167,7 @@ def _draw_qr(draw, text, cx, cy, max_side):
                                 ox + (c + 1) * cell - 1, oy + (r + 1) * cell - 1], fill=(17, 17, 17))
 
 
-def render(meta, share_url):
-    """渲染分享图，返回 PIL Image（RGB）。"""
-    if not ready():
-        raise ShareUnavailable("服务端分享图未启用（缺少 Pillow / segno / CJK 字体）")
-    cover = _fetch_cover(meta.get("pic") or "")
+def _square_background(cover):
     hue = palette_hue(cover) if cover else 268.0
     img = _background(hue)
 
@@ -187,58 +185,101 @@ def render(meta, share_url):
     mask = Image.new("L", (620, 620), 0)
     ImageDraw.Draw(mask).rounded_rectangle([0, 0, 620, 620], radius=32, fill=255)
     img.paste(cimg, (230, 180), mask)
-    draw = ImageDraw.Draw(img)
-
-    # 品牌
-    kind = str(meta.get("type") or "song")
-    draw.text((90, 70), "CurrentMusic", font=_font(FONT_BOLD, 42), fill=(240, 240, 240))
-    draw.text((90, 124), SHARE_LABELS.get(kind, "SHARE"),
-              font=_font(FONT_BOLD, 22), fill=(170, 170, 170))
-
-    # 主标题 / 副标题 / 补充信息（歌曲复用 artists/album，其他类型用 sub/sub2）
-    f_name, f_artist, f_album = _font(FONT_BOLD, 54), _font(FONT_REG, 32), _font(FONT_REG, 26)
-    sub = meta.get("sub") or meta.get("artists") or ""
-    sub2 = meta.get("sub2") or meta.get("album") or ""
-    y = 860
-    for line in _wrap(draw, meta.get("name"), f_name, 900, 2):
-        draw.text((90, y), line, font=f_name, fill=(255, 255, 255))
-        y += 72
-    if sub:
-        draw.text((90, y + 6), _fit(draw, sub, f_artist, 900),
-                  font=f_artist, fill=(200, 200, 200))
-    if sub2:
-        draw.text((90, y + 52), _fit(draw, sub2, f_album, 900),
-                  font=f_album, fill=(150, 150, 150))
-
-    # 分隔线与底部文案
-    draw.line([(90, 1090), (W - 90, 1090)], fill=(70, 70, 70), width=2)
-    cta = meta.get("cta") or ("在 CurrentMusic 收听" if kind == "song" else "在 CurrentMusic 打开")
-    draw.text((90, 1140), cta, font=_font(FONT_REG, 24), fill=(150, 150, 150))
-    url_short = share_url.replace("https://", "").replace("http://", "")
-    draw.text((90, 1185), _fit(draw, url_short, _font(FONT_MONO, 22), 610),
-              font=_font(FONT_MONO, 22), fill=(210, 210, 210))
-    draw.text((90, 1228), "扫码或访问链接", font=_font(FONT_REG, 20), fill=(130, 130, 130))
-    hint = meta.get("hint") or f'也可打开 CurrentMusicX 搜索「{meta.get("name") or ""}」'
-    draw.text((90, 1268), _fit(draw, hint, _font(FONT_REG, 19), 610),
-              font=_font(FONT_REG, 19), fill=(150, 150, 150))
-
-    # 二维码
-    _draw_qr(draw, share_url, 860, 1250, 258)
     return img
 
 
-def ensure_image(meta, share_url) -> str:
+def _immersive_background(cover):
+    if cover:
+        img = ImageOps.fit(cover, (W, H), method=Image.LANCZOS)
+    else:
+        img = _background(268.0)
+        ImageDraw.Draw(img).text((W // 2, 550), "♪", font=_font(FONT_MONO, 270),
+                                 fill=(136, 108, 170), anchor="mm")
+    # Gradually darken the brand and text areas while leaving the center artwork clear.
+    stops = ((0, 204), (182, 179), (520, 0), (806, 92), (965, 209), (H, 245))
+    opacity = []
+    for (top, start), (bottom, end) in zip(stops, stops[1:]):
+        opacity.extend(round(start + (end - start) * (y - top) / (bottom - top)) for y in range(top, bottom))
+    mask = Image.new("L", (1, H))
+    mask.putdata(opacity)
+    scrim = Image.new("RGB", (W, H), (8, 9, 15))
+    return Image.composite(scrim, img, mask.resize((W, H)))
+
+
+def render(meta, share_url, style=DEFAULT_STYLE):
+    """渲染分享图，返回 PIL Image（RGB）。"""
+    if not ready():
+        raise ShareUnavailable("服务端分享图未启用（缺少 Pillow / segno / CJK 字体）")
+    immersive = style == "immersive"
+    cover = _fetch_cover(meta.get("pic") or "", 1200 if immersive else 800)
+    img = _immersive_background(cover) if immersive else _square_background(cover)
+    draw = ImageDraw.Draw(img)
+    inset = 80 if immersive else 90
+    text_width = W - 2 * inset
+
+    # 品牌
+    kind = str(meta.get("type") or "song")
+    brand_x = inset
+    if immersive:
+        try:
+            with Image.open(BRAND_ICON) as source:
+                logo = source.convert("RGBA").resize((112, 112), Image.LANCZOS)
+                img.paste(logo, (72, 56), logo)
+                brand_x = 208
+        except OSError:
+            pass
+    draw.text((brand_x, 70), "CurrentMusic", font=_font(FONT_BOLD, 42), fill=(240, 240, 240))
+    draw.text((brand_x, 124), SHARE_LABELS.get(kind, "SHARE"),
+              font=_font(FONT_BOLD, 22), fill=(170, 170, 170))
+
+    # 主标题 / 副标题 / 补充信息（歌曲复用 artists/album，其他类型用 sub/sub2）
+    f_name = _font(FONT_BOLD, 64 if immersive else 54)
+    f_artist, f_album = _font(FONT_REG, 32), _font(FONT_REG, 26)
+    sub = meta.get("sub") or meta.get("artists") or ""
+    sub2 = meta.get("sub2") or meta.get("album") or ""
+    y = 860
+    for line in _wrap(draw, meta.get("name"), f_name, text_width, 2):
+        draw.text((inset, y), line, font=f_name, fill=(255, 255, 255))
+        y += 78 if immersive else 72
+    if sub:
+        draw.text((inset, y + 6), _fit(draw, sub, f_artist, text_width),
+                  font=f_artist, fill=(200, 200, 200))
+    if sub2:
+        draw.text((inset, y + 52), _fit(draw, sub2, f_album, text_width),
+                  font=f_album, fill=(150, 150, 150))
+
+    # 分隔线与底部文案
+    divider = 1150 if immersive else 1090
+    footer_offset = 30 if immersive else 0
+    draw.line([(inset, divider), (W - inset, divider)], fill=(70, 70, 70), width=2)
+    cta = meta.get("cta") or ("在 CurrentMusic 收听" if kind == "song" else "在 CurrentMusic 打开")
+    draw.text((inset, 1140 + footer_offset), cta, font=_font(FONT_REG, 24), fill=(150, 150, 150))
+    url_short = share_url.replace("https://", "").replace("http://", "")
+    draw.text((inset, 1185 + footer_offset), _fit(draw, url_short, _font(FONT_MONO, 22), 610),
+              font=_font(FONT_MONO, 22), fill=(210, 210, 210))
+    draw.text((inset, 1228 + footer_offset), "扫码或访问链接", font=_font(FONT_REG, 20), fill=(130, 130, 130))
+    hint = meta.get("hint") or f'也可打开 CurrentMusicX 搜索「{meta.get("name") or ""}」'
+    draw.text((inset, 1268 + footer_offset), _fit(draw, hint, _font(FONT_REG, 19), 610),
+              font=_font(FONT_REG, 19), fill=(150, 150, 150))
+
+    # 二维码
+    qr_position = (880, 1260, 240) if immersive else (860, 1250, 258)
+    _draw_qr(draw, share_url, *qr_position)
+    return img
+
+
+def ensure_image(meta, share_url, style=DEFAULT_STYLE) -> str:
     """生成/命中缓存，返回 JPEG 绝对路径。"""
     if not ready():
         raise ShareUnavailable("服务端分享图未启用（缺少 Pillow / segno / CJK 字体）")
     os.makedirs(SHARE_DIR, exist_ok=True)
-    key = hashlib.sha1(f"{STYLE}|{share_url}".encode()).hexdigest()[:12]
+    key = hashlib.sha1(f"{STYLE_VERSIONS[style]}|{share_url}".encode()).hexdigest()[:12]
     prefix = str(meta.get("type") or "song")
     fp = os.path.join(SHARE_DIR, f"{prefix}-{int(meta.get('id') or 0)}-{key}.jpg")
     if os.path.isfile(fp) and time.time() - os.path.getmtime(fp) < CACHE_TTL:
         return fp
     try:
-        img = render(meta, share_url)
+        img = render(meta, share_url, style)
         tmp = f"{fp}.{os.getpid()}.{threading.get_ident()}.tmp"
         img.save(tmp, "JPEG", quality=92, optimize=True)
         os.replace(tmp, fp)

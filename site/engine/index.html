@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="流声引擎是 CurrentMusic 的开源音乐后端，为流声屿、社区客户端 CurrentMusicX 和 API 开发者提供音乐与账户服务。">
+  <meta property="og:title" content="流声引擎 · CurrentMusic Engine">
+  <meta property="og:description" content="连接播放器、歌单与一起听的开源音乐后端。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://music.20110208.xyz/home/engine/">
+  <link rel="canonical" href="https://music.20110208.xyz/home/engine/">
+  <link rel="icon" href="../assets/favicon.svg?v=sage1" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>流声引擎 · CurrentMusic Engine</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <header class="shell masthead">
+    <a class="brand" href="#main">
+      <img src="../assets/favicon.svg?v=sage1" width="38" height="38" alt="">
+      <span>流声引擎 <small lang="en">CurrentMusic Engine</small></span>
+    </a>
+    <nav class="masthead-nav" aria-label="主导航">
+      <a href="#architecture">工作方式</a>
+      <a href="#develop">开发接入</a>
+      <a class="button button-outline" href="/api-docs/">API 文档 <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="main" class="shell">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot"></span><span lang="en">CURRENTMUSIC ENGINE</span><span class="eyebrow-divider"></span>开源音乐后端</p>
+        <h1 id="hero-title">流声引擎</h1>
+        <p class="hero-tagline">不同的播放器，共用一套音乐服务。</p>
+        <p class="hero-intro">流声屿 Web 和社区客户端 CurrentMusicX 通过同一引擎获取音乐、歌词与账户服务。你也可以接入 API，或在自己的服务器上运行引擎。</p>
+        <div class="actions">
+          <a class="button button-primary" href="/api-docs/reference/quickstart/">开始接入 <span aria-hidden="true">↗</span></a>
+          <a class="button button-outline" href="https://github.com/backrooms-yrc/CurrentMusic/tree/main/backend#readme">自托管指南 <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+
+      <figure class="signal" aria-labelledby="signal-caption">
+        <figcaption id="signal-caption"><span class="status-dot"></span> 服务架构</figcaption>
+        <svg class="signal-wave" viewBox="0 0 560 380" preserveAspectRatio="none" fill="none" aria-hidden="true">
+          <path d="M-30 234C95 234 113 92 241 92S385 254 599 254"/>
+          <path d="M-30 251C97 251 120 108 243 108S389 271 599 271"/>
+          <path d="M-30 268C100 268 125 125 247 125S394 288 599 288"/>
+          <path d="M-30 285C103 285 132 142 250 142S399 305 599 305"/>
+          <path d="M-30 302C105 302 138 159 253 159S404 322 599 322"/>
+        </svg>
+        <div class="signal-flow">
+          <ul class="signal-clients" aria-label="客户端与接入方">
+            <li><small lang="en">WEB</small><a href="/app/">流声屿</a></li>
+            <li><small lang="en">ANDROID</small><a href="https://github.com/bileizhen/CurrentMusicX">CurrentMusicX</a></li>
+            <li><small lang="en">DEVELOPERS</small><a href="/api-docs/">自建客户端</a></li>
+          </ul>
+          <div class="signal-api"><span>CurrentMusic API</span></div>
+          <div class="signal-engine">
+            <img src="../assets/favicon.svg?v=sage1" width="45" height="45" alt="">
+            <div><strong>流声引擎</strong><small lang="en">CurrentMusic Engine</small></div>
+          </div>
+          <p class="signal-services">账户与歌单 <span>·</span> 音源与歌词 <span>·</span> 一起听</p>
+        </div>
+      </figure>
+    </section>
+
+    <section id="architecture" class="section" aria-labelledby="architecture-title">
+      <div class="section-heading">
+        <p class="eyebrow">01 <span class="eyebrow-divider"></span> 工作方式</p>
+        <h2 id="architecture-title">播放器负责体验，引擎管理服务。</h2>
+      </div>
+      <dl class="features">
+        <div><dt><span>01</span> 账户与音乐库</dt><dd>提供账户和会话，管理收藏、歌单和最近播放。客户端可以按各自的方式呈现同一份音乐库。</dd></div>
+        <div><dt><span>02</span> 搜索、音源与歌词</dt><dd>对接音乐上游，提供搜索、歌曲详情和音源解析，并向客户端返回统一的歌词格式。</dd></div>
+        <div><dt><span>03</span> 一起听</dt><dd>为听歌房间维护共享队列和播放状态，让不同设备可以一起听同一首歌。</dd></div>
+      </dl>
+    </section>
+
+    <section id="develop" class="section develop" aria-labelledby="develop-title">
+      <div class="section-heading">
+        <p class="eyebrow">02 <span class="eyebrow-divider"></span> 开发接入</p>
+        <h2 id="develop-title">从一次请求开始。</h2>
+        <p>先用公开的健康检查确认实例可达，再按文档接入搜索、歌词和需要登录的播放接口。</p>
+        <a class="text-link" href="/api-docs/">查看 CurrentMusic API 文档 <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="request">
+        <p><span lang="en">GET</span><code>/cm/health</code><small>无需登录</small></p>
+        <pre><code>curl 'https://music.20110208.xyz/cm/health'</code></pre>
+        <a href="/cm/health">查看主站响应 <span aria-hidden="true">↗</span></a>
+      </div>
+    </section>
+
+    <section class="section self-host" aria-labelledby="self-host-title">
+      <div>
+        <p class="eyebrow">03 <span class="eyebrow-divider"></span> 自托管</p>
+        <h2 id="self-host-title">把引擎运行在自己的服务器上。</h2>
+        <p>引擎使用 Python 和 SQLite。公开仓库提供后端源码、环境配置示例和部署模板。音乐功能可接入独立的网易云 API 实例。</p>
+      </div>
+      <a class="button button-primary" href="https://github.com/backrooms-yrc/CurrentMusic/tree/main/backend#readme">阅读部署说明 <span aria-hidden="true">↗</span></a>
+    </section>
+  </main>
+
+  <footer class="shell site-footer">
+    <div><strong>流声引擎</strong><span lang="en">CurrentMusic Engine</span></div>
+    <nav aria-label="相关链接">
+      <a href="/">CurrentMusic 官网</a>
+      <a href="/app/">CurrentMusic 流声屿</a>
+      <a href="https://github.com/backrooms-yrc/CurrentMusic">GitHub</a>
+    </nav>
+  </footer>
+</body>
+</html>

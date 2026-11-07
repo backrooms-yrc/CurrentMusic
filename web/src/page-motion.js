@@ -1,7 +1,7 @@
 import { createLoadingIndicator, loadingCycle, enhanceLoading } from './loading.js';
 // A single route owner: interrupted navigations cancel their animation and never reset the new page's scroll.
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-export function createPageMotion(container) {
+export function createPageMotion(container, footer) {
   let generation = 0, exit = null, observer = null, indicator = null, cycle = null;
   const animations = new Set();
   function animate(node, frames, duration, easing = 'cubic-bezier(.2,0,0,1)') {
@@ -44,6 +44,7 @@ export function createPageMotion(container) {
     const wrap = document.createElement('div');
     wrap.className = 'cm-page cm-route-page' + (back ? ' cm-page-back' : '');
     container.replaceChildren(wrap);
+    if (footer) container.appendChild(footer);
     container.scrollTop = 0;
     const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
     // Fade in asynchronously inserted content, including in-page tab/filter changes.
@@ -71,7 +72,7 @@ export function createPageMotion(container) {
       if (!hasSkeleton && !wrap.firstElementChild) {
         wrap.innerHTML = `<div class="cm-skeleton" role="status" aria-label="正在加载">
           <div class="sk sk-l1" style="height:28px;width:34%;margin:12px 0 24px;border-radius:6px"></div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:24px">
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:24px">
             <div class="sk" style="height:100px;border-radius:14px"></div>
             <div class="sk" style="height:100px;border-radius:14px"></div>
             <div class="sk" style="height:100px;border-radius:14px"></div>
@@ -125,7 +126,10 @@ export async function dismissBoot() {
   if (!boot.isConnected) return;
   if (reduced() || !boot.animate) { boot.remove(); return; }
   boot.setAttribute('aria-hidden', 'true'); boot.style.pointerEvents = 'none';
-  const animation = boot.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out' });
-  animation.onfinish = () => boot.remove();
-  animation.oncancel = () => boot.remove();
+  await new Promise(resolve => {
+    const animation = boot.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out' });
+    const finish = () => { boot.remove(); resolve(); };
+    animation.onfinish = finish;
+    animation.oncancel = finish;
+  });
 }

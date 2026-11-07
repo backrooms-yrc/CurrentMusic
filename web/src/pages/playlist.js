@@ -29,7 +29,7 @@ export async function render(el, params) {
       badge = isNcm ? '<span class="cm-ncmbadge">网易云</span>' : '';
       songs = p.tracks || [];
       desc = (p.description ? p.description + ' · ' : '') + `共 ${songs.length} 首`;
-      cover = getAimoChartCover(id, p.name) || p.cover || '';
+      cover = p.cover || '';
       shareKind = 'local-playlist';
       shareSub = 'CurrentMusic 歌单';
       owner = !isNcm && p.user_id === (auth.user && auth.user.id);
@@ -42,7 +42,7 @@ export async function render(el, params) {
       const p = await api.ncmPlaylist(id);
       title = p.name || '排行榜'; desc = `网易云 · 共 ${p.trackCount || (p.songs || []).length} 首`;
       songs = p.songs || [];
-      cover = getAimoChartCover(id, p.name) || p.cover || '';
+      cover = p.cover || '';
       shareKind = 'playlist';
       shareSub = p.creator || '网易云歌单';
     } else {
@@ -62,14 +62,15 @@ export async function render(el, params) {
   ];
   const isNcm = kind === 'pl' && badge;
   let sortKey = sessionStorage.getItem('cm.plSort') || (isNcm ? 'desc' : 'asc');
-  const originalSongs = [...songs];
-  const applySort = (arr, key = sortKey) => {
-    if (key === 'desc') return [...arr].reverse();
-    if (key === 'name') return [...arr].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh'));
-    if (key === 'artist') return [...arr].sort((a, b) => (a.artists || '').localeCompare(b.artists || '', 'zh'));
-    return [...arr];
+  const originalSongs = songs;
+  const applySort = key => {
+    if (key === 'desc') return [...originalSongs].reverse();
+    if (key === 'name') return [...originalSongs].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'zh'));
+    if (key === 'artist') return [...originalSongs].sort((a, b) => (a.artists || '').localeCompare(b.artists || '', 'zh'));
+    return originalSongs;
   };
-  songs = applySort(originalSongs, sortKey);
+  songs = applySort(sortKey);
+  const displayCover = (kind === 'ncmpl' && getAimoChartCover(id)) || cover;
 
   el.innerHTML = `
     <div class="cm-plsort" id="plSort">
@@ -77,7 +78,7 @@ export async function render(el, params) {
       ${SORTS.map(s => `<mdui-chip ${s.key === sortKey ? 'selected' : ''} data-k="${s.key}">${s.label}</mdui-chip>`).join('')}
     </div>
     <div class="cm-detail-head">
-      <div class="cm-detail-cover">${cover ? `<img src="${esc(cover)}" onerror="this.remove()">` : ''}<span class="material-icons-outlined">music_note</span></div>
+      <div class="cm-detail-cover">${displayCover ? `<img src="${esc(displayCover)}" onerror="this.remove()">` : ''}<span class="material-icons-outlined">music_note</span></div>
       <div>
         <h2>${esc(title)} ${badge}</h2>
         <div class="cm-detail-sub">${esc(desc)}</div>
@@ -96,27 +97,24 @@ export async function render(el, params) {
     <div id="list"></div>
     <section class="cm-sec" id="plSimiSec" hidden><div class="cm-sec-head"><h2>相似歌单</h2></div><div class="cm-plgrid" id="plSimi"></div></section>`;
 
-  const attachSongList = async () => {
-    await renderSongList(list, songs, {
+  let list = el.querySelector('#list');
+  const attachSongList = (tracks) =>
+    renderSongList(list, tracks, {
       deferStatus: true,
       likeSource: id === 'likes' ? 'local' : undefined,
-      onPlay: i => player.playList(songs, i),
+      onPlay: i => player.playList(tracks, i),
       onRemove: removable ? async i => {
-        const s = songs[i];
+        const s = tracks[i];
         try {
           if (id === 'likes') await api.toggleLike(s);
           else await api.delPlaylistTracks(+id, [s.ncm_id]);
-          const origIdx = originalSongs.indexOf(s);
-          if (origIdx >= 0) originalSongs.splice(origIdx, 1);
-          songs.splice(i, 1);
           render(el, params);
         } catch (e) { toast(e.message); }
       } : undefined,
     });
-  };
 
   el.querySelectorAll('#plSort mdui-chip').forEach(ch => {
-    ch.onclick = async () => {
+    ch.onclick = () => {
       const k = ch.dataset.k;
       sessionStorage.setItem('cm.plSort', k);
       const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
@@ -126,17 +124,18 @@ export async function render(el, params) {
           if (c === ch) c.setAttribute('selected', '');
           else c.removeAttribute('selected');
         });
-        songs = applySort(originalSongs, sortKey);
-        await attachSongList();
-        const playBtn = el.querySelector('#playAll');
-        if (playBtn) playBtn.onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
+        songs = applySort(sortKey);
+        // 旧列表上的红心状态更新或重绘只能写入已移出的节点。
+        const next = list.cloneNode(false);
+        list.replaceWith(next);
+        list = next;
+        attachSongList(songs);
         return;
       }
       render(el, params);
     };
   });
 
-  const list = el.querySelector('#list');
   // 把当前列表顺序写回网易云歌单（T2 写操作，需绑定 + confirm=1）
   const saveOrderBtn = el.querySelector('#saveOrder');
   if (saveOrderBtn) saveOrderBtn.onclick = async () => {
@@ -162,7 +161,7 @@ export async function render(el, params) {
       .catch(e => toast('编辑器加载失败：' + e.message));
   };
 
-  await attachSongList();
+  await attachSongList(songs);
 
   el.querySelector('#playAll').onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
   const sharePl = el.querySelector('#sharePl');

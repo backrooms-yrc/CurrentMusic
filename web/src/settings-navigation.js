@@ -68,20 +68,20 @@ export function mountSettingsNavigation(el) {
     }
   });
   const categories = CATEGORIES.map(category => ({ ...category, groups: category.groups.map(group => ({ ...group, items: group.items.filter(id => rows.has(id)) })).filter(group => group.items.length) }));
-  let parts = location.hash.split('?')[0].split('/').slice(2);
+  const parts = location.hash.split('?')[0].split('/').slice(2);
   let category = categories.find(item => item.id === parts[0]);
   let group = category && category.groups.find(item => item.id === parts[1]);
   const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
-  let lastNavKey = (category ? category.id : '') + '/' + (group ? group.id : '');
   const query = new URLSearchParams(location.hash.split('?')[1] || '');
   let search = query.get('q') || '';
   const href = (cat, section) => '#/settings' + (cat ? '/' + cat.id : '') + (section ? '/' + section.id : '');
   const icon = name => `<span class="material-icons-outlined" aria-hidden="true">${name}</span>`;
+  const crumbsHTML = () => `<a href="#/settings">设置</a>${category ? `${icon('chevron_right')}<a href="${href(category)}" ${!group ? 'aria-current="page"' : ''}>${category.title}</a>` : ''}${group ? `${icon('chevron_right')}<span aria-current="page">${group.title}</span>` : ''}`;
   el.innerHTML = `<section class="cm-settings-hub">
     <header class="cm-settings-header"><div><span class="cm-settings-eyebrow">MAKE IT YOURS</span><h1>设置</h1><p>把音乐空间，调成你喜欢的样子。</p></div><div class="cm-settings-emblem" aria-hidden="true">${icon('tune')}</div></header>
     <div class="cm-settings-search"><label for="settingsSearch">${icon('search')}<span class="cm-sr-only">搜索全部设置</span></label><input id="settingsSearch" type="search" autocomplete="off" placeholder="搜索设置，例如：音质、主题、两步验证" value="${esc(search)}"><button type="button" id="clearSettingsSearch" aria-label="清除搜索">${icon('close')}</button></div>
     <div class="cm-settings-layout"><nav class="cm-settings-sidebar" aria-label="设置分类"><a href="#/settings" ${!category ? 'aria-current="page"' : ''}>${icon('dashboard')}<span>全部设置</span></a>${categories.map(cat => `<a href="${href(cat)}" ${cat === category ? 'aria-current="page"' : ''}>${icon(cat.icon)}<span>${cat.title}</span></a>`).join('')}</nav>
-    <div class="cm-settings-main"><nav class="cm-settings-crumbs" aria-label="当前位置"><a href="#/settings">设置</a>${category ? `${icon('chevron_right')}<a href="${href(category)}" ${!group ? 'aria-current="page"' : ''}>${category.title}</a>` : ''}${group ? `${icon('chevron_right')}<span aria-current="page">${group.title}</span>` : ''}</nav>
+    <div class="cm-settings-main"><nav class="cm-settings-crumbs" aria-label="当前位置">${crumbsHTML()}</nav>
     <div id="settingsContent"></div></div></div><div id="settingsStore" hidden></div></section>`;
   const store = el.querySelector('#settingsStore');
   rows.forEach(row => store.appendChild(row));
@@ -94,23 +94,8 @@ export function mountSettingsNavigation(el) {
     ids.forEach(id => panel.querySelector('.cm-setting-list').appendChild(rows.get(id)));
     content.appendChild(panel);
   };
-  function paint({ animate = false } = {}) {
-    const currentKey = (category ? category.id : '') + '/' + (group ? group.id : '');
-    const needTransition = isAimo && (animate || (currentKey !== lastNavKey && !search));
-    lastNavKey = currentKey;
-
+  function paint() {
     rows.forEach(row => store.appendChild(row)); content.replaceChildren();
-    if (needTransition) {
-      try {
-        content.animate([
-          { opacity: 0, transform: 'translateY(6px)' },
-          { opacity: 1, transform: 'translateY(0)' }
-        ], {
-          duration: 180,
-          easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
-        });
-      } catch {}
-    }
     const words = search.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
     clear.hidden = !search;
     if (words.length) {
@@ -127,22 +112,10 @@ export function mountSettingsNavigation(el) {
       summary.textContent = `找到 ${count} 项相关设置`;
       if (!count) content.insertAdjacentHTML('beforeend', `<div class="cm-settings-empty">${icon('search_off')}<h2>没有找到相关设置</h2><p>试试更简短的词，例如“主题”“下载”或“2FA”。</p><button type="button" id="resetSettingsSearch">清除搜索</button></div>`);
       const reset = content.querySelector('#resetSettingsSearch'); if (reset) reset.onclick = () => { input.value = ''; updateSearch(); input.focus(); };
-    } else if (isAimo) {
-      if (category) {
-        content.innerHTML = `<div class="cm-settings-category-heading"><h2>${category.title}</h2><p>${category.description}</p></div>`;
-        const targetGroups = group ? [group] : category.groups;
-        targetGroups.forEach(sec => addRows(category, sec, sec.items, false));
-      } else {
-        const cards = document.createElement('div'); cards.className = 'cm-settings-categories';
-        categories.forEach(item => {
-          const a = document.createElement('a'); a.className = 'cm-settings-card'; a.href = href(item);
-          const count = item.groups.reduce((sum, entry) => sum + entry.items.length, 0);
-          a.innerHTML = `${icon(item.icon)}<div><h2>${item.title}</h2><p>${item.description}</p><span>${count} 项设置 · ${item.groups.map(s => s.title).join(' / ')}</span></div>${icon('chevron_right')}`;
-          cards.appendChild(a);
-        });
-        content.appendChild(cards);
-        content.insertAdjacentHTML('beforeend', '<p class="cm-settings-footnote">找不到想改的选项？试试上方搜索，支持设置名称和常用关键词。</p>');
-      }
+    } else if (isAimo && category) {
+      content.innerHTML = `<div class="cm-settings-category-heading"><h2>${category.title}</h2><p>${category.description}</p></div>`;
+      const sections = group ? [group] : category.groups;
+      sections.forEach(section => addRows(category, section, section.items, false));
     } else if (category && group) {
       addRows(category, group, group.items, false);
     } else {
@@ -165,63 +138,29 @@ export function mountSettingsNavigation(el) {
     history.replaceState(history.state, '', base + (search ? '?q=' + encodeURIComponent(search) : ''));
     paint();
   }
-  function navigateTo(targetHref, { push = true } = {}) {
-    const clean = targetHref.split('?')[0];
-    parts = clean.split('/').slice(2);
-    category = categories.find(item => item.id === parts[0]);
-    group = category && category.groups.find(item => item.id === parts[1]);
-
-    if (push) {
-      history.pushState(null, '', targetHref);
-    }
-
-    if (search) {
-      search = '';
-      input.value = '';
-      clear.hidden = true;
-    }
-
-    const sideLinks = el.querySelectorAll('.cm-settings-sidebar a');
-    sideLinks.forEach(link => {
-      const linkHref = link.getAttribute('href');
-      const isCurrent = (!category && linkHref === '#/settings') ||
-                        (category && linkHref === href(category));
-      if (isCurrent) {
-        link.setAttribute('aria-current', 'page');
-      } else {
-        link.removeAttribute('aria-current');
-      }
-    });
-
-    const crumbs = el.querySelector('.cm-settings-crumbs');
-    if (crumbs) {
-      crumbs.innerHTML = `<a href="#/settings">设置</a>${category ? `${icon('chevron_right')}<a href="${href(category)}" ${!group ? 'aria-current="page"' : ''}>${category.title}</a>` : ''}${group ? `${icon('chevron_right')}<span aria-current="page">${group.title}</span>` : ''}`;
-    }
-
-    paint({ animate: true });
-  }
-
   if (isAimo) {
-    el.addEventListener('click', event => {
-      const link = event.target.closest('a');
-      if (!link) return;
-      const targetHref = link.getAttribute('href');
-      if (targetHref && targetHref.startsWith('#/settings')) {
-        event.preventDefault();
-        navigateTo(targetHref, { push: true });
+    const crumbs = el.querySelector('.cm-settings-crumbs');
+    const sideLinks = el.querySelectorAll('.cm-settings-sidebar a');
+    let transition;
+    el.querySelector('.cm-settings-hub').addEventListener('cm-aimo-settings-navigate', event => {
+      event.preventDefault();
+      const [path, query] = event.detail.split('?');
+      const [, , categoryId, groupId] = path.split('/');
+      category = categories.find(item => item.id === categoryId);
+      group = category && category.groups.find(item => item.id === groupId);
+      input.value = search = new URLSearchParams(query || '').get('q') || '';
+      sideLinks.forEach(link => {
+        if (link.getAttribute('href') === href(category)) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+      });
+      crumbs.innerHTML = crumbsHTML();
+      paint();
+      if (transition) transition.cancel();
+      if (content.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        transition = content.animate([{ opacity: 0, transform: 'translateY(6px)' },
+          { opacity: 1, transform: 'none' }], { duration: 180, easing: 'cubic-bezier(.22,1,.36,1)' });
       }
     });
-
-    const handleAimoSubroute = () => {
-      if (!el.isConnected) {
-        window.removeEventListener('cm-aimo-settings-navigate', handleAimoSubroute);
-        return;
-      }
-      if (location.hash.startsWith('#/settings')) {
-        navigateTo(location.hash, { push: false });
-      }
-    };
-    window.addEventListener('cm-aimo-settings-navigate', handleAimoSubroute);
   }
 
   input.addEventListener('input', updateSearch);

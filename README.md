@@ -14,7 +14,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-216359?style=flat-square" alt="MIT 许可"></a>
 </p>
 
-**[打开 Web 播放器](https://music.20110208.xyz/app/)** · **[社区客户端 CurrentMusicX](https://github.com/bileizhen/CurrentMusicX)**
+**[打开 CurrentMusic 流声屿](https://music.20110208.xyz/app/)** · **[社区客户端 CurrentMusicX](https://github.com/bileizhen/CurrentMusicX)** · **[流声引擎官网](https://music.20110208.xyz/home/engine/)**
 
 [界面预览](#界面预览) · [功能一览](#功能一览) · [自托管与构建](#自托管与构建) · [API 文档](https://music.20110208.xyz/api-docs/)
 
@@ -51,7 +51,7 @@
 | **播放与歌词** | 音质选择、自动音源回退、逐字歌词与翻译、音质资料、副歌跳转及版本推荐。 |
 | **整理曲库** | 自建歌单、红心、收藏、最近播放和听歌统计，支持绑定网易云。 |
 | **一起听与分享** | 房间内同步播放和管理队列，生成歌曲链接、方块或沉浸式分享图。 |
-| **外观与交互** | 深浅主题、封面取色、玻璃效果、迷你播放器，以及手机和平板、桌面的响应式布局。 |
+| **外观与交互** | 深浅主题、封面取色、玻璃效果、迷你播放器，以及手机和平板、桌面的响应式布局。在「设置 → 外观 → 界面风格」可选用 Aimo 设计。 |
 | **账号与交流** | 通行密钥、两步验证、社区动态、聊天室和可选 AI 助手。 |
 
 ## 自托管与构建

@@ -87,12 +87,22 @@ async function run() {
       return { ok: true, text: async () => JSON.stringify(result) };
     };
     const qqOptions = qqCandidates(songReference, { fetchImpl: fetchQQ });
-    await rejects(matchCandidates(songReference, [qqOptions[0]]), 'no_verified_source');
-    const alternatives = await matchCandidates(songReference, qqOptions);
+    let releaseLegacy;
+    const slowLegacy = new Promise(resolve => { releaseLegacy = resolve; });
+    const legacyAttempts = [];
+    const alternatives = await matchCandidates(songReference, [qqOptions, {
+      name: 'slow-legacy', timeoutMs: 10000, get: () => { legacyAttempts.push('slow'); return slowLegacy; },
+    }, {
+      name: 'later-legacy', get: () => { legacyAttempts.push('later'); return base + '/html'; },
+    }]).finally(() => releaseLegacy(base + '/html'));
+    assert.deepEqual(legacyAttempts, ['slow'], 'independent source runs while QQ tries both qualities in one slot');
     assert.equal(alternatives.source, 'vkeys:qq:1');
     assert.equal(alternatives.durationMs, 299000);
-    assert.equal(requests.filter(u => u.pathname === '/v2/music/tencent').length, 1, 'parallel qualities share the metadata lookup');
-    assert(requests.filter(u => u.pathname.endsWith('/song/link')).every(u => u.searchParams.get('mid') === qq.mid));
+    assert(alternatives.attempts.some(attempt => attempt.source === 'vkeys:qq:2' && attempt.reason === 'duration_mismatch'));
+    assert.equal(requests.filter(u => u.pathname === '/v2/music/tencent').length, 1, 'both qualities share the metadata lookup');
+    const links = requests.filter(u => u.pathname.endsWith('/song/link'));
+    assert(links.every(u => u.searchParams.get('mid') === qq.mid));
+    assert.deepEqual(links.map(u => u.searchParams.get('quality')), ['2', '1']);
     const malformed = qqCandidates(songReference, { fetchImpl: async url => ({ ok: true, text: async () =>
       JSON.stringify(String(url).includes('/v2/') ? { code: 200, data: [qq] } : { code: 0, data: { songMID: 'wrong', url: base + '/full' } }) }) });
     await rejects(matchCandidates(songReference, malformed), 'no_verified_source');

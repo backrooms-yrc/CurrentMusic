@@ -171,8 +171,6 @@ window.addEventListener('hashchange', () => {
   }
 });
 
-let currentRoutePath = '';
-
 async function router({ refresh = false } = {}) {
   const hash = location.hash || '#/home';
   if (needsWelcome() && !/^#\/(welcome|two-factor|security-question|legal)(?:[/?]|$)/.test(hash)) { location.hash = '#/welcome'; return; }
@@ -202,16 +200,20 @@ async function router({ refresh = false } = {}) {
   if (!matched) { location.hash = '#/home'; return; }
   if (params) params.query = query;   // 页面按需读取（大多忽略）
 
-  const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
-  if (isAimo && !refresh && routePath.startsWith('#/settings') && currentRoutePath && currentRoutePath.startsWith('#/settings')) {
-    currentRoutePath = routePath;
-    window.dispatchEvent(new CustomEvent('cm-aimo-settings-navigate', { detail: { routePath, query } }));
-    return;
+  if (!refresh && matched.page === settingsPage && document.documentElement.getAttribute('data-ui-preset') === 'aimo') {
+    const mounted = out().firstElementChild;
+    const hub = mounted && mounted.style.pointerEvents !== 'none' && mounted.querySelector('.cm-settings-hub');
+    if (hub && !hub.dispatchEvent(
+      new CustomEvent('cm-aimo-settings-navigate', { cancelable: true, detail: hash })
+    )) return;
   }
-  currentRoutePath = routePath;
 
   document.body.classList.toggle('cm-onboarding-active', needsWelcome() && /^#\/(welcome|two-factor|security-question)$/.test(routePath));
-  document.getElementById('pageTitle').textContent = routePath === '#/user' && !auth.token ? '登录与注册' : matched.title;
+  const pageTitle = document.getElementById('pageTitle');
+  const isHome = matched.page === home;
+  pageTitle.classList.toggle('cm-home-title', isHome && !window.NativeApi?.versionCode);
+  pageTitle.textContent = isHome ? document.title
+    : routePath === '#/user' && !auth.token ? '登录与注册' : matched.title;
   document.querySelectorAll('#bottomNav .navItem').forEach(a => {
     const active = a.getAttribute('href') === routePath.split('/').slice(0, 2).join('/')
       || (a.getAttribute('href') === '#/library' && /^#\/(pl|ncmpl)\//.test(routePath));
@@ -219,11 +221,18 @@ async function router({ refresh = false } = {}) {
     if (active) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  if (!showPage) showPage = createPageMotion(out());
+  if (!showPage) {
+    const footer = window.NativeApi?.versionCode ? null : document.getElementById('engineCredit').content.firstElementChild;
+    showPage = createPageMotion(out(), footer);
+  }
   await showPage(wrap => matched.page.render(wrap, params), navDirection === 'back', { refresh });
 }
 
 function boot() {
+  if (window.NativeApi?.versionCode) {
+    document.title = 'CurrentMusic';
+    document.querySelectorAll('[data-web-brand]').forEach(el => { el.textContent = document.title; });
+  }
   applyTheme();
   bootColorScheme();   // 配色方案（默认动态取色，取色随播放封面变化）
   bootFontScale();     // 字体大小（默认标准；不跟随系统字号，见 ui.js FONT_SCALES）
@@ -241,10 +250,9 @@ function boot() {
   initRipple();
   initImageFade();   // 全局图片加载动画（骨架微光 → 渐显）
   warmDecorScales(); // 预热头像挂件比例表（本地缓存即时可用，后台校验版本号）
-  initTopAccount();
   window.__cmBooted = true;   // 供 index.html 的启动诊断判定
   initExpressiveLoading();
-  dismissBoot();
+  initTopAccount(dismissBoot());
 
   document.getElementById('topAction').onclick = () => { location.hash = '#/settings'; };   // 齿轮直达设置页
 
@@ -320,8 +328,13 @@ function boot() {
   // 启动自动检测更新（延迟启动，不与首屏渲染抢资源）
   setTimeout(() => { checkUpdate({ silent: true }).catch(() => {}); }, 1500);
 
-  // 系统深浅色切换时（Android 壳转发 cmthemechange），auto 模式即时跟随
+  // 浏览器与 Android 壳的系统主题变化都交给现有主题设置处理。
   window.addEventListener('cmthemechange', applyTheme);
+  if (!window.NativeApi) {
+    const browserTheme = window.matchMedia('(prefers-color-scheme: dark)');
+    if (browserTheme.addEventListener) browserTheme.addEventListener('change', applyTheme);
+    else browserTheme.addListener(applyTheme);
+  }
 
   // Android 系统返回统一入口（壳调用）：关闭浮层（带动画）→ 原生历史栈返回（吃到后退动画）→ 逐级回首页
   window.__cmHandleBack = function () {

@@ -19,14 +19,14 @@ const cardShell = (id, title) => `
   </section>`;
 
 /** 歌单卡片网格（复用现有 .cm-plgrid/.cm-plcard 样式，不新增默认皮肤样式）。 */
-function playlistsHTML(list) {
+function playlistsHTML(list, charts = false) {
   return `<div class="cm-plgrid">${list.map(pl => {
-    const aimoCover = getAimoChartCover(pl.id, pl.name);
-    const coverSrc = aimoCover || (pl.pic ? (pl.pic.startsWith('data:') ? pl.pic : `${esc(pl.pic)}?param=300y300`) : '');
+    const aimoCover = charts && getAimoChartCover(pl.id, pl.name);
+    const coverSrc = aimoCover || (pl.pic ? `${pl.pic}?param=300y300` : '');
     return `
     <div class="cm-plcard" data-id="${pl.id}">
       <div class="cm-plcover">${
-        coverSrc ? `<img src="${coverSrc}" loading="lazy" onerror="this.remove()">` : ''
+        coverSrc ? `<img src="${esc(coverSrc)}" loading="lazy" onerror="this.remove()">` : ''
       }<span class="material-icons-outlined">queue_music</span></div>
       <div class="cm-plname">${esc(pl.name)}</div>
       <div class="cm-plsub">${pl.sub || ''}</div>
@@ -174,7 +174,7 @@ export async function mountDiscover(el) {
     const groups = (v2R.status === 'fulfilled' ? (v2R.value.data || []) : [])
       .filter(g => (g.list || []).length);
     const norm = t => ({
-      id: t.id, name: t.name, pic: getAimoChartCover(t.id, t.name) || t.coverUrl || t.coverImgUrl,
+      id: t.id, name: t.name, pic: t.coverUrl || t.coverImgUrl,
       sub: `${t.updateFrequency || ''}${t.trackCount ? ` · ${t.trackCount} 首` : ''}`,
     });
     const tabs = [{ key: 'all', label: '全部榜单', items: all.map(norm) }]
@@ -184,7 +184,7 @@ export async function mountDiscover(el) {
       s.innerHTML = `<div class="cm-sec-head"><h2>排行榜</h2></div>
         <div class="cm-chips">${tabs.map((t, i) =>
           `<span class="cm-hot${i === idx ? ' on' : ''}" data-i="${i}">${esc(t.label)}</span>`).join('')}</div>`
-        + playlistsHTML(tabs[idx].items.slice(0, 12));
+        + playlistsHTML(tabs[idx].items.slice(0, 12), true);
       s.querySelectorAll('[data-i]').forEach(c => { c.onclick = () => draw(+c.dataset.i); });
       s.querySelectorAll('.cm-plcard').forEach(c => { c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.id}`; }; });
     };
