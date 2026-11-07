@@ -98,6 +98,7 @@ function playerVisualsVisible() {
 }
 function syncPlayerVisuals() {
   const visible = playerVisualsVisible();
+  overlay()?.classList.toggle('pl-background-paused', !visible);
   if (waveCtl) waveCtl.setVisible(visible);
   if (!visible) {
     stopKaraoke();
@@ -379,7 +380,7 @@ const LYRIC_SIZES = [
   { key: 'xl', label: 'Aa·特大', fs: 19 },
 ];
 let lyricSizeKey = localStorage.getItem('cm.lyricSize') || defaultLyricSizeKey();
-let bgGradOn = localStorage.getItem('cm.bgGrad') === '1';   // 沉浸模式（原动态渐变背景），默认关闭
+let bgGradOn = localStorage.getItem('cm.bgGrad') !== '0';
 let lyricKaraoke = localStorage.getItem('cm.karaoke') !== '0';   // 逐字歌词（卡拉OK），默认开启
 
 // 窄屏播放页视图：cover（封面+控制） ↔ lyric（整屏歌词），点击主区域切换
@@ -952,10 +953,10 @@ async function openFull() {
   ov.classList.remove('closing');
   ov.hidden = false;
   document.body.classList.add('player-open');
-  // 主题「翱翔鸟Music」：全屏播放页 = 翱翔鸟 Music 的 Apple Music 歌词页布局。
-  // 只替换这一主题下的结构与样式，其它皮肤维持原有 DOM 与 CSS 不变。
+  // 翱翔鸟Music 使用独立的 Apple Music 歌词页布局。
   const sb = isSoaringBirdTheme();
-  const bgStyle = m.pic ? `background-image:linear-gradient(rgba(24,22,30,.45),rgba(24,22,30,.62)),url('${esc(m.pic)}')` : '';
+  const backdrop = `<div class="${sb ? 'lp-backdrop' : 'pl-bg'}" id="plBg" aria-hidden="true"><div class="pl-ambient"></div></div>`;
+  ov.classList.toggle('pl-background-paused', !playerVisualsVisible());
   const qualityNow = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
   const modeNow = PLAY_MODES.find(x => x.key === player.playMode);
   const plAi = `<span class="pl-ai-btn" id="plAskAi" title="问 CurrentMusicAI"><span class="pl-ai-ava material-icons-outlined">auto_awesome</span><b>问AI</b></span>`;
@@ -988,15 +989,7 @@ async function openFull() {
 
   ov.innerHTML = sb ? `
     <div class="lp" role="dialog" aria-label="正在播放">
-      <div class="lp-backdrop" id="plBg" aria-hidden="true">
-        ${m.pic ? `<img src="${esc(m.pic)}" alt="">` : ''}
-        <div class="lp-fluid">
-          <span class="lp-blob lp-blob--1"></span>
-          <span class="lp-blob lp-blob--2"></span>
-          <span class="lp-blob lp-blob--3"></span>
-          <span class="lp-blob lp-blob--4"></span>
-        </div>
-      </div>
+      ${backdrop}
 
       <button type="button" class="lp-close" id="plClose" aria-label="收起">
         <span class="material-icons-outlined">keyboard_arrow_down</span>
@@ -1061,7 +1054,7 @@ async function openFull() {
         </div>
       </div>
     </div>` : `
-    <div class="pl-bg" id="plBg" style="${bgStyle}"></div>
+    ${backdrop}
     <div class="pl-page">
       <div class="pl-top">
         <span class="pl-btn" id="plClose"><span class="material-icons-outlined">keyboard_arrow_down</span></span>
@@ -1467,8 +1460,8 @@ function openMoreDrawer() {
               <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
             </div>
             <div class="cm-more-row">
-              <div><div class="cm-more-t">沉浸模式</div><div class="cm-more-s">封面主色流动渐变铺满播放页</div></div>
-              <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
+              <div><div class="cm-more-t">动态背景</div><div class="cm-more-s">封面色缓慢流动，换歌时平滑过渡</div></div>
+              <mdui-switch id="mGrad" aria-label="动态背景" ${bgGradOn ? 'checked' : ''}></mdui-switch>
             </div>
           </section>
         </div>
@@ -1600,50 +1593,23 @@ async function doDownload(level) {
   }
 }
 
-// ---------- 播放页背景：动态渐变（默认开）/ 封面模糊 ----------
+// ---------- 播放页背景 ----------
 
 async function applyPlayerBg() {
   const el = document.getElementById('plBg');
   if (!el || !player.meta) return;
-  // 翱翔鸟Music：背景就是参考项目的「封面模糊 + 四个流动色团」，
-  // 不使用 CurrentMusic 的动态渐变/静态封面底，避免多套滤镜叠加（卡顿来源之一）。
-  if (isSoaringBirdTheme()) {
-    const m = player.meta;
-    const img = el.querySelector('img');
-    if (img && m.pic && img.getAttribute('src') !== m.pic) img.src = m.pic;
-    if (!m.pic) return;
-    coverColors(m.pic).then(cs => {
-      if (!cs || !player.meta || player.meta.pic !== m.pic) return;
-      el.style.setProperty('--c1', cs.primary);
-      el.style.setProperty('--c2', cs.deep);
-      el.style.setProperty('--c3', cs.dark);
-      el.style.setProperty('--c4', cs.accent || cs.deep);
-    }).catch(() => {});
-    return;
-  }
+  const pic = player.meta.pic || '';
+  el.classList.toggle('grad', bgGradOn);
   if (!bgGradOn) {
-    el.className = 'pl-bg';
-    el.style.backgroundImage = player.meta.pic
-      ? `linear-gradient(rgba(24,22,30,.45),rgba(24,22,30,.62)),url('${esc(player.meta.pic)}')` : '';
+    el.style.setProperty('--pl-cover-image', pic ? `url(${JSON.stringify(pic)})` : 'none');
     return;
   }
-  el.className = 'pl-bg grad';
-  const g = (cs, deg) => `linear-gradient(${deg}deg, ${cs.primary} 0%, ${cs.deep} 48%, ${cs.dark} 100%)`;
-  const setG = (a, b) => {
-    el.style.setProperty('--g1', a);
-    el.style.setProperty('--g2', b);
-  };
-  setG('linear-gradient(155deg, #6750a4 0%, #4a3a78 48%, #322653 100%)',
-       'linear-gradient(205deg, #4a3a78 0%, #6750a4 55%, #322653 100%)');   // 兜底色组，取色成功后覆盖
-  // 先用「上一次成功的色组」立即上色（coverColors 在取不到时也会返回它），
-  // 再等本次取色回来覆盖：这样切歌不会先闪一下默认紫。
-  const quick = await coverColors(player.meta.pic);
-  if (quick && player.meta && document.getElementById('plBg') === el) {
-    setG(g(quick, 155), g({ ...quick, primary: quick.deep, deep: quick.primary }, 205));
-  }
-  const cs = await coverColors(player.meta.pic);
-  if (!cs || !player.meta || document.getElementById('plBg') !== el) return;
-  setG(g(cs, 155), g({ ...cs, primary: cs.deep, deep: cs.primary }, 205));
+  // 取色期间保留当前背景。旧封面晚到时不能覆盖正在播放的歌曲。
+  const colors = await coverColors(pic, { fallback: false });
+  if (!el.isConnected || !bgGradOn || !player.meta || (player.meta.pic || '') !== pic) return;
+  el.style.setProperty('--pl-bg-base', colors?.dark || '');
+  el.style.setProperty('--pl-bg-main', colors?.primary || '');
+  el.style.setProperty('--pl-bg-accent', colors?.accent || '');
 }
 
 // 动态取色：配色方案为 dynamic 时随封面切换全局主色（含深色档/强调色，见 applyColorScheme）

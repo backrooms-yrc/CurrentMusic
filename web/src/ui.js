@@ -188,9 +188,7 @@ function _extract(imgUrl) {
   });
 }
 
-// 取色入口：缩略图直连 → 后端代理兜底 → null（调用方用默认色组）
-// 最近一次成功的色组：某张封面取不到色时沿用它，而不是掉回默认紫
-// （默认紫闪一下比"沿用上一个封面色"更割裂；这也直接提高了动态取色的覆盖率）
+// 全局配色可沿用最近一次成功的色组；播放页背景可为无封面的歌曲使用自己的底色。
 let _lastPalette = null;
 
 /** 主色 + 深浅档 + 强调色（强调色给进度条/高亮等次级元素用）。 */
@@ -205,27 +203,36 @@ function _paletteOf(raw) {
   };
 }
 
-export async function coverColors(pic) {
-  if (!pic) return _lastPalette;
-  if (_coverColorCache.has(pic)) return _coverColorCache.get(pic);
-  const thumb = pic + (pic.includes('?') ? '&' : '?') + 'param=240y240';
-  const base = localStorage.getItem('cm.base') || '';
-  // 多源依次尝试：直连缩略图 → 后端代理缩略图 → 直连原图 → 后端代理原图。
-  // 任一条成功即可出图（热链/跨域被拦时后面的兜住），这也是"覆盖率"的一部分。
-  const sources = [
-    thumb,
-    base ? `${base}/img?url=${encodeURIComponent(thumb)}` : null,
-    pic,
-    base ? `${base}/img?url=${encodeURIComponent(pic)}` : null,
-  ].filter(Boolean);
-  let raw = null;
-  for (const src of sources) {
-    try { raw = await _extract(src); break; } catch { /* 换下一个源 */ }
+async function _loadCoverColors(pic) {
+  let url;
+  try { url = new URL(pic, location.href); } catch { return null; }
+  const sources = [pic];
+  // 图片代理只接受网易云封面。其他来源直接按原图取色。
+  if (url.hostname === 'music.126.net' || url.hostname.endsWith('.music.126.net')) {
+    url.searchParams.set('param', '240y240');
+    const thumb = url.href;
+    const proxy = src => `${settings.base}/img?url=${encodeURIComponent(src)}`;
+    sources.unshift(thumb, proxy(thumb));
+    sources.push(proxy(pic));
   }
-  if (raw) _lastPalette = _paletteOf(raw);
-  const out = raw ? _lastPalette : _lastPalette;    // 取不到就沿用上一个色组
-  _coverColorCache.set(pic, out);
-  return out;
+  for (const src of sources) {
+    try { return _paletteOf(await _extract(src)); } catch { /* 换下一个源 */ }
+  }
+  return null;
+}
+
+export async function coverColors(pic, { fallback = true } = {}) {
+  if (!pic) return fallback ? _lastPalette : null;
+  // 全局配色和播放页背景在切歌时共享同一次取色请求。
+  if (!_coverColorCache.has(pic)) {
+    _coverColorCache.set(pic, _loadCoverColors(pic).then(colors => {
+      if (colors) _lastPalette = colors;
+      else _coverColorCache.delete(pic);
+      return colors;
+    }));
+  }
+  const colors = await _coverColorCache.get(pic);
+  return colors || (fallback ? _lastPalette : null);
 }
 
 // ---------- 字体大小（默认「标准」；**不跟随系统字号**，由用户在设置页决定） ----------

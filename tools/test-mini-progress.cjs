@@ -10,6 +10,7 @@ const assets = buildSync({ stdin: { resolveDir: root, contents: `
   import './web/src/apple-hig.css';
   import './web/src/app.css';
   import './web/src/watch.css';
+  import './web/src/aimo.css';
   import { initPlayerUI } from './web/src/player-ui.js';
   export { player, tick, notifyState, setClockSource } from './web/src/player.js';
   export { api, auth, settings } from './web/src/api.js';

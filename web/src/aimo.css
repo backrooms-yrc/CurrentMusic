@@ -1878,8 +1878,16 @@ html[data-ui-preset="aimo"] #playerOverlay {
   color: var(--aimo-text-primary) !important;
 }
 
-html[data-ui-preset="aimo"] .pl-bg {
-  display: none !important;
+html[data-ui-preset="aimo"] .pl-bg:not(.grad) {
+  display: none;
+}
+
+html[data-ui-preset="aimo"] .pl-bg.grad {
+  opacity: .20;
+}
+
+html[data-ui-preset="aimo"].mdui-theme-dark .pl-bg.grad {
+  opacity: .55;
 }
 
 html[data-ui-preset="aimo"] .pl-page {

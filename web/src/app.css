@@ -812,8 +812,62 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-bg {
   position: fixed; top: -60px; right: -60px; bottom: -60px; left: -60px; inset: -60px; z-index: 0;
   background-color: var(--cm-primary-dark, #2a2732); background-size: cover; background-position: center;
+  background-image: linear-gradient(rgba(24,22,30,.45), rgba(24,22,30,.62)), var(--pl-cover-image, none);
   filter: blur(60px) brightness(.62) saturate(1.35);
 }
+.pl-bg.grad {
+  top: 0; right: 0; bottom: 0; left: 0;
+  background: none;
+  filter: none;
+}
+
+/* 播放时只移动两个渐变色团，切歌时让底色和色团各自过渡。 */
+#plBg { pointer-events: none; }
+.pl-ambient { display: none; }
+.grad > .pl-ambient {
+  display: block; position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden;
+  background-color: var(--pl-bg-base, #252632);
+}
+.pl-ambient,
+.pl-ambient::before,
+.pl-ambient::after { transition: background-color 1.6s ease; }
+.pl-ambient::before,
+.pl-ambient::after {
+  content: ''; position: absolute; width: 125%; height: 125%;
+  --pl-blob-mask: radial-gradient(ellipse, #000, rgba(0, 0, 0, .68) 32%, transparent 70%);
+  -webkit-mask-image: var(--pl-blob-mask);
+  mask-image: var(--pl-blob-mask);
+  animation: plAmbientDrift 32s ease-in-out infinite alternate;
+}
+.pl-ambient::before {
+  top: -38%; left: -35%;
+  background-color: var(--pl-bg-main, #555574);
+}
+.pl-ambient::after {
+  right: -35%; bottom: -38%;
+  background-color: var(--pl-bg-accent, #485368);
+  animation-duration: 44s;
+  animation-direction: alternate-reverse;
+  --pl-drift-x: -29%; --pl-drift-y: -26%;
+}
+@keyframes plAmbientDrift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(var(--pl-drift-x, 29%), var(--pl-drift-y, 26%), 0); }
+}
+#plBg.grad::after {
+  content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+  background: linear-gradient(rgba(0, 0, 0, .38), rgba(0, 0, 0, .58));
+}
+#playerOverlay.closing .pl-ambient::before,
+#playerOverlay.closing .pl-ambient::after,
+.pl-background-paused .pl-ambient::before,
+.pl-background-paused .pl-ambient::after { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .pl-ambient,
+  .pl-ambient::before,
+  .pl-ambient::after { animation: none; transition: none; }
+}
+
 .pl-page { position: relative; z-index: 1; }
 .pl-page {
   --pl-cover-size: min(68vw, 286px, 40vh);
@@ -1244,29 +1298,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 }
 @media (min-width: 900px) and (max-width: 1199px) {
   .cm-page { padding: 0 4px; }
-}
-
-/* ---------- v1.5.0：动态渐变背景 / 更多抽屉 / 居中垫片 / 贴底进度 / Pad 角块 / 排序条 ---------- */
-
-/* 播放页动态渐变背景：双层渐变伪元素 transform 漂移（GPU 合成，持续流动） */
-.pl-bg.grad {
-  --g1: linear-gradient(155deg, #6750a4 0%, #4a3a78 48%, #322653 100%);
-  --g2: linear-gradient(205deg, #4a3a78 0%, #6750a4 55%, #322653 100%);
-  overflow: hidden;
-  filter: saturate(1.2) brightness(.66);
-  background-image: var(--g1);
-}
-.pl-bg.grad::before,
-.pl-bg.grad::after {
-  content: ''; position: absolute; top: -40%; right: -40%; bottom: -40%; left: -40%; inset: -40%;
-  will-change: transform;
-  animation: bgDrift 16s ease-in-out infinite alternate;
-}
-.pl-bg.grad::before { background-image: var(--g1); }
-.pl-bg.grad::after { background-image: var(--g2); animation-duration: 23s; animation-direction: alternate-reverse; opacity: .75; }
-@keyframes bgDrift {
-  0%   { transform: translate(-5%, -4%) rotate(0deg) scale(1); }
-  100% { transform: translate(5%, 6%) rotate(10deg) scale(1.28); }
 }
 
 /* 更多抽屉 */
@@ -2491,10 +2522,6 @@ html[data-ui-preset="glass"] .cm-auth-apk {
 }
 
 /* ---- 8. 播放页：保留沉浸暗色，但把玻璃质感延伸过去 ---- */
-html[data-ui-preset="glass"] .pl-bg.grad {
-  --g1: linear-gradient(155deg, #0a84ff 0%, #3b2a86 50%, #05070d 100%);
-  --g2: linear-gradient(205deg, #5e5ce6 0%, #0a84ff 55%, #05070d 100%);
-}
 html[data-ui-preset="glass"] .pl-lyric-tools {
   background: linear-gradient(rgba(5, 7, 13, .85) 30%, transparent) !important;
 }
@@ -2877,10 +2904,6 @@ html[data-ui-preset="frost"] .cm-auth-apk {
 }
 
 /* ---- 8. 播放页：保持沉浸暗色，玻璃只加在工具条与角标 ---- */
-html[data-ui-preset="frost"] .pl-bg.grad {
-  --g1: linear-gradient(155deg, #1b3a6b 0%, #0d1a33 52%, #05070d 100%);
-  --g2: linear-gradient(205deg, #0a84ff 0%, #123 55%, #05070d 100%);
-}
 html[data-ui-preset="frost"] .pl-lyric-tools {
   background: linear-gradient(rgba(5, 7, 13, .8) 30%, transparent) !important;
 }
@@ -4511,7 +4534,7 @@ html[data-ui-preset="cmx"] mdui-menu::part(panel) {
 
 /* ---- 播放页：取色模糊背景 + 可切换形状封面 + 左对齐信息 ---- */
 html[data-ui-preset="cmx"] #playerOverlay { background: #111214 !important; }
-html[data-ui-preset="cmx"] .pl-bg {
+html[data-ui-preset="cmx"] .pl-bg:not(.grad) {
   filter: blur(70px) brightness(.44) saturate(1.25) !important;
 }
 html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(74vw, 360px, 42vh); padding-left: 20px; padding-right: 20px; }
@@ -4713,74 +4736,14 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp {
   to { opacity: 1; transform: none; }
 }
 
-/* ---- 背景：模糊封面打底 + 四色团流动（参考 .lp-backdrop / .lp-fluid / .lp-blob） ---- */
+/* 翱翔鸟Music 关闭动态背景时显示模糊封面。 */
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop {
   position: absolute; inset: 0; overflow: hidden; background: #2a2a30;
 }
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop > img {
-  position: absolute; top: 50%; left: 50%; width: 140%; height: 140%;
-  transform: translate(-50%, -50%); object-fit: cover;
-  filter: blur(80px) brightness(.55) saturate(200%);
-  /* 底图自身慢速漂移，避免「一张静止的模糊封面」 */
-  animation: sbLpBackdropIn 1.2s ease both, sbLpDrift 60s ease-in-out infinite alternate;
-}
-@keyframes sbLpBackdropIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes sbLpDrift {
-  from { transform: translate(-50%, -50%) scale(1.2) rotate(0deg); }
-  to   { transform: translate(-53%, -47%) scale(1.34) rotate(3deg); }
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-fluid {
-  position: absolute; inset: 0;
-  /* 只从封面取色：把取色结果提高饱和/亮度，避免深色封面的背景发灰 */
-  filter: blur(64px) saturate(215%) brightness(1.12);
-  will-change: transform; contain: paint;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob {
-  position: absolute; border-radius: 50%;
-  background: radial-gradient(circle at 50% 50%, var(--c) 0%, transparent 68%);
-  opacity: .9; will-change: transform; transform: translateZ(0);
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob--1 {
-  --c: var(--c1, #4a4a58);
-  width: 78vmax; height: 78vmax; top: -30%; left: -18%;
-  animation: sbLpFlow1 30s ease-in-out infinite alternate;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob--2 {
-  --c: var(--c2, #2b2b38);
-  width: 72vmax; height: 72vmax; bottom: -34%; right: -16%;
-  animation: sbLpFlow2 38s ease-in-out infinite alternate;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob--3 {
-  --c: var(--c3, #5a3a42);
-  width: 58vmax; height: 58vmax; top: 12%; right: 4%; opacity: .6;
-  animation: sbLpFlow3 34s ease-in-out infinite alternate;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob--4 {
-  --c: var(--c4, #233040);
-  width: 52vmax; height: 52vmax; bottom: -22%; left: 14%; opacity: .55;
-  animation: sbLpFlow4 42s ease-in-out infinite alternate;
-}
-@keyframes sbLpFlow1 {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to { transform: translate3d(12vw, 9vh, 0) scale(1.28); }
-}
-@keyframes sbLpFlow2 {
-  from { transform: translate3d(0, 0, 0) scale(1.16); }
-  to { transform: translate3d(-11vw, -7vh, 0) scale(.94); }
-}
-@keyframes sbLpFlow3 {
-  from { transform: translate3d(0, 0, 0) scale(.92) rotate(0deg); }
-  to { transform: translate3d(-9vw, 12vh, 0) scale(1.22) rotate(24deg); }
-}
-@keyframes sbLpFlow4 {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to { transform: translate3d(9vw, -11vh, 0) scale(1.3); }
-}
-/* 压暗渐变（Apple .now-playing-structure：只在底部压暗，顶部保持干净）
-   linear-gradient(0deg,#0006 0,#0000 50%) */
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop::after {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(0deg, rgba(0, 0, 0, .4) 0%, rgba(0, 0, 0, 0) 50%);
+html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop:not(.grad)::before {
+  content: ''; position: absolute; inset: -60px;
+  background: var(--pl-cover-image, none) center / cover;
+  filter: blur(60px) brightness(.55) saturate(1.35);
 }
 
 /* ---- 收起按钮（参考 .lp-close） ---- */
@@ -5227,12 +5190,8 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__sub {
     grid-template-rows: auto auto auto auto auto; row-gap: 14px;
   }
   html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork { width: min(72vw, 300px); margin: 0 auto; }
-  /* 移动端关掉整列的 plus-lighter 混合与背景光斑动画：滚动/换行卡顿的两大来源 */
+  /* 移动端避免在滚动时混合整列歌词。 */
   html[data-ui-preset="soaringbird"] #playerOverlay .lp-right { height: auto; margin-top: 20px; mix-blend-mode: normal; }
-  html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob { animation: none; }
-  html[data-ui-preset="soaringbird"] #playerOverlay .lp-fluid::before,
-  html[data-ui-preset="soaringbird"] #playerOverlay .lp-fluid::after { animation: none; }
-  html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop > img { animation: sbLpBackdropIn 1.2s ease both; }
   /* 必须给固定高度并保留内部滚动：若 height:auto，歌词靠整页滚动，
      lpScrollToArtwork 无处可滚 → 播放时歌词不会跟随（表现为「卡住/错位」）。 */
   html[data-ui-preset="soaringbird"] #playerOverlay .lp-lyrics {
@@ -5296,7 +5255,6 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__sub {
 @media (prefers-reduced-motion: reduce) {
   html[data-ui-preset="soaringbird"] #playerOverlay,
   html[data-ui-preset="soaringbird"] #playerOverlay .lp { animation: none; }
-  html[data-ui-preset="soaringbird"] #playerOverlay .lp-blob,
   html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork,
   html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__badge {
     animation: none !important;
