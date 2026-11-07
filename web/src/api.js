@@ -370,15 +370,16 @@ export const api = {
   /**
    * 播放地址解析。
    * @param {number} ncmId
-   * @param {string} level  auto | 8 档任一
+   * @param {string} level  auto 或指定音质档位
    * @param {string} [immerse] 仅 sky 生效：c51(5.1) | ste(环绕立体声)
-   * @param {object} [opts] { refresh:true 卡顿自愈换 CDN 线 | maxBr: 码率上限 | alts:true 候选边缘 }
+   * @param {object} [opts] { supportsDolby:true 设备支持杜比 | refresh:true 换 CDN 线 | maxBr: 码率上限 | alts:true 候选边缘 }
    */
   songUrl: (ncmId, level, immerse, opts) => {
     const o = opts || {};
     let qs = `/ncm/song/url?id=${ncmId}&level=${level}`;
     if (immerse) qs += '&immerse=' + immerse;
     if (o.maxBr) qs += '&maxBr=' + o.maxBr;
+    if (level === 'auto' && o.supportsDolby) qs += '&supportsDolby=1';
     if (o.refresh) qs += '&refresh=1';
     if (o.alts) qs += '&alts=1';
     if (o.host) qs += '&host=' + encodeURIComponent(o.host);

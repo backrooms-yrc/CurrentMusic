@@ -54,5 +54,21 @@ function setup(entry = 'network') {
   await assert.rejects(s.resolveSongUrl({ncm_id:1},'auto'),/HTTPS/);
   sc.fetch=async()=>{sl.set('cm.audioProvider','currentmusic'); return {ok:true,json:async()=>({success:true,data:{url:'https://audio.test/music'}})}};
   await assert.rejects(s.resolveSongUrl({ncm_id:1},'auto'),/设置已改变/);
+  sc.fetch = async url => {
+    const q = new URL(url, sc.location).searchParams;
+    request = q;
+    return { ok: true, json: async () => ({ url: 'https://audio.test/music',
+      level: q.has('supportsDolby') ? 'dolby' : q.get('level') === 'auto' ? 'jymaster' : q.get('level') }) };
+  };
+  sc.Audio = class { canPlayType(mime) { return mime === 'audio/mp4; codecs="ec-3"' ? 'probably' : ''; } };
+  assert.equal((await s.resolveSongUrl({ncm_id:1},'auto')).autoDolby, true);
+  assert.equal(request.get('supportsDolby'), '1');
+  assert.equal((await s.resolveSongUrl({ncm_id:1},'jymaster')).level, 'jymaster');
+  assert(!request.has('supportsDolby'));
+  assert.equal((await s.resolveSongUrl({ncm_id:1},'auto', undefined, { supportsDolby: false })).level, 'jymaster');
+  assert(!request.has('supportsDolby'));
+  sc.Audio.prototype.canPlayType = () => '';
+  assert.equal((await s.resolveSongUrl({ncm_id:1},'auto')).level, 'jymaster');
+  assert(!request.has('supportsDolby'));
   console.log('PASS: mirror identity, partial reads and cancellation, HTTP/MIME failures, verified CDN switching, stale source rejection, LeiZ credentials isolated and errors preserved');
 })().catch(e=>{console.error(e);process.exitCode=1;});

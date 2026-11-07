@@ -641,7 +641,8 @@ def _probe_audio_once(url, timeout, strict=False):
     return (ok, info)
 
 
-def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, timing=None):
+def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, timing=None,
+             require_exact=False):
     """取某档位的播放地址。
 
     ``probe=False`` 跳过 2KB 音频头校验（也不返回 sr/bits/ch）：档位择优时先用它
@@ -674,11 +675,13 @@ def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, t
         raise NcmError("该歌曲不可播放（版权/地区限制）")
     if it.get("freeTrialInfo"):
         raise NcmError("官方接口仅返回试听片段，需尝试备用音源")
+    if require_exact and it.get("level") != level:
+        raise NcmError(f"上游未返回 {level} 档位")
     url = _https(it["url"])
     spec = {}
     if probe:
         t_probe = time.time()
-        ok, spec = probe_audio(url)
+        ok, spec = probe_audio(url, strict=True) if require_exact else probe_audio(url)
         if timing is not None:
             timing["probeMs"] = int((time.time() - t_probe) * 1000)
         if not ok:

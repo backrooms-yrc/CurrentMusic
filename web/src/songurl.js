@@ -1,11 +1,18 @@
 // 播放地址解析（阶段二）：三级回退，解决「地区受限 / 已下架」的曲目播放
 //
-//   1) 项目路由 /ncm/song/url —— 服务端 SVIP 八档并行探测，正常曲目走这条
+//   1) 项目路由 /ncm/song/url —— 服务端按客户端能力并行探测音质
 //   2) /song/url/match        —— 解灰：从其它音源取直链（周杰伦等地区受限曲目的关键）
 //   3) /song/url              —— 老接口，兜底
 //   4) /check/music           —— 都失败时判断「是版权不可播还是网络问题」，给出准确文案
 import { network, sourceIdentity } from './network.js';
 import { api } from './api.js';
+
+// EC-3 解码能力由当前浏览器报告。实际输出由系统和音频设备决定。
+function supportsDolby() {
+  if (typeof Audio === 'undefined') return false;
+  const support = new Audio().canPlayType?.('audio/mp4; codecs="ec-3"');
+  return support === 'probably' || support === 'maybe';
+}
 
 /** 把上游三种不同的响应形状统一成 { url, type, level }。 */
 function pickUrl(d) {
@@ -70,13 +77,16 @@ async function resolveCurrentMusicUrl(meta, level, immerse, opts) {
   try {
     // immerse 必须一起传：音效「沉浸环绕声·环绕」就是 sky + immerseType=ste，
     // 漏传会静默降级成默认的 c51(5.1) 流。
-    const info = await api.songUrl(id, level, immerse, Object.assign({ alts: true }, opts));
+    const options = { alts: true, ...opts };
+    if (level === 'auto' && options.supportsDolby === undefined) options.supportsDolby = supportsDolby();
+    const info = await api.songUrl(id, level, immerse, options);
     const url = pickUrl(info);
     // 透传上游字段：sr/bits/ch（文件头解析出的真实规格，客户端据此提示高解析度档位）、
     // br/size/md5（展示与缓存判断）、host（卡顿上报要指名是哪条 CDN 线）——
     // 曾经只挑 url/type/level，导致规格信息丢失。
     if (url) return Object.assign({}, info, {
       url, type: (info && info.type) || 'mp3', level: (info && info.level) || level || 'auto',
+      autoDolby: level === 'auto' && options.supportsDolby && info.level === 'dolby',
     });
     lastErr = new Error('该音质档位无可用地址');
   } catch (e) { lastErr = e; }

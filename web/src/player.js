@@ -1,5 +1,5 @@
 import { network, probeLines, swapLine, lineBest, famOf, sourceIdentity } from './network.js';
-// 播放引擎：单例 audio、队列、音质选择（默认自动最高，后端并行探测母带档）、循环/随机、MediaSession。
+// 播放引擎：单例 audio、队列、自动音质、循环/随机、MediaSession。
 import { mdui } from './md.js';
 import { api, auth, settings, ncmSongs } from './api.js';
 import { toast, tierLabel } from './ui.js';
@@ -219,13 +219,23 @@ let corsPending = null;         // 待回退重试的 { url, pos, host }（带 C
 function loadUrl(url, pos) {
   corsPending = null;
   const host = hostOf(url);
-  const badHost = !!(host && corsFailHosts[host]);   // 该域名已知不支持 CORS
+  // 杜比交给系统直接输出，避免 Web Audio 图对声道重新混音。
+  const direct = player.urlInfo?.level === 'dolby' || !!(host && corsFailHosts[host]);
   // 【危险路径防御】已知不支持 CORS 的域名 + 当前元素已挂音频图 → 必须**先换新元素**
   // 再普通加载。否则跨域污染的音源会让音频图输出静音，且**不会触发 error 事件**
   // （context.state 仍是 running，看门狗也发现不了）→ 表现为"歌在放但没声音"，
   // 是最难排查的一类故障。
-  if (badHost && graphEl) { teardownGraph({ keepContext: true }); disposeAudio(audio); audio = makeAudio(); }
-  if (!vizDisabled && !badHost) {
+  if (direct && graphEl) {
+    const old = audio;
+    teardownGraph({ keepContext: true });
+    audio = makeAudio();
+    audio.volume = old.volume;
+    audio.muted = old.muted;
+    audio.defaultPlaybackRate = old.defaultPlaybackRate;
+    audio.playbackRate = old.playbackRate;
+    disposeAudio(old);
+  }
+  if (!vizDisabled && !direct) {
     audio.crossOrigin = 'anonymous';       // CDN 实测带 access-control-allow-origin: *
     corsPending = { url: url, pos: pos || 0, host: host };
   } else {
@@ -480,8 +490,7 @@ export const player = {
         } catch (e) { /* 忽略 */ }
       }, 2000);
       const hardStop = setTimeout(stop, capWall * 1000);
-      this._prefetch = { identity, id: nx.ncm_id, url: info.url, type: info.type, level: info.level,
-                         host: info.host, hosts: info.hosts, el };
+      this._prefetch = { identity, id: nx.ncm_id, info, el };
     } catch { /* 预取失败不影响正常播放 */ }
     finally { this._prefetchBusy = false; }
   },
@@ -599,7 +608,7 @@ export const player = {
     this.persist();
   },
 
-  async playAt(i) {
+  async playAt(i, { skipDolby = false, pos = 0 } = {}) {
     if (i < 0 || i >= this.queue.length || (this.playPending && this.queue[i] === this.meta)) return;
     if (!auth.token) {                     // 游客：弹登录提示，不解析音源
       this.loading = false;
@@ -609,7 +618,7 @@ export const player = {
       return;
     }
     flushListen(true);             // 结算上一首，包括尚未上报的尾段
-    const request = this._playRequest = {};
+    const request = this._playRequest = { skipDolby };
     this.index = i;
     const meta = this.meta = this.queue[i];
     this.urlInfo = null;
@@ -634,16 +643,15 @@ export const player = {
     let info;
     try {
       const pf = this._prefetch;
-      if (pf && pf.identity === sourceIdentity() && String(pf.id) === String(this.meta.ncm_id) && pf.url) {
-        info = { url: pf.url, type: pf.type || 'mp3', level: pf.level || 'auto',
-                 host: pf.host, hosts: pf.hosts };
+      if (!skipDolby && pf && pf.identity === sourceIdentity() && String(pf.id) === String(this.meta.ncm_id)) {
+        info = pf.info;
         // 用完即弃：已缓冲字节留在媒体缓存供主元素复用，下载立即终止
         this._discardPrefetch();
         this._prefetch = null;
       } else {
         const _pl2 = effectiveLevel();
         try {
-          info = await resolveSongUrl(meta, _pl2.level, _pl2.immerse);
+          info = await resolveSongUrl(meta, _pl2.level, _pl2.immerse, skipDolby ? { supportsDolby: false } : undefined);
         } catch (e) {
           if (_pl2.level !== settings.quality) {
             toast('该音效当前不可用，已回退普通音质');
@@ -691,7 +699,7 @@ export const player = {
     if (info.host) probeLines(info);
     const better = swapLine(info);
     if (better) info.url = better;
-    loadUrl(info.url, 0);          // 优先 CORS 干净加载（可视化前提），失败自动回退
+    loadUrl(info.url, pos);
     this.wantPlaying = true;
     // 起播前攒少量余量（按实测速率 6~20s，硬上限 8s）——快速出声优先
     emit('stalling', true);
@@ -701,7 +709,7 @@ export const player = {
       const swap2 = swapLine(cur);           // 预缓冲期间探测完成：起播前就换到最优线
       if (swap2) {
         cur.url = swap2;
-        loadUrl(swap2, 0);
+        loadUrl(swap2, pos);
         await waitAhead(startTarget(), 8);
         if (this._playRequest !== request || this.urlInfo !== cur || !this.starting) return;
       }
@@ -1052,8 +1060,9 @@ async function recoverStalled() {
     // refresh 重拿地址：已锁定线路时带 host 在**同一条最优线**上重连（新签名/新连接，
     // 不让服务端轮换到别的线）；未锁定（刚进站还没测完）时由服务端换线兜底
     const pin = network.cdn === 'auto' ? (lineBest.byFam[famOf(((player.urlInfo || {}).host) || '')] || '') : '';
-    const info = await resolveSongUrl(player.meta, _pl3.level, _pl3.immerse,
-                                      pin ? { refresh: true, host: pin } : { refresh: true });
+    const info = await resolveSongUrl(player.meta, _pl3.level, _pl3.immerse, {
+      refresh: true, host: pin, supportsDolby: request?.skipDolby ? false : undefined,
+    });
     if (player._playRequest !== request) return;
     const betterR = swapLine(info);
     if (betterR) info.url = betterR;
@@ -1189,6 +1198,10 @@ function bindAudio(el) {
       player.starting = false;
       emit('stalling', false);
       emit('state');
+    }
+    if (player.urlInfo.autoDolby) {
+      player.playAt(player.index, { skipDolby: true, pos: el.currentTime || 0 });
+      return;
     }
     errStreak++;
     const cap = Math.min(3, Math.max(1, player.queue.length));

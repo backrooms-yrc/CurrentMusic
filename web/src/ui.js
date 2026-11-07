@@ -44,7 +44,11 @@ export const QUALITY_TIERS = [
   { key: 'exhigh', label: '极高 320k' },
   { key: 'standard', label: '标准 128k' },
 ];
-export const tierLabel = k => k === 'matched' ? '匹配音源' : (QUALITY_TIERS.find(t => t.key === k) || {}).label || k;
+export function tierLabel(k) {
+  if (k === 'matched') return '匹配音源';
+  if (k === 'dolby') return '杜比全景声';
+  return QUALITY_TIERS.find(t => t.key === k)?.label || k;
+}
 
 export function loadingBar() {
   return `<div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div>`;

@@ -38,7 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # ---------------------------------------------------------------- 档位策略
 
-# 全部音质档（与 cm_server.VALID_LEVELS 同集合；此处只保留策略需要的顺序信息）
+# 按名义码率排序的常规音质档。杜比全景声单独按设备能力选择。
 TIERS = ("jymaster", "jyeffect", "sky", "hires", "lossless", "exhigh", "standard")
 
 # 旧实现就固定探测这 4 档（不含 hires）——保持一致，避免悄悄改变 auto 的结果。
@@ -87,28 +87,28 @@ def allowed_levels(max_br: int = 0):
     return tuple(lv for lv in CAP_TIERS if NOMINAL_BR.get(lv, 0) <= max_br)
 
 
-def probe_tiers(max_br: int = 0):
+def probe_tiers(max_br: int = 0, supports_dolby: bool = False):
     """要向上游取「地址 + 元信息」的档位（降序）。
 
-    - 不限码率：与旧实现完全一致的 4 档；
+    - 不限码率：探测 4 个常规档，支持杜比的客户端额外探测杜比；
     - 给了上限：放宽到该上限内的全部档位（否则「上限 = 极高」会因为
       exhigh/standard 不在集合里而一档都取不到）。
     """
     if not max_br:
-        return PROBE_TIERS
+        return ("dolby", *PROBE_TIERS) if supports_dolby else PROBE_TIERS
     allowed = allowed_levels(max_br)
     return allowed or ("standard",)
 
 
 def ranked(results, max_br: int = 0):
-    """按旧口径（score 从大到小）排序、并滤掉超出上限的档位。
+    """优先选择已确认的杜比档，常规档按 score 降序排列。
 
     调用方按这个顺序**逐个做音频头校验**：第一个校验通过的就是最终档位。
     这样只需 1 次 2KB 校验（而不是每档都校验一次），同时保留「上游把某档
     降级成错误页时自动顺位」的能力。
     """
     items = [(lv, r) for lv, r in results if r and within(lv, max_br)]
-    items.sort(key=lambda kv: score(kv[1]), reverse=True)
+    items.sort(key=lambda kv: (kv[0] == "dolby", score(kv[1])), reverse=True)
     return items
 
 
@@ -126,6 +126,8 @@ def within(level, max_br: int) -> bool:
     """
     if not max_br:
         return True
+    if level == "dolby":
+        return False
     return NOMINAL_BR.get(level, 0) <= max_br
 
 
