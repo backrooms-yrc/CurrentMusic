@@ -57,9 +57,29 @@ html[data-ui-preset="aimo"] {
   --aimo-font-serif: "Noto Serif SC", "Iowan Old Style", Baskerville, Georgia, "Songti SC", SimSun, serif;
   --aimo-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* 映射项目主色与圆角 */
-  --cm-primary: var(--aimo-primary);
+  /* 映射项目主色与圆角，严格防泄漏 */
+  --cm-primary: var(--aimo-primary) !important;
+  --cm-primary-deep: var(--aimo-primary) !important;
+  --cm-primary-dark: var(--aimo-primary) !important;
+  --cm-accent: var(--aimo-accent) !important;
+  --cm-accent-deep: var(--aimo-accent) !important;
   --cm-radius: var(--aimo-radius-card);
+
+  /* 全局各模块文字与表面映射，彻底根除暗黑模式下文字与背景融合隐形的问题 */
+  --label: var(--aimo-text-primary) !important;
+  --label-1: var(--aimo-text-primary) !important;
+  --label-2: var(--aimo-text-secondary) !important;
+  --label-3: var(--aimo-text-tertiary) !important;
+  --label-4: var(--aimo-border) !important;
+  --frs-fg: var(--aimo-text-primary) !important;
+  --frs-fg2: var(--aimo-text-secondary) !important;
+  --frs-fg3: var(--aimo-text-tertiary) !important;
+  --settings-muted: var(--aimo-text-secondary) !important;
+  --settings-line: var(--aimo-border-soft) !important;
+  --settings-panel: var(--aimo-panel) !important;
+  --surface: var(--aimo-panel) !important;
+  --hairline: var(--aimo-border-soft) !important;
+  --border: var(--aimo-border-soft) !important;
 
   /* MDUI 亮色代币映射 */
   --mdui-color-background-light: 250, 250, 249 !important;
@@ -119,7 +139,27 @@ html[data-ui-preset="aimo"].mdui-theme-dark {
   --aimo-shadow-lg: none;
   --aimo-shadow-sm: none;
 
-  --cm-primary: var(--aimo-primary);
+  --cm-primary: var(--aimo-primary) !important;
+  --cm-primary-deep: var(--aimo-primary) !important;
+  --cm-primary-dark: var(--aimo-primary) !important;
+  --cm-accent: var(--aimo-accent) !important;
+  --cm-accent-deep: var(--aimo-accent) !important;
+
+  /* 暗色模式下高对比度文字与表面映射 */
+  --label: var(--aimo-text-primary) !important;
+  --label-1: var(--aimo-text-primary) !important;
+  --label-2: var(--aimo-text-secondary) !important;
+  --label-3: var(--aimo-text-tertiary) !important;
+  --label-4: var(--aimo-border) !important;
+  --frs-fg: var(--aimo-text-primary) !important;
+  --frs-fg2: var(--aimo-text-secondary) !important;
+  --frs-fg3: var(--aimo-text-tertiary) !important;
+  --settings-muted: var(--aimo-text-secondary) !important;
+  --settings-line: var(--aimo-border-soft) !important;
+  --settings-panel: var(--aimo-panel) !important;
+  --surface: var(--aimo-panel) !important;
+  --hairline: var(--aimo-border-soft) !important;
+  --border: var(--aimo-border-soft) !important;
 
   /* MDUI 暗色代币映射 */
   --mdui-color-background-dark: 20, 20, 20 !important;
@@ -142,10 +182,7 @@ html[data-ui-preset="aimo"].mdui-theme-dark {
   --mdui-color-on-primary-container-dark: 242, 242, 237 !important;
 }
 
-/* 强制清除全局彩色主色覆盖 */
-html[data-ui-preset="aimo"]:not([style*="--cm-primary"]) {
-  --cm-primary: var(--aimo-primary);
-}
+
 
 /* --------------------------------------------------------------------------
    2. 全局基础排版、选区高亮与隐形滚动条
@@ -566,51 +603,70 @@ html[data-ui-preset="aimo"] .sk-ava {
 
   /* 导航项 */
   html[data-ui-preset="aimo"] #bottomNav .navItem {
-    width: 56px;
-    height: 52px;
-    flex: none;
-    margin: 0 auto;
-    border-radius: var(--aimo-radius-item);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    color: var(--aimo-text-secondary);
-    text-decoration: none;
-    font-size: calc(11px * var(--cm-fs, 1));
-    font-weight: 500;
-    transition: background 160ms ease, color 160ms ease;
+    width: 56px !important;
+    height: 52px !important;
+    flex: none !important;
+    margin: 0 auto !important;
+    border-radius: var(--aimo-radius-item) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    color: var(--aimo-text-secondary) !important;
+    text-decoration: none !important;
+    font-size: calc(11px * var(--cm-fs, 1)) !important;
+    font-weight: 500 !important;
+    transition: background 160ms ease, color 160ms ease !important;
   }
 
   html[data-ui-preset="aimo"] #bottomNav .navItem:hover {
-    background: var(--aimo-bg-sunken);
-    color: var(--aimo-text-primary);
+    background: var(--aimo-bg-sunken) !important;
+    color: var(--aimo-text-primary) !important;
   }
 
   html[data-ui-preset="aimo"] #bottomNav .navItem.cur {
-    background: var(--aimo-bg-sunken);
-    color: var(--aimo-primary);
-    font-weight: 600;
+    background: var(--aimo-bg-sunken) !important;
+    color: var(--aimo-primary) !important;
+    font-weight: 600 !important;
   }
 
   html[data-ui-preset="aimo"] #bottomNav .nav-ic {
-    width: 32px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
+    width: 32px !important;
+    height: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 8px !important;
     background: transparent !important;
+    color: inherit !important;
   }
 
   html[data-ui-preset="aimo"] #bottomNav .nav-ic::before {
     display: none !important;
   }
 
-  html[data-ui-preset="aimo"] #bottomNav .navItem .material-icons-outlined {
-    font-size: 20px;
-    color: inherit;
+  html[data-ui-preset="aimo"] #bottomNav .aimo-icon-slot {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: inherit !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .aimo-icon {
+    width: 20px !important;
+    height: 20px !important;
+    color: inherit !important;
+    stroke: currentColor !important;
+    display: block !important;
+  }
+
+  html[data-ui-preset="aimo"] #bottomNav .navItem span:not(.nav-ic) {
+    color: inherit !important;
+    font-size: 11px !important;
+    line-height: 1.2 !important;
   }
 
   /* 桌面顶栏：从 72px 侧栏右侧贴边延伸至右缘，高度 56px */
@@ -2900,7 +2956,6 @@ html[data-ui-preset="aimo"] .aimo-icon {
 html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] {
   font-size: 0 !important;
   line-height: 0 !important;
-  color: transparent !important;
 }
 
 html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > *:not(.aimo-icon-slot):not(.cm-ncmdot) {
@@ -2910,10 +2965,12 @@ html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > *:not(.aimo-icon-slot):
 html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > .aimo-icon-slot {
   font-size: initial !important;
   line-height: 1 !important;
-  color: currentColor !important;
+  color: inherit !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* 播放传输控制核心大键微图标尺寸规范 */
@@ -2952,4 +3009,293 @@ html[data-ui-preset="aimo"] .cm-setting .aimo-icon {
   height: 18px !important;
   color: var(--aimo-text-secondary) !important;
   margin-right: 12px !important;
+}
+
+
+/* ==========================================================================
+   22. 弹窗公告与系统模态框（Announcements & Modals）- 纯正 Aimo 纸墨编辑风格
+   ========================================================================== */
+html[data-ui-preset="aimo"] .cm-ann {
+  padding: 4px !important;
+  gap: 12px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-item {
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-card) !important;
+  box-shadow: none !important;
+  padding: 16px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-item.pinned {
+  border-color: var(--aimo-border) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-pin {
+  background: var(--aimo-bg-sunken) !important;
+  color: var(--aimo-text-primary) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: 999px !important;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  font-weight: 550 !important;
+  letter-spacing: 0.02em !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  box-shadow: none !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-pin .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-ann-pin .aimo-icon {
+  color: var(--aimo-text-primary) !important;
+  font-size: 12px !important;
+  width: 13px !important;
+  height: 13px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-title {
+  color: var(--aimo-text-primary) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.015em !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-meta {
+  color: var(--aimo-text-secondary) !important;
+  opacity: 1 !important;
+  font-size: 12px !important;
+  font-family: var(--aimo-font-mono) !important;
+  margin-top: 6px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body {
+  color: var(--aimo-text-primary) !important;
+  font-size: 14px !important;
+  line-height: 1.72 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body p {
+  color: var(--aimo-text-primary) !important;
+  margin: 8px 0 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body a {
+  color: var(--aimo-text-primary) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 3px !important;
+  font-weight: 550 !important;
+  transition: opacity 140ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body a:hover {
+  opacity: 0.8 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body ul,
+html[data-ui-preset="aimo"] .cm-ann-body ol {
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body li {
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body code {
+  background: var(--aimo-bg-sunken) !important;
+  color: var(--aimo-text-primary) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: 4px !important;
+  padding: 1px 5px !important;
+  font-family: var(--aimo-font-mono) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body pre {
+  background: var(--aimo-bg-sunken) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-control) !important;
+  padding: 10px 12px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-body blockquote {
+  border-left: 3px solid var(--aimo-border) !important;
+  color: var(--aimo-text-secondary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-link {
+  color: var(--aimo-text-primary) !important;
+  background: var(--aimo-bg-sunken) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-button) !important;
+  padding: 5px 14px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-top: 10px !important;
+  box-shadow: none !important;
+  transition: all 140ms var(--aimo-ease) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-link:hover {
+  background: var(--aimo-bg-elevated) !important;
+  border-color: var(--aimo-border) !important;
+  color: var(--aimo-text-primary) !important;
+  transform: translateY(-1px) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-ann-link .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-ann-link .aimo-icon {
+  font-size: 15px !important;
+  width: 14px !important;
+  height: 14px !important;
+  color: inherit !important;
+}
+
+/* ==========================================================================
+   23. 首页元素、横幅与全局字色对比度统一（Global Contrast & Banner Hardening）
+   ========================================================================== */
+/* 问候区时间与日期：纯正等宽排版，字色清晰可读 */
+html[data-ui-preset="aimo"] .cm-greet-date {
+  color: var(--aimo-text-secondary) !important;
+  font-family: var(--aimo-font-mono) !important;
+  font-size: 13px !important;
+  opacity: 1 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-greet-week {
+  opacity: 1 !important;
+  color: var(--aimo-text-secondary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-greet-sep {
+  opacity: 0.5 !important;
+  color: var(--aimo-text-tertiary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-greet-clock {
+  opacity: 1 !important;
+  color: var(--aimo-text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-greet-title {
+  font-family: var(--aimo-font-serif) !important;
+  color: var(--aimo-text-primary) !important;
+  font-size: 24px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.02em !important;
+}
+
+/* 首页推广横幅（CMX Banner）：彻底去除彩色渐变与高亮紫蓝，纯平纸墨化 */
+html[data-ui-preset="aimo"] .cm-cmx-banner,
+html[data-ui-preset="aimo"].mdui-theme-dark .cm-cmx-banner {
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-card) !important;
+  box-shadow: none !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-cmx-banner > .material-icons-outlined,
+html[data-ui-preset="aimo"].mdui-theme-dark .cm-cmx-banner > .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-cmx-banner .aimo-icon {
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-cmx-t b {
+  color: var(--aimo-text-primary) !important;
+  font-weight: 600 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-cmx-sub {
+  color: var(--aimo-text-secondary) !important;
+  opacity: 1 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-cmx-go,
+html[data-ui-preset="aimo"].mdui-theme-dark .cm-cmx-go {
+  color: var(--aimo-text-secondary) !important;
+  font-weight: 500 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-cmx-banner:hover .cm-cmx-go {
+  color: var(--aimo-text-primary) !important;
+}
+
+/* 网易云音乐绑定与装扮挂件横幅：去渐变纯平化 */
+html[data-ui-preset="aimo"] .cm-bindbanner,
+html[data-ui-preset="aimo"] .cm-decor-banner,
+html[data-ui-preset="aimo"] .cm-vipbanner {
+  background: var(--aimo-panel) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  border-radius: var(--aimo-radius-card) !important;
+  box-shadow: none !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-bindbanner > .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-decor-banner > .material-icons-outlined,
+html[data-ui-preset="aimo"] .cm-bindbanner .aimo-icon,
+html[data-ui-preset="aimo"] .cm-decor-banner .aimo-icon {
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-bindbanner b,
+html[data-ui-preset="aimo"] .cm-decor-banner b {
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-bindbanner span,
+html[data-ui-preset="aimo"] .cm-decor-banner span {
+  color: var(--aimo-text-secondary) !important;
+}
+
+/* 全局内容常规超链接统一：杜绝彩色蓝字 */
+html[data-ui-preset="aimo"] a:not([class]):not(#topbar a):not(#bottomNav a) {
+  color: var(--aimo-text-primary) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 3px !important;
+}
+
+html[data-ui-preset="aimo"] a:not([class]):hover {
+  opacity: 0.8 !important;
+}
+
+/* 统一次要信息文字、歌词与卡片副标题，彻底避免字色与背景融为一体 */
+html[data-ui-preset="aimo"] .cm-card-sub,
+html[data-ui-preset="aimo"] .cm-song-sub,
+html[data-ui-preset="aimo"] .cm-song-lyric,
+html[data-ui-preset="aimo"] .cm-usub,
+html[data-ui-preset="aimo"] .cm-time,
+html[data-ui-preset="aimo"] .cm-empty {
+  color: var(--aimo-text-secondary) !important;
+  opacity: 1 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-sec-more {
+  color: var(--aimo-text-secondary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-sec-more:hover {
+  color: var(--aimo-text-primary) !important;
+}
+
+/* AI 标签去彩色渐变 */
+html[data-ui-preset="aimo"] .cm-tag.ai {
+  background: var(--aimo-primary) !important;
+  color: var(--aimo-primary-text) !important;
+  box-shadow: none !important;
+  border-radius: 999px !important;
+  font-weight: 600 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-tag.title {
+  background: var(--aimo-bg-sunken) !important;
+  color: var(--aimo-text-primary) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: none !important;
 }

@@ -288,6 +288,7 @@ export function setColorSchemeKey(key) {
 
 export function applyColorScheme(hex, pal) {
   if (!hex) return;
+  if (document.documentElement.getAttribute('data-ui-preset') === 'aimo') return;
   try { mdui.setColorScheme(hex); } catch { /* 部分内核 */ }
   const st = document.documentElement.style;
   st.setProperty('--cm-primary', hex);

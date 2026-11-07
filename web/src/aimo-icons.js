@@ -51,6 +51,10 @@ export const AIMO_ICONS = {
   camera: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>`,
   edit: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`,
   android: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="m5 16 1.5-3"></path><path d="m19 16-1.5-3"></path><path d="M6 14h12"></path><path d="M7 10h10a5 5 0 0 0-10 0v4"></path><line x1="9" y1="6" x2="8" y2="3"></line><line x1="15" y1="6" x2="16" y2="3"></line></svg>`,
+  pin: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a1 1 0 0 0 0-2H8a1 1 0 0 0 0 2h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg>`,
+  externalLink: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`,
+  chevronRight: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>`,
+  music: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>`,
 };
 
 export function injectSlot(el, iconKey) {
@@ -105,6 +109,7 @@ export function syncAimoIcons() {
       if (href.includes('home')) key = 'home';
       else if (href.includes('search')) key = 'search';
       else if (href.includes('discover') || href.includes('square')) key = 'explore';
+      else if (href.includes('library')) key = 'queue';
       else if (href.includes('user')) key = 'user';
       else if (href.includes('room')) key = 'radio';
       if (key) {
@@ -241,6 +246,27 @@ export function syncAimoIcons() {
     const ic = editBio.querySelector('.material-icons-outlined') || editBio;
     injectSlot(ic, 'edit');
   }
+
+  // 5. 弹窗公告（Announcements Dialog）图标
+  document.querySelectorAll('.cm-ann-pin .material-icons-outlined, .cm-ann-pin .material-icons').forEach(ic => injectSlot(ic, 'pin'));
+  document.querySelectorAll('.cm-ann-link .material-icons-outlined, .cm-ann-link .material-icons').forEach(ic => injectSlot(ic, 'externalLink'));
+
+  // 6. 首页横幅图标
+  const cmxBanner = document.getElementById('cmxBanner');
+  if (cmxBanner) {
+    const ic = cmxBanner.querySelector('.material-icons-outlined');
+    if (ic) injectSlot(ic, 'android');
+    const go = cmxBanner.querySelector('.cm-cmx-go .material-icons-outlined');
+    if (go) injectSlot(go, 'chevronRight');
+  }
+  document.querySelectorAll('.cm-bindbanner > .material-icons-outlined').forEach(ic => injectSlot(ic, 'cloud'));
+  document.querySelectorAll('.cm-decor-banner > .material-icons-outlined').forEach(ic => injectSlot(ic, 'sparkles'));
+
+  // 7. 歌曲列表红心按钮
+  document.querySelectorAll('.cm-song-like').forEach(btn => {
+    const isLiked = btn.classList.contains('on');
+    injectSlot(btn, isLiked ? 'heartFilled' : 'heart');
+  });
 }
 
 let syncTimer = 0;
@@ -269,5 +295,25 @@ export function initAimoIcons() {
   if (outEl && typeof MutationObserver !== 'undefined') {
     const moOut = new MutationObserver(() => scheduleSync());
     moOut.observe(outEl, { childList: true, subtree: true });
+  }
+
+  // 监听 body 直属子节点插入（针对 mdui-dialog / .cm-ann 动态弹窗），弹窗开启瞬间自动挂载细线图标
+  if (typeof MutationObserver !== 'undefined') {
+    const moBody = new MutationObserver((mutations) => {
+      let shouldSync = false;
+      for (const m of mutations) {
+        if (m.addedNodes.length > 0) {
+          for (const node of m.addedNodes) {
+            if (node.nodeType === 1 && (node.tagName === 'MDUI-DIALOG' || node.classList?.contains('cm-ann') || node.querySelector?.('.cm-ann, mdui-dialog'))) {
+              shouldSync = true;
+              break;
+            }
+          }
+        }
+        if (shouldSync) break;
+      }
+      if (shouldSync) scheduleSync();
+    });
+    moBody.observe(document.body, { childList: true });
   }
 }

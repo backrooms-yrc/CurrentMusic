@@ -42,6 +42,14 @@ export function applyUiPreset(key) {
   // 「key !== DEFAULT_PRESET 就打属性」的写法——那会把 md3 也打成属性。
   if (key === 'frost' || key === 'glass' || key === 'cmx' || key === 'soaringbird' || key === 'aimo') el.setAttribute('data-ui-preset', key);
   else el.removeAttribute('data-ui-preset');
+  if (key === 'aimo') {
+    // 切换至 Aimo 设计主题时，彻底清除行内 style 残留的彩色变量，回归纯正纸墨编辑风格
+    el.style.removeProperty('--cm-primary');
+    el.style.removeProperty('--cm-primary-deep');
+    el.style.removeProperty('--cm-primary-dark');
+    el.style.removeProperty('--cm-accent');
+    el.style.removeProperty('--cm-accent-deep');
+  }
 }
 
 export function setUiPreset(key) {
