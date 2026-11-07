@@ -40,6 +40,28 @@ export function initTopAccount(bootDismissed) {
     account.style.transformOrigin = `50% ${r.top - layoutRect(account).top + r.height / 2}px`;
     const dx = innerWidth / (2 * layoutScale()) - (r.left + r.width / 2);
     const dy = innerHeight / (2 * layoutScale()) - (r.top + r.height / 2);
+
+    const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
+    if (isAimo) {
+      // Aimo 主题：头像收拢至顶栏右上角，遵从物理克制微动效（280ms），精准落位
+      account.classList.add('cm-account-flying');
+      const startEl = document.querySelector('.cm-auth-panel, #go, .cm-detail-cover') || null;
+      let fromX = dx, fromY = dy;
+      if (startEl && startEl.getClientRects().length) {
+        const sr = layoutRect(startEl);
+        fromX = (sr.left + sr.width / 2) - (r.left + r.width / 2);
+        fromY = (sr.top + Math.min(sr.height / 2, 80)) - (r.top + r.height / 2);
+      }
+      flight = account.animate([
+        { opacity: 0, transform: `translate(${fromX}px, ${fromY}px) scale(1.15)` },
+        { opacity: 1, transform: 'none' },
+      ], { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+      account.classList.remove('cm-account-arriving');
+      const finish = () => { if (own === generation) settle(); };
+      flight.onfinish = finish;
+      timer = setTimeout(finish, 320);
+      return;
+    }
     account.classList.add('cm-account-flying');
     flight = account.animate([
       { opacity: 0, transform: `translate(${dx}px, ${dy + 18}px) scale(1.7)`, offset: 0, easing: 'ease-out' },

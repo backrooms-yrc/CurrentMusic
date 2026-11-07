@@ -122,6 +122,7 @@ export function createPageMotion(container, footer) {
 export async function dismissBoot() {
   const boot = document.getElementById('boot');
   if (!boot) return;
+  if (document.documentElement.getAttribute('data-ui-preset') === 'aimo') { boot.remove(); return; }
   await loadingCycle(boot).finish();
   if (!boot.isConnected) return;
   if (reduced() || !boot.animate) { boot.remove(); return; }

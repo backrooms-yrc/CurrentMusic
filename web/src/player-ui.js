@@ -10,6 +10,7 @@ import { castIconHTML, openCastDialog } from './cast.js';
 import { openAskAI, ensureAiBot } from './ask-ai.js';
 import { createMiniProgress, createPlayerProgress } from './playback-progress.js';
 import { layoutRect, layoutScale } from './tablet-scale.js';
+import { AIMO_ICONS, injectSlot, isAimo } from './aimo-icons.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
 // 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
@@ -24,12 +25,13 @@ const AM_ICON = {
 const playSpinner = '<span class="cm-play-spinner" role="status" aria-label="正在准备播放"></span>';
 
 function amPlayIcon() {
-  return player.playPending
-    ? playSpinner
-    : (player.isPlaying() ? AM_ICON.pause : AM_ICON.play);
+  if (player.playPending) return playSpinner;
+  const icons = isAimo() ? AIMO_ICONS : AM_ICON;
+  return player.isPlaying() ? icons.pause : icons.play;
 }
 
 function miniPlayIcon() {
+  if (isAimo()) return amPlayIcon();
   return player.playPending ? playSpinner
     : `<span class="material-icons-outlined">${player.isPlaying() ? 'pause_circle' : 'play_circle'}</span>`;
 }
@@ -297,10 +299,10 @@ async function loadLyric() {
 }
 
 const PLAY_MODES = [
-  { key: 'list', icon: 'repeat', label: '列表循环' },
-  { key: 'one', icon: 'repeat_one', label: '单曲循环' },
-  { key: 'order', icon: 'trending_flat', label: '顺序播放' },
-  { key: 'shuffle', icon: 'shuffle', label: '随机播放' },
+  { key: 'list', icon: 'repeat', aimoIcon: 'repeat', label: '列表循环' },
+  { key: 'one', icon: 'repeat_one', aimoIcon: 'repeatOne', label: '单曲循环' },
+  { key: 'order', icon: 'trending_flat', aimoIcon: 'order', label: '顺序播放' },
+  { key: 'shuffle', icon: 'shuffle', aimoIcon: 'shuffle', label: '随机播放' },
 ];
 
 // ---------- 歌词多语言模式 ----------
@@ -1218,6 +1220,7 @@ async function openFull() {
   ov.querySelector('#plPrev').onclick = () => player.prev();
   ov.querySelector('#plNext').onclick = () => player.next();
   const modeBtn = ov.querySelector('#plMode');
+  injectSlot(modeBtn, modeNow.aimoIcon);
   modeBtn.onclick = () => {
     const idx = PLAY_MODES.findIndex(x => x.key === player.playMode);
     const next = PLAY_MODES[(idx + 1) % PLAY_MODES.length];
@@ -1227,6 +1230,7 @@ async function openFull() {
       modeBtn.classList.toggle('on', next.key !== 'order');
       modeBtn.title = next.label;
       modeBtn.querySelector('.material-icons-outlined').textContent = next.icon;
+      injectSlot(modeBtn, next.aimoIcon);
     }
     toast(next.label);
   };
@@ -1280,7 +1284,9 @@ async function openFull() {
   applyPlayerBg();
   applyDynamicScheme();
   ov.querySelector('#plComments').onclick = () => openComments(player.meta);
-  ov.querySelector('#plLike').onclick = async () => {
+  const likeBtn = ov.querySelector('#plLike');
+  injectSlot(likeBtn, st.liked ? 'heartFilled' : 'heart');
+  likeBtn.onclick = async () => {
     await toggleLikeDefault(m, () => syncPlayerLike(m));
   };
   // 汉堡菜单左侧的五角星：复用「喜欢」逻辑，状态由 syncPlayerLike 同步
@@ -1678,6 +1684,7 @@ async function syncPlayerLike(m, refresh = true) {
       btn.classList.toggle('on', s.liked);
       btn.classList.toggle('is-on', s.liked);
       btn.querySelector('.material-icons-outlined').textContent = s.liked ? 'favorite' : 'favorite_border';
+      injectSlot(btn, s.liked ? 'heartFilled' : 'heart');
       btn.title = s.source === 'ncm' ? '红心到网易云' : '加入 CurrentMusic 我喜欢';
     }
     const star = document.getElementById('plStar');

@@ -45,6 +45,9 @@ be imported without installing the Qt GUI stack.
   MDUI 1 runtime code is not bundled; see the MDUI MIT notice above.
 - Material Design Icons font (Apache-2.0), https://github.com/google/material-design-icons.
   Distributed through @material-design-icons/font; license copy: `licenses/material-icons-Apache-2.0.txt`.
+- Aimo uses SVG paths adapted from Lucide (ISC), https://lucide.dev/license,
+  including Feather-derived icons (MIT), https://github.com/feathericons/feather.
+  The notices are retained in `web/src/aimo-icons.js` and the Web bundle.
 - qrcode-generator (MIT), https://github.com/kazuhikoarase/qrcode-generator.
   The installed npm package includes its copyright/license notice in the QR implementation.
 - esbuild (MIT), https://github.com/evanw/esbuild (build-time dependency).
