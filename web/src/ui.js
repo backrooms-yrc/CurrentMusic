@@ -2,6 +2,7 @@
 import { mdui } from './md.js';
 import { api, auth, decorScale, settings } from './api.js';
 import { levelBadge } from './level-badges.js';
+import { layoutRect, layoutScale } from './tablet-scale.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -66,14 +67,14 @@ export function initRipple() {
     const t = e.target.closest(RIPPLE_SEL);
     if (!t || !e.isPrimary) return;
     if (t.shadowRoot) return;                   // 影子 DOM 宿主：涟漪会落在错误位置
-    const r = t.getBoundingClientRect();
+    const r = layoutRect(t);
     if (!r.width && !r.height) return;
     const d = Math.max(r.width, r.height) * 2.2;
     const rip = document.createElement('i');
     rip.className = 'cm-rip';
     rip.style.width = rip.style.height = d + 'px';
-    rip.style.left = (e.clientX - r.left - d / 2) + 'px';
-    rip.style.top = (e.clientY - r.top - d / 2) + 'px';
+    rip.style.left = (e.clientX / layoutScale() - r.left - d / 2) + 'px';
+    rip.style.top = (e.clientY / layoutScale() - r.top - d / 2) + 'px';
     t.appendChild(rip);
     // animationend 在部分内核/headless 下不触发，定时兜底清理
     rip.addEventListener('animationend', () => rip.remove(), { once: true });

@@ -13,6 +13,7 @@ import { api, auth, call, settings } from './api.js';
 import { esc, avatarHTML, userTags, toast } from './ui.js';
 import { MAX_ATTACH, TYPE_LABEL, attachHTML, bindAttach, openAttachPicker } from './attach.js';
 import { renderMarkdown } from './markdown.js';
+import { layoutRect, layoutScale } from './tablet-scale.js';
 
 const PAGE = 30;
 const AI_USERNAME = 'CurrentMusicAI';
@@ -206,7 +207,7 @@ export async function mountChat(box) {
         if (mr.height > 0) bottom = Math.min(bottom, mr.top);
       }
       const top = chatEl.getBoundingClientRect().top;
-      chatEl.style.height = Math.max(160, Math.floor(bottom - top - 8)) + 'px';
+      chatEl.style.height = Math.max(160, Math.floor((bottom - top) / layoutScale() - 8)) + 'px';
     };
     const unbindFit = () => {
       window.removeEventListener('resize', fit);
@@ -272,9 +273,9 @@ export async function mountChat(box) {
   }
   function placePicker() {
     if (!pickerOpen) return;
-    const cr = chatEl.getBoundingClientRect();
-    let anchor = composer.getBoundingClientRect().top;
-    if (!suggest.hidden) anchor = Math.min(anchor, suggest.getBoundingClientRect().top);
+    const cr = layoutRect(chatEl);
+    let anchor = layoutRect(composer).top;
+    if (!suggest.hidden) anchor = Math.min(anchor, layoutRect(suggest).top);
     picker.style.bottom = Math.max(56, Math.round(cr.bottom - anchor + 8)) + 'px';
     picker.style.maxHeight = Math.max(120, Math.min(260, Math.round(anchor - cr.top - 12))) + 'px';
   }

@@ -581,8 +581,7 @@ html[data-ui-preset="aimo"] .sk-ava {
     left: 0 !important;
     right: auto !important;
     width: 72px !important;
-    height: 100vh !important;
-    height: 100dvh !important;
+    height: auto !important;
     margin: 0 !important;
     padding: calc(18px + max(env(safe-area-inset-top), var(--safe-t, 0px))) 0 calc(18px + max(env(safe-area-inset-bottom), var(--safe-b, 0px))) !important;
     box-sizing: border-box !important;
@@ -1075,8 +1074,8 @@ html[data-ui-preset="aimo"] .cm-quick {
   justify-content: center !important;
   text-align: left !important;
   gap: 4px !important;
-  padding: var(--cm-quick-padding, 14px 16px) !important;
-  min-height: var(--cm-quick-min-height, 82px) !important;
+  padding: 14px 16px !important;
+  min-height: 82px !important;
   border-radius: var(--aimo-radius-surface) !important;
   background: var(--aimo-bg-elevated) !important;
   border: 1px solid var(--aimo-border-soft) !important;

@@ -7,6 +7,8 @@
 // 4. 彻底移除全局 DOM 监听，采用局部与 RAF 节流，消除主线程卡顿
 // ==========================================================================
 
+import { layoutScale } from './tablet-scale.js';
+
 const isAimoActive = () => document.documentElement.getAttribute('data-ui-preset') === 'aimo';
 
 export function enhanceAimoSegmented(container) {
@@ -155,7 +157,7 @@ export function enhanceAimoSegmented(container) {
         moveRaf = requestAnimationFrame(() => {
           moveRaf = null;
           if (!dragging) return;
-          const currentCenter = startCenter + dx;
+          const currentCenter = startCenter + dx / layoutScale();
           const geo = getInterpolatedGeometry(currentCenter);
           if (geo) applyGeometry(geo, false);
         });
@@ -182,7 +184,7 @@ export function enhanceAimoSegmented(container) {
 
     suppressClickUntil = performance.now() + 320;
     const dx = e.clientX - startX;
-    const target = getNearestButton(startCenter + dx);
+    const target = getNearestButton(startCenter + dx / layoutScale());
     if (target) {
       const geo = getGeometry(target);
       applyGeometry(geo, true);

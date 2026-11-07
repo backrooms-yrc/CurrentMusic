@@ -9,6 +9,8 @@
 // 外观（玻璃本体、高光边、圆角、过渡曲线）全部在 app.css 里，分别限定在
 // frost / cmx 皮肤下；默认皮肤（MD3）不显示它，仍用原来的胶囊指示器。
 
+import { layoutRect, layoutScale } from './tablet-scale.js';
+
 const DROP_ID = 'navDrop';
 const NAV_SEL = '#bottomNav';
 const ITEM_SEL = '.navItem';
@@ -46,7 +48,7 @@ function currentItem() {
 function measure(target) {
   const item = target || currentItem();
   if (!item || !nav) return null;
-  const nr = nav.getBoundingClientRect();
+  const nr = layoutRect(nav);
   const icon = item.querySelector('.nav-ic');
   // 文字是 .navItem 的**直接子** span；不能用 span:not(.nav-ic)——
   // 那样会先匹配到 .nav-ic 里的图标字形 span，文字就被漏掉了。
@@ -55,7 +57,7 @@ function measure(target) {
     const ch = item.children[i];
     if (ch.tagName === 'SPAN' && !ch.classList.contains('nav-ic')) { label = ch; break; }
   }
-  const parts = [icon, label].filter(Boolean).map(el => el.getBoundingClientRect())
+  const parts = [icon, label].filter(Boolean).map(layoutRect)
     .filter(r => r.width > 0 && r.height > 0);
   if (!parts.length) return null;
   const left = Math.min.apply(null, parts.map(r => r.left));
@@ -177,10 +179,10 @@ function clearHover() {
 /** 拖动预览：水滴跟随手指，并把经过的项点亮。 */
 function previewAt(clientX) {
   if (!drop || !nav) return;
-  const nr = nav.getBoundingClientRect();
+  const nr = layoutRect(nav);
   const w = parseFloat(drop.style.getPropertyValue('--nd-w')) || 70;
   const h = parseFloat(drop.style.getPropertyValue('--nd-h')) || 52;
-  let x = clientX - nr.left - w / 2;
+  let x = clientX / layoutScale() - nr.left - w / 2;
   if (x < 4) x = 4;
   if (x + w > nr.width - 4) x = Math.max(4, nr.width - 4 - w);
   drop.classList.add('scrubbing');
@@ -270,7 +272,7 @@ function initRailHover() {
       hint.style.opacity = '0';
       return;
     }
-    const r = item.getBoundingClientRect(), nr = rail.getBoundingClientRect();
+    const r = layoutRect(item), nr = layoutRect(rail);
     const first = hint.style.opacity !== '1';
     if (first) hint.classList.add('no-anim');
     hint.style.setProperty('--nh-y', (r.top - nr.top - rail.clientTop + rail.scrollTop) + 'px');

@@ -12,14 +12,18 @@ const tracks = Array.from({ length: 12 }, (_, i) => ({
   pic: origin + '/app/brand-icon.png', duration: 240000,
 }));
 
-async function openHome(browser, options, { preset = 'cmx', font = 'standard' } = {}) {
+async function openHome(browser, options, { preset = 'cmx', font = 'standard', windowWidth } = {}) {
   const page = await browser.newPage({ reducedMotion: 'reduce', ...options });
-  await page.addInitScript(({ preset, font, song }) => {
+  await page.addInitScript(({ preset, font, song, windowWidth }) => {
+    if (windowWidth) Object.defineProperty(window, 'outerWidth', { value: windowWidth });
+    document.addEventListener('opened', event => {
+      if (event.target.matches('mdui-dialog')) event.target.dataset.fixtureOpened = 'true';
+    }, true);
     localStorage.setItem('cm.recReset', 'rec-1.28.74');
     localStorage.setItem('cm.uiPreset', preset);
     localStorage.setItem('cm.fontScale', font);
     localStorage.setItem('cm.lastq', JSON.stringify({ queue: [song], index: 0 }));
-  }, { preset, font, song: tracks[0] });
+  }, { preset, font, song: tracks[0], windowWidth });
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
     if (url.origin === origin && url.pathname.startsWith('/app/')) {
@@ -29,83 +33,113 @@ async function openHome(browser, options, { preset = 'cmx', font = 'standard' } 
       }
     }
     if (url.pathname === '/cm/bootstrap') return route.fulfill({ json: { daily: { daily: tracks, forYou: tracks } } });
+    if (url.pathname === '/cm/announcements') {
+      return route.fulfill({ json: { items: [{ title: 'Fixture announcement', body: ('This is a test paragraph. '.repeat(8) + '\n\n').repeat(8) }] } });
+    }
     return route.fulfill({ json: {} });
   });
   await page.goto(origin + '/app/#/home');
   await page.locator('#dailyRow .cm-card').first().waitFor();
   await page.locator('#boot').waitFor({ state: 'hidden' });
+  await page.locator('mdui-dialog[data-fixture-opened] .cm-ann').waitFor();
   return page;
 }
 
 async function geometry(page) {
   return page.evaluate(() => {
     const out = document.getElementById('out');
-    const card = out.querySelector('#dailyRow .cm-card');
-    const rect = selector => document.querySelector(selector).getBoundingClientRect();
+    const sizes = {};
+    for (const [key, element] of Object.entries({
+      rail: document.getElementById('bottomNav'), top: document.getElementById('topbar'),
+      dialog: document.querySelector('mdui-dialog').shadowRoot.querySelector('[part="panel"]'),
+      announcement: document.querySelector('.cm-ann'), cover: out.querySelector('#dailyRow .cm-card img'),
+      song: out.querySelector('.cm-song'), mini: document.getElementById('mini'),
+    })) {
+      const r = element.getBoundingClientRect();
+      sizes[key] = [r.x, r.width, r.height].map(value => value * devicePixelRatio);
+    }
+    const scale = Number(getComputedStyle(document.documentElement).zoom);
     return {
-      width: innerWidth, zoom: visualViewport.scale, overflow: out.scrollWidth - out.clientWidth,
-      card: card.getBoundingClientRect().width, image: card.querySelector('img').getBoundingClientRect().width,
-      shortcut: rect('.cm-quick').height, song: rect('.cm-song').height, nav: rect('#bottomNav').width,
-      navTarget: rect('.navItem.cur').height, mini: rect('#mini').width,
-      titleFont: parseFloat(getComputedStyle(document.getElementById('pageTitle')).fontSize),
+      sizes, scale, width: innerWidth / scale, overflow: out.scrollWidth - out.clientWidth,
+      font: getComputedStyle(document.documentElement).getPropertyValue('--cm-fs'),
     };
   });
+}
+
+function assertParity(actual, expected, label) {
+  for (const key of Object.keys(expected)) {
+    for (let i = 0; i < expected[key].length; i++) {
+      assert(Math.abs(actual[key][i] - expected[key][i]) <= 3,
+        `${label} ${key}: ${actual[key]} vs ${expected[key]}`);
+    }
+  }
 }
 
 (async () => {
   const browser = await chromium.launch({ ...(process.env.CM_CHROMIUM_EXECUTABLE ?
     { executablePath: process.env.CM_CHROMIUM_EXECUTABLE } : {}), args: ['--no-sandbox'] });
   try {
-    for (const [label, userAgent, isMobile] of [
-      ['Chrome Android', android, true], ['Edge Android', android + ' EdgA/131.0.0.0', true],
-      ['Android desktop site', desktop, false],
+    const screen = { width: 1280, height: 800 };
+    const pc = await openHome(browser, { viewport: { width: 1280, height: 655 } });
+    const expected = await geometry(pc);
+    await pc.close();
+    for (const [label, userAgent, windowWidth, dpr] of [
+      ['Android Chrome desktop site', desktop, 1280, 1.2],
+      ['Android Edge', android + ' EdgA/131.0.0.0', 1280, 1.2],
+      ['Low-density Android tablet', android, 1067, 1.2],
+      ['High-density tablet with browser zoom', desktop, 1280, 2.4],
     ]) {
-      const portrait = { width: 800, height: 1100 };
-      const page = await openHome(browser, { viewport: portrait, userAgent, isMobile, hasTouch: true, deviceScaleFactor: 2 });
-      for (const viewport of [portrait, { width: 1100, height: 620 }, { width: 600, height: 840 }]) {
-        await page.setViewportSize(viewport);
-        const g = await geometry(page);
-        assert.equal(g.width, viewport.width);
-        assert.equal(g.zoom, 1);
-        assert(g.overflow <= 0 && g.card === 128 && g.image === 128 && g.shortcut < 100 && g.song <= 60, JSON.stringify(g));
-        assert(g.navTarget >= 44 && g.mini <= 640);
-        assert(g.nav <= (viewport.width < 900 ? 480 : 88), JSON.stringify(g));
-      }
+      const page = await openHome(browser, { viewport: { width: 1067, height: 546 }, screen,
+        userAgent, isMobile: userAgent.includes('Android'), hasTouch: true, deviceScaleFactor: dpr }, { windowWidth });
+      const g = await geometry(page);
+      assert(Math.abs(g.scale - 1 / 1.2) < .002 && g.overflow <= 0 && Math.abs(g.width - 1280) <= 1, `${label}: ${JSON.stringify(g)}`);
+      const density = dpr / 1.2;
+      const sizes = Object.fromEntries(Object.entries(g.sizes).map(([key, values]) => [key, values.map(value => value / density)]));
+      assertParity(sizes, expected.sizes, label);
+      await page.getByText('知道了', { exact: true }).tap();
+      await page.locator('.cm-ann').waitFor({ state: 'hidden' });
       await page.locator('#bottomNav [href="#/library"]').tap();
       await page.waitForURL('**/#/library');
       await page.locator('.cm-mini-inner').tap();
       await page.locator('#plSeek').waitFor({ state: 'visible' });
-      assert(await page.locator('#plCover').evaluate(el => el.getBoundingClientRect().width <= 290));
       const play = await page.locator('#plPlay').boundingBox();
       assert(play && play.y >= 0 && play.y + play.height <= page.viewportSize().height);
-      console.log('PASS', label, 'portrait, landscape and 600px split view');
+      console.log('PASS', label, 'desktop-sized shell, artwork and modal; touch navigation');
       await page.close();
     }
 
-    const tablet = { viewport: { width: 800, height: 1100 }, userAgent: android, isMobile: true, hasTouch: true };
-    for (const preset of ['frost', 'glass', 'md3', 'aimo', 'soaringbird']) {
-      const page = await openHome(browser, tablet, { preset });
-      const g = await geometry(page);
-      assert(g.overflow <= 0 && g.card === 128 && g.image === 128, `${preset}: ${JSON.stringify(g)}`);
-      if (preset === 'soaringbird') {
-        const cards = await page.locator('.cm-hero__card').evaluateAll(els => els.map(el => el.getBoundingClientRect().y));
-        assert.equal(cards.length, 2);
-        assert.equal(cards[0], cards[1]);
-      }
-      await page.close();
-    }
-
-    const page = await openHome(browser, tablet, { font: 'xl' });
-    assert(Math.abs((await geometry(page)).titleFont - 23 * 1.28) < .1, 'saved font setting still applies');
-    await page.setViewportSize({ width: 840, height: 390 });
-    assert.equal((await geometry(page)).card, 150, 'landscape phones use existing layout');
-    await page.setViewportSize({ width: 390, height: 840 });
-    assert.equal((await geometry(page)).card, 117, 'portrait phones use existing layout');
+    const portrait = { viewport: { width: 667, height: 917 }, screen: { width: 800, height: 1280 },
+      userAgent: android, isMobile: true, hasTouch: true, deviceScaleFactor: 1.2 };
+    const page = await openHome(browser, portrait, { font: 'xl', windowWidth: 800 });
+    const g = await geometry(page);
+    assert(g.scale < 1 && g.font.trim() === '1.28' && g.overflow <= 0);
+    await page.getByText('知道了', { exact: true }).tap();
+    await page.locator('.cm-ann').waitFor({ state: 'hidden' });
+    const selected = page.locator('#bottomNav [aria-current="page"]');
+    const indicator = page.locator('#navDrop');
+    await page.waitForFunction(() => document.getElementById('navDrop').getBoundingClientRect().width > 0);
+    const [item, pill] = await Promise.all([selected.boundingBox(), indicator.boundingBox()]);
+    assert(Math.abs(item.x + item.width / 2 - pill.x - pill.width / 2) < 2, 'bottom indicator stays centered');
+    const target = await page.locator('#bottomNav [href="#/library"]').boundingBox();
+    const cdp = await page.context().newCDPSession(page);
+    const y = item.y + item.height / 2;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: item.x + item.width / 2, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: target.x + target.width / 2, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForURL('**/#/library');
+    await page.setViewportSize({ width: 510, height: 917 });
+    assert.equal(await page.evaluate(() => Number(getComputedStyle(document.documentElement).zoom)), 1);
     await page.close();
 
-    const mouse = await openHome(browser, { viewport: tablet.viewport });
-    assert.equal((await geometry(mouse)).card, 150, 'mouse desktops use existing layout');
-    await mouse.close();
-    console.log('PASS tablet themes, font preferences, phone and desktop scope');
+    for (const [options, windowWidth] of [
+      [{ viewport: { width: 390, height: 800 }, screen: { width: 390, height: 844 }, userAgent: android, isMobile: true, hasTouch: true, deviceScaleFactor: 1.2 }, 468],
+      [{ viewport: { width: 800, height: 1050 }, screen, userAgent: desktop, hasTouch: true, deviceScaleFactor: 2 }, 800],
+      [{ viewport: { width: 1067, height: 546 }, screen, userAgent: desktop, deviceScaleFactor: 1.2 }, 1280],
+    ]) {
+      const page = await openHome(browser, options, { windowWidth });
+      assert.equal((await geometry(page)).scale, 1);
+      await page.close();
+    }
+    console.log('PASS portrait drag, split view, font preferences, and phone/desktop scale');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

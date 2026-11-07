@@ -24,6 +24,7 @@
 // 而边缘高光是用 CSS inset 阴影实现的，在所有浏览器都能看到。
 
 import { on } from './player.js';
+import { layoutRect } from './tablet-scale.js';
 
 const MAX_MAP_PX = 640 * 640;
 
@@ -58,7 +59,7 @@ const sdDepth = (px, py, w, h, r) => -sdOut(px, py, w, h, r);
  */
 export function attachLens(el, id, o) {
   if (!el) return null;
-  const rect = el.getBoundingClientRect();
+  const rect = layoutRect(el);
   if (rect.width < 8 || rect.height < 8) return null;      // 未布局（隐藏）→ 拒绝生成废图
   // 圆角不得越过"短边的一半"：超过之后圆角矩形 SDF 的 W/2−R 变负、梯度在轴上翻转，
   // 位移图会退化成一条十字缝（上游 hyalite rule 2 踩过同一个坑，它把方向场的半径
@@ -244,7 +245,7 @@ export function refreshGlass() {
   if (!glassRefractionSupported()) return;
   targets.forEach(t => {
     targetEls(t).forEach(({ el, id }) => {
-      const r = el.getBoundingClientRect();
+      const r = layoutRect(el);
       if (r.width < 8 || r.height < 8) return;
       attachLens(el, id, { radius: lensRadius(t, el, r), bevel: t.bevel, maxd: t.maxd,
         blur: t.blur != null ? t.blur : lensBlurOf(el) });
@@ -301,7 +302,7 @@ function watchSize() {
   targets.forEach(t => {
     targetEls(t).forEach(({ el, id }) => {
       seen[id] = 1;
-      const r = el.getBoundingClientRect();
+      const r = layoutRect(el);
       if (r.width < 8 || r.height < 8) return;        // 尚未布局
       const sig = Math.round(r.width) + 'x' + Math.round(r.height);
       // 除尺寸外还要比对**元素实例**：目标元素若被 innerHTML 重建而尺寸恰好

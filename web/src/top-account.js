@@ -1,5 +1,6 @@
 import { api, auth } from './api.js';
 import { avatarHTML, userTags, userTagsText } from './ui.js';
+import { layoutRect, layoutScale } from './tablet-scale.js';
 
 // 独立于路由挂载；页面切换、滚动与登录后的跳转不会销毁顶部账号。
 export function initTopAccount(bootDismissed) {
@@ -35,10 +36,10 @@ export function initTopAccount(bootDismissed) {
     await Promise.all([bootDismissed, imagesReady]);
     if (own !== generation || account.hidden) return;
     startupToken = '';
-    const r = account.querySelector('.cm-top-avatar').getBoundingClientRect();
-    account.style.transformOrigin = `50% ${r.top - account.getBoundingClientRect().top + r.height / 2}px`;
-    const dx = innerWidth / 2 - (r.left + r.width / 2);
-    const dy = innerHeight / 2 - (r.top + r.height / 2);
+    const r = layoutRect(account.querySelector('.cm-top-avatar'));
+    account.style.transformOrigin = `50% ${r.top - layoutRect(account).top + r.height / 2}px`;
+    const dx = innerWidth / (2 * layoutScale()) - (r.left + r.width / 2);
+    const dy = innerHeight / (2 * layoutScale()) - (r.top + r.height / 2);
 
     const isAimo = document.documentElement.getAttribute('data-ui-preset') === 'aimo';
     if (isAimo) {
@@ -47,7 +48,7 @@ export function initTopAccount(bootDismissed) {
       const startEl = document.querySelector('.cm-auth-panel, #go, .cm-detail-cover') || null;
       let fromX = dx, fromY = dy;
       if (startEl && startEl.getClientRects().length) {
-        const sr = startEl.getBoundingClientRect();
+        const sr = layoutRect(startEl);
         fromX = (sr.left + sr.width / 2) - (r.left + r.width / 2);
         fromY = (sr.top + Math.min(sr.height / 2, 80)) - (r.top + r.height / 2);
       }
@@ -61,7 +62,6 @@ export function initTopAccount(bootDismissed) {
       timer = setTimeout(finish, 320);
       return;
     }
-
     account.classList.add('cm-account-flying');
     flight = account.animate([
       { opacity: 0, transform: `translate(${dx}px, ${dy + 18}px) scale(1.7)`, offset: 0, easing: 'ease-out' },

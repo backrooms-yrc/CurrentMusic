@@ -11,7 +11,7 @@ import './settings.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
 import './top-account.css';
 import './aimo.css';
-import './tablet.css';
+import { initTabletScale } from './tablet-scale.js';
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
 import { mdui } from './md.js';
 import { toast, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
@@ -231,6 +231,7 @@ async function router({ refresh = false } = {}) {
 }
 
 function boot() {
+  initTabletScale();
   if (window.NativeApi?.versionCode) {
     document.title = 'CurrentMusic';
     document.querySelectorAll('[data-web-brand]').forEach(el => { el.textContent = document.title; });
