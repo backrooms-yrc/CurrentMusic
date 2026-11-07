@@ -184,7 +184,10 @@ export function enhanceAimoSegmented(container) {
   container.addEventListener('pointermove', onPointerMove);
   container.addEventListener('pointerup', onPointerFinish);
   container.addEventListener('pointercancel', onPointerFinish);
-  container.addEventListener('lostpointercapture', onPointerFinish);
+  container.addEventListener('lostpointercapture', e => {
+    // Touch starts with implicit capture on the button, then transfers to the container.
+    if (e.target === container) onPointerFinish(e);
+  });
   container.addEventListener('pointerleave', e => {
     if (!moved && e.pointerId === pointerId) {
       dragging = false;
