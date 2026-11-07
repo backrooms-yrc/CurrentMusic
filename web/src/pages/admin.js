@@ -9,6 +9,7 @@ import { renderMarkdown } from '../markdown.js';
 import { esc, toast, confirmDialog, promptDialog, userTags, fmtCount, avatarHTML } from '../ui.js';
 import { levelBadge, levelLabel } from '../level-badges.js';
 import { drawLineChart, drawBarChart, drawComboChart, drawDonutChart } from '../admin-charts.js';
+import { layoutRect } from '../tablet-scale.js';
 
 const PAGE = 20;
 let query = '', offset = 0, userSort = 'reg';   // 跨页面停留保留搜索/排序；搜索/翻页只改列表
@@ -232,8 +233,8 @@ export async function render(el) {
   const moveTabIndicator = (animate = true) => {
     const on = tabsEl.querySelector('.cm-atab.on');
     if (!on) return;
-    const r = on.getBoundingClientRect();
-    const tr = tabsEl.getBoundingClientRect();
+    const r = layoutRect(on);
+    const tr = layoutRect(tabsEl);
     tabInd.style.width = r.width + 'px';
     tabInd.style.height = r.height + 'px';
     tabInd.style.top = (r.top - tr.top + tabsEl.scrollTop) + 'px';

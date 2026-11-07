@@ -12,7 +12,6 @@
   <link rel="icon" href="brand-icon.png?v=sage1" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=sage1">
   <script>
-    if (!window.NativeApi || !window.NativeApi.versionCode) document.documentElement.classList.add('cm-web');
     // 某些 CDN 将 /app 的重定向内部跟随，返回首页却保留无斜杠 URL。
     // 固定网页资源基址，避免 app.js 被解析成站点根目录的 /app.js。
     // Android 的 cm.local 虚拟源仍从 assets 根目录读取。
@@ -60,7 +59,7 @@
       if (gt !== null && gt !== '') document.documentElement.style.setProperty('--frs-alpha', gt);
     } catch (e) { /* 忽略 */ }
   </script>
-  <link rel="stylesheet" href="app.css?v=deff5d75d6">
+  <link rel="stylesheet" href="app.css?v=16f7f52525">
   <style>
     html, body { margin: 0; height: 100%; overscroll-behavior-y: none; }
     #boot { position: fixed; top: 0; right: 0; bottom: 0; left: 0; inset: 0; z-index: 10000; display: flex;
@@ -326,6 +325,6 @@ html.mdui-theme-dark[data-ui-preset="soaringbird"] .cm-route-loading{background:
       }, 9000);
     })();
   </script>
-  <script src="app.js?v=deff5d75d6"></script>
+  <script src="app.js?v=16f7f52525"></script>
 </body>
 </html>

@@ -4,6 +4,8 @@
 // canvas.clientWidth/Height 重新算尺寸（高 DPI 下乘 devicePixelRatio），因此
 // 布局变化后再次调用即可，不需要维护内部坐标系。
 
+import { layoutRect, layoutScale } from './tablet-scale.js';
+
 const FONT = 'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
 
 let _cssKey = '', _cssCache = {};
@@ -117,9 +119,9 @@ function bindHover(canvas) {
   const apply = () => {
     const c = canvas._cmChart;
     if (!c || !last) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = last.clientX - rect.left;
-    const y = last.clientY - rect.top;
+    const rect = layoutRect(canvas);
+    const x = last.clientX / layoutScale() - rect.left;
+    const y = last.clientY / layoutScale() - rect.top;
     const idx = c.hit(x, y);
     if (idx == null) { hide(); return; }
     c.draw(idx);

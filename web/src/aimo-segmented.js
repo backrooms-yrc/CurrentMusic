@@ -6,6 +6,8 @@
 // 3. 严格限定在 html[data-ui-preset="aimo"] 生效
 // ==========================================================================
 
+import { layoutScale } from './tablet-scale.js';
+
 const isAimoActive = () => document.documentElement.getAttribute('data-ui-preset') === 'aimo';
 
 export function enhanceAimoSegmented(container) {
@@ -149,7 +151,7 @@ export function enhanceAimoSegmented(container) {
     }
     if (moved) {
       if (e.cancelable) e.preventDefault();
-      const currentCenter = startCenter + dx;
+      const currentCenter = startCenter + dx / layoutScale();
       const geo = getInterpolatedGeometry(currentCenter);
       if (geo) applyGeometry(geo, false);
     }
@@ -170,7 +172,7 @@ export function enhanceAimoSegmented(container) {
 
     suppressClickUntil = performance.now() + 320;
     const dx = e.clientX - startX;
-    const target = getNearestButton(startCenter + dx);
+    const target = getNearestButton(startCenter + dx / layoutScale());
     if (target) {
       const geo = getGeometry(target);
       applyGeometry(geo, true);

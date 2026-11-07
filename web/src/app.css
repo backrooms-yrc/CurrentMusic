@@ -8,6 +8,7 @@
    移动端浏览器（含 Android WebView 的辅助功能文字缩放）会按系统字号放大文字，
    text-size-adjust:none 就是显式退出这套自动缩放，否则同一份设置在不同机器上大小不一致。 */
 html {
+  zoom: var(--cm-view-scale, 1);
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: none;
   text-size-adjust: none;
@@ -20,6 +21,8 @@ input, textarea, [contenteditable] { -webkit-user-select: text; user-select: tex
 .cm-empty, .cmt-content, .pl-lyric-line { user-select: none; }
 
 :root {
+  --cm-vw: calc(1vw / var(--cm-view-scale, 1));
+  --cm-vh: calc(1vh / var(--cm-view-scale, 1));
   /* 字体大小倍率：由设置页写入（默认 1 = 标准）。所有字号都用 calc(Npx * var(--cm-fs)) */
   --cm-fs: 1;
   --safe-t: 0px; --safe-b: 0px; --safe-l: 0px; --safe-r: 0px;  /* 原生 insets 桥值 */
@@ -905,7 +908,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 
 /* Pad / 横屏 / 宽屏：左右双栏（封面控制台 + 歌词） */
 @media (min-width: 600px) {
-  .pl-page { --pl-cover-size: min(36vw, 320px); }
+  .pl-page { --pl-cover-size: min(calc(36 * var(--cm-vw)), 320px); }
   .pl-body { flex-direction: row; align-items: center; gap: clamp(28px, 6vw, 72px); }
   .pl-left { flex: 0 0 auto; width: min(42vw, 420px); justify-content: center; }
   .pl-right { flex: 1; height: 100%; align-items: stretch; }
@@ -1029,7 +1032,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
    这里把顶栏与主体收进同一个限宽容器并水平居中，两栏比例固定，
    封面随视口/高度放大到合理尺寸（不再永远 320px 顶在左上）。 */
 @media (min-width: 900px) {
-  .pl-page { --pl-cover-size: min(30vw, 380px, 46vh); padding-left: 40px; padding-right: 40px; }
+  .pl-page { --pl-cover-size: min(calc(30 * var(--cm-vw)), 380px, calc(46 * var(--cm-vh))); padding-left: 40px; padding-right: 40px; }
   .pl-top,
   .pl-body { width: 100%; max-width: 1020px; margin-left: auto; margin-right: auto; }
   .pl-body { gap: clamp(48px, 8vw, 110px); align-items: center; }
@@ -3503,7 +3506,7 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 /* ---------- 弹窗公告（v1.28.22） ----------
    设计口径：公告是「内容」，不是玻璃浮层——用实体面板 + 发丝线 + 双层阴影，
    字号/间距走 HIG 令牌；置顶用强调色小徽章区分。 */
-.cm-ann { display: flex; flex-direction: column; gap: 12px; max-height: min(62vh, 560px); overflow-y: auto;
+.cm-ann { display: flex; flex-direction: column; gap: 12px; max-height: min(calc(62 * var(--cm-vh)), 560px); overflow-y: auto;
   -webkit-overflow-scrolling: touch; padding: 2px; }
 .cm-ann-item {
   padding: 14px 16px; border-radius: var(--r-card, 16px);
@@ -4186,7 +4189,7 @@ html[data-ui-preset="cmx"] #pageTitle {
     min-width: 0;
     white-space: normal;
     overflow-wrap: break-word;
-    font-size: calc(clamp(13px, 4vw, 28px) * var(--cm-fs, 1));
+    font-size: calc(clamp(13px, calc(4 * var(--cm-vw)), 28px) * var(--cm-fs, 1));
     line-height: 1.15;
   }
   body.cm-has-account #pageTitle.cm-home-title {
@@ -4537,7 +4540,7 @@ html[data-ui-preset="cmx"] #playerOverlay { background: #111214 !important; }
 html[data-ui-preset="cmx"] .pl-bg:not(.grad) {
   filter: blur(70px) brightness(.44) saturate(1.25) !important;
 }
-html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(74vw, 360px, 42vh); padding-left: 20px; padding-right: 20px; }
+html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(calc(74 * var(--cm-vw)), 360px, calc(42 * var(--cm-vh))); padding-left: 20px; padding-right: 20px; }
 html[data-ui-preset="cmx"] .pl-top { position: relative; }
 html[data-ui-preset="cmx"] .pl-cover-wrap { align-self: center; margin-top: 4px; margin-bottom: 18px; }
 html[data-ui-preset="cmx"] #plCover {
@@ -4617,7 +4620,7 @@ html[data-ui-preset="cmx"] body.player-open #mini { visibility: hidden; }
 /* 横屏 / 矮屏：X 的封面+信息+操作总高超过可用高度时，原布局会上下被裁。
    这里压缩波形并隐藏统计、缩小封面/标题/走带，保证首屏完整看到封面、信息、进度与播放键。 */
 @media (min-width: 600px) and (max-height: 660px) {
-  html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(30vw, 34vh); padding-top: 8px; padding-bottom: 8px; }
+  html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(calc(30 * var(--cm-vw)), calc(34 * var(--cm-vh))); padding-top: 8px; padding-bottom: 8px; }
   html[data-ui-preset="cmx"] .pl-top { padding-top: 0; }
   html[data-ui-preset="cmx"] .pl-cover-wrap { margin: 0 0 8px; }
   html[data-ui-preset="cmx"] .pl-name { font-size: calc(24px * var(--cm-fs, 1)); }
@@ -4872,7 +4875,7 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-left {
 /* ---- 封面 + 光晕（参考 .lp-artwork / __glow） ---- */
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-artwork {
   position: relative;
-  width: min(100%, calc(100dvh - 400px));
+  width: min(100%, calc(100dvh / var(--cm-view-scale, 1) - 400px));
   aspect-ratio: 1; height: auto;
   border-radius: 12px; margin-bottom: 6px;
   animation: sbLpArtIn 1s cubic-bezier(.2,.8,.2,1) both;

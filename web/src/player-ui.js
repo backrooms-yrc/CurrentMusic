@@ -9,6 +9,7 @@ import { openShare } from './share.js';
 import { castIconHTML, openCastDialog } from './cast.js';
 import { openAskAI, ensureAiBot } from './ask-ai.js';
 import { createMiniProgress, createPlayerProgress } from './playback-progress.js';
+import { layoutRect, layoutScale } from './tablet-scale.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
 // 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
@@ -910,13 +911,13 @@ function lpScrollToArtwork(box, el) {
   if (!track || !el) return;
   const max = soarScrollMax(box);
   if (max < 2) return;               // 歌词比面板短：没有可滚动的余量
-  const boxTop = box.getBoundingClientRect().top;
+  const boxTop = layoutRect(box).top;
   const art = document.querySelector('#playerOverlay .lp-artwork');
   // 只有双栏布局才对齐「封面中线」；≤980 是单列，按封面中线算会得到负值，
   // 改为在歌词面板内居中。
   let anchor = box.clientHeight / 2;
   if (art && window.innerWidth > 980) {
-    const ar = art.getBoundingClientRect();
+    const ar = layoutRect(art);
     anchor = (ar.top + ar.height / 2) - boxTop;
     // 防御：封面还在入场动画/被遮挡时可能量到异常值，退回面板居中
     if (!(anchor >= 0 && anchor <= box.clientHeight * 1.5)) anchor = box.clientHeight / 2;
@@ -931,7 +932,7 @@ function soarManualScroll(box, dy) {
   const track = soarTrack(box);
   if (!track) return;
   const max = soarScrollMax(box);
-  const y = Math.min(max, Math.max(0, soarScrollY + dy));
+  const y = Math.min(max, Math.max(0, soarScrollY + dy / layoutScale()));
   // 拖动期间临时关掉行过渡（松手后恢复），保证 1:1 跟手
   box.classList.add('is-scrolling');
   clearTimeout(soarScrollTimer);
@@ -1123,15 +1124,17 @@ async function openFull() {
       if (open) {
         // 菜单改成 position:fixed 后由这里定位：跟随三点按钮右缘，下方放不下就向上弹出，
         // 这样窄屏/矮窗口也不会被 .lp 的 overflow:hidden 裁掉。
-        const r = menuBtn.getBoundingClientRect();
-        const mw = Math.min(236, window.innerWidth - 24);
+        const r = layoutRect(menuBtn);
+        const width = window.innerWidth / layoutScale();
+        const height = window.innerHeight / layoutScale();
+        const mw = Math.min(236, width - 24);
         menu.style.width = mw + 'px';
-        const mh = Math.min(menu.scrollHeight || 360, window.innerHeight - 24);
+        const mh = Math.min(menu.scrollHeight || 360, height - 24);
         let top = r.bottom + 8;
-        if (top + mh > window.innerHeight - 12) top = Math.max(12, r.top - mh - 8);
+        if (top + mh > height - 12) top = Math.max(12, r.top - mh - 8);
         menu.style.top = top + 'px';
         menu.style.left = 'auto';
-        menu.style.right = Math.max(12, window.innerWidth - r.right) + 'px';
+        menu.style.right = Math.max(12, width - r.right) + 'px';
         document.addEventListener('pointerdown', onDoc, true);
         document.addEventListener('keydown', onKey);
       } else {
