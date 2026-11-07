@@ -13,8 +13,8 @@ export const AIMO_ICONS = {
   explore: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>`,
   user: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`,
   radio: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"></path></svg>`,
-  play: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor"></polygon></svg>`,
-  pause: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><rect x="6" y="4" width="4" height="16" fill="currentColor"></rect><rect x="14" y="4" width="4" height="16" fill="currentColor"></rect></svg>`,
+  play: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor"></polygon></svg>`,
+  pause: `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><rect x="6" y="4" width="4" height="16" fill="currentColor"></rect><rect x="14" y="4" width="4" height="16" fill="currentColor"></rect></svg>`,
   prev: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>`,
   next: `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>`,
   repeat: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="m17 2 4 4-4 4"></path><path d="M3 11v-1a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v1a4 4 0 0 1-4 4H3"></path></svg>`,
@@ -27,19 +27,52 @@ export const AIMO_ICONS = {
   volumeMute: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="22" y1="9" x2="16" y2="15"></line><line x1="16" y1="9" x2="22" y2="15"></line></svg>`,
   close: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
   chevronDown: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
+
+  // --- “我的”页面与全站 Lucide 极简细线扩展库 ---
+  award: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><circle cx="12" cy="8" r="6"></circle><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"></path></svg>`,
+  quote: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"></path></svg>`,
+  disc: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>`,
+  sparkles: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"></path></svg>`,
+  key: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"></circle><path d="m21 2-9.6 9.6"></path><path d="m15.5 7.5 3 3L22 7l-2-2"></path></svg>`,
+  bookOpen: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>`,
+  activity: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>`,
+  messageSquare: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`,
+  users: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`,
+  rss: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>`,
+  userCog: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><circle cx="19" cy="11" r="2"></circle><path d="m19 8 .5 1"></path><path d="m19 14 .5-1"></path><path d="m21.6 9.5-.9.5"></path><path d="m16.4 12.5.9-.5"></path></svg>`,
+  cloud: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg>`,
+  podcast: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><circle cx="12" cy="11" r="1"></circle><path d="M16.8 7.2a6.8 6.8 0 0 1 0 7.6"></path><path d="M7.2 14.8a6.8 6.8 0 0 1 0-7.6"></path><path d="M19.6 4.4a10.8 10.8 0 0 1 0 13.2"></path><path d="M4.4 17.6a10.8 10.8 0 0 1 0-13.2"></path><path d="M12 12v7"></path><path d="M9 19h6"></path></svg>`,
+  shieldCheck: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>`,
+  compass: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>`,
+  badgeCheck: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"></path><path d="m9 12 2 2 4-4"></path></svg>`,
+  listPlus: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M11 12H3"></path><path d="M16 6H3"></path><path d="M16 18H3"></path><path d="M18 9v6"></path><path d="M21 12h-6"></path></svg>`,
+  moreHorizontal: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>`,
+  bot: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><rect width="18" height="10" x="3" y="11" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" x2="8" y1="16" y2="16"></line><line x1="16" x2="16" y1="16" y2="16"></line></svg>`,
+  camera: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>`,
+  edit: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>`,
+  android: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="aimo-icon" aria-hidden="true"><path d="m5 16 1.5-3"></path><path d="m19 16-1.5-3"></path><path d="M6 14h12"></path><path d="M7 10h10a5 5 0 0 0-10 0v4"></path><line x1="9" y1="6" x2="8" y2="3"></line><line x1="15" y1="6" x2="16" y2="3"></line></svg>`,
 };
 
-function injectSlot(el, iconKey) {
+export function injectSlot(el, iconKey) {
   if (!el) return;
+  const svg = AIMO_ICONS[iconKey];
+  if (!svg) return;
+
   let slot = el.querySelector(':scope > .aimo-icon-slot');
   if (!slot) {
     slot = document.createElement('span');
     slot.className = 'aimo-icon-slot';
     slot.setAttribute('aria-hidden', 'true');
+    // 清除原生元素内残留的字体文本节点（如 "military_tech", "favorite", "search" 等），根除重影
+    for (let i = el.childNodes.length - 1; i >= 0; i--) {
+      const node = el.childNodes[i];
+      if (node.nodeType === 3) {
+        node.textContent = '';
+      }
+    }
     el.prepend(slot);
   }
-  const svg = AIMO_ICONS[iconKey];
-  if (svg && slot.__iconKey !== iconKey) {
+  if (slot.__iconKey !== iconKey) {
     slot.innerHTML = svg;
     slot.__iconKey = iconKey;
   }
@@ -49,12 +82,18 @@ function injectSlot(el, iconKey) {
 export function syncAimoIcons() {
   if (!isAimo()) return;
 
-  // 1. 顶栏操作
+  // 1. 顶栏操作区
   const topSearch = document.getElementById('topSearch');
   if (topSearch) injectSlot(topSearch, 'search');
 
   const topAction = document.getElementById('topAction');
   if (topAction) injectSlot(topAction, 'settings');
+
+  const dlApkTop = document.getElementById('dlApkTop');
+  if (dlApkTop) {
+    const ic = dlApkTop.querySelector('.material-icons-outlined') || dlApkTop;
+    injectSlot(ic, 'android');
+  }
 
   // 2. 底部/桌面侧栏导航
   const bottomNav = document.getElementById('bottomNav');
@@ -65,7 +104,7 @@ export function syncAimoIcons() {
       let key = '';
       if (href.includes('home')) key = 'home';
       else if (href.includes('search')) key = 'search';
-      else if (href.includes('discover')) key = 'explore';
+      else if (href.includes('discover') || href.includes('square')) key = 'explore';
       else if (href.includes('user')) key = 'user';
       else if (href.includes('room')) key = 'radio';
       if (key) {
@@ -75,16 +114,18 @@ export function syncAimoIcons() {
     });
   }
 
-  // 3. 播放器核心操作传输控件
+  // 3. 播放传输控制核心大键 (全屏与迷你条)
   const plPlay = document.getElementById('plPlay');
   if (plPlay) {
-    const isPlaying = plPlay.querySelector('.material-icons-outlined')?.textContent?.trim() === 'pause';
+    const text = plPlay.textContent || '';
+    const isPlaying = text.includes('pause') || plPlay.classList.contains('playing') || plPlay.querySelector('svg')?.getAttribute('viewBox')?.includes('18');
     injectSlot(plPlay, isPlaying ? 'pause' : 'play');
   }
 
   const plPlaySm = document.getElementById('plPlaySm');
   if (plPlaySm) {
-    const isPlaying = plPlaySm.querySelector('.material-icons-outlined')?.textContent?.trim() === 'pause';
+    const text = plPlaySm.textContent || '';
+    const isPlaying = text.includes('pause') || plPlaySm.classList.contains('playing');
     injectSlot(plPlaySm, isPlaying ? 'pause' : 'play');
   }
 
@@ -100,9 +141,27 @@ export function syncAimoIcons() {
   const plClose = document.getElementById('plClose');
   if (plClose) injectSlot(plClose, 'chevronDown');
 
+  const plAdd = document.getElementById('plAdd');
+  if (plAdd) injectSlot(plAdd, 'listPlus');
+
+  const plComments = document.getElementById('plComments');
+  if (plComments) injectSlot(plComments, 'messageSquare');
+
+  const plHeart = document.getElementById('plHeart');
+  if (plHeart) injectSlot(plHeart, 'sparkles');
+
+  const plMore = document.getElementById('plMore');
+  if (plMore) injectSlot(plMore, 'moreHorizontal');
+
+  const plAskAi = document.getElementById('plAskAi');
+  if (plAskAi) {
+    const ic = plAskAi.querySelector('.pl-ai-ava') || plAskAi;
+    injectSlot(ic, 'bot');
+  }
+
   const plMode = document.getElementById('plMode');
   if (plMode) {
-    const modeText = plMode.querySelector('.material-icons-outlined')?.textContent?.trim() || '';
+    const modeText = plMode.textContent || '';
     let modeKey = 'repeat';
     if (modeText.includes('one')) modeKey = 'repeatOne';
     else if (modeText.includes('shuffle')) modeKey = 'shuffle';
@@ -111,7 +170,7 @@ export function syncAimoIcons() {
 
   const plLike = document.getElementById('plLike');
   if (plLike) {
-    const isLiked = plLike.classList.contains('liked') || plLike.querySelector('.material-icons-outlined')?.textContent?.trim() === 'favorite';
+    const isLiked = plLike.classList.contains('on') || plLike.classList.contains('liked') || plLike.textContent.includes('favorite');
     injectSlot(plLike, isLiked ? 'heartFilled' : 'heart');
   }
 
@@ -120,23 +179,95 @@ export function syncAimoIcons() {
     const isMute = plVolIcon.textContent?.trim()?.includes('off') || plVolIcon.textContent?.trim()?.includes('mute');
     injectSlot(plVolIcon, isMute ? 'volumeMute' : 'volume');
   }
+
+  // 4. “我的”页面 (User Profile) 全量图标替换
+  const quickCards = [
+    { sel: '.cm-quick[href*="levels"]', icon: 'award' },
+    { sel: '.cm-quick[href*="likes"]', icon: 'heart' },
+    { sel: '.cm-quick[href*="library"]', icon: 'queue' },
+    { sel: '.cm-quick[href*="lyricmarks"]', icon: 'quote' },
+    { sel: '.cm-quick[href*="assets"]', icon: 'disc' },
+  ];
+  quickCards.forEach(({ sel, icon }) => {
+    document.querySelectorAll(sel).forEach(card => {
+      const ic = card.querySelector('.material-icons-outlined') || card.querySelector('.material-icons');
+      if (ic) injectSlot(ic, icon);
+    });
+  });
+
+  const settingMap = {
+    setDecor: 'sparkles',
+    chgPass: 'key',
+    goUgc: 'bookOpen',
+    goFoot: 'activity',
+    goMsg: 'messageSquare',
+    goFollow: 'users',
+    goEvents: 'rss',
+    goAccount: 'userCog',
+    goCloud: 'cloud',
+    goRadio: 'radio',
+    goPodcast: 'podcast',
+    goMember: 'shieldCheck',
+    goServices: 'compass',
+    goRep: 'badgeCheck',
+  };
+  Object.keys(settingMap).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      const ic = el.querySelector('.material-icons-outlined') || el.querySelector('.material-icons');
+      if (ic) injectSlot(ic, settingMap[id]);
+    }
+  });
+
+  document.querySelectorAll('.cm-setting[data-sw]').forEach(item => {
+    const ic = item.querySelector('.material-icons-outlined') || item.querySelector('.material-icons');
+    if (ic) injectSlot(ic, 'user');
+  });
+
+  const avaCam = document.querySelector('.cm-ava-cam');
+  if (avaCam) {
+    const ic = avaCam.querySelector('.material-icons-outlined') || avaCam;
+    injectSlot(ic, 'camera');
+  }
+
+  const editNick = document.getElementById('editNick');
+  if (editNick) {
+    const ic = editNick.querySelector('.material-icons-outlined') || editNick;
+    injectSlot(ic, 'edit');
+  }
+
+  const editBio = document.getElementById('editBio');
+  if (editBio) {
+    const ic = editBio.querySelector('.material-icons-outlined') || editBio;
+    injectSlot(ic, 'edit');
+  }
+}
+
+let syncTimer = 0;
+function scheduleSync() {
+  if (!isAimo()) return;
+  cancelAnimationFrame(syncTimer);
+  syncTimer = requestAnimationFrame(() => {
+    syncAimoIcons();
+  });
 }
 
 export function initAimoIcons() {
   syncAimoIcons();
   document.addEventListener('cm-uipreset', syncAimoIcons);
-  window.addEventListener('hashchange', () => {
-    if (isAimo()) requestAnimationFrame(syncAimoIcons);
-  });
-  window.addEventListener('cm-play-state', () => {
-    if (isAimo()) requestAnimationFrame(syncAimoIcons);
-  });
-  // 仅在主播放容器状态变动时按需同步
+  window.addEventListener('hashchange', scheduleSync);
+  window.addEventListener('cm-play-state', scheduleSync);
+
+  // 监听全屏播放器与主路由挂载点，异步内容装载完成即时无缝换装
   const ov = document.getElementById('playerOverlay');
   if (ov && typeof MutationObserver !== 'undefined') {
-    const mo = new MutationObserver(() => {
-      if (isAimo()) requestAnimationFrame(syncAimoIcons);
-    });
-    mo.observe(ov, { attributes: true, attributeFilter: ['hidden', 'class'] });
+    const mo = new MutationObserver(() => scheduleSync());
+    mo.observe(ov, { attributes: true, attributeFilter: ['hidden', 'class'], childList: true, subtree: true });
+  }
+
+  const outEl = document.getElementById('out');
+  if (outEl && typeof MutationObserver !== 'undefined') {
+    const moOut = new MutationObserver(() => scheduleSync());
+    moOut.observe(outEl, { childList: true, subtree: true });
   }
 }

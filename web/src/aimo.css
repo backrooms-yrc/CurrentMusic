@@ -697,19 +697,6 @@ html[data-ui-preset="aimo"] .sk-ava {
     display: flex !important;
     align-items: center !important;
   }
-
-  /* 桌面端迷你播放器进度条：居中紧凑定位，杜绝通栏贯穿超长条 */
-  html[data-ui-preset="aimo"] .cm-mini-prog {
-    left: 50% !important;
-    right: auto !important;
-    transform: translateX(-50%) !important;
-    width: min(440px, 40vw) !important;
-    max-width: 440px !important;
-    top: 0 !important;
-    height: 14px !important;
-    margin-top: -7px !important;
-    z-index: 5 !important;
-  }
 }
 
 /* --------------------------------------------------------------------------
@@ -808,19 +795,6 @@ html[data-ui-preset="aimo"] .sk-ava {
     align-items: center !important;
   }
 
-  /* 移动端迷你播放器进度条：定界在曲目信息与操作区之间，避免全屏贯通 */
-  html[data-ui-preset="aimo"] .cm-mini-prog {
-    left: calc(16px + 40px + 12px) !important;
-    right: calc(16px + 80px + 12px) !important;
-    width: auto !important;
-    max-width: 360px !important;
-    transform: none !important;
-    top: 0 !important;
-    height: 14px !important;
-    margin-top: -7px !important;
-    z-index: 5 !important;
-  }
-
   /* 移动顶栏 */
   html[data-ui-preset="aimo"] #topbar {
     left: 0 !important;
@@ -880,35 +854,76 @@ html[data-ui-preset="aimo"] #pageTitle {
 }
 
 html[data-ui-preset="aimo"] #topActs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
 }
 
 html[data-ui-preset="aimo"] #topSearch,
 html[data-ui-preset="aimo"] #topAction {
-  width: 36px;
-  height: 36px;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--aimo-radius-control);
-  background: var(--aimo-bg-sunken);
-  color: var(--aimo-text-primary);
-  border: 1px solid var(--aimo-border-soft);
-  box-shadow: none;
-  transition: transform 120ms var(--aimo-ease), background 160ms ease;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: var(--aimo-radius-control) !important;
+  background: var(--aimo-panel) !important;
+  color: var(--aimo-text-primary) !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-decoration: none !important;
+  transition: transform 120ms var(--aimo-ease), background 160ms ease, border-color 160ms ease !important;
 }
 
 html[data-ui-preset="aimo"] #topSearch:hover,
 html[data-ui-preset="aimo"] #topAction:hover {
-  background: var(--aimo-panel);
+  background: var(--aimo-bg-elevated) !important;
+  border-color: var(--aimo-border) !important;
 }
 
 html[data-ui-preset="aimo"] #topSearch:active,
 html[data-ui-preset="aimo"] #topAction:active {
-  transform: scale(0.92);
+  transform: scale(0.92) !important;
+}
+
+/* 网页版顶栏「下载安卓版 APP」入口 */
+html[data-ui-preset="aimo"] .cm-dl-apk-top {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  box-sizing: border-box !important;
+  padding: 0 12px !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  border: 1px solid var(--aimo-border-soft) !important;
+  background: var(--aimo-panel) !important;
+  color: var(--aimo-text-secondary) !important;
+  font-family: var(--aimo-font-sans) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  transition: transform 120ms var(--aimo-ease), background 160ms ease, border-color 160ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-dl-apk-top:hover {
+  background: var(--aimo-bg-elevated) !important;
+  border-color: var(--aimo-border) !important;
+  color: var(--aimo-text-primary) !important;
+}
+
+html[data-ui-preset="aimo"] .cm-dl-apk-top:active {
+  transform: scale(0.95) !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -1030,9 +1045,15 @@ html[data-ui-preset="aimo"] .cm-quick:active {
 }
 
 html[data-ui-preset="aimo"] .cm-quick .material-icons-outlined {
-  font-size: 20px !important;
-  color: var(--aimo-text-primary) !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
   margin-bottom: 2px !important;
+}
+
+html[data-ui-preset="aimo"] .cm-quick .aimo-icon-slot {
+  font-size: initial !important;
+  color: var(--aimo-text-primary) !important;
 }
 
 html[data-ui-preset="aimo"] .cm-quick b {
@@ -1815,20 +1836,42 @@ html[data-ui-preset="aimo"] .cm-mini-btn:active {
   transform: scale(0.92);
 }
 
-/* 进度槽规整：重置高度与绝对坐标，消除旧系统 24px 偏移与通栏大条 */
+/* --------------------------------------------------------------------------
+   迷你播放条顶边极简进度线 (2.5px Top Slim Bar)
+   -------------------------------------------------------------------------- */
 html[data-ui-preset="aimo"] .cm-mini-prog {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 12px !important;
+  margin: 0 !important;
+  transform: none !important;
+  z-index: 10 !important;
+  cursor: pointer !important;
   background: transparent !important;
 }
 
 html[data-ui-preset="aimo"] .cm-mini-track {
   position: absolute !important;
-  top: 6px !important;
+  top: 0 !important;
   left: 0 !important;
   right: 0 !important;
+  width: 100% !important;
   height: 2.5px !important;
-  border-radius: 999px !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
   background: var(--aimo-border-soft) !important;
   overflow: hidden !important;
+  transition: height 140ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-prog:hover .cm-mini-track,
+html[data-ui-preset="aimo"] .cm-mini-prog.is-dragging .cm-mini-track,
+html[data-ui-preset="aimo"] .cm-mini-prog:focus-within .cm-mini-track {
+  height: 4px !important;
 }
 
 html[data-ui-preset="aimo"] .cm-mini-track i {
@@ -1836,23 +1879,35 @@ html[data-ui-preset="aimo"] .cm-mini-track i {
   top: 0 !important;
   left: 0 !important;
   height: 100% !important;
+  border-radius: 0 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-track #miniProg {
   background: var(--aimo-primary) !important;
-  border-radius: 999px !important;
 }
 
 html[data-ui-preset="aimo"] .cm-mini-track #miniBuf {
   background: var(--aimo-border) !important;
-  opacity: 0.55 !important;
+  opacity: 0.45 !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-prog input {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  z-index: 2 !important;
 }
 
 html[data-ui-preset="aimo"] .cm-mini-thumb {
-  top: 7px !important;
-  width: 9px !important;
-  height: 9px !important;
-  border-radius: 50% !important;
-  background: var(--aimo-primary) !important;
-  border: 2px solid var(--aimo-bg-elevated) !important;
-  box-shadow: var(--aimo-shadow-sm) !important;
+  display: none !important;
+}
+
+html[data-ui-preset="aimo"] .cm-mini-time {
+  display: none !important;
 }
 
 html[data-ui-preset="aimo"] .cm-mini-time {
@@ -1942,18 +1997,67 @@ html[data-ui-preset="aimo"] .pl-seek-track i {
   background: var(--aimo-primary);
 }
 
-html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge {
-  background: var(--aimo-primary);
-  color: var(--aimo-primary-text) !important;
-  border-radius: 50%;
-  box-shadow: var(--aimo-shadow-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+html[data-ui-preset="aimo"] .pl-transport {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 24px !important;
 }
 
-html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge .material-icons-outlined {
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge {
+  width: 64px !important;
+  height: 64px !important;
+  min-width: 64px !important;
+  min-height: 64px !important;
+  max-width: 64px !important;
+  max-height: 64px !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  background: var(--aimo-primary) !important;
   color: var(--aimo-primary-text) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  transition: transform 140ms var(--aimo-ease), background 160ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge:hover {
+  background: var(--aimo-primary-hover) !important;
+  transform: scale(1.04) !important;
+}
+
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge:active {
+  transform: scale(0.94) !important;
+}
+
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.big {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  max-width: 44px !important;
+  max-height: 44px !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--aimo-text-primary) !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  transition: transform 120ms var(--aimo-ease), background 160ms ease !important;
+}
+
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.big:hover {
+  background: var(--aimo-bg-sunken) !important;
+}
+
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.big:active {
+  transform: scale(0.92) !important;
 }
 
 /* 歌词视窗：高对比度纸墨极简排版与浅色/深色模式适配 */
@@ -2199,37 +2303,65 @@ html[data-ui-preset="aimo"] .cm-quick[href*="3779629"] .material-icons-outlined 
 }
 
 /* --------------------------------------------------------------------------
-   19. 发现页面分区导航胶囊条 (Discover Navigation Bar)
+   19. 发现页面分区导航与横滑药丸标签 (Discover Navigation & Horizontal Scroll Chips)
    -------------------------------------------------------------------------- */
 html[data-ui-preset="aimo"] .cm-anchorbar {
-  position: sticky !important;
-  top: 0 !important;
-  z-index: 20 !important;
+  position: relative !important;
+  z-index: 10 !important;
   display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
   gap: 8px !important;
-  padding: 10px 4px 12px !important;
-  margin: -4px 0 16px !important;
-  background: color-mix(in srgb, var(--aimo-bg) 88%, transparent) !important;
+  padding: 6px 0 12px 0 !important;
+  margin: 0 0 16px 0 !important;
+  background: transparent !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
   border-bottom: 1px solid var(--aimo-border-soft) !important;
   overflow-x: auto !important;
+  overflow-y: hidden !important;
   scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
 }
 
 html[data-ui-preset="aimo"] .cm-anchorbar::-webkit-scrollbar {
   display: none !important;
 }
 
+html[data-ui-preset="aimo"] .cm-chips {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 2px 0 8px 0 !important;
+  margin-bottom: 12px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+html[data-ui-preset="aimo"] .cm-chips::-webkit-scrollbar {
+  display: none !important;
+}
+
 html[data-ui-preset="aimo"] .cm-anchorbar .cm-hot,
-html[data-ui-preset="aimo"] .cm-hot {
-  flex: none !important;
+html[data-ui-preset="aimo"] .cm-chips .cm-hot,
+html[data-ui-preset="aimo"] span.cm-hot {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  max-width: max-content !important;
+  min-width: 0 !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  height: 34px !important;
-  padding: 0 16px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  line-height: 30px !important;
+  padding: 0 14px !important;
   border-radius: 999px !important;
   background: var(--aimo-panel) !important;
   border: 1px solid var(--aimo-border-soft) !important;
@@ -2238,31 +2370,36 @@ html[data-ui-preset="aimo"] .cm-hot {
   font-size: 13px !important;
   font-weight: 500 !important;
   letter-spacing: -0.01em !important;
-  box-shadow: var(--aimo-shadow-sm) !important;
+  box-shadow: none !important;
   cursor: pointer !important;
   user-select: none !important;
-  transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+  transition: all 160ms var(--aimo-ease) !important;
 }
 
 html[data-ui-preset="aimo"] .cm-anchorbar .cm-hot:hover,
-html[data-ui-preset="aimo"] .cm-hot:hover {
+html[data-ui-preset="aimo"] .cm-chips .cm-hot:hover,
+html[data-ui-preset="aimo"] span.cm-hot:hover {
   background: var(--aimo-bg-elevated) !important;
   color: var(--aimo-text-primary) !important;
   border-color: var(--aimo-border) !important;
-  transform: translateY(-1px);
+  transform: translateY(-1px) !important;
 }
 
 html[data-ui-preset="aimo"] .cm-anchorbar .cm-hot:active,
-html[data-ui-preset="aimo"] .cm-hot:active {
+html[data-ui-preset="aimo"] .cm-chips .cm-hot:active,
+html[data-ui-preset="aimo"] span.cm-hot:active {
   transform: scale(0.96) !important;
 }
 
 html[data-ui-preset="aimo"] .cm-anchorbar .cm-hot.on,
-html[data-ui-preset="aimo"] .cm-hot.on {
+html[data-ui-preset="aimo"] .cm-chips .cm-hot.on,
+html[data-ui-preset="aimo"] span.cm-hot.on {
   background: var(--aimo-primary) !important;
   color: var(--aimo-primary-text) !important;
-  border-color: transparent !important;
-  box-shadow: var(--aimo-shadow-sm) !important;
+  border-color: var(--aimo-primary) !important;
+  box-shadow: none !important;
   font-weight: 600 !important;
 }
 
@@ -2717,13 +2854,13 @@ html[data-ui-preset="aimo"] #topAccount .cm-top-tags {
 
 /* 顶栏操作区在 Aimo 下为右上角头像预留间距，标题自然自适应，按钮间距严谨呼吸 */
 html[data-ui-preset="aimo"] body.cm-has-account #topActs {
-  margin-right: calc(clamp(20px, 3vw, 40px) + 36px + 12px) !important;
+  margin-right: calc(36px + 8px) !important;
   max-width: none !important;
 }
 
 @media (max-width: 899px) {
   html[data-ui-preset="aimo"] body.cm-has-account #topActs {
-    margin-right: 62px !important;
+    margin-right: calc(36px + 8px) !important;
   }
 }
 
@@ -2751,8 +2888,6 @@ html[data-ui-preset="aimo"] .aimo-icon-slot {
 }
 
 html[data-ui-preset="aimo"] .aimo-icon {
-  width: 20px !important;
-  height: 20px !important;
   stroke: currentColor !important;
   stroke-width: 1.75 !important;
   stroke-linecap: round !important;
@@ -2761,11 +2896,38 @@ html[data-ui-preset="aimo"] .aimo-icon {
   flex: none !important;
 }
 
-/* 播放传输控制核心大键 */
+/* 彻底抑制原有粗体 Material 字体图标文字与非 Aimo 默认 SVG，防止双重重叠 */
+html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+}
+
+html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > *:not(.aimo-icon-slot):not(.cm-ncmdot) {
+  display: none !important;
+}
+
+html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > .aimo-icon-slot {
+  font-size: initial !important;
+  line-height: 1 !important;
+  color: currentColor !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* 播放传输控制核心大键微图标尺寸规范 */
 html[data-ui-preset="aimo"] #plPlay .aimo-icon,
 html[data-ui-preset="aimo"] .pl-transport .pl-btn.huge .aimo-icon {
   width: 28px !important;
   height: 28px !important;
+}
+
+html[data-ui-preset="aimo"] #plPrev .aimo-icon,
+html[data-ui-preset="aimo"] #plNext .aimo-icon,
+html[data-ui-preset="aimo"] .pl-transport .pl-btn.big .aimo-icon {
+  width: 24px !important;
+  height: 24px !important;
 }
 
 /* 顶部与导航条微图标 */
@@ -2776,9 +2938,18 @@ html[data-ui-preset="aimo"] #bottomNav .aimo-icon {
   height: 20px !important;
 }
 
-/* 当 Aimo 细线图标就绪时，隐藏原 Material Icons 字体图标 */
-html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > .material-icons-outlined,
-html[data-ui-preset="aimo"] [data-aimo-icon-ready="1"] > .material-icons {
-  display: none !important;
+/* “我的”页面快捷卡片图标 */
+html[data-ui-preset="aimo"] .cm-quick .aimo-icon {
+  width: 22px !important;
+  height: 22px !important;
+  color: var(--aimo-text-primary) !important;
+  margin-bottom: 4px !important;
 }
 
+/* “我的”页面设置列表图标 */
+html[data-ui-preset="aimo"] .cm-setting .aimo-icon {
+  width: 18px !important;
+  height: 18px !important;
+  color: var(--aimo-text-secondary) !important;
+  margin-right: 12px !important;
+}
