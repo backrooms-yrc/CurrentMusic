@@ -7,7 +7,20 @@ const assert = require('node:assert/strict'), path = require('node:path');
   const browser = await chromium.launch({ ...(process.env.CM_CHROMIUM_EXECUTABLE ? { executablePath: process.env.CM_CHROMIUM_EXECUTABLE } : {}), args: ['--no-sandbox'] });
   try {
     for (const width of [390, 1440, 240]) {
-      const { page, context, errors } = await fixture(browser, width);
+      const requests = [];
+      let releaseChorus;
+      const pendingChorus = new Promise(resolve => { releaseChorus = resolve; });
+      const { page, context, errors } = await fixture(browser, width, { chorus: async (route, id) => {
+        requests.push(id);
+        if (id === '2') await pendingChorus;
+        if (id === '3') return route.fulfill({ status: 502, json: { error: '副歌资料暂时不可用' } });
+        return route.fulfill({ json: { id, segments: [
+          { startMs: 60000, endMs: 120000 },
+          { startMs: 180000, endMs: 260000 },
+          { startMs: 240000, endMs: 300000 },
+          { startMs: -1000, endMs: 2000 },
+        ] } });
+      } });
       await page.locator('.cm-mini-inner').click();
       const slider = page.locator('#plSeek');
       await slider.waitFor({ state: 'visible' });
@@ -18,6 +31,16 @@ const assert = require('node:assert/strict'), path = require('node:path');
       assert.equal(await page.locator('#plCur').innerText(), '1:00');
       assert.equal(await page.locator('#plDur').innerText(), '4:00');
       assert.equal(await slider.getAttribute('aria-valuetext'), '1:00 / 4:00');
+      const miniBands = page.locator('.cm-mini-track .cm-chorus-track span');
+      const fullBands = page.locator('.pl-seek-track .cm-chorus-track span');
+      for (const bands of [miniBands, fullBands]) {
+        await bands.first().waitFor({ state: 'attached' });
+        assert.deepEqual(await bands.evaluateAll(els => els.map(el => [el.style.left, el.style.width])),
+          [['25%', '25%'], ['75%', '25%']]);
+      }
+      assert.deepEqual(requests, ['1'], 'the progress bars share the song request');
+      assert.equal(await page.locator('#plSeekChorus').textContent(), '高潮（副歌） 1:00–2:00、3:00–4:00');
+      assert.equal(await slider.getAttribute('aria-describedby'), 'plSeekChorus');
       for (const preset of ['cmx', 'frost', 'glass', 'md3']) for (const dark of [false, true]) {
         await page.evaluate(({ preset, dark }) => {
           document.documentElement.dataset.uiPreset = preset;
@@ -68,11 +91,25 @@ const assert = require('node:assert/strict'), path = require('node:path');
       const beforeSwitch = await page.evaluate(() => seeks.length);
       await page.mouse.move(box.x + box.width * .3, y); await page.mouse.down();
       await page.mouse.move(box.x + box.width * .5, y);
+      const secondRequest = page.waitForRequest(r => r.url().endsWith('/song/chorus?id=2'));
       await page.evaluate(() => { clock.posMs = 0; MiniTest.player.meta = { ...MiniTest.player.meta, ncm_id: 2 }; MiniTest.notifyState(); });
+      await secondRequest;
+      assert.equal(await fullBands.count(), 0, 'the previous song clears before the next response');
       await page.mouse.move(box.x + box.width * .8, y); await page.mouse.up();
       assert.equal(await page.evaluate(() => seeks.length), beforeSwitch, 'old drag must not seek the next song');
       assert.equal(await slider.inputValue(), '0');
       assert.equal(await page.locator('#plCur').innerText(), '0:00');
+      const failedChorus = page.waitForResponse(r => r.url().endsWith('/song/chorus?id=3'));
+      await page.evaluate(() => { MiniTest.player.meta = { ...MiniTest.player.meta, ncm_id: 3 }; MiniTest.notifyState(); });
+      assert.equal((await failedChorus).status(), 502);
+      const staleChorus = page.waitForResponse(r => r.url().endsWith('/song/chorus?id=2'));
+      releaseChorus();
+      await (await staleChorus).finished();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await fullBands.count(), 0, 'a delayed response cannot add bands to the next song');
+      assert.equal(await miniBands.count(), 0);
+      assert.equal(await slider.getAttribute('aria-describedby'), null);
+      assert.deepEqual(requests, ['1', '2', '3']);
       for (const dur of [0, Infinity, NaN]) {
         await page.evaluate(dur => { clock.durMs = dur; MiniTest.player.meta.duration = 0; MiniTest.tick(); }, dur);
         assert(await slider.isDisabled()); assert.equal(await page.locator('#plDur').innerText(), '0:00');
@@ -104,7 +141,7 @@ const assert = require('node:assert/strict'), path = require('node:path');
       assert(Math.abs(await page.evaluate(() => MiniTest.player.audio.currentTime) - 12) < .1);
       assert.equal(await page.locator('#plCur').innerText(), '0:12');
       assert.deepEqual(errors, []);
-      console.log('PASS player progress:', width, 'four skins/light-dark, touch/keyboard, synchronized preview, one seek on release, cancellation, song switch, close/reopen, real audio, disabled states and mini synchronization');
+      console.log('PASS player progress:', width, 'chorus ranges and stale responses, four skins/light-dark, touch/keyboard, synchronized preview, song switch, close/reopen and real audio');
       await context.close();
     }
   } finally { await browser.close(); }

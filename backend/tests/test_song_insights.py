@@ -44,12 +44,22 @@ class SongInsightsTests(unittest.TestCase):
                {"id": 2, "startTime": 1, "endTime": 2},
                {"startTime": -1, "endTime": 2000}, {"startTime": 5, "endTime": 4},
                {"endTime": 2000}, {"startTime": "bad", "endTime": 2000},
-               {"startTime": float("nan"), "endTime": 2000}, None]
+               {"startTime": float("nan"), "endTime": 2000},
+               {"startTime": 0, "endTime": 2**53},
+               {"startTime": False, "endTime": 2000}, None]
         with mock.patch.object(cm_ncm, "call", return_value={"code": 200, "chorus": raw}):
             self.assertEqual(cm_songinfo.chorus(1, "")["segments"],
                              [{"startMs": 0, "endMs": 1000}, {"startMs": 10000, "endMs": 20000}])
         with mock.patch.object(cm_ncm, "call", return_value={"data": []}):
             self.assertEqual(cm_songinfo.chorus(1, "")["segments"], [])
+
+    def test_chorus_matches_large_song_ids_without_rounding(self):
+        sid = 2**53 + 1
+        raw = [{"id": str(sid), "startTime": "10000", "endTime": "20000"},
+               {"id": sid - 1, "startTime": 30000, "endTime": 40000}]
+        with mock.patch.object(cm_ncm, "call", return_value={"data": raw}):
+            self.assertEqual(cm_songinfo.chorus(sid, "")["segments"],
+                             [{"startMs": 10000, "endMs": 20000}])
 
     def test_versions_reads_rcmd_and_never_repeats_original(self):
         song = {"id": 2, "name": "另一版本", "ar": [{"id": 3, "name": "歌手"}],

@@ -1,23 +1,69 @@
 import { fmtDur } from './ui.js';
+import { api, settings } from './api.js';
 
 const clamp = value => Math.max(0, Math.min(100, Number(value) || 0));
+
+// 迷你条与全屏页共用当前歌曲的请求。切歌后允许重新查询，失败不打断播放。
+let currentChorus;
+function loadChorus(id) {
+  const base = settings.base;
+  if (!currentChorus || currentChorus.id !== id || currentChorus.base !== base) {
+    const promise = api.songChorus(id).then(data =>
+      String(data?.id) === id && Array.isArray(data.segments) ? data.segments : [],
+      () => []);
+    currentChorus = { id, base, promise };
+  }
+  return currentChorus.promise;
+}
 
 /** 两处播放器共用定位逻辑，原生 range 保留触屏与键盘操作。 */
 function createProgress(root, player, full, current, total) {
   const ids = full ? ['plSeek', 'plBuf', 'plFill'] : ['miniSeek', 'miniBuf', 'miniProg'];
   root.innerHTML = `
-    <div class="${full ? 'pl-seek-track' : 'cm-mini-track'}" aria-hidden="true"><i id="${ids[1]}"></i><i id="${ids[2]}"></i></div>
+    <div class="${full ? 'pl-seek-track' : 'cm-mini-track'}" aria-hidden="true"><i id="${ids[1]}"></i><i id="${ids[2]}"></i><div class="cm-chorus-track"></div></div>
     <span class="${full ? 'pl-seek-thumb' : 'cm-mini-thumb'}" aria-hidden="true"></span>
     <output class="${full ? 'pl-seek-time' : 'cm-mini-time'}" aria-hidden="true"></output>
-    <input id="${ids[0]}" type="range" min="0" max="100" step="0.1" value="0" aria-label="播放进度" disabled>`;
+    <input id="${ids[0]}" type="range" min="0" max="100" step="0.1" value="0" aria-label="播放进度" disabled>
+    <span id="${ids[0]}Chorus" hidden></span>`;
   const input = root.querySelector('input'), fill = root.querySelector('#' + ids[2]);
   const buffer = root.querySelector('#' + ids[1]), time = root.querySelector('output');
+  const chorusTrack = root.querySelector('.cm-chorus-track');
+  const chorusDescription = root.querySelector('#' + ids[0] + 'Chorus');
   let dragging = false, active = true, blocked = false, meta = player.meta;
+  let chorusId, chorusRequest, segments = [], paintedSegments, paintedDuration;
 
   const duration = () => {
     const value = player.durMs();
     return Number.isFinite(value) && value > 0 ? value : 0;
   };
+  function paintChorus(dur) {
+    if (segments === paintedSegments && dur === paintedDuration) return;
+    paintedSegments = segments;
+    paintedDuration = dur;
+    chorusTrack.textContent = '';
+    const ranges = [];
+    for (const segment of segments) {
+      const start = segment?.startMs;
+      const endMs = segment?.endMs;
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(endMs) || start < 0) continue;
+      const end = Math.min(endMs, dur);
+      if (end <= start) continue;
+      const band = document.createElement('span');
+      band.style.left = start / dur * 100 + '%';
+      band.style.width = (end - start) / dur * 100 + '%';
+      chorusTrack.appendChild(band);
+      ranges.push(`${fmtDur(start)}–${fmtDur(end)}`);
+    }
+    const description = ranges.length ? '高潮（副歌） ' + ranges.join('、') : '';
+    chorusDescription.textContent = description;
+    if (description) {
+      input.setAttribute('aria-describedby', chorusDescription.id);
+      input.title = description;
+    } else {
+      input.removeAttribute('aria-describedby');
+      input.removeAttribute('title');
+    }
+  }
   function paint(pos, dur) {
     const pct = dur ? clamp(pos / dur * 100) : 0;
     const value = `${fmtDur(dur * pct / 100)} / ${fmtDur(dur)}`;
@@ -39,7 +85,20 @@ function createProgress(root, player, full, current, total) {
       dragging = false;
       root.classList.remove('is-dragging');
     }
+    const id = String(meta?.ncm_id || '');
+    if (chorusId !== id) {
+      chorusId = id;
+      segments = [];
+      chorusRequest = /^[1-9]\d*$/.test(id) ? loadChorus(id) : null;
+      const request = chorusRequest;
+      if (request) request.then(result => {
+        if (!active || request !== chorusRequest) return;
+        segments = result;
+        update();
+      });
+    }
     const dur = duration();
+    paintChorus(player.loading ? 0 : dur);
     input.disabled = !dur || !player.urlInfo || player.loading;
     root.classList.toggle('is-disabled', input.disabled);
     if (input.disabled) { dragging = false; root.classList.remove('is-dragging'); }

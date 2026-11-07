@@ -251,6 +251,14 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 }
 /* 缓冲层和已播放层各自保留对比度；transform 平滑推进，避免每次更新重排。 */
 .cm-mini-track #miniBuf { opacity: .28; transition-duration: .4s; }
+.cm-chorus-track {
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+  pointer-events: none;
+}
+.cm-chorus-track span {
+  position: absolute; top: 20%; height: 60%;
+  background: #ffb638; box-shadow: 0 0 0 1px rgba(74, 41, 0, .45);
+}
 .cm-mini-prog input {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0;
   opacity: 0; cursor: pointer; touch-action: none;
@@ -988,7 +996,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: calc(11px * var(--cm-fs, 1)); font-variant-numeric: tabular-nums; }
 .pl-seek > span { min-width: 3.4em; flex: none; color: rgba(255,255,255,.82); }
 .pl-seek > span:last-child { text-align: right; }
-/* 原生 range 负责输入；三层轨道和滑块同步预览，进度只用 transform 平滑推进。 */
+/* 原生 range 负责输入；轨道和滑块同步预览，进度只用 transform 平滑推进。 */
 .pl-seekbar { --playback-progress: 0%; position: relative; flex: 1; min-width: 0; height: 36px; }
 .pl-seek-track { position: absolute; left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px;
   border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.22); }

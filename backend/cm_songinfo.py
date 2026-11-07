@@ -52,6 +52,17 @@ def qualities(sid, real_ip):
     return {"id": sid, "qualities": rows, "playability": "unknown"}
 
 
+def _chorus_ms(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        ms = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    # The web player reads these offsets as JavaScript numbers.
+    return int(ms) if 0 <= ms <= 2**53 - 1 else None
+
+
 def chorus(sid, real_ip):
     d = _fetch("/song/chorus", sid, real_ip)
     raw = d.get("chorus") if isinstance(d.get("chorus"), list) else d.get("data")
@@ -59,17 +70,12 @@ def chorus(sid, real_ip):
         raise cm_ncm.NcmError("副歌资料格式异常，请稍后重试")
     segments = set()
     for v in raw:
-        if not isinstance(v, dict) or ("id" in v and _number(v["id"]) != sid):
+        if not isinstance(v, dict):
             continue
-        start, end = _number(v.get("startTime")), _number(v.get("endTime"))
-        # Missing/invalid starts must not become a valid jump to zero.
-        if v.get("startTime") is None or isinstance(v.get("startTime"), bool):
+        if "id" in v and (isinstance(v["id"], bool) or v["id"] not in (sid, str(sid))):
             continue
-        try:
-            valid_start = math.isfinite(float(v["startTime"])) and float(v["startTime"]) >= 0
-        except (TypeError, ValueError, OverflowError):
-            valid_start = False
-        if valid_start and end > start:
+        start, end = _chorus_ms(v.get("startTime")), _chorus_ms(v.get("endTime"))
+        if start is not None and end is not None and end > start:
             segments.add((start, end))
     return {"id": sid, "segments": [{"startMs": a, "endMs": b} for a, b in sorted(segments)]}
 

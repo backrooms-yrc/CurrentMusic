@@ -2736,7 +2736,7 @@ def route(handler, method):
             ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败或仅有试听时自动匹配，QQ 首选音质失败后立即尝试备用音质，成功结果 level=matched 并附完整音频校验信息；详见 /api-docs/reference/guide-playback-sources/）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
             ("GET", "/song/qualities", "公开", "歌曲音质文件资料（含沉浸声变体；不保证可播放）；详见 /api-docs/reference/guide-song-insights-api/"),
-            ("GET", "/song/chorus", "公开", "副歌段落，startMs/endMs 均为毫秒；详见 /api-docs/reference/guide-song-insights-api/"),
+            ("GET", "/song/chorus", "公开", "播放器高潮（副歌）区间。按网易云歌曲 id 返回 segments，startMs/endMs 均为毫秒。没有区间时返回空数组。详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/song/versions", "公开", "其他版本推荐，排除原曲；由用户选择播放；详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/share/song/{id}", "公开", "歌曲分享元数据（name/artists/album/pic/duration/url/text/image/images；无需登录）"),
             ("GET", "/share/song/{id}/image", "公开", "歌曲分享图（1080×1440 JPEG，style=square 默认方块封面，style=immersive 全幅封面）"),
@@ -4423,7 +4423,8 @@ def route(handler, method):
             raise ApiError(400, "id 必须为正整数")
         real_ip = cm_ncm_gateway.client_ip(handler)
         ip_key = hashlib.sha256(real_ip.encode()).hexdigest()[:16]
-        key = f"songinfo:v1:{path}:{ncm_id}:{ip_key}"
+        version = 2 if path == "/song/chorus" else 1
+        key = f"songinfo:v{version}:{path}:{ncm_id}:{ip_key}"
         cached = cm_db.cache_get(key)
         if cached:
             return jresp(handler, 200, json.loads(cached))

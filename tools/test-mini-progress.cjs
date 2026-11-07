@@ -34,7 +34,8 @@ async function fixture(browser, width, options = {}) {
   page.on('pageerror', e => errors.push(e.message));
   if (options.initScript) await page.addInitScript(options.initScript);
   await page.route('**/*', route => {
-    const name = new URL(route.request().url()).pathname.split('/').pop();
+    const url = new URL(route.request().url()), name = url.pathname.split('/').pop();
+    if (options.chorus && url.pathname === '/cm/song/chorus') return options.chorus(route, url.searchParams.get('id'));
     if (name === 'tone.wav') {
       const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers().range || '');
       const start = range ? Number(range[1]) : 0;

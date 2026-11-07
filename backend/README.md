@@ -98,6 +98,7 @@ LDDC 的安装/升级见 `deploy/README.md`；它使用独立 venv，后端认�
 仓库内的接口说明见：
 
 - `docs/lyrics-api.md`：歌词逐字轴、LDDC 回退与 `wSynth`
+- 播放进度条使用的副歌区间、音质和其他版本见[歌曲资料 API](../docs/song-insights-api.md)
 - `docs/password-api.md`：邮箱验证码找回/修改密码、验证码命名空间与限流
 - `docs/private-roaming-api.md`：私人漫游模式/场景、推荐回调与垃圾桶
 - `docs/play-history-sync.md`：播放历史实时写入绑定网易云账号
