@@ -132,10 +132,10 @@ async function worker(job) {
   const names = fs.readdirSync(modules).filter(name => /^[a-z][a-z0-9_-]*\.js$/.test(name)).map(name => name.slice(0, -3));
   if (job.source && job.source !== 'vkeys' && !names.includes(job.source)) throw new MatchError('unknown_source');
   const candidates = [];
-  // Keep the second QQ quality as a later fallback, so one unavailable service
-  // cannot occupy both workers while other independent sources are waiting.
+  // Try alternate QQ quality immediately after the first one fails validation.
+  // The group occupies one slot, leaving the other slot for independent sources.
   const qq = !job.source || job.source === 'vkeys' ? qqCandidates(reference) : [];
-  if (qq.length) candidates.push(qq[0]);
+  if (qq.length) candidates.push(qq);
   for (const name of job.source === 'vkeys' ? [] : job.source ? [job.source] : names) {
     if (name === 'unm') {
       const localRequire = createRequire(path.join(utils, 'package.json'));
@@ -154,7 +154,6 @@ async function worker(job) {
       } });
     }
   }
-  if (qq.length > 1) candidates.push(qq[1]);
   return matchCandidates(reference, candidates);
 }
 

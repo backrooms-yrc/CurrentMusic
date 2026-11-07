@@ -792,7 +792,7 @@ def _remember_url_error(key, exc):
 def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
                      max_br=0, refresh=False, alts=False, want_host=""):
     """官方音源优先；失败后仅下发经过严格音频校验的灰色曲目匹配结果。"""
-    started = time.time()
+    started = time.monotonic()
     ip_key = hashlib.sha256((real_ip or '').encode()).hexdigest()[:16]
     source = os.environ.get('CM_NCM_MATCH_SOURCE', '').strip()
     key = f"smatch:v2:{ncm_id}:{ip_key}:{source}"
@@ -805,6 +805,7 @@ def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
             return _resolve_official_play_url(ncm_id, level, immerse, real_ip, max_br, refresh, alts, want_host)
         except cm_ncm.NcmError:
             pass
+        match_started = time.monotonic()
 
         def match():
             result = cm_ncm.song_url_match(ncm_id, real_ip=real_ip)
@@ -815,10 +816,14 @@ def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
 
         try:
             out = dict(_resolve_flight.do(key, match, timeout=24.0))
-        except cm_ncm.NcmError:
+        except cm_ncm.NcmError as error:
+            reason, attempts = cm_ncm.match_failure_codes(error)
+            log.warning("匹配音源失败 song=%s level=%s officialMs=%d matchMs=%d reason=%s attempts=%s",
+                        ncm_id, level, (match_started - started) * 1000,
+                        (time.monotonic() - match_started) * 1000, reason, attempts)
             raise cm_ncm.NcmError("官方音源未取得可用地址，灰色曲目匹配也未取得可验证的音频，请稍后重试") from None
         from_cache = False
-    out.update(fromCache=from_cache, resolvedMs=int((time.time() - started) * 1000), requestedLevel=level)
+    out.update(fromCache=from_cache, resolvedMs=int((time.monotonic() - started) * 1000), requestedLevel=level)
     return out
 
 
@@ -2728,7 +2733,7 @@ def route(handler, method):
             ("GET", "/ncmbind/likelist", "Bearer", "绑定账号红心列表 {ids}；refresh=1 强制同步，短期合并已成功写入但上游尚未收敛的红心意图"),
             ("GET", "/daily", "可选登录", "每日推荐"),
             ("GET", "/ncm/search", "公开", "网易云搜索代理，透传 NGINX 提供的用户 RealIP 并按用户 IP 隔离缓存；单曲首屏可含 catalogSongs（公开专辑精确匹配，不计入上游分页）。type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；失败通过 lyricContextStatus 明示。详见 /api-docs/reference/guide-search-catalog/ 与 /api-docs/reference/guide-search-lyrics-api/"),
-            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败或仅有试听时自动尝试备用接口（含新版 QQ 音源），核对歌曲身份并严格验证完整音频，匹配结果 level=matched；详见 /api-docs/reference/guide-playback-sources/）"),
+            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败或仅有试听时自动匹配，QQ 首选音质失败后立即尝试备用音质，成功结果 level=matched 并附完整音频校验信息；详见 /api-docs/reference/guide-playback-sources/）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
             ("GET", "/song/qualities", "公开", "歌曲音质文件资料（含沉浸声变体；不保证可播放）；详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/song/chorus", "公开", "副歌段落，startMs/endMs 均为毫秒；详见 /api-docs/reference/guide-song-insights-api/"),

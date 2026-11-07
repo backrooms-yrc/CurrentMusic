@@ -92,7 +92,8 @@ def _bounded_call(path, params, timeout, **kw):
     except Exception as e:  # noqa: BLE001
         raise NcmError(f"NCM 上游请求失败: {e}")
     if out is _WALL_TIMEOUT:
-        raise NcmError(f"音源解析超时（上游 {timeout + 0.5:.1f}s 未响应），请稍后重试")
+        raise NcmError(f"音源解析超时（上游 {timeout + 0.5:.1f}s 未响应），请稍后重试",
+                       response={"reason": "upstream_deadline"})
     return out
 
 
@@ -105,12 +106,6 @@ def _json_error_response(exc):
     except (OSError, ValueError, UnicodeError):
         pass
     return {}
-
-
-def _json_error_message(exc):
-    """从上游 HTTPError 的 JSON body 提取网易云的 message/msg。"""
-    data = _json_error_response(exc)
-    return data.get("message") or data.get("msg") or ""
 
 
 def ncm_cookie():
@@ -167,21 +162,22 @@ def call(path, params=None, timeout=15.0, retries=1, with_cookie=True, cookie=No
         except urllib.error.HTTPError as e:
             # api-enhanced 常以 HTTP 4xx/5xx 返回 JSON 业务错误；读取 body，
             # 否则上层只能看到无意义的 "HTTP Error 400"。
-            message = _json_error_message(e)
-            last_err = (e, message)
+            last_err = (e, _json_error_response(e))
         except Exception as e:  # noqa: BLE001 统一重试后抛业务错误
-            last_err = (e, "")
-    exc, upstream_message = last_err
+            last_err = (e, {})
+    exc, response = last_err
+    upstream_message = response.get("message") or response.get("msg") or ""
     status = getattr(exc, "code", None)
     msg = upstream_message or str(exc)
     if status == 503 or "503" in msg or "Service Unavailable" in msg:
         raise NcmError("网易云暂时拒绝了请求（多因风控或频繁操作），请稍后重试，或改用扫码方式绑定",
-                       status_code=503)
+                       status_code=503, response=response)
     if status == 401 or "401" in msg:
-        raise NcmError("网易云拒绝了该操作（登录信息可能已失效）", status_code=401)
+        raise NcmError("网易云拒绝了该操作（登录信息可能已失效）", status_code=401, response=response)
     if upstream_message:
-        raise NcmError(f"网易云请求失败：{upstream_message}", status_code=status if 400 <= (status or 0) < 500 else None)
-    raise NcmError(f"NCM 上游请求失败: {msg}")
+        raise NcmError(f"网易云请求失败：{upstream_message}", status_code=status if 400 <= (status or 0) < 500 else None,
+                       response=response)
+    raise NcmError(f"NCM 上游请求失败: {msg}", response=response)
 
 
 def post_json(path, payload, cookie=None, timeout=10.0, real_ip=None):
@@ -697,6 +693,31 @@ def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, t
     return out
 
 
+_MATCH_FAILURE_CODES = frozenset((
+    "upstream_deadline", "invalid_id", "invalid_source", "unknown_source", "matching_busy",
+    "matching_timeout", "matching_failed", "worker_failed", "reference_unavailable",
+    "reference_duration_missing", "no_verified_source", "reference_identity_missing", "identity_mismatch",
+    "provider_timeout", "provider_failed", "provider_unavailable", "provider_http_rejected",
+    "provider_response_invalid", "invalid_url", "http_rejected", "audio_fetch_failed", "not_audio",
+    "audio_probe_failed", "audio_duration_missing", "duration_mismatch", "truncated_audio", "unsupported_audio",
+    "match_metadata_invalid", "match_recheck_failed",
+))
+
+
+def match_failure_codes(error):
+    """仅返回允许写入日志的固定错误码，不输出上游消息、用户 IP 或音频链接。"""
+    response = error.response
+    reason = response.get("reason")
+    if not isinstance(reason, str) or reason not in _MATCH_FAILURE_CODES:
+        reason = "upstream_error"
+    attempts = response.get("attempts")
+    if not isinstance(attempts, list):
+        attempts = []
+    codes = {attempt.get("reason") for attempt in attempts if isinstance(attempt, dict)
+             and isinstance(attempt.get("reason"), str) and attempt["reason"] in _MATCH_FAILURE_CODES}
+    return reason, ",".join(sorted(codes)) or "-"
+
+
 def song_url_match(ncm_id, real_ip=None):
     """灰色曲目补充接口；只有实测收到音频文件头时才返回，不冒充请求的音质档位。"""
     # 上游默认缓存成功响应两分钟，网页链接也可能被缓存；失败重试/refresh 必须重新匹配。
@@ -714,7 +735,7 @@ def song_url_match(ncm_id, real_ip=None):
     except ValueError:
         valid = False
     if not valid:
-        raise NcmError("灰色曲目匹配未返回音频地址，请稍后重试")
+        raise NcmError("灰色曲目匹配未返回音频地址，请稍后重试", response={"reason": "invalid_url"})
     info = data.get('matchInfo')
     info = info if isinstance(info, dict) else {}
     expected = info.get('expectedDurationMs') or 0
@@ -723,11 +744,13 @@ def song_url_match(ncm_id, real_ip=None):
             or type(expected) not in (int, float) or type(duration) not in (int, float)
             or not math.isfinite(expected) or not math.isfinite(duration) or expected <= 0 or duration <= 0
             or abs(duration - expected) > max(2000, min(10000, expected * .03))):
-        raise NcmError("灰色曲目匹配未通过完整时长校验，请检查上游匹配器部署后重试")
+        raise NcmError("灰色曲目匹配未通过完整时长校验，请检查上游匹配器部署后重试",
+                       response={"reason": "match_metadata_invalid"})
     url = _https(url)
     ok, spec = probe_audio(url, timeout=2.5, strict=True)
     if not ok:
-        raise NcmError("灰色曲目匹配未取得可验证的音频（错误页或网络不可用），请稍后重试")
+        raise NcmError("灰色曲目匹配未取得可验证的音频（错误页或网络不可用），请稍后重试",
+                       response={"reason": "match_recheck_failed"})
     return {"url": url, "br": info.get('br') or 0, "type": info.get('type') or spec.get("type") or "", "size": info.get('size') or spec.get("size") or 0,
             "level": "matched", "source": "netease-match", "md5": "",
             "durationMs": duration, "expectedDurationMs": expected, "matchSource": info.get('source') or '',

@@ -96,18 +96,24 @@ async function matchCandidates(reference, candidates, inspect = inspectAudio) {
   let cursor = 0, winner;
   async function work() {
     while (!winner) {
-      const candidate = candidates[cursor++];
-      if (!candidate) return;
-      try {
-        const value = await providerResult(candidate, reference);
-        const url = mediaUrl(typeof value === 'string' ? value : value?.url);
-        if (!checks.has(url)) checks.set(url, inspect(url, reference));
-        const verified = await checks.get(url);
-        if (!winner) winner = { ...verified, source: candidate.name };
-      } catch (error) {
-        // Provider exceptions can contain credentials or signed URLs; retain only our reason codes.
-        attempts.push({ source: candidate.name, reason: error instanceof MatchError ? error.code : 'provider_failed',
-          ...(Number.isFinite(error?.durationMs) ? { durationMs: error.durationMs, expectedDurationMs: error.expectedDurationMs } : {}) });
+      const group = candidates[cursor++];
+      if (!group) return;
+      // Keep a provider's alternate qualities in the same slot, in preference order.
+      for (const candidate of Array.isArray(group) ? group : [group]) {
+        if (winner) return;
+        try {
+          const value = await providerResult(candidate, reference);
+          if (winner) return;
+          const url = mediaUrl(typeof value === 'string' ? value : value?.url);
+          if (!checks.has(url)) checks.set(url, inspect(url, reference));
+          const verified = await checks.get(url);
+          winner ||= { ...verified, source: candidate.name };
+          return;
+        } catch (error) {
+          // Provider exceptions can contain credentials or signed URLs; retain only our reason codes.
+          attempts.push({ source: candidate.name, reason: error instanceof MatchError ? error.code : 'provider_failed',
+            ...(Number.isFinite(error?.durationMs) ? { durationMs: error.durationMs, expectedDurationMs: error.expectedDurationMs } : {}) });
+        }
       }
     }
   }

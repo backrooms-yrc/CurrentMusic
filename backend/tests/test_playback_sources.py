@@ -1,5 +1,6 @@
 """Client IP isolation and verified grey-track fallback; never uses production data."""
 import io
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -119,6 +120,25 @@ class PlaybackSourceTests(unittest.TestCase):
                 with self.assertRaisesRegex(cm_ncm.NcmError, '请稍后重试'):
                     cm_server.resolve_play_url(1, real_ip=IP_A)
             self.assertEqual(match.call_count, 2)
+
+    def test_match_failure_logs_only_known_codes_from_upstream(self):
+        private_value = 'https://audio.example.test/private?token=fixture'
+        body = {'msg': private_value, 'reason': 'no_verified_source', 'attempts': [
+            {'source': private_value, 'reason': 'duration_mismatch'},
+            {'reason': private_value}, {'reason': ['malformed']},
+        ]}
+        upstream = cm_ncm.urllib.error.HTTPError('http://localhost/match', 502, 'Bad Gateway', {},
+                                                 io.BytesIO(json.dumps(body).encode()))
+        with mock.patch.object(cm_server, '_resolve_official_play_url', side_effect=cm_ncm.NcmError('no URL')), \
+             mock.patch.object(cm_ncm.urllib.request, 'urlopen', side_effect=upstream), \
+             self.assertLogs(cm_server.log, level='WARNING') as logs:
+            with self.assertRaisesRegex(cm_ncm.NcmError, '请稍后重试') as error:
+                cm_server.resolve_play_url(1, 'jymaster', real_ip=IP_A)
+        self.assertIn('song=1 level=jymaster', logs.output[0])
+        self.assertIn('reason=no_verified_source attempts=duration_mismatch', logs.output[0])
+        self.assertNotIn(IP_A, logs.output[0])
+        self.assertNotIn(private_value, logs.output[0])
+        self.assertNotIn(private_value, str(error.exception))
 
     def test_best_level_cache_is_scoped_to_client_ip(self):
         result = {'url': 'https://audio.example.test/song.flac', 'level': 'lossless', 'type': 'flac', 'br': 900000}
