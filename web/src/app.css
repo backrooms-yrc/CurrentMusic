@@ -840,7 +840,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   --pl-blob-mask: radial-gradient(ellipse, #000, rgba(0, 0, 0, .68) 32%, transparent 70%);
   -webkit-mask-image: var(--pl-blob-mask);
   mask-image: var(--pl-blob-mask);
-  animation: plAmbientDrift 32s ease-in-out infinite alternate;
+  animation: plAmbientDrift calc(24s / var(--pl-bg-speed, 1)) ease-in-out infinite alternate;
 }
 .pl-ambient::before {
   top: -38%; left: -35%;
@@ -849,7 +849,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-ambient::after {
   right: -35%; bottom: -38%;
   background-color: var(--pl-bg-accent, #485368);
-  animation-duration: 44s;
+  animation-duration: calc(33s / var(--pl-bg-speed, 1));
   animation-direction: alternate-reverse;
   --pl-drift-x: -29%; --pl-drift-y: -26%;
 }
@@ -3848,6 +3848,9 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
   font-size: calc(12px * var(--cm-fs, 1)); font-weight: 650; opacity: .62; letter-spacing: .2px; }
 .cm-more-h .material-icons-outlined { font-size: 17px; opacity: .9; }
 .cm-more-field { padding: 6px 0; }
+.cm-bg-speed { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; }
+.cm-bg-speed output { font-size: calc(12px * var(--cm-fs, 1)); font-variant-numeric: tabular-nums; }
+.cm-bg-speed input { grid-column: 1 / -1; width: 100%; min-height: 28px; margin: 0; accent-color: var(--cm-primary); }
 .cm-more-fl { display: block; margin-bottom: 5px; font-size: calc(11px * var(--cm-fs, 1)); opacity: .5; }
 .cm-more-card .cm-more-chips { gap: 6px; }
 .cm-more-card .cm-more-chips mdui-chip { --mdui-chip-height: 30px; font-size: calc(12px * var(--cm-fs, 1)); }

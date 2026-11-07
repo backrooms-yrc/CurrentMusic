@@ -49,12 +49,15 @@ async function play(page, id, pic) {
     await page.locator('.cm-mini-inner').click();
     const bg = page.locator('#plBg');
     const ambient = bg.locator('.pl-ambient');
+    const durations = () => ambient.evaluate(el => ['::before', '::after']
+      .map(pseudo => getComputedStyle(el, pseudo).animationDuration));
     const paletteIs = color => page.waitForFunction(color =>
       document.getElementById('plBg').style.getPropertyValue('--pl-bg-main') === color, color);
     await play(page, 2, covers + 'red.svg');
     await paletteIs(red);
     assert.equal(redSamples, 1, 'theme and player must share the cover request');
     assert(await ambient.isVisible(), 'dynamic background must be visible by default');
+    assert.deepEqual(await durations(), ['24s', '33s']);
     assert(await ambient.evaluate(el => {
       const read = () => getComputedStyle(el, '::before').transform;
       const drift = el.getAnimations({ subtree: true }).find(a => a.animationName === 'plAmbientDrift');
@@ -73,6 +76,30 @@ async function play(page, id, pic) {
       document.getElementById('commentOverlay').remove();
       document.dispatchEvent(new Event('cm-comments-visibility'));
     });
+    await page.locator('#plMore').click();
+    const speed = page.getByRole('slider', { name: '背景速度' });
+    assert.equal(await speed.inputValue(), '1');
+    await speed.press('Home');
+    assert.deepEqual(await durations(), ['48s', '66s']);
+    const phase = await ambient.evaluate(async el => {
+      const drift = el.getAnimations({ subtree: true }).find(a => a.animationName === 'plAmbientDrift');
+      drift.pause();
+      await drift.ready;
+      drift.currentTime = 18000;
+      return drift.effect.getComputedTiming().progress;
+    });
+    await speed.press('End');
+    assert.deepEqual(await durations(), ['12s', '16.5s']);
+    assert.equal(await page.locator('#mBgSpeedValue').textContent(), '2.0×');
+    assert.equal(await speed.getAttribute('aria-valuetext'), '2.0 倍');
+    assert.equal(await ambient.evaluate(el => {
+      const drift = el.getAnimations({ subtree: true }).find(a => a.animationName === 'plAmbientDrift');
+      const progress = drift.effect.getComputedTiming().progress;
+      drift.play();
+      return progress;
+    }), phase, 'changing speed preserves the position of the gradient');
+    await page.getByText('关闭', { exact: true }).click();
+    await speed.waitFor({ state: 'hidden' });
 
     const oldThumb = covers + 'old.svg?param=240y240';
     await Promise.all([page.waitForRequest(oldThumb), play(page, 3, covers + 'old.svg')]);
@@ -93,6 +120,7 @@ async function play(page, id, pic) {
       await page.evaluate(preset => MiniTest.setUiPreset(preset), preset);
       await paletteIs(green);
       assert(await ambient.isVisible(), `${preset} must show the background`);
+      assert.deepEqual(await durations(), ['12s', '16.5s']);
     }
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await ambient.evaluate(el => el.getAnimations({ subtree: true }).length), 0);
@@ -108,14 +136,21 @@ async function play(page, id, pic) {
     await toggle.click();
     assert.equal(await page.evaluate(() => localStorage.getItem('cm.bgGrad')), '0');
     assert.equal(await ambient.isVisible(), false);
+    assert(await speed.isDisabled());
     await play(page, 7, covers + 'red.svg');
     await page.reload();
     await page.evaluate(() => { MiniTest.player.restore(); MiniTest.notifyState(); });
     await page.locator('.cm-mini-inner').click();
     assert.equal(await ambient.isVisible(), false, 'saved preference must survive reload');
     assert((await bg.evaluate(el => getComputedStyle(el).backgroundImage)).includes(covers + 'red.svg'));
+    await page.locator('#plMore').click();
+    assert.equal(await speed.inputValue(), '2', 'saved speed must survive reload');
+    await toggle.click();
+    assert(await speed.isEnabled());
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    assert.deepEqual(await durations(), ['12s', '16.5s']);
     assert.deepEqual(errors, []);
     await context.close();
-    console.log('PASS player background: cover colors, proxy fallback, mobile drift, song changes, themes and settings');
+    console.log('PASS player background: cover colors, proxy fallback, mobile drift, song changes, themes, speed and settings');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -384,6 +384,10 @@ const LYRIC_SIZES = [
 ];
 let lyricSizeKey = localStorage.getItem('cm.lyricSize') || defaultLyricSizeKey();
 let bgGradOn = localStorage.getItem('cm.bgGrad') !== '0';
+const BG_SPEED_KEY = 'cm.bgSpeed';
+const BG_SPEED_MIN = 0.5, BG_SPEED_MAX = 2;
+const savedBgSpeed = Math.round(Number(localStorage.getItem(BG_SPEED_KEY)) * 10) / 10;
+let bgSpeed = savedBgSpeed >= BG_SPEED_MIN && savedBgSpeed <= BG_SPEED_MAX ? savedBgSpeed : 1;
 let lyricKaraoke = localStorage.getItem('cm.karaoke') !== '0';   // 逐字歌词（卡拉OK），默认开启
 
 // 窄屏播放页视图：cover（封面+控制） ↔ lyric（整屏歌词），点击主区域切换
@@ -1469,8 +1473,14 @@ function openMoreDrawer() {
               <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
             </div>
             <div class="cm-more-row">
-              <div><div class="cm-more-t">动态背景</div><div class="cm-more-s">封面色缓慢流动，换歌时平滑过渡</div></div>
+              <div><div class="cm-more-t">动态背景</div><div class="cm-more-s">封面配色流动，换歌时平滑过渡</div></div>
               <mdui-switch id="mGrad" aria-label="动态背景" ${bgGradOn ? 'checked' : ''}></mdui-switch>
+            </div>
+            <div class="cm-more-field cm-bg-speed">
+              <label class="cm-more-t" for="mBgSpeed">背景速度</label>
+              <output for="mBgSpeed" id="mBgSpeedValue">${bgSpeed.toFixed(1)}×</output>
+              <input type="range" id="mBgSpeed" min="${BG_SPEED_MIN}" max="${BG_SPEED_MAX}" step="0.1"
+                value="${bgSpeed}" aria-valuetext="${bgSpeed.toFixed(1)} 倍" ${bgGradOn ? '' : 'disabled'}>
             </div>
           </section>
         </div>
@@ -1555,9 +1565,17 @@ function openMoreDrawer() {
       renderLyric();
       stopKaraoke(); startKaraoke(); fireKaraoke();
     });
+    const bgSpeedInput = diag.querySelector('#mBgSpeed');
+    const bgSpeedValue = diag.querySelector('#mBgSpeedValue');
+    bgSpeedInput.oninput = () => {
+      setBgSpeed(bgSpeedInput.valueAsNumber);
+      bgSpeedValue.textContent = `${bgSpeed.toFixed(1)}×`;
+      bgSpeedInput.setAttribute('aria-valuetext', `${bgSpeed.toFixed(1)} 倍`);
+    };
     diag.querySelector('#mGrad').addEventListener('change', e => {
       bgGradOn = e.target.checked;
       localStorage.setItem('cm.bgGrad', bgGradOn ? '1' : '0');
+      bgSpeedInput.disabled = !bgGradOn;
       applyPlayerBg();
     });
     diag.querySelectorAll('mdui-chip[data-g="dl"]').forEach(ch => {
@@ -1604,6 +1622,22 @@ async function doDownload(level) {
 
 // ---------- 播放页背景 ----------
 
+function setBgSpeed(speed) {
+  if (!Number.isFinite(speed) || speed < BG_SPEED_MIN || speed > BG_SPEED_MAX || speed === bgSpeed) return;
+  const previous = bgSpeed;
+  bgSpeed = speed;
+  localStorage.setItem(BG_SPEED_KEY, String(speed));
+  const el = document.getElementById('plBg');
+  if (!el) return;
+  // 时长改变时同步调整已播放时间，让色团从当前位置继续流动。
+  const drifts = (el.getAnimations?.({ subtree: true }) || []).filter(a => a.animationName === 'plAmbientDrift');
+  const times = drifts.map(a => a.currentTime);
+  el.style.setProperty('--pl-bg-speed', String(speed));
+  drifts.forEach((animation, i) => {
+    if (typeof times[i] === 'number') animation.currentTime = times[i] * previous / speed;
+  });
+}
+
 async function applyPlayerBg() {
   const el = document.getElementById('plBg');
   if (!el || !player.meta) return;
@@ -1613,6 +1647,7 @@ async function applyPlayerBg() {
     el.style.setProperty('--pl-cover-image', pic ? `url(${JSON.stringify(pic)})` : 'none');
     return;
   }
+  el.style.setProperty('--pl-bg-speed', String(bgSpeed));
   // 取色期间保留当前背景。旧封面晚到时不能覆盖正在播放的歌曲。
   const colors = await coverColors(pic, { fallback: false });
   if (!el.isConnected || !bgGradOn || !player.meta || (player.meta.pic || '') !== pic) return;
