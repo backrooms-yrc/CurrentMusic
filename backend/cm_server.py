@@ -6,6 +6,7 @@
 import json
 import logging
 import hashlib
+import sqlite3
 import os
 import re
 import secrets
@@ -579,16 +580,34 @@ def _ncm_startplay_event(ncm_id):
     }}
 
 
-def _spawn_ncm_listen(cookie, ncm_id, real_ip, play=None):
+_ncm_device_name_lock = threading.Lock()
+
+
+def _name_ncm_playback_device(cookie, real_ip):
+    key = "ncm-playback-device:" + cookie["deviceId"]
+    with _ncm_device_name_lock:
+        if cm_db.cache_get(key):
+            return
+        cm_db.cache_set(key, "pending", 300)
+    cm_ncm.name_playback_device(cookie, real_ip=real_ip)
+    cm_db.cache_set(key, "ok", 86400)
+
+
+def _spawn_ncm_listen(cookie, ncm_id, real_ip, play=None, *, playback_client):
     """异步写用户绑定网易云账号的听歌历史；失败只回滚同步标记，不影响本地播放。"""
     def run():
         try:
+            device_cookie = cm_ncm.playback_device_cookie(cookie, playback_client)
+            try:
+                _name_ncm_playback_device(device_cookie, real_ip)
+            except (cm_ncm.NcmError, OSError, sqlite3.Error) as e:
+                log.info("网易云播放设备命名失败 client=%s error=%s", playback_client, type(e).__name__)
             if play is not None:
-                cm_ncm.scrobble(cookie, ncm_id, play["ms"] // 1000,
+                cm_ncm.scrobble(device_cookie, ncm_id, play["ms"] // 1000,
                                 total=((play["duration"] or 0) + 999) // 1000,
                                 name=play["name"] or "", artist=play["artists"] or "", real_ip=real_ip)
             else:
-                cm_ncm.weblog(cookie, [_ncm_startplay_event(ncm_id)], real_ip=real_ip)
+                cm_ncm.weblog(device_cookie, [_ncm_startplay_event(ncm_id)], real_ip=real_ip)
         except Exception as e:  # noqa: BLE001 外部账号同步不能阻断播放
             if play is not None:
                 cm_db.reset_play_sync(play["rowid"])
@@ -2739,7 +2758,7 @@ def route(handler, method):
             ("POST", "/posts", "Bearer", "发布动态"),
             ("POST", "/posts/{id}/like", "Bearer", "点赞动态"),
             ("GET", "/plays/recent", "Bearer", "最近播放"),
-            ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId；上报 {playId,totalMs,finished}，结束时同步网易云实际收听时长；兼容旧版 ms 增量"),
+            ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId，platform 可选 web/x/app；上报 {playId,totalMs,finished}，结束时同步网易云实际收听时长；兼容旧版 ms 增量"),
             ("GET", "/songs/status", "可选登录", "歌曲列表状态：liked/faved 为本地状态，counts 为本地计数，ncmCounts 为网易云红心数"),
             ("GET", "/likes/count", "公开", "批量点赞数：counts 本地、ncmCounts 网易云红心数"),
             ("POST", "/likes/{ncmId}", "Bearer", "CurrentMusic 自建红心 toggle {meta}，返回 {on,count}（本地计数）"),
@@ -3910,7 +3929,12 @@ def route(handler, method):
         binding = cm_db.get_binding(u["id"])
         sync_cookie = (binding or {}).get("cookie") if binding else ""
         real_ip = cm_ncm_gateway.client_ip(handler)
-        if "playId" in (body or {}):
+        # Reuse the platform values used by account/device reporting. Old X clients use OkHttp.
+        platform = body.get("platform")
+        if not isinstance(platform, str) or platform not in cm_ncm.PLAYBACK_DEVICE_NAMES:
+            ua = handler.headers.get("User-Agent", "") or ""
+            platform = "x" if ua.startswith("okhttp/") else device_label(handler)[1]
+        if "playId" in body:
             play_id, total_ms = body["playId"], body.get("totalMs")
             if (type(play_id) is not int or not 0 < play_id < 2**63
                     or type(total_ms) is not int or total_ms < 0):
@@ -3920,7 +3944,8 @@ def route(handler, method):
             if sync_cookie and body.get("finished") is True:
                 play = cm_db.play_sync_candidate(u["id"], ncm_id, min_ms=None, play_id=play_id)
                 if play:
-                    _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, play)
+                    _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, play,
+                                      playback_client=play["playback_client"] or platform)
             return jresp(handler, 200, {"ok": True})
         # 旧客户端：正数 ms 仍累加到最近一次同曲播放并在满 60 秒时同步。
         ms = 0
@@ -3929,17 +3954,18 @@ def route(handler, method):
         except (TypeError, ValueError):
             ms = 0
         if ms > 0:
-            added = cm_db.add_play_ms(u["id"], ncm_id, ms)
+            added = cm_db.add_play_ms(u["id"], ncm_id, ms, playback_client=platform)
             if added and sync_cookie:
-                play = cm_db.play_sync_candidate(u["id"], ncm_id)
+                play = cm_db.play_sync_candidate(u["id"], ncm_id, playback_client=platform)
                 if play:
-                    _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, play)
+                    _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, play,
+                                      playback_client=play["playback_client"] or platform)
             return jresp(handler, 200, {"ok": True, "added": added})
         cm_db.upsert_song(norm_meta({**(body or {}), "ncm_id": ncm_id}))
-        play_id = cm_db.record_play(u["id"], ncm_id)
+        play_id = cm_db.record_play(u["id"], ncm_id, playback_client=platform)
         if sync_cookie:
             # 开始播放即写 startplay，让网易云「最近播放」实时出现。
-            _spawn_ncm_listen(sync_cookie, ncm_id, real_ip)
+            _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, playback_client=platform)
         return jresp(handler, 200, {"ok": True, "playId": play_id})
 
     if path == "/plays/recent" and method == "GET":

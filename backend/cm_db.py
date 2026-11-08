@@ -111,7 +111,8 @@ CREATE TABLE IF NOT EXISTS plays (
   -- 旧库补列时用「相邻播放间隔（上限为曲目时长）」重建历史值，见 init() 的迁移段。
   ms INTEGER DEFAULT 0,
   -- 领取网易云同步后置 1，失败时放回。
-  ncm_synced INTEGER DEFAULT 0
+  ncm_synced INTEGER DEFAULT 0,
+  playback_client TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS point_rewards (
   user_id INTEGER NOT NULL,
@@ -463,6 +464,8 @@ def init():
                  conn.execute("SELECT COUNT(*) FROM plays").fetchone()[0])
     if "ncm_synced" not in pcols:
         conn.execute("ALTER TABLE plays ADD COLUMN ncm_synced INTEGER DEFAULT 0")
+    if "playback_client" not in pcols:
+        conn.execute("ALTER TABLE plays ADD COLUMN playback_client TEXT NOT NULL DEFAULT ''")
     # v1.17.24 曾有自建关注表，关注已改为同步网易云账号，这里清理遗留表
     conn.execute("DROP TABLE IF EXISTS artist_follows")
     conn.commit()
@@ -1810,7 +1813,7 @@ def user_stat(uid):
         conn.close()
 
 
-def record_play(uid, ncm_id):
+def record_play(uid, ncm_id, *, playback_client=""):
     """记一次"开始播放"。ms 由 add_play_ms 在播放过程中累加。
 
     注意：**不再删除同曲旧记录**——旧实现只保留每首歌最后一条，导致"同一首听 100 遍"
@@ -1818,8 +1821,8 @@ def record_play(uid, ncm_id):
     """
     conn = connect()
     try:
-        cur = conn.execute("INSERT INTO plays(user_id,ncm_id,played_at,ms) VALUES(?,?,?,0)",
-                           (uid, ncm_id, int(time.time())))
+        cur = conn.execute("INSERT INTO plays(user_id,ncm_id,played_at,ms,playback_client) VALUES(?,?,?,0,?)",
+                           (uid, ncm_id, int(time.time()), playback_client))
         conn.commit()
         return cur.lastrowid
     finally:
@@ -1828,25 +1831,22 @@ def record_play(uid, ncm_id):
 
 # 单次上报的上限：前端每 30s 冲一次，正常远小于此；异常值（时钟跳变/双重上报）直接截断
 PLAY_MS_MAX_PER_CALL = 15 * 60 * 1000
-_LATEST_PLAY = ("SELECT rowid FROM plays WHERE user_id=? AND ncm_id=? "
-                "ORDER BY played_at DESC, rowid DESC LIMIT 1")
+_PLAYBACK_CLIENT_FILTER = "AND (? IS NULL OR playback_client IN (?, ''))"
 
 
-def _reward_play(conn, uid, ncm_id, play_id=None):
+def _reward_play(conn, uid, ncm_id, play_id):
     now = int(time.time())
     day = cm_levels.day_start(now)
-    target = "?" if play_id is not None else f"({_LATEST_PLAY})"
-    args = (play_id,) if play_id is not None else (uid, ncm_id)
     # 记录须为当日播放，同时满足累计上报时长与服务端经过时间。
     row = conn.execute(
-        f"SELECT 1 FROM plays WHERE rowid={target} AND played_at BETWEEN ? AND ? AND ms>=?",
-        (*args, day, now - cm_levels.LISTEN_SECONDS, cm_levels.LISTEN_SECONDS * 1000),
+        "SELECT 1 FROM plays WHERE rowid=? AND played_at BETWEEN ? AND ? AND ms>=?",
+        (play_id, day, now - cm_levels.LISTEN_SECONDS, cm_levels.LISTEN_SECONDS * 1000),
     ).fetchone()
     if row:
         _reward_points(conn, uid, day, "listen", ncm_id)
 
 
-def add_play_ms(uid, ncm_id, ms):
+def add_play_ms(uid, ncm_id, ms, *, playback_client=None):
     """把一段**真实收听毫秒**记到该用户最近一次这首歌的播放记录上。
 
     返回实际记入的毫秒数（0 表示没有可归属的记录或参数无效）。
@@ -1860,13 +1860,15 @@ def add_play_ms(uid, ncm_id, ms):
     add = min(add, PLAY_MS_MAX_PER_CALL)
     conn = connect()
     try:
-        cur = conn.execute(
-            f"UPDATE plays SET ms = COALESCE(ms,0) + ? WHERE rowid = ({_LATEST_PLAY})",
-            (add, int(uid), int(ncm_id)))
-        if cur.rowcount:
-            _reward_play(conn, int(uid), int(ncm_id))
+        row = conn.execute(
+            "UPDATE plays SET ms = COALESCE(ms,0) + ? WHERE rowid = ("
+            f"SELECT rowid FROM plays WHERE user_id=? AND ncm_id=? {_PLAYBACK_CLIENT_FILTER} "
+            "ORDER BY played_at DESC, rowid DESC LIMIT 1) RETURNING rowid",
+            (add, int(uid), int(ncm_id), playback_client, playback_client)).fetchone()
+        if row:
+            _reward_play(conn, int(uid), int(ncm_id), row["rowid"])
         conn.commit()
-        return add if cur.rowcount else 0
+        return add if row else 0
     finally:
         conn.close()
 
@@ -1887,14 +1889,14 @@ def update_play_total(uid, ncm_id, play_id, ms):
         conn.close()
 
 
-def play_sync_candidate(uid, ncm_id, min_ms=60_000, *, play_id=None):
+def play_sync_candidate(uid, ncm_id, min_ms=60_000, *, play_id=None, playback_client=None):
     """原子领取达到收听门槛且尚未同步的播放。旧客户端沿用 60 秒门槛。"""
     conn = connect()
     try:
-        where = "AND p.rowid=?" if play_id is not None else ""
-        args = (uid, ncm_id, play_id) if play_id is not None else (uid, ncm_id)
+        where = "AND p.rowid=?" if play_id is not None else _PLAYBACK_CLIENT_FILTER
+        args = (uid, ncm_id, play_id) if play_id is not None else (uid, ncm_id, playback_client, playback_client)
         row = conn.execute(
-            "SELECT p.rowid, p.ms, COALESCE(p.ncm_synced,0) synced, s.name, s.artists, s.duration"
+            "SELECT p.rowid, p.ms, COALESCE(p.ncm_synced,0) synced, p.playback_client, s.name, s.artists, s.duration"
             " FROM plays p LEFT JOIN songs s ON s.ncm_id=p.ncm_id"
             f" WHERE p.user_id=? AND p.ncm_id=? {where} ORDER BY p.played_at DESC, p.rowid DESC LIMIT 1",
             args,

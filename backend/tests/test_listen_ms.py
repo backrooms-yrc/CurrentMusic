@@ -103,6 +103,42 @@ class TestRealListening(ListenMsBase):
             self.assertNotEqual(first, second)
             self.assertFalse(cm_db.update_play_total(self.uid + 1, 1, first, 999_000))
 
+    def test_playback_clients_keep_separate_devices_for_the_same_song(self):
+        token = cm_db.issue_token(self.uid)
+        cm_db.save_binding(self.uid, "MUSIC_U=test-binding", 42)
+
+        def post(body, ua):
+            handler = _Handler("POST", "/plays/1", body, token=token)
+            handler.headers["User-Agent"] = ua
+            cm_server.route(handler, "POST")
+            self.assertEqual(handler.status, 200)
+            return json.loads(handler.wfile.getvalue())
+
+        with mock.patch.object(cm_server, "_spawn_ncm_listen") as spawn:
+            native = post({"name": "歌曲", "duration": SONG_MS}, "okhttp/5.0")["playId"]
+            web = post({"name": "歌曲", "duration": SONG_MS}, "Mozilla/5.0")["playId"]
+            post({"ms": 65_000, "platform": "x"}, "okhttp/5.0")
+            post({"playId": web, "totalMs": 120_000, "finished": True, "platform": "x"}, "okhttp/5.0")
+            self.assertEqual([call.kwargs["playback_client"] for call in spawn.call_args_list],
+                             ["x", "web", "x", "web"])
+            self.assertEqual([call.args[3]["rowid"] for call in spawn.call_args_list[2:]], [native, web])
+            self.assertEqual(self.ms(), 185_000)
+
+    def test_device_registration_failure_does_not_block_listening(self):
+        with (mock.patch.object(cm_server.threading, "Thread") as thread,
+              mock.patch.object(cm_ncm, "name_playback_device", side_effect=cm_ncm.NcmError("rejected")) as name,
+              mock.patch.object(cm_ncm, "weblog") as weblog,
+              mock.patch.object(cm_ncm, "scrobble") as scrobble):
+            thread.side_effect = lambda *, target, **kwargs: mock.Mock(start=target)
+            cm_server._spawn_ncm_listen("MUSIC_U=fixture", 1, None, playback_client="web")
+            cm_server._spawn_ncm_listen("MUSIC_U=fixture", 1, None,
+                                       {"ms": 120_000, "duration": SONG_MS, "name": "", "artists": ""},
+                                       playback_client="web")
+            name.assert_called_once()
+            self.assertEqual(weblog.call_args.args[0], name.call_args.args[0])
+            self.assertEqual(scrobble.call_args.args[0], name.call_args.args[0])
+            self.assertEqual(scrobble.call_args.args[2], 120)
+
     def test_skip_counts_only_real_time(self):
         """点开就切走：只记真实听的那点时间，绝不按整首计。"""
         cm_db.record_play(self.uid, 1)
@@ -200,6 +236,24 @@ class TestLegacyBackfill(ListenMsBase):
 
 
 class TestScrobbleProtocol(unittest.TestCase):
+    def test_playback_device_keeps_auth_and_supplies_ncbl_and_eapi_names(self):
+        bound = "MUSIC_U=token+%2B; deviceId=imported; os=android; mode=Other; __csrf=csrf"
+        web = cm_ncm.playback_device_cookie(bound, "web")
+        android = cm_ncm.playback_device_cookie(bound, "x")
+        self.assertEqual(web, cm_ncm.playback_device_cookie(bound, "web"))
+        self.assertEqual(web["MUSIC_U"], "token+%2B")
+        self.assertEqual(web["__csrf"], "csrf")
+        self.assertNotEqual(web["deviceId"], android["deviceId"])
+        self.assertNotEqual(web["deviceId"], "imported")
+        self.assertEqual(web["os"], "pc")
+        self.assertEqual((web["mode"], web["mobilename"]), ("CurrentMusic Web", "CurrentMusic Web"))
+        self.assertEqual((android["mode"], android["mobilename"]), ("CurrentMusicX", "CurrentMusicX"))
+
+        with mock.patch.object(cm_ncm, "post_json", return_value={"code": 200}) as post:
+            cm_ncm.name_playback_device(web)
+            post.assert_called_once_with("/deviceinfo/center/upload", {"deviceName": "CurrentMusic Web"},
+                                         cookie=web, timeout=5.0, real_ip=None)
+
     def test_ncbl_requires_both_upload_receipts(self):
         details = {"plv": {"fileName": "p.ncbl"}, "pld": {"fileName": "d.ncbl"}}
         with mock.patch.object(cm_ncm, "post_json", return_value={"code": 200, "details": details}) as post:

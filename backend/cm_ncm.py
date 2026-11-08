@@ -3,6 +3,7 @@
 经验来自 astrbot 插件 NcmSvipClient：冷查询可达 4~11s 故超时 15s；
 /song/url/v1 响应的 level 字段是「实际返回档」而非回显请求档。
 """
+import hashlib
 import json
 import logging
 import math
@@ -185,7 +186,7 @@ def post_json(path, payload, cookie=None, timeout=10.0, real_ip=None):
     payload = dict(payload)
     if real_ip:
         payload["realIP"] = real_ip
-    ck = with_os_pc(cookie if cookie is not None else ncm_cookie())
+    ck = cookie if isinstance(cookie, dict) else with_os_pc(cookie if cookie is not None else ncm_cookie())
     if ck:
         payload["cookie"] = ck
     # 上游缓存键不包含 POST body。写操作必须绕过缓存，凭据留在请求体内。
@@ -204,6 +205,31 @@ def post_json(path, payload, cookie=None, timeout=10.0, real_ip=None):
         raise NcmError(f"网易云请求失败：{message or e}", status_code=e.code, response=response) from None
     except Exception as e:  # noqa: BLE001
         raise NcmError(f"NCM 上游请求失败: {e}")
+
+
+PLAYBACK_DEVICE_NAMES = {"web": "CurrentMusic Web", "x": "CurrentMusicX", "app": "CurrentMusic"}
+
+
+def playback_device_cookie(cookie, client):
+    """Isolate the virtual playback device from devices in an imported binding."""
+    values = {}
+    for part in cookie.split(";"):
+        key, sep, value = part.strip().partition("=")
+        if sep and key:
+            values[key] = value
+    name = PLAYBACK_DEVICE_NAMES[client]
+    token = values.get("MUSIC_U") or cookie
+    device_id = hashlib.sha256(f"currentmusic-playback:{client}:{token}".encode()).hexdigest()[:32]
+    # api-enhanced reads mode for NCBL and mobilename for EAPI.
+    values.update(deviceId=device_id, sDeviceId=device_id, mode=name, mobilename=name, os="pc")
+    return values
+
+
+def name_playback_device(cookie, real_ip=None):
+    result = post_json("/deviceinfo/center/upload", {"deviceName": cookie["mode"]},
+                       cookie=cookie, timeout=5.0, real_ip=real_ip)
+    if not isinstance(result, dict) or result.get("code") != 200:
+        raise NcmError("网易云未确认播放设备名称")
 
 
 def weblog(cookie, events, timeout=10.0, real_ip=None):
