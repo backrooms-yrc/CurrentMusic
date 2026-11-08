@@ -16,7 +16,7 @@
 
 **[打开 CurrentMusic 流声屿](https://music.20110208.xyz/app/)** · **[社区客户端 CurrentMusicX](https://github.com/bileizhen/CurrentMusicX)** · **[流声引擎官网](https://music.20110208.xyz/home/engine/)**
 
-[界面预览](#界面预览) · [功能一览](#功能一览) · [自托管与构建](#自托管与构建) · [API 文档](https://music.20110208.xyz/api-docs/)
+[界面预览](#界面预览) · [功能一览](#功能一览) · [项目实现原理](#项目实现原理) · [自托管与构建](#自托管与构建) · [API 文档](https://music.20110208.xyz/api-docs/)
 
 </div>
 
@@ -53,6 +53,20 @@
 | **一起听与分享** | 房间内同步播放和管理队列，生成歌曲链接、方块或沉浸式分享图。 |
 | **外观与交互** | 深浅主题、封面取色、玻璃效果、迷你播放器，以及手机和平板、桌面的响应式布局。在「设置 → 外观 → 界面风格」可选用 Aimo 设计。 |
 | **账号与交流** | 通行密钥、两步验证、社区动态、聊天室和可选 AI 助手。 |
+
+## 项目实现原理
+
+[![CurrentMusic 实现原理图 / CurrentMusic architecture diagram](docs/images/architecture.png)](docs/images/architecture.png)
+
+Web 的业务 API 默认统一走流声引擎的 `/cm/` 入口。CurrentMusicX 按功能、音源设置和登录态分流，部分请求由手机直连网易云。两端都可以从返回的媒体地址直接加载音频。Web 选用 LeiZ 音源时直接向 LeiZ 取址，云盘分步上传也可直传对象存储。
+
+By default, Web sends its application API requests through the engine at `/cm/`. CurrentMusicX routes requests by feature, audio source and sign-in state, connecting to NetEase directly for selected features. Both clients can load audio directly from the returned media URL. Web can resolve playback URLs through LeiZ when selected and send cloud upload files directly to object storage.
+
+**匿名 SVIP** 由后端从 `CM_NCM_COOKIE` 指向的文件读取服务端 SVIP Cookie，经独立部署的 NCM API 向网易云取址。播放取址要求登录 CurrentMusic，绑定个人网易云账号是可选的。个人歌单、收藏等账号操作使用用户自己的绑定 Cookie。图底的 `ncm-inject` 是部署记录中的独立入口。
+
+**Anonymous SVIP** uses a server-side SVIP cookie from the file configured by `CM_NCM_COOKIE`. The engine passes it to the separately deployed NCM API to resolve NetEase playback URLs. Playback URL requests require a CurrentMusic sign-in, with NetEase account linking optional. Personal actions such as managing playlists and likes use the user's linked cookie. The `ncm-inject` route at the bottom is a separate entry point documented in the deployment notes.
+
+[后端 / Backend](backend/README.md) · [播放取址 / Playback URL resolution](docs/playback-sources.md) · [账号绑定 / Account linking](docs/third-party-ncm-sync.md) · [独立入口 / Separate gateway](docs/api-5-phase-plan.md#1-实测拓扑)
 
 ## 自托管与构建
 
