@@ -616,6 +616,52 @@ def _spawn_ncm_listen(cookie, ncm_id, real_ip, play=None, *, playback_client):
     threading.Thread(target=run, name="ncm-listen-sync", daemon=True).start()
 
 
+_web_play_sync_lock = threading.Lock()
+_web_play_sync_pending = {}
+_web_play_sync_pool = ThreadPoolExecutor(max_workers=6, thread_name_prefix="ncm-web-listen")
+
+
+def _sync_web_play_segment(uid, ncm_id, play_id, ncm_uid):
+    play = cm_db.web_play_sync_candidate(play_id, ncm_uid)
+    if not play:
+        return
+    binding = cm_db.get_binding(uid) or {}
+    if binding.get("ncm_uid") != ncm_uid or not binding.get("cookie") or binding.get("stale"):
+        return
+    cookie = cm_ncm.playback_device_cookie(binding["cookie"], "web")
+    target = play["target_seconds"]
+    delta = target - play["ncm_reported_seconds"]
+    total = ((play["duration"] or 0) + 999) // 1000 or target
+    if not play["ncm_plv_reported"]:
+        cm_ncm.upload_web_play_log(cookie, ncm_id, "plv", delta, total)
+        cm_db.confirm_web_play_sync(play_id, ncm_uid)
+    cm_ncm.upload_web_play_log(cookie, ncm_id, "pld", delta, total)
+    cm_db.confirm_web_play_sync(play_id, ncm_uid, seconds=target)
+
+
+def _drain_web_play_sync(play_id):
+    while True:
+        with _web_play_sync_lock:
+            job = _web_play_sync_pending[play_id]
+            if job is None:
+                del _web_play_sync_pending[play_id]
+                return
+            _web_play_sync_pending[play_id] = None
+        uid, ncm_id, ncm_uid = job
+        try:
+            _sync_web_play_segment(uid, ncm_id, play_id, ncm_uid)
+        except Exception as e:  # noqa: BLE001 后续进度仍可重试未确认的日志
+            log.info("网易云 Web 时长同步失败 song=%s error=%s", ncm_id, type(e).__name__)
+
+
+def _queue_web_play_sync(uid, ncm_id, play_id, ncm_uid):
+    with _web_play_sync_lock:
+        scheduled = play_id in _web_play_sync_pending
+        _web_play_sync_pending[play_id] = (uid, ncm_id, ncm_uid)
+    if not scheduled:
+        _web_play_sync_pool.submit(_drain_web_play_sync, play_id)
+
+
 def _payload_recent(u, limit=20):
     """最近播放。原 /plays/recent 逻辑。"""
     ids = cm_db.recent_plays(u["id"], int(limit))
@@ -2758,7 +2804,7 @@ def route(handler, method):
             ("POST", "/posts", "Bearer", "发布动态"),
             ("POST", "/posts/{id}/like", "Bearer", "点赞动态"),
             ("GET", "/plays/recent", "Bearer", "最近播放"),
-            ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId，platform 可选 web/x/app；上报 {playId,totalMs,finished}，结束时同步网易云实际收听时长；兼容旧版 ms 增量"),
+            ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId，platform 可选 web/x/app；上报 {playId,totalMs,finished}，Web 播放中增量同步，结束时补报尾段；兼容旧版 ms 增量"),
             ("GET", "/songs/status", "可选登录", "歌曲列表状态：liked/faved 为本地状态，counts 为本地计数，ncmCounts 为网易云红心数"),
             ("GET", "/likes/count", "公开", "批量点赞数：counts 本地、ncmCounts 网易云红心数"),
             ("POST", "/likes/{ncmId}", "Bearer", "CurrentMusic 自建红心 toggle {meta}，返回 {on,count}（本地计数）"),
@@ -3928,6 +3974,7 @@ def route(handler, method):
             raise ApiError(400, "播放上报需要 JSON 对象")
         binding = cm_db.get_binding(u["id"])
         sync_cookie = (binding or {}).get("cookie") if binding else ""
+        ncm_uid = (binding or {}).get("ncm_uid") if sync_cookie else None
         real_ip = cm_ncm_gateway.client_ip(handler)
         # Reuse the platform values used by account/device reporting. Old X clients use OkHttp.
         platform = body.get("platform")
@@ -3941,7 +3988,11 @@ def route(handler, method):
                 raise ApiError(400, "playId 或 totalMs 无效")
             if not cm_db.update_play_total(u["id"], ncm_id, play_id, total_ms):
                 raise ApiError(404, "播放记录不存在")
-            if sync_cookie and body.get("finished") is True:
+            finished = body.get("finished") is True
+            if (ncm_uid and cm_ncm.web_scrobble_available()
+                    and cm_db.prepare_web_play_sync(u["id"], ncm_id, play_id, ncm_uid, finished)):
+                _queue_web_play_sync(u["id"], ncm_id, play_id, ncm_uid)
+            elif sync_cookie and finished:
                 play = cm_db.play_sync_candidate(u["id"], ncm_id, min_ms=None, play_id=play_id)
                 if play:
                     _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, play,

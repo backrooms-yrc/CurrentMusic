@@ -112,7 +112,11 @@ CREATE TABLE IF NOT EXISTS plays (
   ms INTEGER DEFAULT 0,
   -- 领取网易云同步后置 1，失败时放回。
   ncm_synced INTEGER DEFAULT 0,
-  playback_client TEXT NOT NULL DEFAULT ''
+  playback_client TEXT NOT NULL DEFAULT '',
+  ncm_playback_uid INTEGER NOT NULL DEFAULT 0,
+  ncm_plv_reported INTEGER NOT NULL DEFAULT 0,
+  ncm_reported_seconds INTEGER NOT NULL DEFAULT 0,
+  ncm_finished INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS point_rewards (
   user_id INTEGER NOT NULL,
@@ -466,6 +470,9 @@ def init():
         conn.execute("ALTER TABLE plays ADD COLUMN ncm_synced INTEGER DEFAULT 0")
     if "playback_client" not in pcols:
         conn.execute("ALTER TABLE plays ADD COLUMN playback_client TEXT NOT NULL DEFAULT ''")
+    for column in ("ncm_playback_uid", "ncm_plv_reported", "ncm_reported_seconds", "ncm_finished"):
+        if column not in pcols:
+            conn.execute(f"ALTER TABLE plays ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
     # v1.17.24 曾有自建关注表，关注已改为同步网易云账号，这里清理遗留表
     conn.execute("DROP TABLE IF EXISTS artist_follows")
     conn.commit()
@@ -1889,6 +1896,63 @@ def update_play_total(uid, ncm_id, play_id, ms):
         conn.close()
 
 
+def _ncm_listen_minimum(duration):
+    return min(30_000, max(1000, duration // 2)) if duration and duration > 0 else 30_000
+
+
+def prepare_web_play_sync(uid, ncm_id, play_id, ncm_uid, finished):
+    conn = connect()
+    try:
+        # Adopt pre-upgrade plays only if they have never been sent by the old one-shot path.
+        cur = conn.execute(
+            "UPDATE plays SET ncm_playback_uid=?, ncm_finished=MAX(ncm_finished, ?) "
+            "WHERE rowid=? AND user_id=? AND ncm_id=? AND playback_client IN ('web', '') "
+            "AND COALESCE(ncm_synced,0)=0 AND ncm_playback_uid IN (0, ?)",
+            (ncm_uid, int(finished), play_id, uid, ncm_id, ncm_uid),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def web_play_sync_candidate(play_id, ncm_uid):
+    conn = connect()
+    try:
+        play = conn.execute(
+            "SELECT p.ms, p.ncm_plv_reported, p.ncm_reported_seconds, p.ncm_finished, s.duration "
+            "FROM plays p LEFT JOIN songs s ON s.ncm_id=p.ncm_id "
+            "WHERE p.rowid=? AND p.ncm_playback_uid=? AND COALESCE(p.ncm_synced,0)=0",
+            (play_id, ncm_uid),
+        ).fetchone()
+        if not play or (play["ms"] or 0) < _ncm_listen_minimum(play["duration"]):
+            return None
+        target = play["ms"] // 1000
+        sent = play["ncm_reported_seconds"]
+        if target <= sent or (sent and target - sent < 30 and not play["ncm_finished"]):
+            return None
+        return dict(play, target_seconds=target)
+    finally:
+        conn.close()
+
+
+def confirm_web_play_sync(play_id, ncm_uid, *, seconds=None):
+    conn = connect()
+    try:
+        if seconds is None:
+            conn.execute("UPDATE plays SET ncm_plv_reported=1 WHERE rowid=? AND ncm_playback_uid=?",
+                         (play_id, ncm_uid))
+        else:
+            conn.execute(
+                "UPDATE plays SET ncm_reported_seconds=MAX(ncm_reported_seconds, ?) "
+                "WHERE rowid=? AND ncm_playback_uid=?",
+                (seconds, play_id, ncm_uid),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def play_sync_candidate(uid, ncm_id, min_ms=60_000, *, play_id=None, playback_client=None):
     """原子领取达到收听门槛且尚未同步的播放。旧客户端沿用 60 秒门槛。"""
     conn = connect()
@@ -1896,20 +1960,19 @@ def play_sync_candidate(uid, ncm_id, min_ms=60_000, *, play_id=None, playback_cl
         where = "AND p.rowid=?" if play_id is not None else _PLAYBACK_CLIENT_FILTER
         args = (uid, ncm_id, play_id) if play_id is not None else (uid, ncm_id, playback_client, playback_client)
         row = conn.execute(
-            "SELECT p.rowid, p.ms, COALESCE(p.ncm_synced,0) synced, p.playback_client, s.name, s.artists, s.duration"
+            "SELECT p.rowid, p.ms, COALESCE(p.ncm_synced,0) synced, p.playback_client, p.ncm_playback_uid, s.name, s.artists, s.duration"
             " FROM plays p LEFT JOIN songs s ON s.ncm_id=p.ncm_id"
             f" WHERE p.user_id=? AND p.ncm_id=? {where} ORDER BY p.played_at DESC, p.rowid DESC LIMIT 1",
             args,
         ).fetchone()
-        if not row or row["synced"]:
+        if not row or row["synced"] or row["ncm_playback_uid"]:
             return None
         if min_ms is None:
-            duration = row["duration"] or 0
-            min_ms = min(30_000, max(1000, duration // 2)) if duration > 0 else 30_000
+            min_ms = _ncm_listen_minimum(row["duration"])
         if (row["ms"] or 0) < min_ms:
             return None
         cur = conn.execute(
-            "UPDATE plays SET ncm_synced=1 WHERE rowid=? AND COALESCE(ncm_synced,0)=0",
+            "UPDATE plays SET ncm_synced=1 WHERE rowid=? AND COALESCE(ncm_synced,0)=0 AND ncm_playback_uid=0",
             (int(row["rowid"]),))
         conn.commit()
         if not cur.rowcount:

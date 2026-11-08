@@ -9,6 +9,8 @@ import logging
 import math
 import os
 import re
+import shutil
+import subprocess
 import threading
 import time
 import urllib.parse
@@ -21,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.environ.get("CM_DATA_DIR", os.path.join(ROOT, "data"))
 BASE = os.environ.get("CM_NCM_BASE", "http://127.0.0.1:3001")
 COOKIE_PATH = os.environ.get("CM_NCM_COOKIE", os.path.join(DATA_DIR, "ncm-cookie"))
+NCBL_DIR = os.environ.get("CM_NCM_NCBL_DIR", os.path.join(os.path.dirname(ROOT), "ncm-api"))
 LYRIC_CACHE_VERSION = "v17"
 
 _cookie_lock = threading.Lock()
@@ -240,6 +243,24 @@ def weblog(cookie, events, timeout=10.0, real_ip=None):
     return post_json("/weblog", {
         "data": {"logs": json.dumps(events, ensure_ascii=False)},
     }, cookie=cookie, timeout=timeout, real_ip=real_ip)
+
+
+def web_scrobble_available():
+    return bool(NCBL_DIR and os.path.isfile(os.path.join(NCBL_DIR, "util", "ncbl.js")) and shutil.which("node"))
+
+
+def upload_web_play_log(cookie, ncm_id, kind, seconds, total):
+    # The bridge emits only its exit status. Keep credentials off the command line and out of logs.
+    payload = json.dumps({"cookie": cookie, "id": ncm_id, "kind": kind, "seconds": seconds, "total": total})
+    try:
+        result = subprocess.run(
+            ["node", os.path.join(ROOT, "backend", "ncm-playback-log.cjs"), os.path.abspath(NCBL_DIR)],
+            input=payload, text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=18,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise NcmError("网易云听歌日志上传进程失败") from None
+    if result.returncode:
+        raise NcmError("网易云未确认听歌日志")
 
 
 def scrobble(cookie, ncm_id, seconds, *, total=0, name="", artist="", real_ip=None):

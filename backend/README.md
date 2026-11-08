@@ -72,6 +72,7 @@ python3 backend/cm_server.py
 | `CM_PASSKEY_ANDROID_ORIGINS` | `{}` | Android 签名 Origin 到 RP ID 的 JSON 对象；RP ID 必须是获准的 HTTPS 入口的域名。参见[通行密钥接口](../docs/passkeys-api.md) |
 | `CM_DEFAULT_HOST` | `localhost` | 请求缺少 Host 头时用于生成链接 |
 | `CM_NCM_BASE` | `http://127.0.0.1:3001` | NCM API 基址 |
+| `CM_NCM_NCBL_DIR` | `<repo>/../ncm-api` | Web 时长增量同步使用的 api-enhanced 安装目录，需要 Node.js 和已安装的上游依赖。为空时按播放结束同步 |
 | `CM_NCM_COOKIE` | `<CM_DATA_DIR>/ncm-cookie` | 网易云 cookie 文件 |
 | `CM_NCM_MATCH_SOURCE` | 空（上游自动选择） | 官方取址失败后的单个匹配音源；须由上游支持，见 [播放音源说明](../docs/playback-sources.md) |
 | `CM_SEARCH_CATALOG` | `<CM_DATA_DIR>/search-catalog.json` | 可选的公开专辑曲目索引；仅含元数据，不含用户资料或音频 |

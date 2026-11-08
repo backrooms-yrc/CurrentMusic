@@ -114,7 +114,8 @@ class TestRealListening(ListenMsBase):
             self.assertEqual(handler.status, 200)
             return json.loads(handler.wfile.getvalue())
 
-        with mock.patch.object(cm_server, "_spawn_ncm_listen") as spawn:
+        with (mock.patch.object(cm_server, "_spawn_ncm_listen") as spawn,
+              mock.patch.object(cm_ncm, "web_scrobble_available", return_value=False)):
             native = post({"name": "歌曲", "duration": SONG_MS}, "okhttp/5.0")["playId"]
             web = post({"name": "歌曲", "duration": SONG_MS}, "Mozilla/5.0")["playId"]
             post({"ms": 65_000, "platform": "x"}, "okhttp/5.0")
@@ -123,6 +124,72 @@ class TestRealListening(ListenMsBase):
                              ["x", "web", "x", "web"])
             self.assertEqual([call.args[3]["rowid"] for call in spawn.call_args_list[2:]], [native, web])
             self.assertEqual(self.ms(), 185_000)
+
+    def _web_play_requests(self):
+        token = cm_db.issue_token(self.uid)
+        cm_db.save_binding(self.uid, "MUSIC_U=web-fixture", 42)
+
+        def post(body):
+            handler = _Handler("POST", "/plays/1", body, token=token)
+            handler.headers["User-Agent"] = "Mozilla/5.0"
+            cm_server.route(handler, "POST")
+            self.assertEqual(handler.status, 200)
+            return json.loads(handler.wfile.getvalue())
+
+        return post
+
+    def test_web_sends_deltas_during_playback_and_drains_a_concurrent_finish(self):
+        post = self._web_play_requests()
+        with (mock.patch.object(cm_server, "_spawn_ncm_listen") as start,
+              mock.patch.object(cm_ncm, "web_scrobble_available", return_value=True),
+              mock.patch.object(cm_ncm, "upload_web_play_log") as upload,
+              mock.patch.object(cm_server._web_play_sync_pool, "submit",
+                                side_effect=lambda fn, play_id: fn(play_id))):
+            play_id = post({"name": "歌曲", "duration": SONG_MS})["playId"]
+
+            def progress(seconds, finished=False):
+                post({"playId": play_id, "totalMs": seconds * 1000, "finished": finished})
+
+            def finish_while_uploading(cookie, song, kind, seconds, total):
+                if kind == "pld" and upload.call_count == 3:
+                    progress(73, True)
+
+            progress(29)
+            upload.assert_not_called()
+            progress(30)
+            self.assertEqual([call.args[2:4] for call in upload.call_args_list], [("plv", 30), ("pld", 30)])
+            upload.side_effect = finish_while_uploading
+            progress(60)
+            progress(35)
+            progress(73, True)
+            self.assertEqual([call.args[2:4] for call in upload.call_args_list],
+                             [("plv", 30), ("pld", 30), ("pld", 30), ("pld", 13)])
+            self.assertEqual(self.ms(), 73_000)
+            start.assert_called_once()
+            self.assertTrue(all(call.args[0]["mode"] == "CurrentMusic Web" for call in upload.call_args_list))
+
+    def test_web_retries_failed_duration_without_repeating_play_count(self):
+        post = self._web_play_requests()
+        with (mock.patch.object(cm_server, "_spawn_ncm_listen"),
+              mock.patch.object(cm_ncm, "web_scrobble_available", return_value=True),
+              mock.patch.object(cm_ncm, "upload_web_play_log",
+                                side_effect=[None, cm_ncm.NcmError("rejected"), None]) as upload,
+              mock.patch.object(cm_server._web_play_sync_pool, "submit",
+                                side_effect=lambda fn, play_id: fn(play_id))):
+            play_id = post({"name": "歌曲", "duration": SONG_MS})["playId"]
+            for seconds in (30, 60, 60):
+                post({"playId": play_id, "totalMs": seconds * 1000, "finished": False})
+            self.assertEqual([call.args[2:4] for call in upload.call_args_list],
+                             [("plv", 30), ("pld", 30), ("pld", 60)])
+
+    def test_legacy_web_deltas_still_sync_with_ncbl_available(self):
+        post = self._web_play_requests()
+        with (mock.patch.object(cm_server, "_spawn_ncm_listen") as sync,
+              mock.patch.object(cm_ncm, "web_scrobble_available", return_value=True)):
+            post({"name": "歌曲", "duration": SONG_MS})
+            post({"ms": 60_000})
+            self.assertEqual(sync.call_count, 2)
+            self.assertEqual(sync.call_args.args[3]["ms"], 60_000)
 
     def test_device_registration_failure_does_not_block_listening(self):
         with (mock.patch.object(cm_server.threading, "Thread") as thread,

@@ -738,9 +738,11 @@ export const player = {
     if (!auth.token || !this.meta) return;
     lastTickT = -1;
     lastCastAt = 0;
-    lastFlushAt = Date.now();
+    lastFlushAt = 0;
+    const duration = Number(this.meta.duration);
+    const firstSyncAt = duration > 0 ? Math.min(30000, Math.max(1000, Math.floor(duration / 2))) : 30000;
     listenSession = {
-      id: this.meta.ncm_id, token: auth.token, totalMs: 0, sentMs: 0, relaySent: false,
+      id: this.meta.ncm_id, token: auth.token, totalMs: 0, sentMs: 0, firstSyncAt, relaySent: false,
       start: api.recordPlay(this.meta).catch(() => null),
     };
   },
@@ -931,7 +933,7 @@ export const player = {
 // 旧口径是"开始播放就把整首时长记进去"：跳歌按整首计（虚高），同一首重播只留最后一条
 // 记录（虚低），跟真实收听无关。现在只统计**真的在播**的时间：
 //   · timeupdate 按 currentTime 的前进量累加；暂停、拖动、后台挂起都不计
-//   · 每 30s 冲一次增量；切歌 / 暂停 / 播放结束 / 页面隐藏时补冲，避免丢时长
+//   · 达到首次收听门槛后上报，之后每新增约 30s 上报；暂停、切歌、结束和页面隐藏时补报
 //   · 投屏时本机 audio 不前进，改由 tick()（投屏侧驱动）按设备播放态用墙钟累计
 let listenSession = null;    // 每次播放独立累计，切歌后的响应只修改原播放
 let lastTickT = -1;          // 上次 timeupdate 的 currentTime（秒）
@@ -977,11 +979,17 @@ async function flushListen(finished = false) {
   catch { if (session.sentMs === totalMs) session.sentMs = previousMs; }
 }
 
-/** 30s 一次的节流冲（本地以 timeupdate 驱动、投屏以 tick 驱动，都不需要定时器）。 */
+/** 按实际累计量上报，避免缓冲或事件延迟让首次同步多等一轮。 */
 function maybeFlushListen() {
+  const session = listenSession;
+  if (!session || session.token !== auth.token) return;
+  const target = session.sentMs < session.firstSyncAt
+    ? Math.max(session.firstSyncAt, session.sentMs + 1000)
+    : session.sentMs + 30000;
   const now = Date.now();
-  if (!lastFlushAt) { lastFlushAt = now; return; }
-  if (now - lastFlushAt >= 30000) { lastFlushAt = now; flushListen(); }
+  if (session.totalMs < target || (lastFlushAt && now - lastFlushAt < 5000)) return;
+  lastFlushAt = now;
+  flushListen();
 }
 
 // ---------- 播放抗卡顿（缓冲可视化 / 卡顿自愈 / 下一首预取）----------
