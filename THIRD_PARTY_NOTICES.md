@@ -55,6 +55,12 @@ be imported without installing the Qt GUI stack.
   respective licenses; no Microsoft runtime source is relicensed by this repository.
 - Windows diagnostic audio fixtures are synthetic 440 Hz sine waves generated
   with FFmpeg, not recordings of third-party songs.
+- The Windows 2.0 prototype uses MyGo 0.8.3 (MIT), https://github.com/egoist/mygo,
+  and Go 1.27.3 (BSD-3-Clause). The pinned Windows Go module dependencies are
+  purego (Apache-2.0), go-text/typesetting (Unlicense OR BSD-3-Clause), and Go's x/image,
+  x/net and x/text (BSD-3-Clause). Prototype bundles include their notices.
+  The media bridge uses Windows SDK APIs and the Microsoft C++ runtime
+  under the [Visual Studio license terms](https://visualstudio.microsoft.com/license-terms/).
 
 ## Backend dependencies and content
 

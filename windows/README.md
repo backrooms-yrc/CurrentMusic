@@ -1,5 +1,7 @@
 # CurrentMusic for Windows 1.0.0
 
+此页记录历史 WinUI 3 版本。Windows 2.0 原生 Go 技术原型及实机验收见 [MyGo 开发目录](mygo/README.md)。
+
 C# / WinUI 3 原生 Windows 音乐客户端。支持 Windows 10 2004（build 19041）及以上与 Windows 11；提供 x64、ARM64 自包含 MSI。工程路线、验收范围与未覆盖的验证见 [五阶段计划](../docs/windows-five-phase-plan.md)。
 
 ## 功能
