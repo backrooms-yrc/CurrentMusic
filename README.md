@@ -4,6 +4,8 @@
 
 # CurrentMusic
 
+**简体中文** · [English](README-en.md)
+
 **用浏览器听歌，也可以搭建自己的音乐服务。**
 
 逐字歌词 · 云端歌单 · 多人一起听
@@ -56,17 +58,29 @@
 
 ## 项目实现原理
 
-[![CurrentMusic 实现原理图 / CurrentMusic architecture diagram](docs/images/architecture.png)](docs/images/architecture.png)
+[![CurrentMusic 实现原理图](docs/images/architecture.png)](docs/images/architecture.png)
 
-Web 的业务 API 默认统一走流声引擎的 `/cm/` 入口。CurrentMusicX 按功能、音源设置和登录态分流，部分请求由手机直连网易云。两端都可以从返回的媒体地址直接加载音频。Web 选用 LeiZ 音源时直接向 LeiZ 取址，云盘分步上传也可直传对象存储。
+### 客户端怎样分流
 
-By default, Web sends its application API requests through the engine at `/cm/`. CurrentMusicX routes requests by feature, audio source and sign-in state, connecting to NetEase directly for selected features. Both clients can load audio directly from the returned media URL. Web can resolve playback URLs through LeiZ when selected and send cloud upload files directly to object storage.
+- **Web 流声屿**默认把搜索、歌曲详情、歌词、播放取址、账号和社区等业务 API 统一发往流声引擎的 `/cm/`。可选 LeiZ 音源会直接请求 LeiZ。云盘分步上传由引擎申请令牌和登记文件，中间的文件数据可直传对象存储。
+- **CurrentMusicX** 由客户端按功能、音源设置和登录态选择路径。默认音源的播放取址、站内账号和歌单、社区、站内房间以及云端绑定走引擎。搜索、评论和网易云原生双人一起听可直连网易云，已在手机登录网易云时，个人歌单、收藏和推荐通常也走直连。没有本机网易云会话时，部分账号功能可走引擎复用云端绑定。选择「网易云原生」音源后，播放取址也由手机直连，歌词来源可另选。
 
-**匿名 SVIP** 由后端从 `CM_NCM_COOKIE` 指向的文件读取服务端 SVIP Cookie，经独立部署的 NCM API 向网易云取址。播放取址要求登录 CurrentMusic，绑定个人网易云账号是可选的。个人歌单、收藏等账号操作使用用户自己的绑定 Cookie。图底的 `ncm-inject` 是部署记录中的独立入口。
+### 流声引擎怎样处理请求
 
-**Anonymous SVIP** uses a server-side SVIP cookie from the file configured by `CM_NCM_COOKIE`. The engine passes it to the separately deployed NCM API to resolve NetEase playback URLs. Playback URL requests require a CurrentMusic sign-in, with NetEase account linking optional. Personal actions such as managing playlists and likes use the user's linked cookie. The `ncm-inject` route at the bottom is a separate entry point documented in the deployment notes.
+1. HTTPS 反向代理将 `/cm/` 转发给 Python 后端，并写入可信客户端 IP。后端按路由处理登录校验、限流和缓存。公开搜索、详情和歌词可供访客查询，媒体取址要求 CurrentMusic 登录。搜索和播放取址可将可信客户端 IP 传给上游，并据此隔离缓存。
+2. 站内账号、歌单、社区和房间由后端处理，会话和业务数据保存在 SQLite。聊天室和听歌房可用服务器发送事件（SSE）接收更新。需要访问网易云时，后端通过 `CM_NCM_BASE` 调用独立部署的 NCM API（Node.js / api-enhanced），由它向网易云发起协议请求并返回结果。
+3. 网易云个人操作走单独的鉴权路径。引擎校验 CurrentMusic 会话，再读取该用户绑定的网易云 Cookie 来访问其歌单、收藏等数据。X 端完成本机网易云登录后，可通过 `/cm/ncmbind/import` 将凭据同步给引擎，由服务端验证账号归属。引擎保存的 Cookie 只用于服务端请求。
 
-[后端 / Backend](backend/README.md) · [播放取址 / Playback URL resolution](docs/playback-sources.md) · [账号绑定 / Account linking](docs/third-party-ncm-sync.md) · [独立入口 / Separate gateway](docs/api-5-phase-plan.md#1-实测拓扑)
+### 匿名 SVIP 怎样取址
+
+1. 用户登录 **CurrentMusic** 后，以站内令牌请求 `GET /cm/ncm/song/url`，提交歌曲 ID 和音质档位。这里的「匿名」指取址可以省略个人网易云绑定。
+2. 后端读取 `CM_NCM_COOKIE` 指向的文件，将服务器配置的网易云 SVIP Cookie 注入发往 NCM API 的官方取址请求 `/song/url/v1`。网易云按该服务端账号的权益、曲目限制和请求档位返回结果。站内令牌用于引擎鉴权，服务端 Cookie 用于上游鉴权。
+3. 引擎选择可用音质，探测最终官方地址的音频头。官方取址失败或只返回试听时，可经部署好的匹配器查找候选音源，并校验音频和时长。匹配请求使用公开歌曲资料，发往匹配器的请求不携带这两类网易云 Cookie。
+4. 后端返回播放地址和可验证的音频信息。常规播放时，Web 和 X 直接从返回的 CDN 或匹配音源地址读取音频。歌词走独立接口。引擎优先使用官方 YRC，缺少逐字数据时可由 LDDC 补全，最后回退到 LRC 并标记估算的逐字时间。X 可独立选择本机直连或自动多源匹配。
+
+部署记录还记载了一个独立的 `ncm-inject` 入口。它对符合注入规则且调用方未带 Cookie 的请求补上服务端 SVIP Cookie，再交给 NCM API。上图的 Web 与 X 默认请求链使用的是 `/cm/`。
+
+[后端说明](backend/README.md) · [播放取址](docs/playback-sources.md) · [账号绑定](docs/third-party-ncm-sync.md) · [歌词接口](docs/lyrics-api.md) · [部署记录](docs/api-5-phase-plan.md#1-实测拓扑)
 
 ## 自托管与构建
 
