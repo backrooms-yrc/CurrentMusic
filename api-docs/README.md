@@ -12,3 +12,5 @@ Docusaurus 构建到 build/，publish.cjs 发布到 data/api-docs/。原 vendor/
 ## 独立构建与上游资料
 
 不要求本机存在特定生产目录。默认从当前后端路由、登记表和仓库专题构建；若仓库旁边存在 ncm-api 源码，会读取其公开文档。可通过 `NCM_API_DIR=/path/to/api-enhanced npm run build` 显式指定。没有上游资料时仍生成完整路由/权限清单，缺失的上游参数说明会如实标注，build-info.json 中 upstreamDocumentationIncluded=false、upstreamDocsSha256=null；有资料时记录其内容哈希。
+
+QQ 音乐接口清单来自后端登记表，可在未部署 QQ Music API 的环境中构建。

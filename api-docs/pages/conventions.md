@@ -6,13 +6,14 @@
 
 同一个路径可能有多个 HTTP 方法，必须按方法分别接入。除非明确是查询，不要用 GET 发起写操作；JSON 写入请求设置 `Content-Type: application/json`。GET 无请求体时不需要这个请求头。
 
-## 两套令牌不可混用
+## 凭据与用途
 
 | 凭据 | 取得方式 | 用途 |
 | --- | --- | --- |
 | CurrentMusic 会话 token | `/cm/auth/login` 等账号登录接口 | 音乐客户端账户、绑定、社区、管理等服务 |
 | 通行证 access_token | `/cm/passport/token` 授权码 / 刷新令牌 / 客户端凭据流程 | 被 scope 授权的第三方产品能力；以通行证专题为准 |
 | 网易云 Cookie | 仅由服务端管理的绑定流程产生 | 客户端不能直接传入泛化网关覆盖登录态 |
+| QQ 音乐个人会话 | [QQ 音乐扫码登录](guide-qq-music-api.md) | 用 `X-QQ-Session` 或同源 Cookie 携带，账号态请求还需 CurrentMusic Bearer |
 
 通常使用 `Authorization: Bearer <token>`。401 可能是会话失效，也可能是网易云尚未绑定或上游绑定已失效，必须结合响应文案判断，不能一律删除本地账号。
 

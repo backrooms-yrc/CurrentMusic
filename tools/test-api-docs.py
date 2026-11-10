@@ -51,6 +51,12 @@ class DocumentationTests(unittest.TestCase):
             manifest=json.loads((output/'manifest.json').read_text())
             upstream={item['path'] for item in manifest if item['group']=='netease'}
             self.assertEqual(upstream,{'/cm/ncm'+p for p in docs.cm_ncm_registry.REGISTRY})
+            qq = {(item['method'], item['path'], item['auth']) for item in manifest if item['group'] == 'qqmusic'}
+            self.assertEqual(qq, {(route.method, '/cm/qqmusic' + route.path, route.auth)
+                                  for route in docs.cm_qq_registry.ROUTES})
+            self.assertEqual(metadata['qqMusicOperations'], len(qq))
+            self.assertTrue((output/'guide-qq-music-api.md').is_file())
+            self.assertIn('GET | `/cm/qqmusic/song/url` | Bearer + QQ 会话', (output/'qqmusic.md').read_text())
             for f in output.glob('*.md'):
                 text=re.sub(r'```.*?```','',f.read_text(),flags=re.S)
                 for target in re.findall(r'\]\(([^)]+)\)',text):

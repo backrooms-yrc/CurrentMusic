@@ -61,6 +61,15 @@ See [playback source validation](../docs/playback-sources.md) for duration check
 deadlines, compatible response fields, and regression commands. Original upstream
 source backups stay in ignored `data/ncm-matcher-backups/`.
 
+## QQ Music API
+
+Deploy [QQ Music API v3.3.6](https://github.com/yakult-green-tea/qq-music-api/releases/tag/v3.3.6)
+as a separate loopback-only Node service. Set `CM_QQ_MUSIC_BASE=http://127.0.0.1:3200`
+in the CurrentMusic environment. Enable the upstream encrypted session store
+with its own state directory and protected secret file. The nginx example
+includes a dedicated `/cm/qqmusic/` location without access logging or caching.
+See [QQ Music integration](../docs/qq-music-api.md) for account and API details.
+
 ## LDDC word-by-word lyrics (optional)
 
 CurrentMusic already synthesizes per-character timing from line-level lyrics. For

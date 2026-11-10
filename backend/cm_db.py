@@ -158,6 +158,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_seen INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, last_seen);
+CREATE TABLE IF NOT EXISTS qq_session_owners (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS cache (
   k TEXT PRIMARY KEY,
   v TEXT NOT NULL,
@@ -2303,8 +2308,47 @@ def cache_purge_expired():
     conn = connect()
     try:
         cur = conn.execute("DELETE FROM cache WHERE expires<=?", (int(time.time()),))
+        conn.execute("DELETE FROM qq_session_owners WHERE last_seen<=?", (int(time.time()) - 8 * 86400,))
         conn.commit()
         return cur.rowcount or 0
+    finally:
+        conn.close()
+
+
+def claim_qq_session(token_hash, uid):
+    """Associate a QQ service session digest with the CurrentMusic user who scanned."""
+    conn = connect()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO qq_session_owners(token_hash,user_id,last_seen) VALUES(?,?,?)"
+            " ON CONFLICT(token_hash) DO UPDATE SET last_seen=excluded.last_seen"
+            " WHERE user_id=excluded.user_id", (token_hash, uid, int(time.time())))
+        conn.commit()
+        return bool(cursor.rowcount)
+    finally:
+        conn.close()
+
+
+def qq_session_owned_by(token_hash, uid):
+    conn = connect()
+    try:
+        now = int(time.time())
+        row = conn.execute("SELECT last_seen FROM qq_session_owners WHERE token_hash=? AND user_id=?",
+                           (token_hash, uid)).fetchone()
+        if row and row["last_seen"] <= now - 86400:
+            conn.execute("UPDATE qq_session_owners SET last_seen=MAX(last_seen,?)"
+                         " WHERE token_hash=? AND user_id=?", (now, token_hash, uid))
+            conn.commit()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def forget_qq_session(token_hash, uid):
+    conn = connect()
+    try:
+        conn.execute("DELETE FROM qq_session_owners WHERE token_hash=? AND user_id=?", (token_hash, uid))
+        conn.commit()
     finally:
         conn.close()
 

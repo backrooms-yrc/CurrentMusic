@@ -31,6 +31,7 @@
 - 搜索与播放：搜索 → 歌曲详情 → 登录后解析音源 → 获取歌词。
 - 账号接入：注册/登录 → Bearer 会话 → 资料与设备管理。
 - 同步网易云：CurrentMusic 登录 → 手机/二维码绑定 → 同步歌单或调用 T1/T2 接口。
+- 接入 QQ 音乐：[扫码、个人会话与能力对照](guide-qq-music-api.md) · [QQ 音乐接口清单](qqmusic.md)。
 - 第三方产品登录：[通行证接入](guide-passport-api.md)，使用授权码 + PKCE。
 - 实时能力：[聊天 AI](guide-currentmusic-ai.md)、[一起听](guide-rooms-design.md)。
 - 项目署名：[一行代码嵌入流声引擎徽章](guide-engine-badge-api.md)。

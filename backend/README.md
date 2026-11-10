@@ -26,6 +26,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
   并能提供 `/song/url/v1`、`/lyric/new`、`/comment` 等上游接口
 - 可用的网易云 cookie（写到 `CM_NCM_COOKIE` 指向的文件；服务端据此取音源）
 - 解灰匹配需在独立上游部署 [验证挂钩](../docs/playback-sources.md#部署与回归) 并安装系统 ffprobe；普通官方取址无此要求
+- QQ 音乐可选接入独立的 QQ Music API v3.3.6。在 `CM_QQ_MUSIC_BASE` 配置回环地址，见 [QQ 音乐接入](../docs/qq-music-api.md)。
 - 可选：
   - Pillow + segno + Noto Sans CJK：分享图渲染（缺失时 `/share/song/{id}/image` 返回 503）；
     可执行 `pip install -r deploy/requirements-optional.txt`，并安装 Noto CJK 字体

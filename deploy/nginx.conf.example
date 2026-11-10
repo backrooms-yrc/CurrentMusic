@@ -35,6 +35,25 @@ server {
         proxy_read_timeout 90s;
     }
 
+    # Keep QQ session and QR identifiers out of reverse-proxy logs.
+    location = /cm/qqmusic {
+        access_log off;
+        error_log /dev/null crit;
+        proxy_cache off;
+        proxy_pass http://127.0.0.1:3010/qqmusic;
+    }
+    location ^~ /cm/qqmusic/ {
+        access_log off;
+        error_log /dev/null crit;
+        proxy_cache off;
+        proxy_pass http://127.0.0.1:3010/qqmusic/;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+
     # Chat SSE (exact match wins over /cm/)
     location = /cm/live/chat {
         gzip off;

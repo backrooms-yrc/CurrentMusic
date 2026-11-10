@@ -75,6 +75,9 @@ be imported without installing the Qt GUI stack.
 - NetEaseCloudMusicApiEnhanced / api-enhanced (MIT) is deployed separately;
   its backend source and account cookies are not bundled here. The license for
   documentation excerpts is retained in `api-docs/licenses/ncm-api-MIT.txt`.
+- yakult-green-tea/qq-music-api v3.3.6 (MIT), https://github.com/yakult-green-tea/qq-music-api,
+  is a separate loopback service. CurrentMusic ships its own HTTP gateway and
+  route allowlist. See the upstream [license](https://github.com/yakult-green-tea/qq-music-api/blob/v3.3.6/LICENSE).
 - @neteasecloudmusicapienhanced/unblockmusic-utils 0.4.4 (MIT),
   https://github.com/NeteaseCloudMusicApiEnhanced/UnblockNeteaseMusic-utils,
   and @unblockneteasemusic/server 0.28.0 (LGPL-3.0-only),

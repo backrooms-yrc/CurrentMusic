@@ -36,6 +36,8 @@ import cm_ncm_gateway
 import cm_net
 import cm_ncm_registry
 import cm_passport
+import cm_qq
+import cm_qq_registry
 import cm_rooms
 import cm_sms
 import cm_stream
@@ -1230,8 +1232,9 @@ def cast_resolve(ncm_id, level=None, allow_downgrade=True):
     return url, ext, lv
 
 
-def jresp(handler, code, obj, cache_control=None):
-    if urlparse(handler.path).path.startswith(("/auth/passkeys", "/auth/2fa/", "/auth/security-question")) or (isinstance(obj, dict) and (obj.get("requires2FA") or obj.get("requiresSecurityQuestion"))):
+def jresp(handler, code, obj, cache_control=None, extra_headers=None):
+    path = urlparse(handler.path).path
+    if path.startswith(("/auth/passkeys", "/auth/2fa/", "/auth/security-question")) or (isinstance(obj, dict) and (obj.get("requires2FA") or obj.get("requiresSecurityQuestion"))):
         cache_control = "no-store"
     body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     handler.send_response(code)
@@ -1239,6 +1242,8 @@ def jresp(handler, code, obj, cache_control=None):
     if cache_control:
         handler.send_header("Cache-Control", cache_control)
     handler.send_header("Access-Control-Allow-Origin", "*")
+    for name, value in (extra_headers or {}).items():
+        handler.send_header(name, value)
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -2074,6 +2079,12 @@ def route(handler, method):
     if path in _AUTH_PATHS and auth_rate_limited(ip):
         return jresp(handler, 429, {"error": "登录尝试过于频繁，请稍后再试"})
 
+    if cm_qq.is_path(path):
+        if path == "/qqmusic/login/qr/key" and method == "POST" and auth_rate_limited(ip):
+            raise ApiError(429, "登录尝试过于频繁，请稍后再试")
+        status, result, headers = cm_qq.dispatch(handler, method, path, q, body, require_user)
+        return jresp(handler, status, result, extra_headers=headers)
+
     # ---- 健康检查 ----
     if path == "/network/probe" and method == "GET":
         return jresp(handler, 200, {"service": "CurrentMusic", "ok": True, "now": int(time.time())}, cache_control="no-store")
@@ -2857,9 +2868,12 @@ def route(handler, method):
                             "upstream": f"{base}/cm/ncm{p}"})
         return jresp(handler, 200, {"version": "1.0", "generatedAt": int(time.time()),
                                     "sources": {"netease": f"{base}/docs",
+                                                "qqmusic": f"{base}/api-docs/reference/guide-qq-music-api/",
                                                 "backend": f"{base}/cm"},
                                     "groups": [{"id": "backend", "title": "CurrentMusic 自有后端", "items": own_out},
-                                               {"id": "netease", "title": "网易云音乐侧（经 CurrentMusic 代理）", "items": ncm_out}]})
+                                               {"id": "netease", "title": "网易云音乐侧（经 CurrentMusic 代理）", "items": ncm_out},
+                                               {"id": "qqmusic", "title": "QQ 音乐侧（经 CurrentMusic 代理）",
+                                                "items": cm_qq_registry.catalog(base)}]})
 
     if path == "/developer" and method == "GET":
         """CurrentDeveloper 开发者平台：独立页面（不依赖 /app 音乐客户端，自己管会话）。
@@ -5612,9 +5626,15 @@ class Handler(BaseHTTPRequestHandler):
             jresp(self, e.status, {"error": e.error, "error_description": e.desc})
         except cm_ncm.NcmError as e:
             jresp(self, 502, {"error": str(e)})
+        except cm_qq.Error as e:
+            jresp(self, e.status, e.body)
         except Exception as e:  # noqa: BLE001
-            log.exception("内部错误 %s %s", method, self.path)
-            jresp(self, 500, {"error": f"服务器内部错误: {e}"})
+            if cm_qq.is_path(urlparse(self.path).path):
+                log.error("QQ 网关内部错误 %s", type(e).__name__)
+                jresp(self, 500, {"error": "QQ 音乐网关内部错误"})
+            else:
+                log.exception("内部错误 %s %s", method, self.path)
+                jresp(self, 500, {"error": f"服务器内部错误: {e}"})
 
     def do_GET(self):
         self._run("GET")
@@ -5634,22 +5654,37 @@ class Handler(BaseHTTPRequestHandler):
         self._run("DELETE")
 
     def end_headers(self):
+        if cm_qq.is_path(getattr(self, "path", "").split("?", 1)[0]):
+            self.send_header("Cache-Control", "no-store")
         super().end_headers()
         w = self.wfile
         if isinstance(w, _HeadWriter):
             w._body = True      # 响应头已发出，后面写的一定是正文
 
     def do_OPTIONS(self):
+        qq = cm_qq.is_path(urlparse(self.path).path)
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Authorization,Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS" if qq else "GET,POST,PUT,DELETE,OPTIONS")
+        self.send_header("Access-Control-Allow-Headers",
+                         "Authorization,Content-Type,X-QQ-Session" if qq else "Authorization,Content-Type")
         self.send_header("Access-Control-Max-Age", "600")
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def log_request(self, code="-", size="-"):
+        path = getattr(self, "path", "").split("?", 1)[0].rstrip("/")
+        if cm_qq.is_path(path):
+            entry = cm_qq_registry.match(path[len(cm_qq_registry.PREFIX):])
+            log.info("QQ %s %s %s", self.command, entry.path if entry else "-", code)
+            return
+        super().log_request(code, size)
+
     def log_message(self, fmt, *args):  # 精简访问日志
-        log.info("%s %s %s", self.client_address[0], self.command, self.path.split("?")[0])
+        path = getattr(self, "path", "").split("?", 1)[0]
+        if cm_qq.is_path(path):
+            return
+        log.info("%s %s %s", self.client_address[0], self.command, path)
 
 
 def _cache_housekeeping():

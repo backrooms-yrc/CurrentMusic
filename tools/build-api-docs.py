@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / 'backend'))
 import cm_ncm_registry
 import cm_ncm_gateway
+import cm_qq_registry
 
 GROUPS = {
     'auth': '账号与认证', 'profile': '个人资料', 'passport': '通行证与应用授权',
@@ -36,6 +37,7 @@ GUIDES = {
     'search-lyrics-api': '歌词搜索与命中前后文',
     'search-catalog': '搜索地区与公开曲库补充',
     'ncm-comments-api': '网易云评论排序、回复与点赞',
+    'qq-music-api': 'QQ 音乐接入与能力对照',
     'playback-sources': '播放音源与灰色曲目匹配',
     'passkeys-api': '通行密钥登录与绑定',
     'two-factor-api': '登录两步验证', 'passport-api': '通行证完整接入', 'password-api': '密码找回与修改', 'lyrics-api': '歌词与逐字轴',
@@ -312,6 +314,7 @@ def build(output, upstream):
             (output/f'guide-{name}.md').write_text(text)
             sidebar.append(f'  - [{title}](guide-{name}.md)')
     build_upstream(output, upstream, sidebar, endpoint_index, manifest)
+    build_qq(output, sidebar, endpoint_index, manifest)
     sidebar += ['- **维护**', '  - [来源、许可与更新](about.md)']
     (output/'_sidebar.md').write_text('\n'.join(sidebar)+'\n')
     (output/'endpoints.md').write_text('\n'.join(endpoint_index)+'\n')
@@ -319,8 +322,10 @@ def build(output, upstream):
     (output/'build-info.json').write_text(json.dumps({
         'contentFormat': 'markdown', 'backendOperations': len(extracted),
         'upstreamPaths': len(cm_ncm_registry.REGISTRY),
+        'qqMusicOperations': len(cm_qq_registry.ROUTES),
+        'qqMusicApiVersion': cm_qq_registry.UPSTREAM_VERSION,
         'sourceHashes': {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
-                         for name in ['backend/cm_server.py','backend/cm_ncm_registry.py','docs/api-endpoint-phase-map.csv']},
+                         for name in ['backend/cm_server.py','backend/cm_ncm_registry.py','backend/cm_qq_registry.py','docs/api-endpoint-phase-map.csv']},
         'upstreamDocsSha256': hashlib.sha256((upstream/'public/docs/home.md').read_bytes()).hexdigest()
                               if (upstream/'public/docs/home.md').is_file() else None,
         'upstreamDocumentationIncluded': (upstream/'public/docs/home.md').is_file(),
@@ -328,8 +333,31 @@ def build(output, upstream):
     for p in (ROOT/'api-docs/pages').glob('*.md'):
         shutil.copy2(p,output/p.name)
     with (output/'README.md').open('a') as f:
-        f.write(f'\n\n当前目录：**{len(extracted)} 项自有路由/方法组合**，**{len(cm_ncm_registry.REGISTRY)} 项上游登记路径**。\n')
+        f.write(f'\n\n当前目录：**{len(extracted)} 项自有路由/方法组合**，**{len(cm_ncm_registry.REGISTRY)} 项网易云登记路径**，**{len(cm_qq_registry.ROUTES)} 项 QQ 音乐操作**。\n')
     print(f'API docs: {len(extracted)} backend operations, {len(cm_ncm_registry.REGISTRY)} upstream paths → {output}')
+
+
+def build_qq(output, sidebar, index, manifest):
+    sidebar += ['- **QQ 音乐侧**', '  - [QQ 音乐接口清单](qqmusic.md)']
+    text = [
+        '# QQ 音乐接口清单', '',
+        f'上游版本为 `{cm_qq_registry.UPSTREAM_VERSION}`。认证、入参、示例及能力对照见 [QQ 音乐接入指南](guide-qq-music-api.md)。',
+        '',
+    ]
+    groups = {'compat': '网易云形状兼容接口', 'session': '扫码与会话', 'native': 'QQ Music API 原生业务接口'}
+    for kind, title in groups.items():
+        text += [f'## {title}', '', '| 方法 | 路径 | 认证 | 分类 / 上游查询参数 |', '| --- | --- | --- | --- |']
+        for route in cm_qq_registry.ROUTES:
+            if route.kind != kind:
+                continue
+            path = '/cm' + cm_qq_registry.PREFIX + route.path
+            fields = ', '.join(f'`{name}`' for name in route.params)
+            detail = f'{route.title} · {fields}' if fields else route.title
+            text.append(f'| {route.method} | `{path}` | {route.auth} | {detail} |')
+            manifest.append(dict(method=route.method, path=path, auth=route.auth, group='qqmusic', kind=kind))
+            index.append(f'| {route.method} | [`{path}`](qqmusic.md) | QQ 音乐 · {title} |')
+        text.append('')
+    (output/'qqmusic.md').write_text('\n'.join(text))
 
 
 def build_upstream(output, upstream, sidebar, index, manifest):
