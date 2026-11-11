@@ -208,6 +208,7 @@ body.no-mini #out { bottom: calc(var(--cm-nav-h) + max(env(safe-area-inset-botto
 /* 缓冲层压在进度层下面：一眼看出"已经缓存到哪"，弱网时心里有底 */
 .cm-mini-prog #miniBuf { background: color-mix(in srgb, var(--cm-primary) 32%, transparent); transition: width .5s linear; }
 .cm-mini-inner {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
   display: flex; align-items: center; gap: 10px; height: 100%; padding: 0 12px;
   background: var(--mdui-color-surface-container-high, #ece6f0);
   border-top: 1px solid rgba(0, 0, 0, .08);  border-top: 1px solid color-mix(in srgb, var(--mdui-color-outline-variant, #cac4d0) 30%, transparent);

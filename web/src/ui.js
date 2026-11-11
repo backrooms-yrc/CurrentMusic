@@ -477,7 +477,7 @@ export async function songListHTML(songs, { removable = false, offset = 0 } = {}
   const st = await fetchStatus(songs.map(s => s.ncm_id));
   if (auth.token) ensureNcmLiked().catch(() => {});
   return `<div class="cm-songs">` + songs.map((s, i) => `
-    <div class="cm-song" data-i="${offset + i}">
+    <div class="cm-song" data-i="${offset + i}" data-song-id="${esc(s.ncm_id != null ? s.ncm_id : '')}">
       ${s.pic ? `<img class="cm-song-pic" src="${esc(s.pic)}" loading="lazy">` : `<div class="cm-song-pic ph"><span class="material-icons-outlined">music_note</span></div>`}
       <div class="cm-song-main">
         <div class="cm-song-name">${esc(s.name)}</div>

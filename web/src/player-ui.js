@@ -41,7 +41,93 @@ function waveformHTML() {
 
 // ---------- 迷你条 ----------
 
+let cancelMiniHold = () => {};
+let locateFrame = 0;
+
+function stopLocating() {
+  cancelAnimationFrame(locateFrame);
+  locateFrame = 0;
+}
+
+function locateCurrentSong() {
+  const out = document.getElementById('out');
+  const id = player.meta && player.meta.ncm_id;
+  const row = out && id != null && id !== '' && [...out.querySelectorAll('.cm-song[data-song-id]')]
+    .find(item => item.dataset.songId === String(id));
+  if (!row) { toast('当前歌曲不在此列表中'); return; }
+
+  stopLocating();
+  const start = out.scrollTop;
+  const target = Math.max(0, Math.min(out.scrollHeight - out.clientHeight,
+    start + row.getBoundingClientRect().top - out.getBoundingClientRect().top
+      - out.clientTop - (out.clientHeight - row.offsetHeight) / 2));
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reducedMotion) { out.scrollTop = target; return; }
+  const started = performance.now();
+  const step = now => {
+    const progress = Math.min(1, (now - started) / 450);
+    out.scrollTop = start + (target - start) * (1 - Math.pow(1 - progress, 3));
+    locateFrame = progress < 1 ? requestAnimationFrame(step) : 0;
+  };
+  locateFrame = requestAnimationFrame(step);
+}
+
+function bindMiniHold() {
+  // song/state 更新会替换子元素，手势监听绑定到稳定的容器上。
+  const mini = document.getElementById('mini');
+  let hold = null, timer = 0, suppressClick = false;
+  cancelMiniHold = () => {
+    clearTimeout(timer);
+    timer = 0;
+    hold = null;
+  };
+  mini.addEventListener('pointerdown', e => {
+    if (hold) { cancelMiniHold(); suppressClick = true; return; }
+    suppressClick = false;
+    if (!e.isPrimary || e.button !== 0 || e.target.closest('.cm-mini-btn')) return;
+    if (!e.target.closest('.cm-mini-inner')) return;
+    hold = { id: e.pointerId, x: e.clientX, y: e.clientY, hash: location.hash };
+    timer = setTimeout(() => {
+      if (!hold || hold.hash !== location.hash) return;
+      timer = 0;
+      suppressClick = true;
+      locateCurrentSong();
+    }, 500);
+  });
+  document.addEventListener('pointermove', e => {
+    if (hold && hold.id === e.pointerId && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 10) {
+      cancelMiniHold();
+      suppressClick = true;
+    }
+  }, { passive: true });
+  ['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, e => {
+    if (hold && hold.id === e.pointerId) cancelMiniHold();
+  }));
+  mini.addEventListener('pointerleave', cancelMiniHold);
+  mini.addEventListener('contextmenu', e => {
+    if (e.target.closest('.cm-mini-inner') && !e.target.closest('.cm-mini-btn')) e.preventDefault();
+  });
+  mini.addEventListener('click', e => {
+    if (!suppressClick || !e.detail) return;
+    suppressClick = false;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
+  window.addEventListener('hashchange', () => { cancelMiniHold(); stopLocating(); });
+  window.addEventListener('blur', cancelMiniHold);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { cancelMiniHold(); stopLocating(); }
+  });
+  document.addEventListener('pointerdown', e => {
+    stopLocating();
+    if (!e.isPrimary) { cancelMiniHold(); suppressClick = true; }
+  }, { passive: true });
+  document.getElementById('out').addEventListener('wheel', stopLocating, { passive: true });
+}
+
 function renderMini() {
+  cancelMiniHold();
+  stopLocating();
   const el = document.getElementById('mini');
   if (!player.meta) { el.innerHTML = ''; el.style.display = 'none'; return; }
   el.style.display = '';
@@ -963,6 +1049,7 @@ export async function addToPlaylist(songs) {
 }
 
 export function initPlayerUI() {
+  bindMiniHold();
   renderMini();
   applyDynamicScheme();   // 启动即随上次播放的封面取色（配色为 dynamic 时）
 }
