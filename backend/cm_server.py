@@ -859,6 +859,10 @@ def _remember_url_error(key, exc):
         cm_db.cache_set(f"{key}:err", msg, 60)
 
 
+class PlaybackMatchError(cm_ncm.NcmError):
+    """官方和匹配音源均未解析成功。"""
+
+
 def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
                      max_br=0, refresh=False, alts=False, want_host="", supports_dolby=False):
     """官方音源优先；失败后仅下发经过严格音频校验的灰色曲目匹配结果。"""
@@ -894,7 +898,7 @@ def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
             log.warning("匹配音源失败 song=%s level=%s officialMs=%d matchMs=%d reason=%s attempts=%s",
                         ncm_id, level, (match_started - started) * 1000,
                         (time.monotonic() - match_started) * 1000, reason, attempts)
-            raise cm_ncm.NcmError("官方音源未取得可用地址，灰色曲目匹配也未取得可验证的音频，请稍后重试") from None
+            raise PlaybackMatchError("官方音源未取得可用地址，灰色曲目匹配也未取得可验证的音频，请稍后重试") from None
         from_cache = False
     out.update(fromCache=from_cache, resolvedMs=int((time.monotonic() - started) * 1000), requestedLevel=level)
     return out
@@ -2823,7 +2827,7 @@ def route(handler, method):
             ("GET", "/ncmbind/likelist", "Bearer", "绑定账号红心列表 {ids}；refresh=1 强制同步，短期合并已成功写入但上游尚未收敛的红心意图"),
             ("GET", "/daily", "可选登录", "每日推荐"),
             ("GET", "/ncm/search", "公开", "网易云搜索代理，透传 NGINX 提供的用户 RealIP 并按用户 IP 隔离缓存；单曲首屏可含 catalogSongs（公开专辑精确匹配，不计入上游分页）。type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；失败通过 lyricContextStatus 明示。详见 /api-docs/reference/guide-search-catalog/ 与 /api-docs/reference/guide-search-lyrics-api/"),
-            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；自动音质在 supportsDolby=1 且未限制码率时优先选可用的杜比全景声；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败或仅有试听时自动匹配，QQ 首选音质失败后立即尝试备用音质，成功结果 level=matched 并附完整音频校验信息；详见 /api-docs/reference/guide-playback-sources/）"),
+            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；自动音质在 supportsDolby=1 且未限制码率时优先选可用的杜比全景声；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败或仅有试听时自动匹配，QQ 首选音质失败后立即尝试备用音质，成功结果 level=matched 并附完整音频校验信息；匹配失败返回 502 与 code=playback_match_failed；详见 /api-docs/reference/guide-playback-sources/）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
             ("GET", "/song/qualities", "公开", "歌曲音质文件资料（含沉浸声变体；不保证可播放）；详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/song/chorus", "公开", "播放器高潮（副歌）区间。按网易云歌曲 id 返回 segments，startMs/endMs 均为毫秒。没有区间时返回空数组。详见 /api-docs/reference/guide-song-insights-api/"),
@@ -4356,18 +4360,20 @@ def route(handler, method):
         level = q.get("level") or "auto"
         if level != "auto" and level not in VALID_LEVELS:
             level = "lossless"
-        out = resolve_play_url(
-            ncm_id, level,
-            immerse=q.get("immerse") or None,          # 仅 sky 生效：c51(5.1)/ste(环绕立体声)
-            # 把**真实用户 IP** 交给上游挑最近的 CDN 边缘节点。此前这条主路径没传
-            # （只有泛化转发传了），等于让上游按源站所在地选节点，高峰期表现为播放卡。
-            real_ip=cm_ncm_gateway.client_ip(handler),
-            max_br=q.get("maxBr") or q.get("maxbr") or 0,
-            refresh=_truthy(q.get("refresh")),
-            alts=_truthy(q.get("alts")),
-            want_host=(q.get("host") or "").strip(),
-            supports_dolby=_truthy(q.get("supportsDolby", "0")),
-        )
+        try:
+            out = resolve_play_url(
+                ncm_id, level,
+                immerse=q.get("immerse") or None,          # 仅 sky 生效：c51(5.1)/ste(环绕立体声)
+                # 把真实用户 IP 交给上游选择 CDN 边缘。
+                real_ip=cm_ncm_gateway.client_ip(handler),
+                max_br=q.get("maxBr") or q.get("maxbr") or 0,
+                refresh=_truthy(q.get("refresh")),
+                alts=_truthy(q.get("alts")),
+                want_host=(q.get("host") or "").strip(),
+                supports_dolby=_truthy(q.get("supportsDolby", "0")),
+            )
+        except PlaybackMatchError as e:
+            return jresp(handler, 502, {"error": str(e), "code": "playback_match_failed"})
         return jresp(handler, 200, out)
 
     # ---- 播放卡顿上报 / CDN 边缘健康度（v1.28.23） ----

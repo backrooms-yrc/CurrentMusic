@@ -109,7 +109,7 @@ window.__cmHttpDone = function (id, status, body) {
   let data = null;
   try { data = body ? JSON.parse(body) : null; } catch { data = { error: '响应解析失败' }; }
   if (status >= 200 && status < 300) p.resolve(data);
-  else p.reject(Object.assign(new Error((data && data.error) || `HTTP ${status}`), { status }));
+  else p.reject(Object.assign(new Error((data && data.error) || `HTTP ${status}`), { status, code: data?.code }));
 };
 
 async function rawRequest(method, url, headers, bodyStr, keepalive = false) {
@@ -125,7 +125,7 @@ async function rawRequest(method, url, headers, bodyStr, keepalive = false) {
   let data = null;
   try { data = await r.json(); } catch { /* 空体 */ }
   if (r.ok) return data;
-  throw Object.assign(new Error((data && data.error) || `HTTP ${r.status}`), { status: r.status });
+  throw Object.assign(new Error((data && data.error) || `HTTP ${r.status}`), { status: r.status, code: data?.code });
 }
 
 let onAuthExpired = null;

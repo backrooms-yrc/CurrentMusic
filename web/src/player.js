@@ -27,6 +27,13 @@ export function playLevel() {
 // 分析器档位（波形模块据此把 byte 还原成 dB 并做倾斜补偿）
 const MIN_DB = -110, MAX_DB = -10;
 
+// 旧版 iOS/iPadOS 的 Web Audio 图在静音模式或后台切换后可能无声，即使上下文仍在运行。
+const browserUA = navigator.userAgent;
+const mobileApple = /iPhone|iPad|iPod/.test(browserUA);
+const desktopIPad = /Macintosh/.test(browserUA) && navigator.maxTouchPoints > 1;
+const appleVersion = (mobileApple ? /\bOS (\d+)[_.]/ : /\bVersion\/(\d+)/).exec(browserUA);
+const nativeIOSAudio = (mobileApple || desktopIPad) && !!appleVersion && Number(appleVersion[1]) < 18;
+
 let audio = makeAudio();
 
 // Web Audio 分析器状态：analyser 非空即代表「可视化可用」
@@ -64,7 +71,7 @@ function resumeContext() {
 }
 
 function unlockAudio(event) {
-  if (!event.isTrusted) return;
+  if (nativeIOSAudio || !event.isTrusted) return;
   if (document.hidden && typeof window.NativeApi === 'undefined') return;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
@@ -139,7 +146,7 @@ function teardownGraph({ keepContext = false } = {}) {
 
 /** 建图：**只在确认音源 CORS 干净之后**调用（否则会把声音吞掉）。 */
 function buildGraph(el) {
-  if (analyser || vizDisabled) return false;
+  if (nativeIOSAudio || analyser || vizDisabled) return false;
   el = el || audio;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) { vizDisabled = true; return false; }
@@ -220,7 +227,7 @@ function loadUrl(url, pos) {
   corsPending = null;
   const host = hostOf(url);
   // 杜比交给系统直接输出，避免 Web Audio 图对声道重新混音。
-  const direct = player.urlInfo?.level === 'dolby' || !!(host && corsFailHosts[host]);
+  const direct = nativeIOSAudio || player.urlInfo?.level === 'dolby' || !!(host && corsFailHosts[host]);
   // 【危险路径防御】已知不支持 CORS 的域名 + 当前元素已挂音频图 → 必须**先换新元素**
   // 再普通加载。否则跨域污染的音源会让音频图输出静音，且**不会触发 error 事件**
   // （context.state 仍是 running，看门狗也发现不了）→ 表现为"歌在放但没声音"，
@@ -701,18 +708,22 @@ export const player = {
     if (better) info.url = better;
     loadUrl(info.url, pos);
     this.wantPlaying = true;
-    // 起播前攒少量余量（按实测速率 6~20s，硬上限 8s）——快速出声优先
+    // 匹配取址已经历远端校验，交给浏览器按可播放数据起播。旧 iOS 也可能在 play() 前不预载。
+    const startImmediately = nativeIOSAudio || info.level === 'matched' || info.level === 'unblock';
     emit('stalling', true);
-    const cur = info;
-    waitAhead(startTarget(), 8).then(async () => {
-      if (this._playRequest !== request || this.urlInfo !== cur || !this.starting) return;
-      const swap2 = swapLine(cur);           // 预缓冲期间探测完成：起播前就换到最优线
-      if (swap2) {
-        cur.url = swap2;
-        loadUrl(swap2, pos);
+    const isCurrent = () => this._playRequest === request && this.urlInfo === info && this.starting;
+    const startPlayback = async () => {
+      if (!startImmediately) {
         await waitAhead(startTarget(), 8);
-        if (this._playRequest !== request || this.urlInfo !== cur || !this.starting) return;
+        if (!isCurrent()) return;
+        const swap2 = swapLine(info);       // 预缓冲期间探测完成：起播前就换到最优线
+        if (swap2) {
+          info.url = swap2;
+          loadUrl(swap2, pos);
+          await waitAhead(startTarget(), 8);
+        }
       }
+      if (!isCurrent()) return;
       emit('stalling', false);
       if (this.wantPlaying) {
         const currentAudio = audio;
@@ -725,7 +736,8 @@ export const player = {
           toast('点击播放键开始播放');
         });
       }
-    });
+    };
+    startPlayback();
     emit('song');
     emit('state');
     this.report();

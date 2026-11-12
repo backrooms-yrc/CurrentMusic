@@ -1,7 +1,7 @@
 // 播放地址解析（阶段二）：三级回退，解决「地区受限 / 已下架」的曲目播放
 //
-//   1) 项目路由 /ncm/song/url —— 服务端按客户端能力并行探测音质
-//   2) /song/url/match        —— 解灰：从其它音源取直链（周杰伦等地区受限曲目的关键）
+//   1) 项目路由 /ncm/song/url —— 服务端按客户端能力并行探测音质，必要时匹配
+//   2) /song/url/match        —— 兼容旧服务端
 //   3) /song/url              —— 老接口，兜底
 //   4) /check/music           —— 都失败时判断「是版权不可播还是网络问题」，给出准确文案
 import { network, sourceIdentity } from './network.js';
@@ -89,20 +89,26 @@ async function resolveCurrentMusicUrl(meta, level, immerse, opts) {
       autoDolby: level === 'auto' && options.supportsDolby && info.level === 'dolby',
     });
     lastErr = new Error('该音质档位无可用地址');
-  } catch (e) { lastErr = e; }
+  } catch (e) {
+    if (e.status === 401) throw e;
+    lastErr = e;
+  }
 
-  // 2) 解灰：地区受限/下架曲目从其它音源取直链
-  try {
-    const d = await api.ncm('/song/url/match', { id });
-    const url = pickUrl(d);
-    if (url) return { url, type: 'mp3', level: 'unblock' };
-  } catch { /* 解灰服务不可用时继续兜底 */ }
+  // 2) 旧服务端兼容：主路径已尝试匹配时，跳过这次耗时的重复请求。
+  if (lastErr?.code !== 'playback_match_failed') {
+    try {
+      const d = await api.ncm('/song/url/match', { id });
+      const url = pickUrl(d);
+      if (url) return { url, type: 'mp3', level: 'unblock' };
+    } catch { /* 解灰服务不可用时继续兜底 */ }
+  }
 
   // 3) 老接口兜底
   try {
     const d = await api.ncm('/song/url', { id, br: 320000 });
     const url = pickUrl(d);
-    if (url) return { url, type: (d && d.type) || 'mp3', level: 'legacy' };
+    const song = Array.isArray(d?.data) ? d.data[0] : d?.data || d;
+    if (url && !song?.freeTrialInfo) return { url, type: song?.type || 'mp3', level: 'legacy' };
   } catch { /* 继续 */ }
 
   // 4) 明确失败原因：能区分「版权不可播」与「网络/上游异常」

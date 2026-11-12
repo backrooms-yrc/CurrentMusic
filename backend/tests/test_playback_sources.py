@@ -164,11 +164,14 @@ class PlaybackSourceTests(unittest.TestCase):
             match.assert_not_called()
 
     def test_match_failure_is_retryable_and_not_cached(self):
+        token = self.token()
         with mock.patch.object(cm_server, '_resolve_official_play_url', side_effect=cm_ncm.NcmError('no URL')), \
              mock.patch.object(cm_ncm, 'song_url_match', side_effect=cm_ncm.NcmError('temporary')) as match:
             for _ in range(2):
-                with self.assertRaisesRegex(cm_ncm.NcmError, '请稍后重试'):
-                    cm_server.resolve_play_url(1, real_ip=IP_A)
+                status, out = self.call('GET', '/ncm/song/url?id=1', token=token, ip=IP_A)
+                self.assertEqual(status, 502)
+                self.assertEqual(out['code'], 'playback_match_failed')
+                self.assertIn('请稍后重试', out['error'])
             self.assertEqual(match.call_count, 2)
 
     def test_match_failure_logs_only_known_codes_from_upstream(self):

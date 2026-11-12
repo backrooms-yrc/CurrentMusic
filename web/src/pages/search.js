@@ -39,6 +39,12 @@ const searchResultSkeleton = (n = 6) => `<div class="cm-search-result-skeleton" 
   <div class="cm-skel-list">${Array.from({ length: n }, () => `<div class="cm-skel-song"><div class="sk sk-pic"></div><div class="cm-skel-main"><div class="sk sk-l1"></div><div class="sk sk-l2"></div></div></div>`).join('')}</div>
 </div>`;
 
+const suggestionSkeleton = `<div class="cm-sug cm-skeleton" role="status" aria-label="搜索候选加载中">
+  ${[110, 155, 95].map(width => `<div class="cm-sug-item" aria-hidden="true">
+    <span class="sk cm-sug-placeholder-icon"></span><span class="sk cm-sug-placeholder-text" style="width:${width}px"></span>
+  </div>`).join('')}
+</div>`;
+
 const panelLoading = () => '<div class="cmt-more-loading"><mdui-circular-progress></mdui-circular-progress> 加载中…</div>';
 const playSong = (songs, index) => player.playList(songs, index, { shuffleStart: false });
 
@@ -67,7 +73,9 @@ export async function render(el, params = []) {
              <input id="kw" type="search" placeholder="搜索歌曲 / 歌手 / 专辑" maxlength="100" enterkeyhint="search" autocomplete="off" spellcheck="false" aria-label="搜索歌曲 / 歌手 / 专辑">
            </label>`
         : `<mdui-text-field id="kw" label="搜索歌曲 / 歌手 / 专辑" variant="outlined" maxlength="100" enterkeyhint="search" clearable></mdui-text-field>`}
-      <button type="submit" class="cm-search-go">搜索</button>
+      <mdui-button type="submit" variant="filled"${reduceMotion() ? ' no-ripple' : ''}>
+        <span slot="icon" class="material-icons-outlined" aria-hidden="true">search</span>搜索
+      </mdui-button>
     </form>
     <div id="sugBox"></div>
     <div id="histBox"></div>
@@ -597,9 +605,10 @@ export async function render(el, params = []) {
     if (composing || e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') { e.preventDefault(); submitSearch(); }
     if (e.key === 'Escape') hideSuggestions();
-    if (e.key === 'ArrowDown' && sugBox.firstElementChild) {
+    const first = e.key === 'ArrowDown' && sugBox.querySelector('button');
+    if (first) {
       e.preventDefault();
-      sugBox.querySelector('button').focus();
+      first.focus();
     }
   });
 
@@ -614,6 +623,7 @@ export async function render(el, params = []) {
     hideSuggestions();
     const my = sugSeq;
     const isCurrent = () => my === sugSeq && el.isConnected && (input.value || '').trim() === kw;
+    sugBox.innerHTML = suggestionSkeleton;
     sugTimer = setTimeout(async () => {
       try {
         const mobile = await api.searchSuggest(kw).catch(() => null);
@@ -623,11 +633,12 @@ export async function render(el, params = []) {
           const pc = await api.ncm('/search/suggest/pc', { keyword: kw });
           words = (pc?.data?.suggests || []).map(x => x.keyword).filter(Boolean);
         }
-        if (!isCurrent() || !words.length) return;
+        if (!isCurrent()) return;
+        if (!words.length) { hideSuggestions(); return; }
         words = [...new Set(words)].slice(0, 10);
         sugBox.innerHTML = `<div class="cm-sug" role="group" aria-label="搜索候选">${words.map(w =>
           `<button type="button" class="cm-sug-item" data-k="${esc(w)}" aria-label="搜索 ${esc(w)}">` +
-          `<span class="material-icons-outlined">search</span><span class="k">${esc(w)}</span></button>`).join('')}</div>`;
+          `<span class="material-icons-outlined" aria-hidden="true">search</span><span class="k">${esc(w)}</span></button>`).join('')}</div>`;
         sugBox.querySelectorAll('[data-k]').forEach(c => {
           c.onclick = () => doSearch(c.dataset.k);
           c.onkeydown = e => {
@@ -639,7 +650,7 @@ export async function render(el, params = []) {
             }
           };
         });
-      } catch { if (isCurrent()) sugBox.innerHTML = ''; }
+      } catch { if (isCurrent()) hideSuggestions(); }
     }, 300);
   }
 

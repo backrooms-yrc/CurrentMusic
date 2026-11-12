@@ -79,9 +79,13 @@ UNM 聚合源按单个原生音源分别校验，防止很短的提示音先赢�
 `type`、`br`、`size`、`sr`、`bits`、`ch` 仅填写实际可验证的文件信息；未知值为空或 0。
 响应还包含 `durationMs`、`expectedDurationMs`、`matchSource`。
 匹配接口不保证请求的音质或 `maxBr` 上限，不能把它标成无损、母带或沉浸声。
-Web 显示“匹配音源”。第三方地址不参与网易云 CDN 边缘替换。
+Web 显示“匹配音源”。拿到匹配地址后立即请求播放，由浏览器根据可用数据起播。第三方地址不参与网易云 CDN 边缘替换。
 成功结果按用户 IP 缓存 120 秒，`refresh=1` 会重新解析；失败不缓存。
 原有官方音源失败缓存不会阻止匹配接口重试。
+
+官方取址和匹配均失败时，`GET /cm/ncm/song/url` 返回 HTTP 502，响应包含
+`code: "playback_match_failed"` 和可展示的 `error`。收到此错误码后，网页跳过重复的
+`/cm/ncm/song/url/match` 请求，仍可尝试旧版官方取址接口。用户也可重新发起播放。
 
 上游 `/song/url/match` 保留 `data: URL` 与 `proxyUrl` 字段，并增加 `matchInfo`：
 `validated: true`、`validationVersion: 1`、实际格式与时长等。所有来源失败时返回 HTTP 502，
