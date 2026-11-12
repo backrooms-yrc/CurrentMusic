@@ -48,6 +48,9 @@ func (a *prototype) openCloudPage(page int) {
 		a.cloud.loadRecent()
 	case cloudRoomsPage:
 		a.cloud.loadRooms("public", false)
+	case cloudDrivePage:
+		a.cloud.drive.tab = "drive"
+		a.cloud.loadDrive(false)
 	}
 }
 
@@ -56,7 +59,7 @@ func (a *prototype) cloudNavigation(c *ui.Context, wide bool) {
 		title string
 		page  int
 		icon  *ui.SVG
-	}{{"发现音乐", cloudDiscoverPage, searchIcon}, {"一起听", cloudRoomsPage, queueIcon}, {"社区", cloudCommunityPage, accountIcon}, {"我的喜欢", cloudLikesPage, heartIcon}, {"云端歌单", cloudPlaylistsPage, playlistIcon}, {"最近播放", cloudRecentPage, playIcon}, {"演示曲库", demoPage, libraryIcon}}
+	}{{"发现音乐", cloudDiscoverPage, searchIcon}, {"一起听", cloudRoomsPage, queueIcon}, {"社区", cloudCommunityPage, accountIcon}, {"我的喜欢", cloudLikesPage, heartIcon}, {"云端歌单", cloudPlaylistsPage, playlistIcon}, {"最近播放", cloudRecentPage, playIcon}, {"音乐云盘", cloudDrivePage, libraryIcon}, {"演示曲库", demoPage, libraryIcon}}
 	if !wide {
 		navItem(c, playlistIcon, "我的曲库", false, a.page >= cloudLikesPage).Menu(func(m *ui.Menu) {
 			for _, item := range pages {
@@ -198,7 +201,7 @@ func (a *prototype) cloudPage(c *ui.Context, w float32, compact bool) {
 	s := a.cloud
 	if a.page != libraryPage && a.page != cloudDiscoverPage && a.page != cloudCommunityPage && s.user.ID == 0 {
 		sectionHeading(c, "我的曲库", "", "", compact)
-		ui.Text(c, "登录后可查看喜欢和云端歌单。")
+		ui.Text(c, "登录后可查看个人曲库与云盘。")
 		if labelButton(c, "前往登录", 92, true).Clicked() {
 			a.page = settingsPage
 		}
@@ -208,6 +211,9 @@ func (a *prototype) cloudPage(c *ui.Context, w float32, compact bool) {
 	switch a.page {
 	case cloudCommunityPage:
 		a.cloudCommunityPage(c, compact)
+	case cloudDrivePage:
+		a.cloudDrivePage(c, compact)
+		return
 	case cloudRoomsPage:
 		a.cloudRoomsPage(c, compact)
 	case cloudRoomPage:

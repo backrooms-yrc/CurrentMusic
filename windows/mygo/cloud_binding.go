@@ -17,9 +17,12 @@ import (
 )
 
 type cloudBinding struct {
-	Bound         bool
-	Valid         *bool
-	Profile       struct{ Nickname string }
+	Bound   bool
+	Valid   *bool
+	Profile struct {
+		Nickname string
+		UID      driveNumber
+	}
 	LastSyncCount int
 }
 
@@ -38,6 +41,9 @@ func (s *cloudLibrary) loadBinding() {
 		err := api.call(ctx, http.MethodGet, "/ncmbind/session", true, nil, &result)
 		return result, err
 	}, func(result cloudBinding) {
+		if s.drive.uid > 0 && (!result.Bound || s.drive.uid != result.Profile.UID) {
+			s.drive = cloudDriveState{}
+		}
 		s.binding.state, s.binding.loaded = result, true
 	})
 }
@@ -130,6 +136,7 @@ func (s *cloudLibrary) pollBindingQR(key string) {
 						s.binding.qrNotice = "请在手机上确认"
 					case result.Code == 803:
 						s.stopBindingQR()
+						s.drive = cloudDriveState{}
 						s.binding.qrNotice = "已完成网易云绑定"
 						s.loadBinding()
 					default:
@@ -162,6 +169,9 @@ func (s *cloudLibrary) bindingWrite(method, endpoint string, body any, notice st
 		err := api.call(ctx, method, endpoint, true, body, nil)
 		return struct{}{}, api.bindingError(ctx, err)
 	}, func(struct{}) {
+		if endpoint == "/ncmbind/phone/login" || endpoint == "/ncmbind" && method == http.MethodDelete {
+			s.drive = cloudDriveState{}
+		}
 		if done != nil {
 			done()
 		}

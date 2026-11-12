@@ -149,7 +149,7 @@ func TestNativeLibraryAndRoomsAgainstCurrentMusicGateway(t *testing.T) {
 	guest.community.chatDraft = "临时聊天室验收"
 	guest.sendChat()
 	wait(func() bool {
-		return len(owner.community.chat) == 1 && owner.community.chat[0].UserID == guest.user.ID
+		return !guest.busy && len(owner.community.chat) == 1 && owner.community.chat[0].UserID == guest.user.ID
 	})
 	guest.community.postDraft = "临时动态验收"
 	guest.postText(0)
@@ -157,7 +157,7 @@ func TestNativeLibraryAndRoomsAgainstCurrentMusicGateway(t *testing.T) {
 	owner.loadPosts(false)
 	wait(func() bool { return !owner.busy })
 	if len(owner.community.posts) != 1 || owner.community.posts[0].Author.ID != guest.user.ID {
-		t.Fatal("the other account could not read the published post")
+		t.Fatalf("the other account could not read the published post: sender=%q reader=%q", guest.notice, owner.notice)
 	}
 	t.Log("the temporary gateway delivered chat and post changes to the other account")
 }

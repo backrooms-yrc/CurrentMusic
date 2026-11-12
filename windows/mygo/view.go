@@ -29,6 +29,7 @@ const (
 	cloudRoomsPage
 	cloudRoomPage
 	cloudCommunityPage
+	cloudDrivePage
 	dockWidth  = 1080
 	barHeight  = 82
 	shellInset = 8

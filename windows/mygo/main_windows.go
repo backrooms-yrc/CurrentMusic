@@ -98,6 +98,20 @@ func (a *validationApp) start(width, height int) {
 	a.cloud.saveFile = func(name string) (string, error) {
 		return mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: a.window, Title: "保存歌曲", DefaultPath: name})
 	}
+	a.cloud.openAudioFile = func(legacy bool) (string, error) {
+		extensions := []string{"mp3", "m4a", "aac", "wav"}
+		if !legacy {
+			extensions = append(extensions, "flac", "ogg", "opus", "ape")
+		}
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{
+			Parent: a.window, Title: "选择要上传的音频文件",
+			Filters: []mygo.FileFilter{{Name: "音频文件", Extensions: extensions}},
+		})
+		if err != nil || len(paths) == 0 {
+			return "", err
+		}
+		return paths[0], nil
+	}
 	a.cloud.roomTimelineChanged = a.receiveRoomTimeline
 	a.outbox = newListenOutbox(outboxPath)
 	listenCtx, stopListen := context.WithCancel(context.Background())

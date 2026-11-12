@@ -112,6 +112,30 @@ func TestCapturePlaybackPreview(t *testing.T) {
 	captureNativeView(t, a, filepath.Join(out, "playback-queue-minimum.png"), minWindowWidth, minWindowHeight)
 }
 
+func TestCaptureCloudDrivePreview(t *testing.T) {
+	out := os.Getenv("CURRENTMUSIC_NATIVE_CAPTURE_DIR")
+	if out == "" {
+		t.Skip("set CURRENTMUSIC_NATIVE_CAPTURE_DIR to capture a native window")
+	}
+	if err := os.MkdirAll(out, 0700); err != nil {
+		t.Fatal(err)
+	}
+	a := newPrototype()
+	a.cloud = &cloudLibrary{user: cloudUser{ID: 1}, openAudioFile: func(bool) (string, error) { return "", nil }}
+	a.page, a.appearance = cloudDrivePage, darkTheme
+	a.position, a.duration, a.seekable = 0, 0, false
+	a.cloud.drive = cloudDriveState{
+		uid: 1, loaded: true, count: 2, used: 18525948, quota: 20 << 30,
+		tracks: []driveTrack{
+			{SongID: 1, SongName: "沿着夜色走到海边，等潮汐把一封没有寄出的长信带回岸上", Artist: "白岛", FileSize: 14680064},
+			{SongID: 2, SongName: "海面来信", Artist: "南岸电台", FileSize: 3845884},
+		},
+	}
+	captureNativeView(t, a, filepath.Join(out, "cloud-drive-dark.png"), 1200, 760)
+	a.appearance = lightTheme
+	captureNativeView(t, a, filepath.Join(out, "cloud-drive-light-minimum.png"), minWindowWidth, minWindowHeight)
+}
+
 func TestCaptureUIRefresh(t *testing.T) {
 	out := os.Getenv("CURRENTMUSIC_NATIVE_CAPTURE_DIR")
 	if out == "" {

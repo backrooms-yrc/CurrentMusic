@@ -37,6 +37,7 @@ type cloudLibrary struct {
 	code                string
 	account             cloudAccountPanel
 	binding             cloudBindingPanel
+	drive               cloudDriveState
 	rooms               cloudRooms
 	community           cloudCommunity
 	serverInput         string
@@ -47,6 +48,7 @@ type cloudLibrary struct {
 	dispatch            func(func())
 	openBrowser         func(string) error
 	saveFile            func(string) (string, error)
+	openAudioFile       func(bool) (string, error)
 	copyText            func(string) error
 	cancelPasskey       context.CancelFunc
 	credentials         sessionCredentials
@@ -116,6 +118,7 @@ func (s *cloudLibrary) reset(base string) {
 	s.user, s.challenge = cloudUser{}, cloudLogin{}
 	s.account = cloudAccountPanel{}
 	s.binding = cloudBindingPanel{}
+	s.drive = cloudDriveState{}
 	s.rooms = cloudRooms{}
 	s.community = cloudCommunity{}
 	s.identity, s.secret, s.code, s.notice, s.busy = "", "", "", "", false

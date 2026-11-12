@@ -68,4 +68,26 @@ python tools/test-api-docs.py
 
 当前原生 EXE 和媒体桥位于 `windows/artifacts/mygo-parity/current/`。测试签名 MSI 和 SHA-256 位于同级的 `current-msi/`。隔离安装通过全新安装、真实旧包升级、回滚、修复、降级阻止和卸载，安装后独立启动留待干净验收机。
 
-正式回执仍缺少冻结清单要求的端到端证据。已绑定真实账号的同步、Windows Hello、Web 与 Windows 双端音频联调，以及云盘、视频、均衡器、完整分享与社区媒体操作等流程仍需实现或验收。发布还需要干净的 Windows 11 25H2 x64、稳定音频端点下两小时实播和可信时间戳签名。
+正式回执仍缺少冻结清单要求的端到端证据。已绑定真实账号的同步、Windows Hello、Web 与 Windows 双端音频联调，以及视频、均衡器、完整分享与社区媒体操作等流程仍需实现或验收。发布还需要干净的 Windows 11 25H2 x64、稳定音频端点下两小时实播和可信时间戳签名。
+
+## 第三阶段音乐云盘
+
+- MyGo 的「音乐云盘」提供容量、分页、曲目详情、歌词、下载、纠正匹配、删除和导入，以及个人电台和音频列表。文件选择与另存使用 Windows 原生对话框。
+- 上传支持按 MD5 申请令牌、通过 HTTPS 直传、登记入库，以及 1400 KiB 以内的旧接口。登记未确认时可重试该步骤。上传令牌仅发往对象存储，CurrentMusic Bearer 仅发往 API 网关。云盘页面和待入库资料随 CurrentMusic 会话切换清除，重试前核对网易云绑定 UID。
+- Windows 11 24H2 x64 上通过 Go 回归、`go vet`、原生 EXE 和 WinRT 桥构建。TLS 测试覆盖直传、入库重试、重复文件跳过直传、绑定变化时拒绝重试、拒绝重定向和旧接口文件体。原生捕获使用模拟曲目，包含深色宽窗和浅色最小窗。
+- WinRT 回环 HTTP Range 实测 MP3、44.1 kHz FLAC、96 kHz FLAC 和 AAC/M4A。MP3 与两种 FLAC 各 20 次 Seek，三组 P95 均为 850 毫秒，最大误差为 70 毫秒。AAC/M4A 两次 Seek 的 P95 为 799 毫秒，最大误差为 0 毫秒。正式 HTTPS 样本、真实网易云绑定账号的云盘写入与 Web 读回仍待验收。此次回归未登记为端到端通过。
+
+~~~powershell
+$artifact = Join-Path $PWD 'windows/artifacts/mygo-parity/media-stage'
+./windows/mygo/build.ps1 -Output $artifact
+go -C windows/mygo test -mod=readonly -count=1 -v -run '^TestCloudDrive'
+$env:CURRENTMUSIC_NATIVE_CAPTURE_DIR = Join-Path $artifact 'native'
+go -C windows/mygo test -mod=readonly -count=1 -v -run '^TestCapture(CloudDrivePreview|UIRefresh)$'
+Remove-Item Env:CURRENTMUSIC_NATIVE_CAPTURE_DIR
+go -C windows/mygo test -mod=readonly -c -o (Join-Path $artifact 'CurrentMusic.MediaProbe.test.exe')
+$env:CURRENTMUSIC_MEDIA_FIXTURE_DIR = (Resolve-Path 'windows/artifacts/mygo-fixtures').Path
+& (Join-Path $artifact 'CurrentMusic.MediaProbe.test.exe') '-test.run=^TestWindowsMediaFixtures$' '-test.v=true' '-test.timeout=4m'
+Remove-Item Env:CURRENTMUSIC_MEDIA_FIXTURE_DIR
+~~~
+
+构建与截图位于 `windows/artifacts/mygo-parity/media-stage/`。用独立网易云账号验收时，上传自有样本，分别在 Windows 和 Web 刷新列表，核对详情、歌词、下载文件、导入和匹配结果，再删除样本并从两端确认移除。电台与音频列表使用含有对应内容的账号核对。
