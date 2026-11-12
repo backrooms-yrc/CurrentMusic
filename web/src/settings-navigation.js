@@ -22,7 +22,7 @@ const CATEGORIES = [
   ] },
   { id: 'about', title: '关于与帮助', icon: 'info', description: '版本更新、使用引导与服务协议', groups: [
     { id: 'app', title: '版本与应用', description: '检查更新、下载应用和查看运行环境', items: ['checkUpd', 'dlApk', 'engine'] },
-    { id: 'help', title: '引导与协议', description: '重新了解 CurrentMusic 与服务规则', items: ['replayWelcome', 'privacyPolicy', 'userTerms'] },
+    { id: 'help', title: '引导与协议', description: '重新了解 CurrentMusic 与服务规则', items: ['replayWelcome', 'donateEntry', 'privacyPolicy', 'userTerms'] },
   ] },
 ];
 const ALIASES = {
@@ -40,6 +40,7 @@ const ALIASES = {
   sqPublic: '隐私 发现 广场 公开 隐藏', server: '服务器 线路 API 域名 URL 地址', secure: 'HTTPS HTTP 安全 连接',
   checkUpd: '升级 版本 更新 update', dlApk: '安卓 Android APK 安装', engine: '浏览器 内核 Chromium WebView 兼容',
   replayWelcome: '重新观看引导 新手 教程 欢迎 入门 onboarding', privacyPolicy: '隐私 政策 数据 个人信息', userTerms: '协议 条款 服务',
+  donateEntry: '捐赠 赞助 支持 打赏 donation sponsor',
 };
 
 /** Move existing controls without cloning, so handlers and async status updates stay intact. */
