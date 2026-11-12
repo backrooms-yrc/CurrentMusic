@@ -210,7 +210,8 @@ def post_json(path, payload, cookie=None, timeout=10.0, real_ip=None):
         raise NcmError(f"NCM 上游请求失败: {e}")
 
 
-PLAYBACK_DEVICE_NAMES = {"web": "CurrentMusic Web", "x": "CurrentMusicX", "app": "CurrentMusic"}
+PLAYBACK_DEVICE_NAMES = {"web": "CurrentMusic Web", "x": "CurrentMusicX", "app": "CurrentMusic",
+                         "windows": "CurrentMusic Windows"}
 
 
 def playback_device_cookie(cookie, client):

@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS plays (
   -- 领取网易云同步后置 1，失败时放回。
   ncm_synced INTEGER DEFAULT 0,
   playback_client TEXT NOT NULL DEFAULT '',
+  client_play_id TEXT,
   ncm_playback_uid INTEGER NOT NULL DEFAULT 0,
   ncm_plv_reported INTEGER NOT NULL DEFAULT 0,
   ncm_reported_seconds INTEGER NOT NULL DEFAULT 0,
@@ -475,6 +476,9 @@ def init():
         conn.execute("ALTER TABLE plays ADD COLUMN ncm_synced INTEGER DEFAULT 0")
     if "playback_client" not in pcols:
         conn.execute("ALTER TABLE plays ADD COLUMN playback_client TEXT NOT NULL DEFAULT ''")
+    if "client_play_id" not in pcols:
+        conn.execute("ALTER TABLE plays ADD COLUMN client_play_id TEXT")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS plays_client_key ON plays(user_id, client_play_id)")
     for column in ("ncm_playback_uid", "ncm_plv_reported", "ncm_reported_seconds", "ncm_finished"):
         if column not in pcols:
             conn.execute(f"ALTER TABLE plays ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
@@ -493,11 +497,11 @@ def init():
 
 # ---------- 歌曲元数据 ----------
 
-def upsert_song(meta):
+def upsert_song(meta, *, _conn=None):
     """meta: {ncm_id,name,artists,album,pic,duration,pop,fee}，字段尽量保留旧值。"""
     if not isinstance(meta, dict) or not meta.get("ncm_id") or not meta.get("name"):
         return False
-    conn = connect()
+    conn = _conn if _conn is not None else connect()
     try:
         row = conn.execute("SELECT * FROM songs WHERE ncm_id=?", (int(meta["ncm_id"]),)).fetchone()
         if row:
@@ -530,10 +534,12 @@ def upsert_song(meta):
                     int(time.time()),
                 ),
             )
-        conn.commit()
+        if _conn is None:
+            conn.commit()
         return True
     finally:
-        conn.close()
+        if _conn is None:
+            conn.close()
 
 
 def upsert_songs_many(metas):
@@ -1831,12 +1837,30 @@ def record_play(uid, ncm_id, *, playback_client=""):
     注意：**不再删除同曲旧记录**——旧实现只保留每首歌最后一条，导致"同一首听 100 遍"
     与"听 1 遍"记的量完全相同（虚低）。历史列表按 GROUP BY 取最新时间，不会重复展示。
     """
+    play_id, _ = record_play_start(uid, ncm_id, playback_client, None)
+    return play_id
+
+
+def record_play_start(uid, ncm_id, playback_client, client_play_id, *, meta=None):
+    """Return (rowid, created). A key reused for a different play returns (None, False)."""
     conn = connect()
     try:
-        cur = conn.execute("INSERT INTO plays(user_id,ncm_id,played_at,ms,playback_client) VALUES(?,?,?,0,?)",
-                           (uid, ncm_id, int(time.time()), playback_client))
+        row = conn.execute(
+            "INSERT INTO plays(user_id,ncm_id,played_at,ms,playback_client,client_play_id) VALUES(?,?,?,0,?,?) "
+            "ON CONFLICT(user_id,client_play_id) DO NOTHING RETURNING rowid",
+            (uid, ncm_id, int(time.time()), playback_client, client_play_id),
+        ).fetchone()
+        existing = None if row else conn.execute(
+            "SELECT rowid FROM plays WHERE user_id=? AND client_play_id=? AND ncm_id=? AND playback_client=?",
+            (uid, client_play_id, ncm_id, playback_client),
+        ).fetchone()
+        if row:
+            if meta is not None:
+                upsert_song(meta, _conn=conn)
+            conn.commit()
+            return row["rowid"], True
         conn.commit()
-        return cur.lastrowid
+        return existing["rowid"] if existing else None, False
     finally:
         conn.close()
 
@@ -1911,7 +1935,7 @@ def prepare_web_play_sync(uid, ncm_id, play_id, ncm_uid, finished):
         # Adopt pre-upgrade plays only if they have never been sent by the old one-shot path.
         cur = conn.execute(
             "UPDATE plays SET ncm_playback_uid=?, ncm_finished=MAX(ncm_finished, ?) "
-            "WHERE rowid=? AND user_id=? AND ncm_id=? AND playback_client IN ('web', '') "
+            "WHERE rowid=? AND user_id=? AND ncm_id=? AND playback_client IN ('web', 'windows', '') "
             "AND COALESCE(ncm_synced,0)=0 AND ncm_playback_uid IN (0, ?)",
             (ncm_uid, int(finished), play_id, uid, ncm_id, ncm_uid),
         )
@@ -1925,7 +1949,7 @@ def web_play_sync_candidate(play_id, ncm_uid):
     conn = connect()
     try:
         play = conn.execute(
-            "SELECT p.ms, p.ncm_plv_reported, p.ncm_reported_seconds, p.ncm_finished, s.duration "
+            "SELECT p.ms, p.ncm_plv_reported, p.ncm_reported_seconds, p.ncm_finished, p.playback_client, s.duration "
             "FROM plays p LEFT JOIN songs s ON s.ncm_id=p.ncm_id "
             "WHERE p.rowid=? AND p.ncm_playback_uid=? AND COALESCE(p.ncm_synced,0)=0",
             (play_id, ncm_uid),

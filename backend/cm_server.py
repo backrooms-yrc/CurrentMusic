@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cm_cast
 import cm_2fa
 import cm_passkeys
+import cm_windows_auth
 import cm_db
 import cm_decor
 import cm_lddc
@@ -92,6 +93,8 @@ _auth_lock = threading.Lock()
 _auth_buckets = defaultdict(deque)
 _AUTH_LIMIT, _AUTH_WINDOW = 30, 60.0
 _AUTH_PATHS = {
+    "/auth/windows/options", "/auth/windows/verify", "/auth/windows/exchange",
+    "/auth/windows/enroll/request", "/auth/windows/enroll/options", "/auth/windows/enroll/verify",
     "/auth/passkeys/register/options", "/auth/passkeys/register/verify",
     "/auth/passkeys/login/options", "/auth/passkeys/login/verify", "/auth/passkeys/delete",
     "/auth/login", "/auth/login/email", "/auth/login/email/code",
@@ -630,7 +633,7 @@ def _sync_web_play_segment(uid, ncm_id, play_id, ncm_uid):
     binding = cm_db.get_binding(uid) or {}
     if binding.get("ncm_uid") != ncm_uid or not binding.get("cookie") or binding.get("stale"):
         return
-    cookie = cm_ncm.playback_device_cookie(binding["cookie"], "web")
+    cookie = cm_ncm.playback_device_cookie(binding["cookie"], play["playback_client"] or "web")
     target = play["target_seconds"]
     delta = target - play["ncm_reported_seconds"]
     total = ((play["duration"] or 0) + 999) // 1000 or target
@@ -1249,12 +1252,14 @@ def jresp(handler, code, obj, cache_control=None, extra_headers=None):
     handler.wfile.write(body)
 
 
-def hresp(handler, code, html):
+def hresp(handler, code, html, extra_headers=None, cache_control="no-cache"):
     """HTML 响应（通行证文档页等；不缓存，避免发版后仍看到旧文档）。"""
     body = html.encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "text/html; charset=utf-8")
-    handler.send_header("Cache-Control", "no-cache")
+    handler.send_header("Cache-Control", cache_control)
+    for name, value in (extra_headers or {}).items():
+        handler.send_header(name, value)
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -2347,6 +2352,35 @@ def route(handler, method):
         log.info("注册用户 uid=%s name=%s verify=%s ip=%s", uid, username, "phone" if phone else "email", ip)
         return jresp(handler, 200, {"token": token, "user": public_user(cm_db.get_user(uid))})
 
+    if path.startswith("/auth/windows/"):
+        try:
+            if path in ("/auth/windows/authorize", "/auth/windows/enroll") and method == "GET":
+                policy = f"default-src 'none'; script-src 'sha256-{cm_windows_auth.SCRIPT_HASH}'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+                html = cm_windows_auth.HTML if path.endswith("/authorize") else cm_windows_auth.ENROLL_HTML
+                return hresp(handler, 200, html,
+                             extra_headers={"Content-Security-Policy": policy},
+                             cache_control="no-store")
+            if method == "POST":
+                origin = handler.headers.get("Origin", "")
+                if path == "/auth/windows/options":
+                    return jresp(handler, 200, cm_windows_auth.begin(origin, body), cache_control="no-store")
+                if path == "/auth/windows/verify":
+                    return jresp(handler, 200, cm_windows_auth.finish(origin, body), cache_control="no-store")
+                if path == "/auth/windows/exchange":
+                    result = cm_windows_auth.exchange(body)
+                    cm_region.note(result["uid"], ip)
+                    user = public_user(cm_db.get_user(result["uid"]))
+                    return jresp(handler, 200, {"token": result["token"], "user": user}, cache_control="no-store")
+                if path == "/auth/windows/enroll/request":
+                    result = cm_windows_auth.request_enrollment(require_user(handler), body)
+                    return jresp(handler, 200, result, cache_control="no-store")
+                if path in ("/auth/windows/enroll/options", "/auth/windows/enroll/verify"):
+                    result = cm_windows_auth.enrollment(origin, body, verify=path.endswith("/verify"))
+                    return jresp(handler, 200, result, cache_control="no-store")
+            raise ApiError(404, "接口不存在")
+        except cm_windows_auth.Error as e:
+            raise ApiError(e.status, str(e))
+
     if path.startswith("/auth/passkeys"):
         try:
             origin = handler.headers.get("Origin", "")
@@ -2716,6 +2750,14 @@ def route(handler, method):
             ('POST', '/auth/passkeys/login/options', '公开', '通行密钥登录选项 {platform?} → {challengeToken,expiresIn,publicKey}；支持获准的 HTTPS 与 Android APK 签名 Origin，强制用户验证'),
             ('POST', '/auth/passkeys/login/verify', '公开', '{challengeToken,credential,device,platform}；校验挑战绑定的 Origin、RP ID 及签名，成功返回 {token,user}，无需额外 2FA 或密保'),
             ('POST', '/auth/passkeys/delete', 'Bearer', '撤销 {id,password,factor}；须密码及已启用的二次验证'),
+            ('GET', '/auth/windows/authorize', '公开', 'Windows 同源通行密钥登录页面'),
+            ('POST', '/auth/windows/options', '公开', '验证回环回调、state 和 PKCE S256 后取得 WebAuthn 挑战'),
+            ('POST', '/auth/windows/verify', '公开', '验证 WebAuthn 并返回仅可由 Windows 客户端兑换的短期授权码'),
+            ('POST', '/auth/windows/exchange', '公开', '使用同一来源、state、回调及 PKCE verifier 一次性兑换 Windows 会话'),
+            ('GET', '/auth/windows/enroll', '公开', 'Windows 同源通行密钥绑定页面'),
+            ('POST', '/auth/windows/enroll/request', 'Bearer', '验证当前密码与二次验证后创建会话绑定票据'),
+            ('POST', '/auth/windows/enroll/options', '公开', '使用绑定票据读取创建选项'),
+            ('POST', '/auth/windows/enroll/verify', '公开', '完成通行密钥绑定并消耗票据'),
             ("GET", "/auth/security-question", "Bearer", "登录密保状态：{enabled, question, twoFactorEnabled}；不返回答案或哈希"),
             ("POST", "/auth/security-question", "Bearer", "开启密保 {password,question,answer}；与验证器 2FA 互斥；验证当前密码并下线其他设备"),
             ("DELETE", "/auth/security-question", "Bearer", "关闭密保 {password,answer}；需当前密码和原答案，下线其他设备"),
@@ -2815,7 +2857,8 @@ def route(handler, method):
             ("POST", "/posts", "Bearer", "发布动态"),
             ("POST", "/posts/{id}/like", "Bearer", "点赞动态"),
             ("GET", "/plays/recent", "Bearer", "最近播放"),
-            ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId，platform 可选 web/x/app；上报 {playId,totalMs,finished}，Web 播放中增量同步，结束时补报尾段；兼容旧版 ms 增量"),
+            ("GET", "/plays/capabilities", "公开", "返回 {clientPlayId:true}，供支持重试的客户端检查服务端兼容性"),
+            ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId，可用 clientPlayId 幂等重试；platform 可选 web/x/app/windows；上报 {playId,totalMs,finished}，Web 和 Windows 播放中增量同步，结束时补报尾段；兼容旧版 ms 增量"),
             ("GET", "/songs/status", "可选登录", "歌曲列表状态：liked/faved 为本地状态，counts 为本地计数，ncmCounts 为网易云红心数"),
             ("GET", "/likes/count", "公开", "批量点赞数：counts 本地、ncmCounts 网易云红心数"),
             ("POST", "/likes/{ncmId}", "Bearer", "CurrentMusic 自建红心 toggle {meta}，返回 {on,count}（本地计数）"),
@@ -3980,6 +4023,9 @@ def route(handler, method):
         return jresp(handler, 200, {"liked": like, "count": counts.get(ncm_id)})
 
     # ---- 播放历史 ----
+    if path == "/plays/capabilities" and method == "GET":
+        return jresp(handler, 200, {"clientPlayId": True})
+
     m = re.fullmatch(r"/plays/(\d+)", path)
     if m and method == "POST":
         u = require_user(handler)
@@ -4026,9 +4072,15 @@ def route(handler, method):
                     _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, play,
                                       playback_client=play["playback_client"] or platform)
             return jresp(handler, 200, {"ok": True, "added": added})
-        cm_db.upsert_song(norm_meta({**(body or {}), "ncm_id": ncm_id}))
-        play_id = cm_db.record_play(u["id"], ncm_id, playback_client=platform)
-        if sync_cookie:
+        client_play_id = body.get("clientPlayId")
+        if "clientPlayId" in body and (not isinstance(client_play_id, str)
+                or not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", client_play_id)):
+            raise ApiError(400, "clientPlayId 无效")
+        meta = norm_meta({**body, "ncm_id": ncm_id})
+        play_id, created = cm_db.record_play_start(u["id"], ncm_id, platform, client_play_id, meta=meta)
+        if play_id is None:
+            raise ApiError(409, "clientPlayId 已用于其他播放")
+        if sync_cookie and created:
             # 开始播放即写 startplay，让网易云「最近播放」实时出现。
             _spawn_ncm_listen(sync_cookie, ncm_id, real_ip, playback_client=platform)
         return jresp(handler, 200, {"ok": True, "playId": play_id})

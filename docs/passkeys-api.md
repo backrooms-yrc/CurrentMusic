@@ -66,3 +66,11 @@ Origin: android:apk-key-hash:_D5jB5uOaa6nq3NIKEbaCTnWzRLa8K__qpouk_v8zzU
 - Origin 后缀为 APK 签名证书 DER 的 32 字节 SHA-256 摘要，经 Base64URL 编码并去掉填充。使用 `apksigner verify --print-certs` 核对实际分发 APK 的证书指纹。RP ID 必须精确匹配已允许的 HTTPS 域名，值为不含端口的 DNS 域名。未配置映射时 Android 来源全部拒绝。
 - 在 RP 域名根路径 `/.well-known/assetlinks.json` 发布 Digital Asset Links。声明包含 `delegate_permission/common.get_login_creds`、包名及正式证书的 SHA-256 指纹。官方声明见 [assetlinks.json](https://music.20110208.xyz/.well-known/assetlinks.json)。该路径应通过可信 HTTPS 直接返回 `200 application/json`，无需登录或验证码。测试包和调试签名使用独立测试域名。
 - 反向代理须原样转发 `Origin`，包括 `android:apk-key-hash:…`。自托管时将上述映射的值改为自己的 HTTPS 认证域名，并在该域名发布对应声明。更改映射后重启 API，旧挑战只有在其 Origin 和 RP ID 仍与配置一致时才能使用。
+
+## Windows 原生客户端
+
+Windows 客户端从当前 HTTPS API 基址打开 `GET /cm/auth/windows/authorize`。浏览器在同源页面完成 WebAuthn，通过 `POST /cm/auth/windows/options` 取挑战，使用 `POST /cm/auth/windows/verify` 验证签名并取得单次授权码。三个步骤复用相同的 `redirectUri`、`state` 和 `codeChallenge`。回调仅接受 `http://127.0.0.1:<临时端口>/currentmusic/auth`。
+
+浏览器回调携带授权码与 `state`。Windows 验证回调后，通过同一 HTTPS API 的 `POST /cm/auth/windows/exchange` 提交 `origin`、`code`、`redirectUri`、`state` 和 `codeVerifier`。授权码有效期为 60 秒，服务端验证 PKCE S256、同源和请求绑定，并在同一事务中消耗授权码和签发 Windows 会话。
+
+已登录用户可使用 `POST /cm/auth/windows/enroll/request` 请求绑定。该请求要求当前 Bearer、`origin`、当前密码以及已开启的二次验证。客户端把一次性票据放入 `GET /cm/auth/windows/enroll` 页面的 URL 片段。浏览器使用票据取得创建选项并提交凭据，绑定始终关联原账号和仍然有效的原会话。绑定完成后刷新 `GET /cm/auth/passkeys` 即可查看结果。

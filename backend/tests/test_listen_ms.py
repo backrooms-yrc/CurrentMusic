@@ -20,6 +20,7 @@ import sys
 import tempfile
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
 
 # cm_db 在 import 时读取 CM_DB，必须先设好环境变量再导入
@@ -79,6 +80,56 @@ class ListenMsBase(unittest.TestCase):
 
 
 class TestRealListening(ListenMsBase):
+    def test_windows_idempotent_start_and_bound_incremental_recovery(self):
+        token = cm_db.issue_token(self.uid)
+        cm_db.save_binding(self.uid, "MUSIC_U=windows-fixture", 42)
+
+        def post(body, path="/plays/1", bearer=token):
+            handler = _Handler("POST", path, body, token=bearer)
+            try:
+                cm_server.route(handler, "POST")
+            except cm_server.ApiError as error:
+                return error.code, {}
+            return handler.status, json.loads(handler.wfile.getvalue())
+
+        start_body = {"name": "歌曲", "duration": SONG_MS, "platform": "windows", "clientPlayId": "fixture-play-1"}
+        with (mock.patch.object(cm_server, "_spawn_ncm_listen") as start,
+              mock.patch.object(cm_ncm, "web_scrobble_available", return_value=True),
+              mock.patch.object(cm_ncm, "upload_web_play_log") as upload,
+              mock.patch.object(cm_server._web_play_sync_pool, "submit", side_effect=lambda fn, play_id: fn(play_id))):
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                results = list(pool.map(post, [start_body] * 8))
+            self.assertTrue(all(status == 200 for status, _ in results))
+            play_ids = {body["playId"] for _, body in results}
+            self.assertEqual(len(play_ids), 1)
+            play_id = play_ids.pop()
+            start.assert_called_once()
+            self.assertEqual(start.call_args.kwargs["playback_client"], "windows")
+            self.assertEqual(post(start_body, "/plays/2")[0], 409)
+            self.assertEqual(post(dict(start_body, clientPlayId=""))[0], 400)
+
+            def progress(seconds, finished=False):
+                self.assertEqual(post({"playId": play_id, "totalMs": seconds * 1000, "finished": finished})[0], 200)
+
+            progress(29)
+            upload.assert_not_called()
+            progress(30)
+            upload.side_effect = cm_ncm.NcmError("fixture offline")
+            progress(60)
+            upload.side_effect = None
+            progress(60)
+            progress(73, True)
+            progress(73, True)
+            self.assertEqual(self.ms(), 73_000)
+            self.assertEqual([call.args[2:4] for call in upload.call_args_list],
+                             [("plv", 30), ("pld", 30), ("pld", 30), ("pld", 30), ("pld", 13)])
+            self.assertTrue(all(call.args[0]["mode"] == "CurrentMusic Windows" for call in upload.call_args_list))
+
+            other_uid = cm_db.create_user("other-windows", "fixture-password", "other")
+            other = cm_db.issue_token(other_uid)
+            self.assertNotEqual(post(start_body, bearer=other)[1]["playId"], play_id)
+            self.assertEqual(post({"playId": play_id, "totalMs": 99_000}, bearer=other)[0], 404)
+
     def test_finished_report_uses_its_own_full_playback(self):
         token = cm_db.issue_token(self.uid)
         cm_db.save_binding(self.uid, "test-binding", 42)

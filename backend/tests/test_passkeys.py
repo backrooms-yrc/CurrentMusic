@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives import hashes
 import cm_db
 import cm_2fa
 import cm_passkeys as pk
+import cm_windows_auth as windows_auth
 
 ANDROID_RP = 'music.20110208.xyz'
 ANDROID_ORIGIN = 'android:apk-key-hash:_D5jB5uOaa6nq3NIKEbaCTnWzRLa8K__qpouk_v8zzU'
@@ -69,13 +70,17 @@ class PasskeyTests(unittest.TestCase):
         return json.dumps({'type':kind,'challenge':challenge or options['publicKey']['challenge'],'origin':origin or self.origin,'crossOrigin':False}).encode()
     def register(self):
         start=pk.begin(self.origin,self.uid,self.sid,'password')
+        credential = self.registration_credential(start)
+        pk.finish(self.origin,start['challengeToken'],credential,self.uid,self.sid)
+        return start,credential
+
+    def registration_credential(self, start):
         pub=self.private.public_key().public_numbers()
         cose=cbor2.dumps({1:2,3:-7,-1:1,-2:pub.x.to_bytes(32,'big'),-3:pub.y.to_bytes(32,'big')})
         rp = start['publicKey']['rp']['id']
         data=hashlib.sha256(rp.encode()).digest()+bytes([0x45])+struct.pack('>I',0)+bytes(16)+struct.pack('>H',len(self.cid))+self.cid+cose
         credential={'id':pk.b64(self.cid),'rawId':pk.b64(self.cid),'type':'public-key','response':{'clientDataJSON':pk.b64(self.client(start,'webauthn.create')),'attestationObject':pk.b64(cbor2.dumps({'fmt':'none','attStmt':{},'authData':data}))}}
-        pk.finish(self.origin,start['challengeToken'],credential,self.uid,self.sid)
-        return start,credential
+        return credential
     def assertion(self,start,uv=True,origin=None,rp=None,challenge=None,counter=1):
         client=self.client(start,'webauthn.get',origin,challenge)
         rp = rp or start['publicKey']['rpId']
@@ -83,6 +88,55 @@ class PasskeyTests(unittest.TestCase):
         signature=self.private.sign(data+hashlib.sha256(client).digest(),ec.ECDSA(hashes.SHA256()))
         c=pk.connect();handle=c.execute('SELECT handle FROM passkey_users WHERE uid=?',(self.uid,)).fetchone()[0];c.close()
         return {'id':pk.b64(self.cid),'rawId':pk.b64(self.cid),'type':'public-key','response':{'clientDataJSON':pk.b64(client),'authenticatorData':pk.b64(data),'signature':pk.b64(signature),'userHandle':pk.b64(handle)}}
+
+    def test_windows_passkey_exchange_is_bound_and_single_use(self):
+        self.register()
+        verifier = pk.secrets.token_urlsafe(32)
+        flow = {
+            "redirectUri": "http://127.0.0.1:49152/currentmusic/auth",
+            "state": pk.secrets.token_urlsafe(32),
+            "codeChallenge": pk.b64(hashlib.sha256(verifier.encode()).digest()),
+        }
+        with self.assertRaises(pk.Error):
+            windows_auth.begin(self.origin, dict(flow, redirectUri="http://localhost:49152/currentmusic/auth"))
+        start = windows_auth.begin(self.origin, flow)
+        signed = dict(flow, challengeToken=start["challengeToken"], credential=self.assertion(start))
+        with self.assertRaises(pk.Error):
+            pk.finish(self.origin, start["challengeToken"], signed["credential"])
+        code = windows_auth.finish(self.origin, signed)
+        self.assertEqual(set(code), {"code"})
+        payload = dict(flow, **code, origin=self.origin, codeVerifier=verifier)
+        for changes in (
+            {"origin": "https://music.20110208.xyz"},
+            {"redirectUri": "http://127.0.0.1:49153/currentmusic/auth"},
+            {"state": pk.secrets.token_urlsafe(32)},
+            {"codeVerifier": pk.secrets.token_urlsafe(32)},
+        ):
+            with self.assertRaises(pk.Error):
+                windows_auth.exchange(dict(payload, **changes))
+        session = windows_auth.exchange(payload)
+        self.assertEqual(cm_db.user_by_token(session["token"])["id"], self.uid)
+        sessions = cm_db.list_sessions(self.uid, session["token"])
+        self.assertEqual(next(item for item in sessions if item["current"])["platform"], "windows")
+        with self.assertRaises(pk.Error):
+            windows_auth.exchange(payload)
+
+    def test_windows_passkey_enrollment_requires_active_session_and_is_single_use(self):
+        user = {"id": self.uid, "_token": self.sid}
+        form = {"origin": self.origin, "password": "password", "name": "Windows QA"}
+        ticket = windows_auth.request_enrollment(user, form)
+        with self.assertRaises(pk.Error):
+            windows_auth.enrollment("https://music.20110208.xyz", ticket)
+        options = windows_auth.enrollment(self.origin, ticket)
+        credential = self.registration_credential(options)
+        self.assertEqual(windows_auth.enrollment(self.origin, dict(ticket, credential=credential), True), {"ok": True})
+        self.assertEqual(pk.listing(self.uid)["keys"][0]["name"], "Windows QA")
+        with self.assertRaises(pk.Error):
+            windows_auth.enrollment(self.origin, ticket)
+        next_ticket = windows_auth.request_enrollment(user, form)
+        cm_db.revoke_token(self.uid, self.sid)
+        with self.assertRaises(pk.Error):
+            windows_auth.enrollment(self.origin, next_ticket)
 
     def test_android_options_are_opt_in_and_do_not_change_web_origins(self):
         with patch.object(pk, 'ANDROID_ORIGINS', {}):
