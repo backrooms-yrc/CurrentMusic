@@ -64,6 +64,7 @@ import * as welcomePage from './pages/welcome.js';
 import { needsWelcome } from './auth-flow.js';
 import * as passkeysPage from './passkeys.js';
 import * as networkPage from './pages/network.js';
+import * as donatePage from './pages/donate.js';
 import * as settingsPage from './pages/settings.js';
 import * as adminPage from './pages/admin.js';
 import * as roomsPage from './pages/rooms.js';
@@ -138,6 +139,7 @@ const ROUTES = [
   { re: /^#\/welcome$/, page: welcomePage, title: '欢迎加入' },
   { re: /^#\/passkeys$/, page: passkeysPage, title: '通行密钥' },
   { re: /^#\/network$/, page: networkPage, title: 'CDN 与音源' },
+  { re: /^#\/donate$/, page: donatePage, title: '捐赠支持' },
   { re: /^#\/settings(?:\/([a-z-]+)(?:\/([a-z-]+))?)?$/, page: settingsPage, title: '设置' },
   { re: /^#\/legal\/(privacy|terms)$/, page: legalPage, title: '政策与协议', fixed: m => [m[1]] },
   { re: /^#\/admin$/, page: adminPage, title: '管理员' },

@@ -2784,6 +2784,11 @@ def route(handler, method):
             ("POST", "/admin/users/{id}/owner", "站长", "设置 / 取消站长（最高角色，仅站长，至少保留一位）"),
             ("GET", "/users/square", "公开", "用户发现广场（含 level、ipRegion）；sort 默认 composite，新增 active、level"),
             ("GET", "/levels/rules", "公开", "活跃积分、等级门槛与试炼规则"),
+            ("GET", "/donation/qr", "公开", "官方捐赠二维码图片（backend/assets/donation-qr.jpg，可缓存）"),
+            ("GET", "/donation/info", "Bearer", "捐赠引导信息：账号基本信息快照、二维码地址、本人捐赠历史与累计 {mine:{items,count,totalCents}}"),
+            ("POST", "/donation", "Bearer", "提交捐赠记录 {amount 元, txnId 交易单号, note? 备注}；金额为用户自报，交易单号全站唯一（重复 409）"),
+            ("GET", "/admin/donations", "管理员", "捐赠用户列表：搜索/分页/聚合（单笔与用户累计金额、次数）；sort=recent/recent_asc/amount/user_total/user_count/name"),
+            ("DELETE", "/admin/donations/{id}", "管理员", "删除捐赠记录（清理误报）"),
             ("GET", "/levels/progress", "Bearer", "当前积分、等级及今日各途径计分次数"),
             ("GET", "/levels/trial", "Bearer", "Lv.6 试炼题目（无答案）"),
             ("POST", "/levels/trial", "Bearer", "提交 50 道试炼答案 {answers}；每题 2 分，60 分及格后升至 Lv.6 Plus"),
@@ -4108,6 +4113,69 @@ def route(handler, method):
 
     if path == "/levels/rules" and method == "GET":
         return jresp(handler, 200, cm_levels.rules())
+
+    # ---- 官方捐赠 ----
+    # 二维码图片公开访问（<img> 标签无法带 Authorization 头）；文件在 backend/assets。
+    if path == "/donation/qr" and method == "GET":
+        fp = os.path.join(os.path.dirname(__file__), "assets", "donation-qr.jpg")
+        if not os.path.isfile(fp):
+            raise ApiError(404, "捐赠二维码未配置")
+        return serve_file(handler, fp, "image/jpeg", cache="public, max-age=86400")
+
+    if path == "/donation/info" and method == "GET":
+        u = require_user(handler)
+        mine = cm_db.user_donations(u["id"])
+        return jresp(handler, 200, {
+            "qrPath": "/donation/qr",
+            "profile": {   # 供「确认账号基本信息」步骤预填（以服务端为准）
+                "username": u["username"],
+                "nickname": u["nickname"],
+                "email": u.get("email") or "",
+                "phone": u.get("phone") or "",
+                "created_at": u.get("created_at") or 0,
+            },
+            "noteMax": cm_db.DONATION_NOTE_MAX,
+            "txnMax": cm_db.DONATION_TXN_MAX,
+            "mine": mine,
+        })
+
+    if path == "/donation" and method == "POST":
+        u = require_user(handler)
+        if not isinstance(body, dict):
+            raise ApiError(400, "请提供捐赠信息")
+        amount = body.get("amount")
+        if not isinstance(amount, (int, float)) or isinstance(amount, bool) \
+                or not 0.01 <= amount <= 100000:
+            raise ApiError(400, "捐赠金额需在 0.01 至 100000 元之间")
+        txn = str(body.get("txnId") or "").strip()
+        if not 6 <= len(txn) <= cm_db.DONATION_TXN_MAX or not re.fullmatch(r"[0-9A-Za-z._-]+", txn):
+            raise ApiError(400, f"交易单号需为 6~{cm_db.DONATION_TXN_MAX} 位数字/字母")
+        note = str(body.get("note") or "").strip()[:cm_db.DONATION_NOTE_MAX]
+        amount_cents = round(amount * 100)
+        try:
+            cm_db.add_donation(u, amount_cents, txn, note)
+        except sqlite3.IntegrityError:
+            raise ApiError(409, "该交易单号已提交过")
+        log.info("用户 %s(%s) 提交捐赠：%.2f 元，单号 %s", u["username"], u["id"], amount, txn)
+        return jresp(handler, 200, {"ok": True, "mine": cm_db.user_donations(u["id"])})
+
+    if path == "/admin/donations" and method == "GET":
+        require_admin(handler)
+        try:
+            limit = min(int(q.get("limit") or 20), 100)
+            offset = max(int(q.get("offset") or 0), 0)
+        except ValueError:
+            raise ApiError(400, "分页参数错误")
+        return jresp(handler, 200, cm_db.admin_list_donations(
+            q.get("query") or "", limit, offset, q.get("sort") or "recent"))
+
+    m = re.fullmatch(r"/admin/donations/(\d+)", path)
+    if m and method == "DELETE":
+        me = require_admin(handler)
+        if not cm_db.admin_delete_donation(int(m.group(1))):
+            raise ApiError(404, "记录不存在")
+        log.info("管理员 %s 删除了捐赠记录 %s", me["username"], m.group(1))
+        return jresp(handler, 200, {"ok": True})
 
     if path == "/levels/progress" and method == "GET":
         u = require_user(handler)

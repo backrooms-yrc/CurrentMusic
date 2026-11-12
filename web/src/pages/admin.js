@@ -13,6 +13,16 @@ import { layoutRect } from '../tablet-scale.js';
 
 const PAGE = 20;
 let query = '', offset = 0, userSort = 'reg';   // 跨页面停留保留搜索/排序；搜索/翻页只改列表
+let donQuery = '', donOffset = 0, donSort = 'recent';
+const DON_SORTS = [
+  { k: 'recent', label: '提交最新' },
+  { k: 'recent_asc', label: '提交最早' },
+  { k: 'amount', label: '单笔金额' },
+  { k: 'user_total', label: '用户累计' },
+  { k: 'user_count', label: '捐赠次数' },
+  { k: 'name', label: '昵称' },
+];
+const fmtYuan = cents => '¥' + ((cents || 0) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ADMIN_USER_SORTS = [
   { k: 'reg', label: '注册最新' },
   { k: 'reg_asc', label: '注册最早' },
@@ -27,6 +37,7 @@ const ADMIN_USER_SORTS = [
 const TABS = [
   { k: 'overview', label: '概览', icon: 'dashboard' },
   { k: 'users', label: '用户', icon: 'people' },
+  { k: 'donations', label: '捐赠', icon: 'volunteer_activism' },
   { k: 'announcements', label: '公告', icon: 'campaign' },
   { k: 'devices', label: '设备', icon: 'devices' },
   { k: 'clients', label: '客户端', icon: 'phone_android' },
@@ -35,6 +46,7 @@ const TABS = [
 const TAB_DESC = {
   overview: '站点运营总览、流量与趋势',
   users: '搜索、分页与账号操作',
+  donations: '捐赠用户列表：金额、次数与交易单号',
   announcements: '发布与维护客户端弹窗公告',
   devices: '全部在线设备与强制下线',
   clients: 'CurrentMusic 与 CurrentMusicX 版本与更新说明',
@@ -153,9 +165,9 @@ export async function render(el) {
 
   const S = {
     tab: 'overview',
-    ov: null, users: null, sessions: null, ann: null, traffic: null, clients: null,
+    ov: null, users: null, sessions: null, ann: null, traffic: null, clients: null, don: null,
     trafficRange: 'day', trafficAt: 0, trafficLoading: false,
-    usersSeq: 0, annSeq: 0, devSeq: 0, clientsSeq: 0, ovLoading: false,
+    usersSeq: 0, annSeq: 0, devSeq: 0, clientsSeq: 0, ovLoading: false, donSeq: 0,
   };
 
   el.innerHTML = `
@@ -193,6 +205,22 @@ export async function render(el) {
         </div>
         <div id="userList">${userSkeleton()}</div>
         <div class="cm-pager" id="userPager"></div>
+      </section>
+
+      <section class="cm-apane" data-pane="donations" id="pane-donations" hidden>
+        <div class="cm-sec-head"><h2>捐赠用户</h2><span class="cm-usub" id="donTotal"></span></div>
+        <div id="donSummary"></div>
+        <div class="cm-adminbar cm-ausearch" style="margin-top:12px">
+          <mdui-text-field id="donQ" label="搜索 用户名 / 昵称 / 邮箱 / 手机号 / 交易单号" variant="outlined" clearable
+            enterkeyhint="search" value="${esc(donQuery)}" style="flex:1"></mdui-text-field>
+          <mdui-button variant="filled" id="donSearch"><span class="material-icons-outlined">search</span>搜索</mdui-button>
+        </div>
+        <div class="cm-plsort cm-asort" id="donSort">
+          <span class="cm-plsort-l"><span class="material-icons-outlined">sort</span>排序</span>
+          ${DON_SORTS.map(x => `<mdui-chip ${x.k === donSort ? 'selected' : ''} data-k="${x.k}">${x.label}</mdui-chip>`).join('')}
+        </div>
+        <div id="donList">${rowSkeleton(4)}</div>
+        <div class="cm-pager" id="donPager"></div>
       </section>
 
       <section class="cm-apane" data-pane="announcements" id="pane-announcements" hidden>
@@ -288,6 +316,7 @@ export async function render(el) {
       if (!S.ov) loadOverview().then(ok => { if (ok) draw(); });
       else draw();
     } else if (k === 'users' && !S.users) loadUsers();
+    else if (k === 'donations' && !S.don) loadDonations();
     else if (k === 'announcements' && !S.ann) loadAnn();
     else if (k === 'devices' && !S.sessions) loadDevices();
     else if (k === 'clients') {
@@ -740,6 +769,105 @@ export async function render(el) {
     await Promise.allSettled([loadUsers({ silent: true }), loadOverview()]);
   }
 
+  // ---------- 捐赠 ----------
+  async function loadDonations({ silent = false } = {}) {
+    const box = el.querySelector('#donList');
+    if (!box) return;
+    if (!silent) {
+      box.innerHTML = rowSkeleton(4);
+      const pager = el.querySelector('#donPager');
+      if (pager) pager.innerHTML = '';
+    }
+    const seq = ++S.donSeq;
+    try {
+      const d = await api.adminDonations(donQuery, donOffset, PAGE, donSort);
+      if (seq !== S.donSeq || !el.isConnected) return;
+      if (donOffset > 0 && !(d.items || []).length && d.total > 0) {
+        donOffset = Math.max(0, Math.floor((d.total - 1) / PAGE) * PAGE);
+        return loadDonations({ silent });
+      }
+      S.don = d;
+      renderDonations();
+    } catch (e) {
+      if (seq !== S.donSeq || !el.isConnected) return;
+      box.innerHTML = `<div class="cm-empty small">捐赠列表加载失败：${esc(e.message)}</div>`;
+    }
+  }
+  function renderDonations() {
+    const d = S.don;
+    if (!d) return;
+    const total = d.total || 0;
+    const tEl = el.querySelector('#donTotal');
+    if (tEl) tEl.textContent = total ? `当前筛选 ${total} 条` : '无匹配记录';
+    const sum = el.querySelector('#donSummary');
+    if (sum) sum.innerHTML = `
+      <div class="cm-agrid">
+        ${card('累计捐赠', fmtYuan(d.totalCents), `${fmtCount(d.totalCount)} 笔记录`)}
+        ${card('捐赠用户', fmtCount(d.donors), `平均 ${fmtYuan(d.totalCount ? Math.round(d.totalCents / d.totalCount) : 0)} / 笔`)}
+      </div>`;
+    const list = el.querySelector('#donList');
+    if (!list) return;
+    list.innerHTML = (d.items || []).length ? `<div class="cm-ulist">${(d.items || []).map(x => `
+      <div class="cm-urow">
+        <div class="cm-uava">${avatarHTML(x, 40)}</div>
+        <div class="cm-umain">
+          <div class="cm-uname">${esc(x.nickname || x.username)}${userTags(x)}
+            <span class="cm-tag">${fmtYuan(x.amount_cents)}</span>
+            ${x.userCount > 1 ? `<span class="cm-tag">第 ${x.userCount} 次捐赠 · 累计 ${fmtYuan(x.userTotalCents)}</span>` : ''}</div>
+          <div class="cm-usub">@${esc(x.username)}${x.email ? ' · ' + esc(x.email) : ''}${x.phone ? ' · ' + esc(x.phone) : ''} · 注册于 ${fmtTime(x.registered_at)}</div>
+          <div class="cm-usub">单号 ${esc(x.txn_id)} · 提交于 ${fmtStamp(x.created_at)}${x.note ? ` · 备注：${esc(x.note)}` : ''}</div>
+        </div>
+        <span class="cm-uact" data-del="${x.id}" title="删除记录"><span class="material-icons-outlined">delete</span></span>
+      </div>`).join('')}</div>` : '<div class="cm-empty small">暂无捐赠记录</div>';
+    const pager = el.querySelector('#donPager');
+    if (pager) {
+      pager.innerHTML = total ? `
+        <mdui-button variant="text" id="donPrev" ${donOffset === 0 ? 'disabled' : ''}>上一页</mdui-button>
+        <span class="cm-pager-info">${donOffset + 1}–${Math.min(donOffset + PAGE, total)} / ${total}</span>
+        <mdui-button variant="text" id="donNext" ${donOffset + PAGE >= total ? 'disabled' : ''}>下一页</mdui-button>` : '';
+      const prev = pager.querySelector('#donPrev'), next = pager.querySelector('#donNext');
+      if (prev) prev.onclick = () => { donOffset = Math.max(0, donOffset - PAGE); loadDonations(); };
+      if (next) next.onclick = () => { donOffset += PAGE; loadDonations(); };
+    }
+    list.querySelectorAll('[data-del]').forEach(btn => {
+      btn.onclick = () => confirmDialog({
+        title: '删除这条捐赠记录？',
+        body: '仅用于清理误报数据，删除后不可恢复。',
+        onOk: async () => {
+          await api.adminDeleteDonation(+btn.dataset.del);
+          toast('已删除');
+          await loadDonations({ silent: true });
+        },
+      });
+    });
+  }
+  const donQ = el.querySelector('#donQ');
+  if (donQ) {
+    const doDonSearch = async () => {
+      donQuery = (donQ.value || '').trim();
+      donOffset = 0;
+      const btn = el.querySelector('#donSearch');
+      if (btn) btn.loading = true;
+      try { await loadDonations(); } finally { if (btn) btn.loading = false; }
+    };
+    donQ.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); doDonSearch(); }
+    });
+    el.querySelector('#donSearch').onclick = doDonSearch;
+  }
+  el.querySelectorAll('#donSort mdui-chip').forEach(ch => {
+    ch.onclick = () => {
+      if (donSort === ch.dataset.k) return;
+      donSort = ch.dataset.k;
+      donOffset = 0;
+      el.querySelectorAll('#donSort mdui-chip').forEach(x => {
+        if (x === ch) x.setAttribute('selected', '');
+        else x.removeAttribute('selected');
+      });
+      loadDonations();
+    };
+  });
+
   // 搜索：只在回车/点按钮时触发；不调用 render(el)
   const uq = el.querySelector('#uq');
   const doSearch = async () => {
@@ -1058,6 +1186,8 @@ export async function render(el) {
         await loadTraffic();
       } else if (S.tab === 'users') {
         await loadUsers();
+      } else if (S.tab === 'donations') {
+        await loadDonations();
       } else if (S.tab === 'announcements') {
         await loadAnn();
       } else if (S.tab === 'devices') {

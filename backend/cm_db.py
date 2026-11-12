@@ -292,7 +292,124 @@ CREATE TABLE IF NOT EXISTS announcements (
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_ann_live ON announcements(removed, pinned DESC, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS donations (   /* 官方捐赠：用户扫码捐赠后自助提交交易单号（金额为用户自报，单位分） */
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  username TEXT NOT NULL,            /* 提交时的账号快照（后续改用户名不影响历史记录） */
+  email TEXT DEFAULT '',             /* 提交时快照 */
+  phone TEXT DEFAULT '',             /* 提交时快照 */
+  registered_at INTEGER DEFAULT 0,   /* 提交时的注册时间快照 */
+  amount_cents INTEGER NOT NULL,     /* 自报捐赠金额（分） */
+  note TEXT DEFAULT '',              /* 可选备注 */
+  txn_id TEXT NOT NULL,              /* 支付交易单号（全站唯一，防重复提交） */
+  created_at INTEGER NOT NULL,
+  UNIQUE(txn_id)
+);
+CREATE INDEX IF NOT EXISTS idx_donation_user ON donations(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_donation_created ON donations(created_at DESC);
 """
+
+
+# ---------- 官方捐赠 ----------
+
+DONATION_NOTE_MAX = 120      # 备注长度上限
+DONATION_TXN_MAX = 64        # 交易单号长度上限
+
+
+def add_donation(user, amount_cents, txn_id, note=""):
+    """记录一笔用户自报捐赠；交易单号重复抛 sqlite3.IntegrityError。"""
+    conn = connect()
+    try:
+        cur = conn.execute(
+            """INSERT INTO donations
+                 (user_id, username, email, phone, registered_at, amount_cents, note, txn_id, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (user["id"], user["username"], user.get("email") or "", user.get("phone") or "",
+             user.get("created_at") or 0, amount_cents, note, txn_id, int(time.time())),
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def user_donations(user_id):
+    """本人捐赠历史 + 累计（次数 / 金额）。"""
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, amount_cents, note, txn_id, created_at FROM donations"
+            " WHERE user_id=? ORDER BY created_at DESC LIMIT 100",
+            (user_id,),
+        ).fetchall()
+        agg = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(amount_cents),0) FROM donations WHERE user_id=?",
+            (user_id,),
+        ).fetchone()
+        return {
+            "items": [dict(r) for r in rows],
+            "count": agg[0], "totalCents": agg[1],
+        }
+    finally:
+        conn.close()
+
+
+def admin_list_donations(query="", limit=20, offset=0, sort="recent"):
+    """管理台捐赠列表：按用户聚合次数与累计金额，支持搜索与分页。"""
+    order = {
+        "recent": "d.created_at DESC",            # 提交最新
+        "recent_asc": "d.created_at ASC",
+        "amount": "d.amount_cents DESC",          # 单笔金额
+        "user_total": "user_total DESC",          # 该用户累计金额
+        "user_count": "user_count DESC",          # 该用户捐赠次数
+        "name": "u.nickname COLLATE NOCASE ASC",
+    }.get(sort, "d.created_at DESC")
+    conn = connect()
+    try:
+        where, args = "", []
+        if query:
+            where = ("WHERE d.username LIKE ? OR u.nickname LIKE ? OR d.email LIKE ?"
+                     " OR d.phone LIKE ? OR d.txn_id LIKE ?")
+            args = [f"%{query}%"] * 5
+        rows = conn.execute(
+            f"""SELECT d.*, u.nickname, u.avatar, u.avatar_decoration, u.disabled, u.title, u.level,
+                   (SELECT COUNT(*) FROM donations x WHERE x.user_id=d.user_id) AS user_count,
+                   (SELECT COALESCE(SUM(x.amount_cents),0) FROM donations x WHERE x.user_id=d.user_id) AS user_total
+                FROM donations d JOIN users u ON u.id=d.user_id {where}
+                ORDER BY {order} LIMIT ? OFFSET ?""",
+            args + [limit, offset],
+        ).fetchall()
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM donations d JOIN users u ON u.id=d.user_id {where}", args
+        ).fetchone()[0]
+        agg = conn.execute(
+            "SELECT COUNT(*), COUNT(DISTINCT user_id), COALESCE(SUM(amount_cents),0) FROM donations"
+        ).fetchone()
+        items = []
+        for r in rows:
+            d = dict(r)
+            d["avatarDecoration"] = d.pop("avatar_decoration", "") or ""
+            d["userCount"] = d.pop("user_count", 0)
+            d["userTotalCents"] = d.pop("user_total", 0)
+            items.append(d)
+        return {
+            "total": total, "items": items,
+            "totalCount": agg[0], "donors": agg[1], "totalCents": agg[2],
+        }
+    finally:
+        conn.close()
+
+
+def admin_delete_donation(donation_id):
+    """删除一条捐赠记录（管理员清理误报 / 测试数据）；返回是否删除。"""
+    conn = connect()
+    try:
+        cur = conn.execute("DELETE FROM donations WHERE id=?", (donation_id,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
 
 
 def connect():

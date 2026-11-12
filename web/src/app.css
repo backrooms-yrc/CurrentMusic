@@ -6197,3 +6197,20 @@ html[data-ui-preset="soaringbird"] .cm-empty { color: var(--sb-text-2); }
   html[data-ui-preset="soaringbird"] .cm-detail-head h2 { font-size: calc(22px * var(--cm-fs, 1)); }
   html[data-ui-preset="soaringbird"] .cm-profile-name { font-size: calc(22px * var(--cm-fs, 1)); }
 }
+
+/* ---------- 捐赠页（#/donate） ---------- */
+.cm-donate { max-width: 640px; margin: 0 auto; }
+.cm-donate-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 0; color: var(--mdui-color-on-surface-variant, #49454f); }
+.cm-donate-note { display: block; padding: 10px 16px; }
+.cm-donate-next { margin-top: 16px; width: 100%; }
+.cm-donate-qrbox { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 0 8px; }
+.cm-donate-qrbox img { width: min(78vw, 320px); height: auto; border-radius: var(--cm-radius, 16px); background: #fff; padding: 8px; }
+.cm-donate-tip { font-size: 13px; color: var(--mdui-color-on-surface-variant, #49454f); text-align: center; padding: 0 16px; }
+.cm-donate-form { display: flex; flex-direction: column; gap: 12px; }
+.cm-donate-form mdui-text-field { width: 100%; }
+.cm-donate-hint { font-size: 12.5px; color: var(--mdui-color-on-surface-variant, #49454f); line-height: 1.6; }
+.cm-donate-actions { display: flex; justify-content: space-between; gap: 12px; }
+.cm-donate-done { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 0 16px; text-align: center; }
+.cm-donate-done .material-icons-outlined { font-size: 44px; color: #e91e63; }
+.cm-donate-done h2 { margin: 0; }
+.cm-donate-done p { margin: 0 16px; color: var(--mdui-color-on-surface-variant, #49454f); }

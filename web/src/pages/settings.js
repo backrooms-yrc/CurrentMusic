@@ -117,6 +117,7 @@ export async function render(el) {
     <div class="cm-sec-head"><h2>关于</h2></div>
     <div class="cm-setting-list">
       ${!isApp ? `<div class="cm-setting" id="dlApk"><span class="material-icons-outlined">android</span>下载安卓版 APP<i>APK · 支持后台播放</i></div>` : ''}
+      ${auth.token ? `<div class="cm-setting" id="donateEntry"><span class="material-icons-outlined">volunteer_activism</span>捐赠支持<i>官方捐赠码 · 自愿参与</i></div>` : ''}
       <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:calc(15px * var(--cm-fs, 1));vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
       <div class="cm-setting" id="passkeys"><span class="material-icons-outlined">fingerprint</span>通行密钥<i>绑定与管理 · 免密码登录</i></div>
       <div class="cm-setting" id="accountInfo"><span class="material-icons-outlined">person</span>当前账号<i id="acctRole">${esc(u.nickname || u.username || '未登录')}${roleText ? ' · ' + esc(roleText) : ''}</i></div>
@@ -133,6 +134,8 @@ export async function render(el) {
   mountSettingsNavigation(el);
   el.querySelector('#passkeys').onclick = () => { location.hash = '#/passkeys'; };
   el.querySelector('#network').onclick = () => { location.hash = '#/network'; };
+  const donateEntry = el.querySelector('#donateEntry');
+  if (donateEntry) donateEntry.onclick = () => { location.hash = '#/donate'; };
 
   const replayWelcome = el.querySelector('#replayWelcome');
   if (replayWelcome) replayWelcome.onclick = () => startWelcome({ replay: true });
