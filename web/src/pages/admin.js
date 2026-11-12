@@ -208,9 +208,7 @@ export async function render(el) {
       </section>
 
       <section class="cm-apane" data-pane="donations" id="pane-donations" hidden>
-        <div class="cm-sec-head"><h2>捐赠用户</h2><span class="cm-usub" id="donTotal"></span>
-          ${(auth.user && (auth.user.isSuper || auth.user.isOwner))
-            ? '<span class="cm-sec-more" id="donNew"><span class="material-icons-outlined">add</span>代录捐赠</span>' : ''}</div>
+        <div class="cm-sec-head"><h2>捐赠用户</h2><span class="cm-usub" id="donTotal"></span></div>
         <div id="donSummary"></div>
         <div class="cm-adminbar cm-ausearch" style="margin-top:12px">
           <mdui-text-field id="donQ" label="搜索 用户名 / 昵称 / 邮箱 / 手机号 / 交易单号" variant="outlined" clearable
@@ -691,6 +689,7 @@ export async function render(el) {
     }
     const acts = [
       { k: 'kick', label: u.sessions ? `踢下线（${u.sessions} 台设备）` : '踢下线（无在线设备）', icon: 'logout' },
+      ...(meSuper ? [{ k: 'donate', label: '代录捐赠', icon: 'volunteer_activism' }] : []),
       { k: 'pw', label: '重置密码', icon: 'password' },
       { k: u.disabled ? 'enable' : 'disable', label: u.disabled ? '解除禁用' : '禁用账号', icon: u.disabled ? 'lock_open' : 'block' },
       { k: 'title', label: u.title ? `修改头衔（当前：${u.title}）` : '设置头衔', icon: 'military_tech' },
@@ -710,6 +709,31 @@ export async function render(el) {
           diag.open = false;
           try {
             if (k === 'kick') { const r = await api.adminKick(id); toast(`已踢下线（${r.kicked} 个会话）`); await afterUserChange(); }
+            else if (k === 'donate') {
+              const diag = mdui.dialog({
+                headline: `为「${u.nickname || u.username}」代录捐赠`,
+                body: `<div class="cm-donate-form" style="padding:0 8px">
+                  <mdui-text-field id="dnAmount" label="捐赠金额（元）" variant="outlined" type="number" min="0.01" max="100000" step="0.01"></mdui-text-field>
+                  <mdui-text-field id="dnTxn" label="交易单号（可选，留空自动生成）" variant="outlined" maxlength="64"></mdui-text-field>
+                  <mdui-text-field id="dnNote" label="备注（可选）" variant="outlined" maxlength="120"></mdui-text-field>
+                  <div class="cm-donate-hint">用于线下捐赠等用户无法自助提交的场景；账号信息以服务端记录为准，记录会带「代录」标记。</div>
+                </div>`,
+                actions: [
+                  { text: '取消' },
+                  { text: '提交', onClick: async () => {
+                    const amount = parseFloat(diag.querySelector('#dnAmount').value);
+                    const txn = (diag.querySelector('#dnTxn').value || '').trim();
+                    const note = (diag.querySelector('#dnNote').value || '').trim();
+                    if (!isFinite(amount) || amount < 0.01) { toast('请填写 0.01 元以上的金额'); return false; }
+                    try {
+                      const r = await api.adminCreateDonation({ userId: id, amount, txnId: txn || undefined, note });
+                      toast(`已代录，单号 ${r.txnId}`);
+                      if (S.tab === 'donations') await loadDonations({ silent: true });
+                    } catch (e) { toast(e.message); return false; }
+                  } },
+                ],
+              });
+            }
             else if (k === 'disable') { await api.adminDisable(id, true); toast('已禁用，其所有会话已作废'); await afterUserChange(); }
             else if (k === 'enable') { await api.adminDisable(id, false); toast('已解除禁用'); await afterUserChange(); }
             else if (k === 'admin') { await api.adminSetAdmin(id, true); toast('已设为管理员'); await afterUserChange(); }
@@ -844,38 +868,6 @@ export async function render(el) {
       });
     });
   }
-  const donNew = el.querySelector('#donNew');
-  if (donNew) donNew.onclick = () => {
-    const diag = mdui.dialog({
-      headline: '代录捐赠（超管/站长）',
-      body: `<div class="cm-donate-form" style="padding:0 8px">
-        <mdui-text-field id="dnUser" label="目标用户（用户名或数字 ID）" variant="outlined"></mdui-text-field>
-        <mdui-text-field id="dnAmount" label="捐赠金额（元）" variant="outlined" type="number" min="0.01" max="100000" step="0.01"></mdui-text-field>
-        <mdui-text-field id="dnTxn" label="交易单号（可选，留空自动生成）" variant="outlined" maxlength="64"></mdui-text-field>
-        <mdui-text-field id="dnNote" label="备注（可选）" variant="outlined" maxlength="120"></mdui-text-field>
-        <div class="cm-donate-hint">用于线下捐赠等用户无法自助提交的场景；账号信息以服务端记录为准，代录条目会带「代录」标记。</div>
-      </div>`,
-      actions: [
-        { text: '取消' },
-        { text: '提交', onClick: async () => {
-          const user = (diag.querySelector('#dnUser').value || '').trim();
-          const amount = parseFloat(diag.querySelector('#dnAmount').value);
-          const txn = (diag.querySelector('#dnTxn').value || '').trim();
-          const note = (diag.querySelector('#dnNote').value || '').trim();
-          if (!user) { toast('请填写目标用户'); return false; }
-          if (!isFinite(amount) || amount < 0.01) { toast('请填写 0.01 元以上的金额'); return false; }
-          const payload = { amount, note };
-          if (/^\d+$/.test(user)) payload.userId = Number(user); else payload.username = user;
-          if (txn) payload.txnId = txn;
-          try {
-            const r = await api.adminCreateDonation(payload);
-            toast(`已代录，单号 ${r.txnId}`);
-            await loadDonations({ silent: true });
-          } catch (e) { toast(e.message); return false; }
-        } },
-      ],
-    });
-  };
   const donQ = el.querySelector('#donQ');
   if (donQ) {
     const doDonSearch = async () => {
