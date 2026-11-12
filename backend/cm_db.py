@@ -302,7 +302,8 @@ CREATE TABLE IF NOT EXISTS donations (   /* 官方捐赠：用户扫码捐赠后
   registered_at INTEGER DEFAULT 0,   /* 提交时的注册时间快照 */
   amount_cents INTEGER NOT NULL,     /* 自报捐赠金额（分） */
   note TEXT DEFAULT '',              /* 可选备注 */
-  txn_id TEXT NOT NULL,              /* 支付交易单号（全站唯一，防重复提交） */
+  txn_id TEXT NOT NULL,              /* 支付交易单号（全站唯一，防重复提交）；管理员代录可自动生成 ADMIN- 前缀占位 */
+  created_by INTEGER DEFAULT 0,      /* >0 = 管理员代录（操作管理员 uid）；0 = 用户自助提交 */
   created_at INTEGER NOT NULL,
   UNIQUE(txn_id)
 );
@@ -317,21 +318,34 @@ DONATION_NOTE_MAX = 120      # 备注长度上限
 DONATION_TXN_MAX = 64        # 交易单号长度上限
 
 
-def add_donation(user, amount_cents, txn_id, note=""):
-    """记录一笔用户自报捐赠；交易单号重复抛 sqlite3.IntegrityError。"""
+def add_donation(user, amount_cents, txn_id, note="", created_by=0):
+    """记录一笔捐赠；交易单号重复抛 sqlite3.IntegrityError。
+
+    created_by>0 表示管理员代录（快照仍取目标用户的账号信息）。
+    """
     conn = connect()
     try:
         cur = conn.execute(
             """INSERT INTO donations
-                 (user_id, username, email, phone, registered_at, amount_cents, note, txn_id, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+                 (user_id, username, email, phone, registered_at, amount_cents, note, txn_id, created_by, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (user["id"], user["username"], user.get("email") or "", user.get("phone") or "",
-             user.get("created_at") or 0, amount_cents, note, txn_id, int(time.time())),
+             user.get("created_at") or 0, amount_cents, note, txn_id, created_by, int(time.time())),
         )
         conn.commit()
         return cur.lastrowid
     finally:
         conn.close()
+
+
+def admin_create_donation(admin, target, amount_cents, txn_id="", note=""):
+    """站长/超管为任一用户代录捐赠；未提供单号时生成 ADMIN- 前缀占位单号。
+
+    返回 (记录 id, 实际单号)；真实单号重复抛 sqlite3.IntegrityError。
+    """
+    if not txn_id:
+        txn_id = f"ADMIN-{int(time.time())}-{secrets.token_hex(3).upper()}"
+    return add_donation(target, amount_cents, txn_id, note, created_by=admin["id"]), txn_id
 
 
 def user_donations(user_id):
@@ -374,9 +388,11 @@ def admin_list_donations(query="", limit=20, offset=0, sort="recent"):
             args = [f"%{query}%"] * 5
         rows = conn.execute(
             f"""SELECT d.*, u.nickname, u.avatar, u.avatar_decoration, u.disabled, u.title, u.level,
+                   c.username AS created_by_name,
                    (SELECT COUNT(*) FROM donations x WHERE x.user_id=d.user_id) AS user_count,
                    (SELECT COALESCE(SUM(x.amount_cents),0) FROM donations x WHERE x.user_id=d.user_id) AS user_total
-                FROM donations d JOIN users u ON u.id=d.user_id {where}
+                FROM donations d JOIN users u ON u.id=d.user_id
+                 LEFT JOIN users c ON c.id=d.created_by {where}
                 ORDER BY {order} LIMIT ? OFFSET ?""",
             args + [limit, offset],
         ).fetchall()
@@ -597,6 +613,10 @@ def init():
             conn.execute(f"ALTER TABLE plays ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
     # v1.17.24 曾有自建关注表，关注已改为同步网易云账号，这里清理遗留表
     conn.execute("DROP TABLE IF EXISTS artist_follows")
+    # donations 表后加的列（老库补列；新库由 SCHEMA 直接建全）
+    dncols = {r[1] for r in conn.execute("PRAGMA table_info(donations)")}
+    if dncols and "created_by" not in dncols:
+        conn.execute("ALTER TABLE donations ADD COLUMN created_by INTEGER DEFAULT 0")
     conn.commit()
     conn.close()
     # 头像挂件目录同步（清单文件缺失/损坏时静默跳过，不影响服务启动）

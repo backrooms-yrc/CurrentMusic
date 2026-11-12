@@ -2789,6 +2789,7 @@ def route(handler, method):
             ("POST", "/donation", "Bearer", "提交捐赠记录 {amount 元, txnId 交易单号, note? 备注}；金额为用户自报，交易单号全站唯一（重复 409）"),
             ("GET", "/admin/donations", "管理员", "捐赠用户列表：搜索/分页/聚合（单笔与用户累计金额、次数）；sort=recent/recent_asc/amount/user_total/user_count/name"),
             ("DELETE", "/admin/donations/{id}", "管理员", "删除捐赠记录（清理误报）"),
+            ("POST", "/admin/donations", "超管/站长", "为任一用户代录捐赠 {userId 或 username, amount 元, txnId?, note?}；单号可留空自动生成 ADMIN- 前缀占位"),
             ("GET", "/levels/progress", "Bearer", "当前积分、等级及今日各途径计分次数"),
             ("GET", "/levels/trial", "Bearer", "Lv.6 试炼题目（无答案）"),
             ("POST", "/levels/trial", "Bearer", "提交 50 道试炼答案 {answers}；每题 2 分，60 分及格后升至 Lv.6 Plus"),
@@ -4158,6 +4159,38 @@ def route(handler, method):
             raise ApiError(409, "该交易单号已提交过")
         log.info("用户 %s(%s) 提交捐赠：%.2f 元，单号 %s", u["username"], u["id"], amount, txn)
         return jresp(handler, 200, {"ok": True, "mine": cm_db.user_donations(u["id"])})
+
+    # 站长/超管为任一用户代录捐赠（线下捐赠、用户无法自助提交等场景）
+    if path == "/admin/donations" and method == "POST":
+        me = require_admin(handler)
+        if not (me.get("is_super") or me.get("is_owner")):
+            raise ApiError(403, "仅超级管理员/站长可代录捐赠")
+        if not isinstance(body, dict):
+            raise ApiError(400, "请提供捐赠信息")
+        uid, uname = body.get("userId"), body.get("username")
+        target = None
+        if isinstance(uid, int) and not isinstance(uid, bool):
+            target = cm_db.get_user(uid)
+        elif isinstance(uname, str) and uname.strip():
+            target = cm_db.get_user_by_name(uname.strip())
+        if not target:
+            raise ApiError(404, "目标用户不存在")
+        amount = body.get("amount")
+        if not isinstance(amount, (int, float)) or isinstance(amount, bool) \
+                or not 0.01 <= amount <= 100000:
+            raise ApiError(400, "捐赠金额需在 0.01 至 100000 元之间")
+        txn = str(body.get("txnId") or "").strip()
+        if txn and (not 6 <= len(txn) <= cm_db.DONATION_TXN_MAX
+                    or not re.fullmatch(r"[0-9A-Za-z._-]+", txn)):
+            raise ApiError(400, f"交易单号需为 6~{cm_db.DONATION_TXN_MAX} 位数字/字母（留空自动生成）")
+        note = str(body.get("note") or "").strip()[:cm_db.DONATION_NOTE_MAX]
+        try:
+            _, txn = cm_db.admin_create_donation(me, target, round(amount * 100), txn, note)
+        except sqlite3.IntegrityError:
+            raise ApiError(409, "该交易单号已存在")
+        log.info("管理员 %s 为用户 %s(%s) 代录捐赠 %.2f 元（单号 %s）",
+                 me["username"], target["username"], target["id"], amount, txn)
+        return jresp(handler, 200, {"ok": True, "txnId": txn})
 
     if path == "/admin/donations" and method == "GET":
         require_admin(handler)

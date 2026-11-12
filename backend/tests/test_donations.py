@@ -22,6 +22,9 @@ class DonationsTest(unittest.TestCase):
         admin = cm_db.create_user("donationadmin", "password123", "管理")
         cm_db.set_admin(admin, True)
         self.admin_token = cm_db.issue_token(admin)
+        owner = cm_db.create_user("donationowner", "password123", "站长")
+        cm_db.set_super(owner, True)
+        self.super_token = cm_db.issue_token(owner)
 
     def request(self, method, path, body=None, token=None):
         h = _Handler(method, path, body, token=token or "")
@@ -85,6 +88,37 @@ class DonationsTest(unittest.TestCase):
         _, d2 = self.request("GET", "/admin/donations", token=self.admin_token)
         self.assertEqual((d2["totalCount"], d2["totalCents"]), (1, 1000))
         self.assertEqual(self.request("DELETE", f"/admin/donations/{it['id']}", token=self.admin_token)[0], 404)
+
+
+    def test_admin_create_donation(self):
+        path = "/admin/donations"
+        # 普通用户/普通管理员都不能代录
+        self.assertEqual(self.request("POST", path, {"username": "donor", "amount": 1}, self.token)[0], 403)
+        self.assertEqual(self.request("POST", path, {"username": "donor", "amount": 1}, self.admin_token)[0], 403)
+        for bad in ({"amount": 1}, {"username": "nobody", "amount": 1},
+                    {"username": "donor"}, {"username": "donor", "amount": 0},
+                    {"username": "donor", "amount": 1, "txnId": "T1"}):
+            # 缺少/找不到目标用户 → 404；金额或单号非法 → 400
+            self.assertIn(self.request("POST", path, bad, self.super_token)[0], (400, 404), bad)
+        # 按用户名代录，单号自动生成
+        status, r = self.request("POST", path, {"username": "donor", "amount": 8.8, "note": "线下"}, self.super_token)
+        self.assertEqual(status, 200)
+        self.assertTrue(r["txnId"].startswith("ADMIN-"))
+        # 按 userId 代录并指定单号；重复单号 409
+        status, r = self.request("POST", path, {"userId": self.uid, "amount": 5, "txnId": "TXB000001"}, self.super_token)
+        self.assertEqual((status, r["txnId"]), (200, "TXB000001"))
+        self.assertEqual(self.request("POST", path, {"userId": self.uid, "amount": 5, "txnId": "TXB000001"},
+                                      self.super_token)[0], 409)
+        # 列表带代录标记与操作人
+        _, d = self.request("GET", "/admin/donations", token=self.admin_token)
+        by_txn = {x["txn_id"]: x for x in d["items"]}
+        self.assertTrue(by_txn["TXB000001"]["created_by"] > 0)
+        self.assertEqual(by_txn["TXB000001"]["created_by_name"], "donationowner")
+        # 自助提交的记录 created_by 为 0
+        self.request("POST", "/donation", {"amount": 1, "txnId": "TXC000001"}, self.token)
+        _, d = self.request("GET", "/admin/donations", token=self.admin_token)
+        by_txn = {x["txn_id"]: x for x in d["items"]}
+        self.assertEqual(by_txn["TXC000001"]["created_by"], 0)
 
 
 if __name__ == "__main__":

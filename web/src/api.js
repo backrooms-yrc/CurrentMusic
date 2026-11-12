@@ -267,6 +267,8 @@ export const api = {
   /** 捐赠用户列表：按用户聚合次数与累计金额。 */
   adminDonations: (query = '', offset = 0, limit = 20, sort = 'recent') => call('GET', `/admin/donations?query=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}&sort=${encodeURIComponent(sort)}`, { auth: true }),
   adminDeleteDonation: (id) => call('DELETE', `/admin/donations/${id}`, { body: {}, auth: true }),
+  /** 站长/超管为任一用户代录捐赠；单号可留空自动生成。 */
+  adminCreateDonation: (payload) => call('POST', '/admin/donations', { body: payload, auth: true }),
   adminSetProgression: (id, points, level) => call('POST', `/admin/users/${id}/progression`, { body: { points, level }, auth: true }),
   adminDisable: (id, on) => call('POST', `/admin/users/${id}/disable`, { body: { on }, auth: true }),
   adminResetPassword: (id, password) => call('POST', `/admin/users/${id}/password`, { body: { password }, auth: true }),

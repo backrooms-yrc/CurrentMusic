@@ -69,6 +69,20 @@
 
 `GET /cm/admin/donations` 提供搜索、分页与按用户聚合的次数 / 累计金额（`sort=recent/amount/user_total/user_count/...`），`DELETE /cm/admin/donations/{id}` 用于清理误报。这两个接口需要管理员权限，第三方客户端无需接入。
 
+### 代录捐赠（超管/站长）
+
+线下捐赠或用户无法自助提交时，站长/超管可代任一用户写入捐赠记录：
+
+```json
+POST /cm/admin/donations
+{ "username": "demo", "amount": 8.8, "note": "线下捐赠" }
+```
+
+- 目标用户用 `userId`（数字 ID）或 `username` 二选一；账号快照仍取目标用户的服务端记录。
+- `amount` 规则与自助提交一致；`txnId` **可选**，留空自动生成 `ADMIN-` 前缀占位单号；真实单号重复返回 409。
+- 代录记录带 `created_by`（操作管理员 uid）与 `created_by_name`，列表中以「代录」标记区分，便于审计。
+- 普通管理员调用返回 403。
+
 ## 隐私与边界
 
 - 交易单号、自报金额与账号快照仅存于 CurrentMusic 服务端，供站长核对捐赠记录，不会下发给其他用户。
