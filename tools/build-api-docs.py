@@ -44,7 +44,7 @@ GUIDES = {
     'private-roaming-api': '私人漫游', 'play-history-sync': '网易云听歌历史同步',
     'currentmusic-ai': '聊天 AI 与 SSE', 'share-api': '分享元数据与图片',
     'engine-badge-api': '流声引擎署名徽章',
-    'realip': 'RealIP 规则', 'third-party-ncm-sync': '第三方客户端绑定同步',
+    'realip': 'RealIP 规则', 'third-party-ncm-sync': '第三方客户端绑定同步', 'donations-api': '官方捐赠与第三方接入',
     'rooms-design': '一起听房间 API 与同步协议', 'network-lines-api': '线路测速',
 }
 
