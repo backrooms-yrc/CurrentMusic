@@ -9,6 +9,7 @@ import { openShare } from './share.js';
 import { castIconHTML, openCastDialog } from './cast.js';
 import { openAskAI, ensureAiBot } from './ask-ai.js';
 import { createMiniProgress, createPlayerProgress } from './playback-progress.js';
+import { applyPlayerBackground, backgroundLabel, openPlayerBackground, updateBackgroundMotion } from './player-background.js';
 import { layoutRect, layoutScale } from './tablet-scale.js';
 import { AIMO_ICONS, injectSlot, isAimo } from './aimo-icons.js';
 
@@ -253,49 +254,65 @@ on('time', () => {
   if (!document.hidden && !document.getElementById('commentOverlay')) {
     if (miniProgress) miniProgress.update();
     if (fullProgress) fullProgress.update();
+    if (playerVisualsVisible()) updateBackgroundMotion(wave, player.isPlaying());
   }
-  updateSbRemaining();
   syncLyric();
 });
-
-/** 翱翔鸟Music 的右侧时间是「剩余」：-0:00（参考 Apple Music）。 */
-function updateSbRemaining() {
-  if (!isSoaringBirdTheme()) return;
-  const el = document.getElementById('plDur');
-  if (!el) return;
-  const dur = player.durMs();
-  const rem = Number.isFinite(dur) && dur > 0 ? Math.max(0, dur - player.posMs()) : 0;
-  const txt = '-' + fmtDur(rem);
-  if (el.textContent !== txt) el.textContent = txt;
-}
 
 // ---------- 全屏播放页 ----------
 
 let lyricLines = [];
-let lyricLoadedFor = null;
+let lyricRequest;
+let autoLyrics = localStorage.getItem('cm.autoLyrics') !== '0';
+
+function paintLyricSource() {
+  const status = document.getElementById('mLyricSource');
+  if (!status) return;
+  const data = lyricRequest?.data;
+  const sources = { 'lddc:qm': 'QQ 音乐', 'lddc:kg': '酷狗音乐', 'lddc:ne': '网易云音乐',
+    'lddc:lrclib': 'LRCLIB', 'ncm:yrc': '网易云音乐', 'ncm:lrc': '网易云音乐' };
+  const timing = data?.wordLevel ? '逐字' : lyricLines.some(line => line.wSynth) ? '估算逐字' : '逐行';
+  status.textContent = lyricRequest?.failed ? '歌词加载失败' : !data ? '正在查找歌词…'
+    : data.instrumental ? '纯音乐' : !lyricLines.length ? '暂无歌词'
+      : [sources[data.source], timing].filter(Boolean).join(' · ');
+}
 
 async function loadLyric() {
-  const m = player.meta;
-  if (!m) return;
-  // 关键：不清空旧歌词——让旧内容在 fetch 期间保持可见（消除"突然消失又出现"的空窗）。
-  // 新数据到达后才一次性替换并重置行号。
-  const oldLines = lyricLines;
-  lyricLoadedFor = m.ncm_id;
-  pushDesktopLyric(-1, true);
-  try {
-    const d = await api.lyric(m.ncm_id);
-    if (!player.meta || player.meta.ncm_id !== m.ncm_id) return;
-    lyricLines = (d.lines || []).filter(l => l.txt);
-  } catch {
-    lyricLoadedFor = m.ncm_id + ':err';
-    lyricLines = [];            // 仅在获取失败时清空
+  const id = player.meta?.ncm_id;
+  if (!id) return;
+  const key = JSON.stringify([settings.base, id, autoLyrics]);
+  if (lyricRequest?.key === key && !lyricRequest.failed) {
+    if (!document.getElementById('plLyric')?.hasChildNodes()) renderLyric();
+    syncLyric(true);
+    return;
   }
-  if (lyricLines !== oldLines) {
-    curLyricIdx = -1;           // 行集变了，重置行号以触发首次滚动
+  const request = { id, key, base: settings.base };
+  if (lyricRequest?.id !== id || lyricRequest?.base !== request.base) {
+    lyricLines = [];
+    curLyricIdx = -1;
     karaokeSpans = null;
   }
+  lyricRequest = request;
   renderLyric();
+  paintLyricSource();
+  pushDesktopLyric(-1, true);
+  let data;
+  try {
+    data = await api.lyric(id, autoLyrics);
+    if (!Array.isArray(data?.lines)) throw new Error('歌词格式无效');
+  } catch {
+    request.failed = true;
+    data = undefined;
+  }
+  if (request !== lyricRequest || request.base !== settings.base || player.meta?.ncm_id !== id) return;
+  request.data = data;
+  lyricLines = (data?.lines || []).filter(l => l.txt);
+  curLyricIdx = -1;
+  karaokeSpans = null;
+  renderLyric();
+  paintLyricSource();
   syncLyric();
+  fireKaraoke();
 }
 
 const PLAY_MODES = [
@@ -341,7 +358,7 @@ function pushDesktopLyric(index, loading, force) {
     }
     return;
   }
-  if (loading) {
+  if (loading || (!lyricLines.length && lyricRequest?.id === m.ncm_id && !lyricRequest.data && !lyricRequest.failed)) {
     const payload = 'loading\u0000' + (m.name || '');
     if (!force && payload === lastDesktopLyric) return;
     lastDesktopLyric = payload;
@@ -383,11 +400,6 @@ const LYRIC_SIZES = [
   { key: 'xl', label: 'Aa·特大', fs: 19 },
 ];
 let lyricSizeKey = localStorage.getItem('cm.lyricSize') || defaultLyricSizeKey();
-let bgGradOn = localStorage.getItem('cm.bgGrad') !== '0';
-const BG_SPEED_KEY = 'cm.bgSpeed';
-const BG_SPEED_MIN = 0.5, BG_SPEED_MAX = 2;
-const savedBgSpeed = Math.round(Number(localStorage.getItem(BG_SPEED_KEY)) * 10) / 10;
-let bgSpeed = savedBgSpeed >= BG_SPEED_MIN && savedBgSpeed <= BG_SPEED_MAX ? savedBgSpeed : 1;
 let lyricKaraoke = localStorage.getItem('cm.karaoke') !== '0';   // 逐字歌词（卡拉OK），默认开启
 
 // 窄屏播放页视图：cover（封面+控制） ↔ lyric（整屏歌词），点击主区域切换
@@ -412,12 +424,14 @@ function setPlayerView(v) {
   }
 }
 
+const boundLyricBoxes = new WeakSet();
 function renderLyric() {
   const box = document.getElementById('plLyric');
   if (!box) return;
   const soar = isSoaringBirdTheme();
   if (!lyricLines.length) {
-    box.innerHTML = soar
+    box.innerHTML = lyricRequest && !lyricRequest.data && !lyricRequest.failed
+      ? '<div class="pl-lyric-empty">歌词加载中…</div>' : soar
       ? `<div class="lp-nolyrics"><span class="lp-nolyrics__badge" aria-hidden="true"><span class="material-icons-outlined">music_note</span></span><p class="lp-nolyrics__title">暂无歌词</p><p class="lp-nolyrics__sub">这首歌是纯音乐，或歌词尚未收录</p></div>`
       : `<div class="pl-lyric-empty">暂无歌词</div>`;
     return;
@@ -499,6 +513,8 @@ function renderLyric() {
   }
   if (soar) layoutSoarPads();
   if (!soar) layoutLyricPads();
+  if (boundLyricBoxes.has(box)) return;
+  boundLyricBoxes.add(box);
   // 只在真实用户输入时暂停自动跟随 3 秒。
   // 不要用 onscroll + 标志位判定——scrollTo 的平滑动画也会触发 scroll 事件，
   // 动画期间标志位被 setTimeout 重置后，后续动画事件会被误判为用户操作，
@@ -534,9 +550,6 @@ function renderLyric() {
 /* 中英混排分词：中文按字、英文按词、空白与符号各自成段（逐字动画的最小单元） */
 const SOAR_TOKEN_RE = /[\u4e00-\u9fa5]|[a-zA-Z0-9'’]+|\s+|./gu;
 
-/** 翱翔鸟Music：逐字只在当前行启用（与参考实现一致）。
-    有词级轴（l.w）就按词切；没有就按「中文按字、英文按词、空白/符号各成段」切，
-    交给 soarSweep 用行时长做连续扫光——绝大多数歌词只有行级时间轴，这样才有逐字效果。 */
 function soarKaraokeOK() {
   return lyricKaraoke && (lyricMode === 'bi' || lyricMode === 'orig' || lyricMode === 'orig-roma');
 }
@@ -547,11 +560,13 @@ function soarTokenizeLine(box, idx) {
   const el = box.querySelector(`.lp-lyric[data-i="${idx}"]`);
   const txt = el && el.querySelector('.lp-lyric__text');
   if (!txt || txt.querySelector('.lp-tk')) return;
-  // 一律按「原文」分词：词级时间轴（l.w）里的 token 往往不带空格，
-  // 直接拼回去会把长句末尾的词粘在一起（表现为「末尾被分割/缺字」）。
-  // 行级时间轴下用按字符权重的匀速扫光，观感与 Apple 一致，也保证文本完整。
-  const tokens = (lineParts(line).main || '').match(SOAR_TOKEN_RE) || [];
+  const main = lineParts(line).main || '';
+  const words = line.w?.map(([, text]) => text);
+  const timed = words?.length && words.join('') === main;
+  const tokens = timed ? words
+    : autoLyrics ? [] : (main.match(SOAR_TOKEN_RE) || []);
   if (!tokens.length) return;
+  txt.classList.toggle('is-word-timed', !!timed);
   txt.innerHTML = tokens.map(tx => `<span class="lp-tk">${esc(tx)}</span>`).join('');
   soarResetSweep();
 }
@@ -706,13 +721,14 @@ function fireKaraoke() {
   if (!spans.length) return;
 
   const sbTheme = isSoaringBirdTheme();
-  // 翱翔鸟Music：始终走「行内匀速扫光」，不吃词级轴（见 soarTokenizeLine 的说明）；
-  // 换行滚动由合成层 CSS transition 完成，主线程只写当前字的 --cp。
-  if (sbTheme) { soarSweep(now, line, spans); return; }
-  if (!line.w) return;
   const w = line.w;
+  if (sbTheme && !spans[0].parentElement.classList.contains('is-word-timed')) {
+    if (!autoLyrics) soarSweep(now, line, spans);
+    return;
+  }
+  if (!w) return;
 
-  if (!CAN_SWEEP) {                  // 老引擎兜底：逐字跳色
+  if (!CAN_SWEEP && !sbTheme) {       // 老引擎兜底：逐字跳色
     let idx = -1;
     for (let k = 0; k < w.length; k++) { if (w[k][0] <= now) idx = k; else break; }
     if (idx === karaokeIdx) return;
@@ -731,7 +747,7 @@ function fireKaraoke() {
 
   for (let k = 0; k < spans.length && k < w.length; k++) {
     const start = w[k][0];
-    const end = (k + 1 < w.length) ? w[k + 1][0] : start + 280;
+    const end = line.words?.[k]?.end ?? w[k + 1]?.[0] ?? start + 280;
     let p = (now - start) / Math.max(60, end - start);
     p = p < 0 ? 0 : (p > 1 ? 1 : p);
     // 量化后比较（避免无变化时重写样式导致重栅格化闪烁）：
@@ -962,7 +978,7 @@ async function openFull() {
   document.body.classList.add('player-open');
   // 翱翔鸟Music 使用独立的 Apple Music 歌词页布局。
   const sb = isSoaringBirdTheme();
-  const backdrop = `<div class="${sb ? 'lp-backdrop' : 'pl-bg'}" id="plBg" aria-hidden="true"><div class="pl-ambient"></div></div>`;
+  const backdrop = `<div class="pl-background" id="plBg" aria-hidden="true"><div class="pl-ambient"></div></div>`;
   ov.classList.toggle('pl-background-paused', !playerVisualsVisible());
   const qualityNow = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
   const modeNow = PLAY_MODES.find(x => x.key === player.playMode);
@@ -1028,7 +1044,7 @@ async function openFull() {
           </div>
 
           <div class="lp-scrubber">
-            <div class="lp-scrubber__bar" id="plSeekbar"></div>
+            <div class="pl-seekbar" id="plSeekbar"></div>
             <div class="lp-scrubber__times">
               <span id="plCur">0:00</span>
               <div class="lp-quality">
@@ -1037,7 +1053,7 @@ async function openFull() {
                   <span class="lp-quality__label">${esc(qualityNow)}</span>
                 </button>
               </div>
-              <span id="plDur">-0:00</span>
+              <span id="plDur">−0:00</span>
             </div>
             <div class="lp-scrubber__stall">${plStall}</div>
           </div>
@@ -1083,10 +1099,10 @@ async function openFull() {
           <div class="pl-ctrl">${plCtrlIcons}</div>
           <div class="pl-progress-stack">
             ${waveformHTML()}
-            <div class="pl-seek">
+            <div class="pl-seekbar" id="plSeekbar"></div>
+            <div class="pl-seek-times">
               <span id="plCur">0:00</span>
-              <div class="pl-seekbar" id="plSeekbar"></div>
-              <span id="plDur">0:00</span>
+              <span id="plDur">−0:00</span>
             </div>
             ${plStall}
           </div>
@@ -1259,8 +1275,7 @@ async function openFull() {
   ov.querySelector('#plQueue').onclick = openQueue;
   if (fullProgress) fullProgress.destroy();
   fullProgress = createPlayerProgress(ov.querySelector('#plSeekbar'), player,
-    ov.querySelector('#plCur'), sb ? null : ov.querySelector('#plDur'));
-  updateSbRemaining();
+    ov.querySelector('#plCur'), ov.querySelector('#plDur'));
   // 波形控制器：数据来自真实频谱（wave.read），进度来自 posMs/durMs
   // （投屏时这两个值来自设备上报，直接读 audio 会是 0）
   const canvas = ov.querySelector('#plWaveCanvas');
@@ -1285,7 +1300,7 @@ async function openFull() {
   const castSlot = ov.querySelector('#plCastSlot');
   if (castSlot) castSlot.onclick = () => openCastDialog();
   else if (castBtn) castBtn.onclick = () => openCastDialog();
-  applyPlayerBg();
+  applyPlayerBackground(m.pic || '');
   applyDynamicScheme();
   ov.querySelector('#plComments').onclick = () => openComments(player.meta);
   const likeBtn = ov.querySelector('#plLike');
@@ -1457,6 +1472,10 @@ function openMoreDrawer() {
         <div class="cm-more-col">
           <section class="cm-more-card">
             <div class="cm-more-h"><span class="material-icons-outlined">subtitles</span>歌词显示</div>
+            <div class="cm-more-row">
+              <div><div class="cm-more-t">歌词自动择优</div><div class="cm-more-s">QQ 逐字优先，逐行兜底</div><div class="cm-more-s" id="mLyricSource" aria-live="polite"></div></div>
+              <mdui-switch id="mAutoLyrics" aria-label="歌词自动择优" ${autoLyrics ? 'checked' : ''}></mdui-switch>
+            </div>
             <div class="cm-more-field">
               <span class="cm-more-fl">语言</span>
               <div class="cm-more-chips" id="chipsLang">${chipsHTML(LYRIC_MODES, lyricMode, 'lang')}</div>
@@ -1469,19 +1488,14 @@ function openMoreDrawer() {
           <section class="cm-more-card">
             <div class="cm-more-h"><span class="material-icons-outlined">auto_awesome</span>播放增强</div>
             <div class="cm-more-row">
-              <div><div class="cm-more-t">逐字歌词</div><div class="cm-more-s">官方逐字精确同步；没有时按行时长自动估算点亮</div></div>
+              <div><div class="cm-more-t">逐字歌词</div><div class="cm-more-s">随逐字时间轴点亮歌词</div></div>
               <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
             </div>
-            <div class="cm-more-row">
-              <div><div class="cm-more-t">动态背景</div><div class="cm-more-s">封面配色流动，换歌时平滑过渡</div></div>
-              <mdui-switch id="mGrad" aria-label="动态背景" ${bgGradOn ? 'checked' : ''}></mdui-switch>
-            </div>
-            <div class="cm-more-field cm-bg-speed">
-              <label class="cm-more-t" for="mBgSpeed">背景速度</label>
-              <output for="mBgSpeed" id="mBgSpeedValue">${bgSpeed.toFixed(1)}×</output>
-              <input type="range" id="mBgSpeed" min="${BG_SPEED_MIN}" max="${BG_SPEED_MAX}" step="0.1"
-                value="${bgSpeed}" aria-valuetext="${bgSpeed.toFixed(1)} 倍" ${bgGradOn ? '' : 'disabled'}>
-            </div>
+            <button type="button" class="cm-more-nav" id="mBackground">
+              <span class="cm-more-nav-ic material-icons-outlined">wallpaper</span>
+              <span><span class="cm-more-t">播放背景</span><span class="cm-more-s">${backgroundLabel()}</span></span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>
           </section>
         </div>
         <div class="cm-more-col">
@@ -1565,19 +1579,16 @@ function openMoreDrawer() {
       renderLyric();
       stopKaraoke(); startKaraoke(); fireKaraoke();
     });
-    const bgSpeedInput = diag.querySelector('#mBgSpeed');
-    const bgSpeedValue = diag.querySelector('#mBgSpeedValue');
-    bgSpeedInput.oninput = () => {
-      setBgSpeed(bgSpeedInput.valueAsNumber);
-      bgSpeedValue.textContent = `${bgSpeed.toFixed(1)}×`;
-      bgSpeedInput.setAttribute('aria-valuetext', `${bgSpeed.toFixed(1)} 倍`);
-    };
-    diag.querySelector('#mGrad').addEventListener('change', e => {
-      bgGradOn = e.target.checked;
-      localStorage.setItem('cm.bgGrad', bgGradOn ? '1' : '0');
-      bgSpeedInput.disabled = !bgGradOn;
-      applyPlayerBg();
+    paintLyricSource();
+    diag.querySelector('#mAutoLyrics').addEventListener('change', e => {
+      autoLyrics = e.target.checked;
+      localStorage.setItem('cm.autoLyrics', autoLyrics ? '1' : '0');
+      loadLyric();
     });
+    diag.querySelector('#mBackground').onclick = () => {
+      diag.open = false;
+      openPlayerBackground(() => player.meta?.pic || '');
+    };
     diag.querySelectorAll('mdui-chip[data-g="dl"]').forEach(ch => {
       ch.onclick = () => { diag.open = false; doDownload(ch.dataset.k); };
     });
@@ -1621,40 +1632,6 @@ async function doDownload(level) {
 }
 
 // ---------- 播放页背景 ----------
-
-function setBgSpeed(speed) {
-  if (!Number.isFinite(speed) || speed < BG_SPEED_MIN || speed > BG_SPEED_MAX || speed === bgSpeed) return;
-  const previous = bgSpeed;
-  bgSpeed = speed;
-  localStorage.setItem(BG_SPEED_KEY, String(speed));
-  const el = document.getElementById('plBg');
-  if (!el) return;
-  // 时长改变时同步调整已播放时间，让色团从当前位置继续流动。
-  const drifts = (el.getAnimations?.({ subtree: true }) || []).filter(a => a.animationName === 'plAmbientDrift');
-  const times = drifts.map(a => a.currentTime);
-  el.style.setProperty('--pl-bg-speed', String(speed));
-  drifts.forEach((animation, i) => {
-    if (typeof times[i] === 'number') animation.currentTime = times[i] * previous / speed;
-  });
-}
-
-async function applyPlayerBg() {
-  const el = document.getElementById('plBg');
-  if (!el || !player.meta) return;
-  const pic = player.meta.pic || '';
-  el.classList.toggle('grad', bgGradOn);
-  if (!bgGradOn) {
-    el.style.setProperty('--pl-cover-image', pic ? `url(${JSON.stringify(pic)})` : 'none');
-    return;
-  }
-  el.style.setProperty('--pl-bg-speed', String(bgSpeed));
-  // 取色期间保留当前背景。旧封面晚到时不能覆盖正在播放的歌曲。
-  const colors = await coverColors(pic, { fallback: false });
-  if (!el.isConnected || !bgGradOn || !player.meta || (player.meta.pic || '') !== pic) return;
-  el.style.setProperty('--pl-bg-base', colors?.dark || '');
-  el.style.setProperty('--pl-bg-main', colors?.primary || '');
-  el.style.setProperty('--pl-bg-accent', colors?.accent || '');
-}
 
 // 动态取色：配色方案为 dynamic 时随封面切换全局主色（含深色档/强调色，见 applyColorScheme）
 async function applyDynamicScheme() {
@@ -1768,7 +1745,7 @@ function updateSongInfo() {
   if (fullProgress) fullProgress.update();
   syncPlayerLike(m);
   // 更新背景
-  applyPlayerBg();
+  applyPlayerBackground(m.pic || '');
 }
 
 /** 音质胶囊：翱翔鸟Music 的 chip 里还有图标，不能直接写 textContent（会清空结构）。 */
@@ -1795,6 +1772,7 @@ on('state', () => {
   const b = document.getElementById('plPlay');
   if (b) b.innerHTML = amPlayIcon();
   if (waveCtl) waveCtl.setPlaying(player.isPlaying());
+  if (playerVisualsVisible() && !player.isPlaying()) updateBackgroundMotion(wave, false);
   if (fullProgress) fullProgress.update();
   renderMini();
 });

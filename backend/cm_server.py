@@ -2766,7 +2766,7 @@ def route(handler, method):
             ("POST", "/rooms/{id}/sync", "成员 Bearer", "读取服务器时钟与时间轴"),
             ("POST", "/rooms/{id}/heartbeat", "成员 Bearer", "刷新在线状态"),
             ("GET", "/announcements", "公开", "站内公告（客户端每次打开拉取并弹窗，置顶在前）"),
-            ("GET", "/ncm/lyric", "公开", "歌词归一化：{lines:[{t,txt,trans,roma,w?,words?,wSynth?}],isYrc,source,wordLevel}；t/w 单位为毫秒，w=[起始,字/词]；官方 YRC 优先，LDDC 候选须与已有官方 LRC 正文相符，否则返回官方 LRC 和估算逐字轴（wSynth）。详见 /api-docs/reference/guide-lyrics-api/"),
+            ("GET", "/ncm/lyric", "公开", "归一化歌词，t/w 单位为毫秒。strategy=auto 优先匹配 QQ 真实逐字，逐行兜底；省略参数时官方 YRC 优先，可返回估算轴（wSynth）。候选须通过元数据及已有官方正文复核。详见 /api-docs/reference/guide-lyrics-api/"),
             ("GET", "/admin/announcements", "管理员", "公告管理列表（含已移除；带 canEdit 权限标记）"),
             ("GET", "/admin/overview", "管理员", "管理台概览：总量、注册与播放趋势、角色计数、用户来源 sourceCounts {web,x,other}（按最近一次成功登录或注册归类）"),
             ("GET", "/admin/clients", "管理员", "客户端版本：CurrentMusic 与 CurrentMusicX 的版本/大小/发布时间/更新说明/历史/下载数"),
@@ -4620,12 +4620,14 @@ def route(handler, method):
 
     if path == "/ncm/lyric" and method == "GET":
         ncm_id = int(q.get("id") or 0)
-        key = f"lyric:{cm_ncm.LYRIC_CACHE_VERSION}:{ncm_id}"
+        auto = q.get("strategy") == "auto"
+        version = "auto-v1" if auto else cm_ncm.LYRIC_CACHE_VERSION
+        key = f"lyric:{version}:{ncm_id}"
         cached = cm_db.cache_get(key)
         if cached:
             return jresp(handler, 200, json.loads(cached))
-        out = cm_ncm.lyric(ncm_id)
-        cm_db.cache_set(key, json.dumps(out, ensure_ascii=False), cm_lddc.cache_ttl(out))
+        out = cm_ncm.lyric(ncm_id, auto=auto)
+        cm_db.cache_set(key, json.dumps(out, ensure_ascii=False), cm_lddc.cache_ttl(out, auto=auto))
         return jresp(handler, 200, out)
 
     # 歌曲深度资料：公开元数据，按可信用户 IP 隔离，失败不写缓存。

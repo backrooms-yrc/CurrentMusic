@@ -6,6 +6,12 @@
 **网易云官方 YRC → 通过复核的 LDDC 逐字源 → 网易云 LRC 与估算逐字轴** 的顺序选择。
 LDDC 未配置、未命中或候选版本与官方正文不符时，返回网易云 LRC（如有）。
 
+`GET /cm/ncm/lyric?id=<ncmId>&strategy=auto` 是网页播放器默认使用的自动择优模式。
+先查找通过歌曲元数据和现有官方歌词正文复核的 QQ 真实逐字（QRC）。
+QQ 没有可用逐字时，使用网易云官方 YRC，再尝试已配置的其他 LDDC 逐字源。
+找不到真实逐字时使用匹配到的逐行歌词。该模式的逐行结果不生成估算轴。
+省略 `strategy` 可继续使用原有模式。
+
 ## 响应
 
 ```json
@@ -43,7 +49,7 @@ LDDC 未配置、未命中或候选版本与官方正文不符时，返回网易
 | `lines[].trans` | string | 翻译，可能为空 |
 | `lines[].roma` | string | 罗马音，可能为空 |
 | `lines[].w` | array? | 逐字/逐词轴：`[起始毫秒, 字/词]`，按时间升序；所有 token 拼接等于 `txt` |
-| `lines[].words` | array? | 供 CurrentMusicX 下一版接入的逐词对象：`{text,start,end}`；当前最新版暂不支持 LDDC 逐字。LDDC 源带真实结束时间，官方 YRC 的 `end` 按相邻 token 推算 |
+| `lines[].words` | array? | 逐词对象 `{text,start,end}`。LDDC 源带真实结束时间，官方 YRC 的 `end` 按相邻 token 推算 |
 | `lines[].wSynth` | bool? | `true` 表示该行 `w` 是服务端按行时长估算的，不是官方/第三方逐字数据 |
 | `isYrc` | bool | 网易云上游是否存在官方 YRC；LDDC 结果也为 `false` |
 | `source` | string | `ncm:yrc` / `ncm:lrc` / `ncm:inst` / `lddc:kg` / `lddc:ne` / `lddc:qm` / `none` |
@@ -122,6 +128,8 @@ CurrentMusic 通过本机 `127.0.0.1:3015` 桥接服务调用它，源码不进�
 - LDDC 未配置时仍按 7 天缓存，不影响旧部署行为。
 - 当前缓存键为 `lyric:v17:<id>`。歌词接口、投屏 LRC 和歌词搜索预览均使用新缓存键，
   旧版中可能串版的歌词不会迁入。
+- 自动择优使用独立缓存。QQ 逐字与已确认的纯音乐缓存 7 天，其余结果在桥接启用时按
+  `CM_LDDC_RETRY_TTL` 重试。
 
 ## 示例
 

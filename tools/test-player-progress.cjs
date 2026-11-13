@@ -29,7 +29,7 @@ const assert = require('node:assert/strict'), path = require('node:path');
       });
       assert.equal(await slider.inputValue(), '25');
       assert.equal(await page.locator('#plCur').innerText(), '1:00');
-      assert.equal(await page.locator('#plDur').innerText(), '4:00');
+      assert.equal(await page.locator('#plDur').innerText(), '−3:00');
       assert.equal(await slider.getAttribute('aria-valuetext'), '1:00 / 4:00');
       const miniBands = page.locator('.cm-mini-track .cm-chorus-track span');
       const fullBands = page.locator('.pl-seek-track .cm-chorus-track span');
@@ -41,6 +41,8 @@ const assert = require('node:assert/strict'), path = require('node:path');
       assert.deepEqual(requests, ['1'], 'the progress bars share the song request');
       assert.equal(await page.locator('#plSeekChorus').textContent(), '高潮（副歌） 1:00–2:00、3:00–4:00');
       assert.equal(await slider.getAttribute('aria-describedby'), 'plSeekChorus');
+      assert.equal(await page.locator('.pl-chorus-played span').count(), 2);
+      assert.equal(await page.locator('.pl-seek-thumb').count(), 0);
       for (const preset of ['cmx', 'frost', 'glass', 'md3']) for (const dark of [false, true]) {
         await page.evaluate(({ preset, dark }) => {
           document.documentElement.dataset.uiPreset = preset;
@@ -61,6 +63,7 @@ const assert = require('node:assert/strict'), path = require('node:path');
       const preview = await slider.inputValue();
       assert(Math.abs(Number(preview) - 75) < 5);
       assert.equal(await page.evaluate(() => seeks.length), 0);
+      assert(await slider.evaluate(el => el.parentElement.classList.contains('is-dragging')));
       assert((await page.locator('#plCur').innerText()).startsWith('2:') || (await page.locator('#plCur').innerText()).startsWith('3:'));
       assert.equal(await page.locator('.pl-seek-time').evaluate(el => getComputedStyle(el).opacity), '1');
       await page.evaluate(() => { window.heldFullSlider = document.getElementById('plSeek'); MiniTest.tick(); MiniTest.notifyState(); });
@@ -112,7 +115,7 @@ const assert = require('node:assert/strict'), path = require('node:path');
       assert.deepEqual(requests, ['1', '2', '3']);
       for (const dur of [0, Infinity, NaN]) {
         await page.evaluate(dur => { clock.durMs = dur; MiniTest.player.meta.duration = 0; MiniTest.tick(); }, dur);
-        assert(await slider.isDisabled()); assert.equal(await page.locator('#plDur').innerText(), '0:00');
+        assert(await slider.isDisabled()); assert.equal(await page.locator('#plDur').innerText(), '−0:00');
       }
       await page.evaluate(() => { clock.durMs = 240000; clock.posMs = 48000; MiniTest.player.loading = true; MiniTest.notifyState(); });
       assert(await slider.isDisabled());

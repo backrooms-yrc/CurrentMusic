@@ -1982,15 +1982,11 @@ html[data-ui-preset="aimo"] #playerOverlay {
   color: var(--aimo-text-primary) !important;
 }
 
-html[data-ui-preset="aimo"] .pl-bg:not(.grad) {
-  display: none;
-}
-
-html[data-ui-preset="aimo"] .pl-bg.grad {
+html[data-ui-preset="aimo"] #plBg {
   opacity: .20;
 }
 
-html[data-ui-preset="aimo"].mdui-theme-dark .pl-bg.grad {
+html[data-ui-preset="aimo"].mdui-theme-dark #plBg {
   opacity: .55;
 }
 
@@ -2036,7 +2032,7 @@ html[data-ui-preset="aimo"] .pl-quality {
   border-radius: 999px;
 }
 
-html[data-ui-preset="aimo"] .pl-seek > span {
+html[data-ui-preset="aimo"] .pl-seek-times {
   color: var(--aimo-text-secondary);
   font-family: var(--aimo-font-mono);
   font-variant-numeric: tabular-nums;
@@ -2048,9 +2044,7 @@ html[data-ui-preset="aimo"] .pl-seek-track {
   border-radius: 999px;
 }
 
-html[data-ui-preset="aimo"] .pl-seek-track i {
-  background: var(--aimo-primary);
-}
+html[data-ui-preset="aimo"] .pl-seekbar { --pl-seek-focus: var(--aimo-text-primary); }
 
 html[data-ui-preset="aimo"] .pl-transport {
   display: flex !important;

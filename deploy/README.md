@@ -99,9 +99,10 @@ curl -fsS http://127.0.0.1:3015/health
 curl -fsS 'http://127.0.0.1:3010/ncm/lyric?id=3340112781' | jq '.source, .wordLevel, (.lines|length)'
 ```
 
-Expected chain: NetEase official YRC → LDDC (`lddc:kg`, `lddc:ne`, ...) → local
-synthetic timing (`wSynth`). Uninstall by stopping/removing `currentmusic-lddc` and
-the `lddc.conf` drop-in; the backend then returns to the synthetic fallback.
+The default API mode uses NetEase YRC → LDDC → synthetic timing (`wSynth`).
+The Web player's automatic mode prioritizes QQ word timing, then NetEase YRC or other
+enabled word-timed sources, with line timing as a fallback.
+To uninstall, stop/remove `currentmusic-lddc` and the `lddc.conf` drop-in.
 
 Optional tuning in `/opt/lddc/bridge.env` (restart the bridge afterwards):
 
@@ -109,7 +110,13 @@ Optional tuning in `/opt/lddc/bridge.env` (restart the bridge afterwards):
 LDDC_SOURCES=KG,NE,QM,LRCLIB   # priority order; drop a source if its upstream is blocked
 LDDC_DEADLINE=8.5              # overall lookup budget in seconds
 LDDC_CACHE_TTL=43200           # in-process positive cache, seconds
+CM_QQ_MUSIC_BASE=http://127.0.0.1:3200 # optional QQ catalogue for automatic mode
 ```
+
+If the local QQ Music API is installed, set `CM_QQ_MUSIC_BASE` in the bridge's
+environment as well as in the backend. The bridge uses the anonymous catalogue
+to find the QQ song ID, then uses LDDC to fetch its QRC. With the setting omitted,
+the bridge uses LDDC's built-in QQ search.
 
 The bridge has no PySide6 dependency; `tools/lddc_headless/` only supplies the few
 `QtCore` types LDDC's non-GUI modules import. On machines without `uv`, install

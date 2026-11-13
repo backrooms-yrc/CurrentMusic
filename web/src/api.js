@@ -171,7 +171,7 @@ export function deviceInfo() {
 }
 
 /** File/Blob → base64（去掉 data URL 前缀）。 */
-function blobToBase64(blob) {
+export function blobToBase64(blob) {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onload = () => resolve(String(fr.result).replace(/^data:[^,]*,/, ''));
@@ -186,7 +186,7 @@ function blobToBase64(blob) {
  * 原样上传必然 400；上游封面/头像也只需要一张方图。
  * 非图片或 canvas 不可用时抛错，由调用方回退原文件。
  */
-function shrinkImage(file, maxSide = 1024, quality = 0.86) {
+export function shrinkImage(file, maxSide = 1024, quality = 0.86) {
   return new Promise((resolve, reject) => {
     if (!/^image\//.test(file.type || '')) return reject(new Error('不是图片'));
     const url = URL.createObjectURL(file);
@@ -410,7 +410,7 @@ export const api = {
   postComment: (id, content) => call('POST', `/posts/${id}/comments`, { body: { content }, auth: true }),
   postCommentDelete: (cid) => call('DELETE', `/posts/comments/${cid}`, { auth: true }),
   songDetail: (ids) => call('GET', `/ncm/song/detail?ids=${ids.slice(0, 100).join(',')}`),
-  lyric: (ncmId) => call('GET', `/ncm/lyric?id=${ncmId}`),
+  lyric: (ncmId, auto = false) => call('GET', `/ncm/lyric?id=${encodeURIComponent(ncmId)}${auto ? '&strategy=auto' : ''}`),
   commentCount: (ncmId) => call('GET', `/ncm/comment-count?id=${ncmId}`),
   ncmPlaylist: (pid) => call('GET', `/ncm/playlist?id=${pid}`),
   daily: () => call('GET', '/daily', { auth: true }),

@@ -212,3 +212,38 @@ class LyricSearchRouteTests(unittest.TestCase):
         self.assertFalse(result['wordLevel'])
         self.assertEqual([line['txt'] for line in result['lines']], ['前一句', '测试命中行', '后一句', '最后一句'])
         self.assertTrue(all(line['wSynth'] for line in result['lines']))
+
+    def test_auto_lyric_prefers_verified_qq_and_keeps_legacy_cache_separate(self):
+        upstream = document('[00:01.000]甲乙\n[00:02.000]丙丁')
+        upstream['yrc'] = {'lyric': '[1000,800](1000,400,0)甲(1400,400,0)乙\n'
+                                    '[2000,800](2000,400,0)丙(2400,400,0)丁'}
+        upstream['tlyric'] = {'lyric': '[00:01.000]翻译'}
+        qq = {'source': 'lddc:qm', 'wordLevel': True, 'lines': [
+            {'t': 1100, 'txt': '甲乙', 'w': [[1100, '甲'], [1550, '乙']]},
+            {'t': 2100, 'txt': '丙丁', 'w': [[2100, '丙'], [2550, '丁']]},
+        ]}
+        with (mock.patch.object(cm_ncm, 'call', return_value=upstream),
+              mock.patch.object(cm_ncm, 'song_detail', return_value=[{'ncm_id': 1}]),
+              mock.patch.object(cm_ncm.cm_lddc, 'enabled', return_value=True),
+              mock.patch.object(cm_ncm.cm_lddc, 'fetch', return_value=qq) as fetch):
+            self.assertEqual(self.call('GET', '/ncm/lyric?id=1')[1]['source'], 'ncm:yrc')
+            status, result = self.call('GET', '/ncm/lyric?id=1&strategy=auto')
+            self.assertEqual(self.call('GET', '/ncm/lyric?id=1&strategy=auto'), (status, result))
+            self.assertEqual(self.call('GET', '/ncm/lyric?id=1')[1]['source'], 'ncm:yrc')
+            fetch.assert_called_once()
+            self.assertTrue(fetch.call_args.kwargs['auto_base']['wordLevel'])
+        self.assertEqual(status, 200)
+        self.assertEqual(result['source'], 'lddc:qm')
+        self.assertEqual(result['lines'][0]['w'], qq['lines'][0]['w'])
+        self.assertEqual(result['lines'][0]['trans'], '翻译')
+
+    def test_auto_lyric_falls_back_to_line_timing(self):
+        with (mock.patch.object(cm_ncm, 'call', return_value=document()),
+              mock.patch.object(cm_ncm, 'song_detail', return_value=[{'ncm_id': 1}]),
+              mock.patch.object(cm_ncm.cm_lddc, 'enabled', return_value=True),
+              mock.patch.object(cm_ncm.cm_lddc, 'fetch', return_value=None)):
+            status, result = self.call('GET', '/ncm/lyric?id=1&strategy=auto')
+        self.assertEqual(status, 200)
+        self.assertEqual(result['source'], 'ncm:lrc')
+        self.assertFalse(result['wordLevel'])
+        self.assertTrue(all('w' not in line and 'words' not in line for line in result['lines']))

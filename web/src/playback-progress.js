@@ -1,4 +1,4 @@
-import { fmtDur } from './ui.js';
+import { coverColors, fmtDur } from './ui.js';
 import { api, settings } from './api.js';
 
 const clamp = value => Math.max(0, Math.min(100, Number(value) || 0));
@@ -17,20 +17,25 @@ function loadChorus(id) {
 }
 
 /** 两处播放器共用定位逻辑，原生 range 保留触屏与键盘操作。 */
-function createProgress(root, player, full, current, total) {
+function createProgress(root, player, full, current, remaining) {
   const ids = full ? ['plSeek', 'plBuf', 'plFill'] : ['miniSeek', 'miniBuf', 'miniProg'];
   root.innerHTML = `
-    <div class="${full ? 'pl-seek-track' : 'cm-mini-track'}" aria-hidden="true"><i id="${ids[1]}"></i><i id="${ids[2]}"></i><div class="cm-chorus-track"></div></div>
-    <span class="${full ? 'pl-seek-thumb' : 'cm-mini-thumb'}" aria-hidden="true"></span>
+    ${full ? '<div class="pl-seek-halo" aria-hidden="true"></div>' : ''}
+    <div class="${full ? 'pl-seek-track' : 'cm-mini-track'}" aria-hidden="true">
+      <i id="${ids[1]}"></i><i id="${ids[2]}"></i><div class="cm-chorus-track"></div>
+      ${full ? '<div class="pl-chorus-played"></div><div class="pl-seek-shine"></div>' : ''}
+    </div>
+    ${full ? '' : '<span class="cm-mini-thumb" aria-hidden="true"></span>'}
     <output class="${full ? 'pl-seek-time' : 'cm-mini-time'}" aria-hidden="true"></output>
     <input id="${ids[0]}" type="range" min="0" max="100" step="0.1" value="0" aria-label="播放进度" disabled>
     <span id="${ids[0]}Chorus" hidden></span>`;
   const input = root.querySelector('input'), fill = root.querySelector('#' + ids[2]);
   const buffer = root.querySelector('#' + ids[1]), time = root.querySelector('output');
   const chorusTrack = root.querySelector('.cm-chorus-track');
+  const playedChorus = root.querySelector('.pl-chorus-played');
   const chorusDescription = root.querySelector('#' + ids[0] + 'Chorus');
   let dragging = false, active = true, blocked = false, meta = player.meta;
-  let chorusId, chorusRequest, segments = [], paintedSegments, paintedDuration;
+  let chorusId, chorusRequest, segments = [], paintedSegments, paintedDuration, cover;
 
   const duration = () => {
     const value = player.durMs();
@@ -41,20 +46,33 @@ function createProgress(root, player, full, current, total) {
     paintedSegments = segments;
     paintedDuration = dur;
     chorusTrack.textContent = '';
+    if (playedChorus) playedChorus.textContent = '';
     const ranges = [];
+    const valid = [];
     for (const segment of segments) {
       const start = segment?.startMs;
       const endMs = segment?.endMs;
       if (!Number.isSafeInteger(start) || !Number.isSafeInteger(endMs) || start < 0) continue;
       const end = Math.min(endMs, dur);
       if (end <= start) continue;
+      valid.push([start, end]);
+    }
+    for (const [start, end] of valid.sort((a, b) => a[0] - b[0])) {
+      const previous = ranges[ranges.length - 1];
+      if (previous && start <= previous[1]) previous[1] = Math.max(previous[1], end);
+      else ranges.push([start, end]);
+    }
+    for (const [start, end] of ranges) {
       const band = document.createElement('span');
       band.style.left = start / dur * 100 + '%';
       band.style.width = (end - start) / dur * 100 + '%';
+      if (start === 0) band.classList.add('starts-track');
+      if (end === dur) band.classList.add('ends-track');
       chorusTrack.appendChild(band);
-      ranges.push(`${fmtDur(start)}–${fmtDur(end)}`);
+      if (playedChorus) playedChorus.appendChild(band.cloneNode());
     }
-    const description = ranges.length ? '高潮（副歌） ' + ranges.join('、') : '';
+    const description = ranges.length
+      ? '高潮（副歌） ' + ranges.map(([start, end]) => `${fmtDur(start)}–${fmtDur(end)}`).join('、') : '';
     chorusDescription.textContent = description;
     if (description) {
       input.setAttribute('aria-describedby', chorusDescription.id);
@@ -65,8 +83,9 @@ function createProgress(root, player, full, current, total) {
     }
   }
   function paint(pos, dur) {
-    const pct = dur ? clamp(pos / dur * 100) : 0;
-    const value = `${fmtDur(dur * pct / 100)} / ${fmtDur(dur)}`;
+    const position = Math.max(0, Math.min(dur, Number(pos) || 0));
+    const pct = dur ? position / dur * 100 : 0;
+    const value = `${fmtDur(position)} / ${fmtDur(dur)}`;
     root.style.setProperty('--playback-progress', pct + '%');
     fill.style.transform = `scaleX(${pct / 100})`;
     input.value = pct;
@@ -74,8 +93,8 @@ function createProgress(root, player, full, current, total) {
       input.setAttribute('aria-valuetext', value);
       time.textContent = value;
     }
-    if (current) current.textContent = fmtDur(dur * pct / 100);
-    if (total) total.textContent = fmtDur(dur);
+    if (current) current.textContent = fmtDur(position);
+    if (remaining) remaining.textContent = '−' + fmtDur(dur - position);
   }
   function update() {
     if (!active) return;
@@ -86,6 +105,13 @@ function createProgress(root, player, full, current, total) {
       root.classList.remove('is-dragging');
     }
     const id = String(meta?.ncm_id || '');
+    const pic = meta?.pic || '';
+    if (full && cover !== pic) {
+      cover = pic;
+      coverColors(pic, { fallback: false }).then(colors => {
+        if (active && cover === pic) root.style.setProperty('--pl-seek-color', colors?.primary || '');
+      });
+    }
     if (chorusId !== id) {
       chorusId = id;
       segments = [];
@@ -154,6 +180,6 @@ export function createMiniProgress(root, player) {
   return createProgress(root, player, false);
 }
 
-export function createPlayerProgress(root, player, current, total) {
-  return createProgress(root, player, true, current, total);
+export function createPlayerProgress(root, player, current, remaining) {
+  return createProgress(root, player, true, current, remaining);
 }

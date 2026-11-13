@@ -66,7 +66,7 @@ def _address():
         raise Error(503, "QQ 音乐上游配置无效") from None
 
 
-def call(method, path, query=None, body=None, session=None):
+def call(method, path, query=None, body=None, session=None, *, timeout=None):
     address = _address()
     headers = {"Accept": "application/json"}
     if session:
@@ -76,7 +76,9 @@ def call(method, path, query=None, body=None, session=None):
         headers["Content-Type"] = "application/json"
         data = json.dumps(body if body is not None else {}, ensure_ascii=False).encode()
     target = path + ("?" + urlencode(query) if query else "")
-    conn = HTTPConnection(*address, timeout=25 if path.startswith(("/login/", "/getMusicPlay")) else 8)
+    if timeout is None:
+        timeout = 25 if path.startswith(("/login/", "/getMusicPlay")) else 8
+    conn = HTTPConnection(*address, timeout=timeout)
     try:
         conn.request(method, target, body=data, headers=headers)
         response = conn.getresponse()

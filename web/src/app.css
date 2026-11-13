@@ -819,27 +819,25 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   animation: cmSlideUp .25s ease;
 }
 @keyframes cmSlideUp { from { transform: translateY(4%); opacity: .4; } to { transform: none; opacity: 1; } }
-/* 毛玻璃遮罩：fixed 相对视口 + 60px 出血，永远铺满全屏；无封面时深色底兜底 */
-.pl-bg {
-  position: fixed; top: -60px; right: -60px; bottom: -60px; left: -60px; inset: -60px; z-index: 0;
-  background-color: var(--cm-primary-dark, #2a2732); background-size: cover; background-position: center;
-  background-image: linear-gradient(rgba(24,22,30,.45), rgba(24,22,30,.62)), var(--pl-cover-image, none);
-  filter: blur(60px) brightness(.62) saturate(1.35);
+.pl-background { position: absolute; inset: 0; overflow: hidden; background: #262428; pointer-events: none; }
+.pl-background:not(.grad)::before {
+  content: ''; position: absolute; inset: calc(-1.5 * var(--pl-bg-blur, 23px));
+  background: var(--pl-cover-image, none) center / cover;
+  filter: blur(var(--pl-bg-blur, 23px));
 }
-.pl-bg.grad {
-  top: 0; right: 0; bottom: 0; left: 0;
-  background: none;
-  filter: none;
+.pl-background::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(rgba(0, 0, 0, .36), rgba(0, 0, 0, .62));
 }
-
-/* 播放时只移动两个渐变色团，切歌时让底色和色团各自过渡。 */
-#plBg { pointer-events: none; }
+.pl-background[data-background="frosted"]::after {
+  background: linear-gradient(rgba(0, 0, 0, .52), rgba(0, 0, 0, .64));
+}
 .pl-ambient { display: none; }
 .grad > .pl-ambient {
   display: block; position: absolute; top: 0; right: 0; bottom: 0; left: 0; overflow: hidden;
   background-color: var(--pl-bg-base, #252632);
 }
-.pl-ambient,
+.pl-ambient { transform: scale(var(--pl-bg-pulse, 1)); transition: transform .5s ease, background-color 1.6s ease; }
 .pl-ambient::before,
 .pl-ambient::after { transition: background-color 1.6s ease; }
 .pl-ambient::before,
@@ -865,10 +863,6 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(var(--pl-drift-x, 29%), var(--pl-drift-y, 26%), 0); }
 }
-#plBg.grad::after {
-  content: ''; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-  background: linear-gradient(rgba(0, 0, 0, .38), rgba(0, 0, 0, .58));
-}
 #playerOverlay.closing .pl-ambient::before,
 #playerOverlay.closing .pl-ambient::after,
 .pl-background-paused .pl-ambient::before,
@@ -876,7 +870,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 @media (prefers-reduced-motion: reduce) {
   .pl-ambient,
   .pl-ambient::before,
-  .pl-ambient::after { animation: none; transition: none; }
+  .pl-ambient::after { animation: none; transition: none; transform: none; }
 }
 
 .pl-page { position: relative; z-index: 1; }
@@ -993,35 +987,56 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .pl-waveform canvas { display: block; width: 100%; height: 100%; }
 /* 宽屏（Pad / 桌面）有更多纵向空间，波形再高一些 */
 @media (min-width: 600px) { .pl-waveform { height: 58px; } }
-.pl-seek { width: 100%; display: flex; align-items: center; gap: 10px; font-size: calc(11px * var(--cm-fs, 1)); font-variant-numeric: tabular-nums; }
-.pl-seek > span { min-width: 3.4em; flex: none; color: rgba(255,255,255,.82); }
-.pl-seek > span:last-child { text-align: right; }
-/* 原生 range 负责输入；轨道和滑块同步预览，进度只用 transform 平滑推进。 */
-.pl-seekbar { --playback-progress: 0%; position: relative; flex: 1; min-width: 0; height: 36px; }
-.pl-seek-track { position: absolute; left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px;
-  border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.22); }
+.pl-seek-times { display: flex; justify-content: space-between; font-size: calc(11px * var(--cm-fs, 1));
+  font-variant-numeric: tabular-nums; line-height: 1.2; color: rgba(255,255,255,.65); }
+.pl-seekbar { --playback-progress: 0%; --pl-seek-thickness: 5px; --pl-seek-active-thickness: 8px;
+  --pl-seek-ink: var(--pl-seek-color, var(--cm-primary, #d0bcff));
+  position: relative; min-width: 0; height: 36px; isolation: isolate; }
+.pl-seek-track { position: absolute; left: 0; right: 0; top: 50%; height: var(--pl-seek-thickness);
+  transform: translateY(-50%); transition: height .22s ease;
+  border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.18); }
 .pl-seek-track i { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background: var(--cm-primary, #d0bcff); transform: scaleX(0); transform-origin: left center; transition: transform .22s linear; }
-.pl-seek-track #plBuf { background: rgba(255,255,255,.52); transition-duration: .4s; }
+  border-radius: inherit; transform: scaleX(0); transform-origin: left center; transition: transform .22s linear; }
+#plSeekbar #plFill { background: var(--pl-seek-ink);
+  background: color-mix(in srgb, var(--pl-seek-ink) 70%, white); }
+#plSeekbar #plBuf { background: rgba(255,255,255,.42); transition-duration: .4s; }
+.pl-seek-halo, .pl-seek-shine { pointer-events: none; position: absolute; left: var(--playback-progress);
+  transform: translateX(-100%); width: min(var(--playback-progress), 110px);
+  transition: left .22s linear, width .22s linear, opacity .22s ease; }
+.pl-seek-halo { height: 32px; top: calc(50% - 16px); opacity: .75;
+  background: radial-gradient(ellipse 55% 38% at 68% 50%, var(--pl-seek-ink), transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%, #000 70%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 45%, #000 70%, transparent); }
+.pl-seek-shine { top: 0; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.12) 35%, #fff); }
+.pl-chorus-played { position: absolute; inset: 0;
+  clip-path: inset(0 calc(100% - var(--playback-progress)) 0 0); transition: clip-path .22s linear; }
+.pl-seek-track .cm-chorus-track span, .pl-chorus-played span {
+  --chorus-gold: #ffd166; --chorus-clear: rgba(255,209,102,0);
+  position: absolute; top: 0; height: 100%; box-shadow: none;
+  background: linear-gradient(90deg, var(--chorus-start, var(--chorus-clear)), var(--chorus-gold) min(6px, 50%),
+    var(--chorus-gold) max(calc(100% - 6px), 50%), var(--chorus-end, var(--chorus-clear))); }
+.pl-seek-track .cm-chorus-track span { --chorus-gold: rgba(255,209,102,.48); }
+.pl-seek-track .starts-track { --chorus-start: var(--chorus-gold); }
+.pl-seek-track .ends-track { --chorus-end: var(--chorus-gold); }
 .pl-seekbar input[type=range] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0;
   opacity: 0; cursor: pointer; touch-action: none; }
 .pl-seekbar input:disabled { cursor: default; }
-.pl-seek-thumb { position: absolute; left: var(--playback-progress); top: 50%; width: 12px; height: 12px;
-  border-radius: 50%; background: #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4); pointer-events: none;
-  transform: translate(-50%, -50%); transition: left .22s linear; }
 .pl-seek-time { position: absolute; right: 0; bottom: 100%; padding: 5px 9px; border-radius: 8px;
   background: rgba(18,18,24,.92); color: #fff; font-size: 11px; font-weight: 600;
   white-space: nowrap; opacity: 0; pointer-events: none; }
 .pl-seekbar:focus-within .pl-seek-time, .pl-seekbar.is-dragging .pl-seek-time { opacity: 1; }
-.pl-seekbar:focus-within .pl-seek-track { outline: 2px solid #fff; outline-offset: 4px; }
-.pl-seekbar.is-dragging .pl-seek-track i, .pl-seekbar.is-dragging .pl-seek-thumb { transition: none; }
-.pl-seekbar.is-dragging .pl-seek-thumb { width: 16px; height: 16px; }
-.pl-seekbar.is-disabled .pl-seek-thumb, .pl-seekbar.is-disabled .pl-seek-time { opacity: 0; }
+.pl-seekbar:focus-within .pl-seek-track { outline: 2px solid var(--pl-seek-focus, #fff); outline-offset: 4px; }
+.pl-seekbar.is-dragging .pl-seek-track { height: var(--pl-seek-active-thickness); }
+.pl-seekbar.is-dragging #plFill, .pl-seekbar.is-dragging .pl-chorus-played,
+.pl-seekbar.is-dragging .pl-seek-shine, .pl-seekbar.is-dragging .pl-seek-halo { transition-duration: 0s; }
+.pl-seekbar.is-dragging .pl-seek-halo, .pl-seekbar.is-disabled .pl-seek-halo,
+.pl-seekbar.is-disabled .pl-seek-shine, .pl-seekbar.is-disabled .pl-seek-time { opacity: 0; }
 @media (hover: hover) and (pointer: fine) {
   .pl-seekbar:not(.is-disabled):hover .pl-seek-time { opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pl-seek-track i, .pl-seek-thumb { transition: none; }
+  .pl-seek-track, .pl-seek-track i, .pl-seek-halo, .pl-seek-shine, .pl-chorus-played { transition: none; }
 }
 /* 卡顿提示：waiting/stalled 时出现，位置就在进度条下方（不挤动控件布局） */
 .pl-stall { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 3px; font-size: calc(11px * var(--cm-fs, 1)); opacity: .85; }
@@ -1569,7 +1584,6 @@ html[data-ui-preset="soaringbird"] .cm-hot-chart { --chart-accent: var(--accent)
   .cm-setting > * + * { margin-left: 12px; }
   .pl-stats > * + * { margin-left: 12px; }
   .pl-ctrl > * + * { margin-left: 18px; }
-  .pl-seek > * + * { margin-left: 10px; }
   .pl-transport > * + * { margin-left: 26px; }
   .cmt-more-loading > * + * { margin-left: 10px; }
   .cmt-item > * + * { margin-left: 12px; }
@@ -3862,6 +3876,15 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 .cm-bg-speed { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; }
 .cm-bg-speed output { font-size: calc(12px * var(--cm-fs, 1)); font-variant-numeric: tabular-nums; }
 .cm-bg-speed input { grid-column: 1 / -1; width: 100%; min-height: 28px; margin: 0; accent-color: var(--cm-primary); }
+.cm-player-bg-settings { display: grid; gap: 12px; }
+.cm-player-bg-settings [hidden] { display: none; }
+.cm-player-bg-preview { position: relative; inset: auto; height: 118px; border-radius: 12px; }
+.cm-player-bg-settings .cm-more-chips { align-items: center; }
+.cm-player-bg-settings button { border: 1px solid currentColor; border-radius: 999px; padding: 6px 12px;
+  min-height: 34px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.cm-player-bg-settings button[aria-pressed="true"] { border-color: transparent;
+  background: rgb(var(--mdui-color-primary-container)); color: rgb(var(--mdui-color-on-primary-container)); }
+
 .cm-more-fl { display: block; margin-bottom: 5px; font-size: calc(11px * var(--cm-fs, 1)); opacity: .5; }
 .cm-more-card .cm-more-chips { gap: 6px; }
 .cm-more-card .cm-more-chips mdui-chip { --mdui-chip-height: 30px; font-size: calc(12px * var(--cm-fs, 1)); }
@@ -4551,9 +4574,6 @@ html[data-ui-preset="cmx"] mdui-menu::part(panel) {
 
 /* ---- 播放页：取色模糊背景 + 可切换形状封面 + 左对齐信息 ---- */
 html[data-ui-preset="cmx"] #playerOverlay { background: #111214 !important; }
-html[data-ui-preset="cmx"] .pl-bg:not(.grad) {
-  filter: blur(70px) brightness(.44) saturate(1.25) !important;
-}
 html[data-ui-preset="cmx"] .pl-page { --pl-cover-size: min(calc(74 * var(--cm-vw)), 360px, calc(42 * var(--cm-vh))); padding-left: 20px; padding-right: 20px; }
 html[data-ui-preset="cmx"] .pl-top { position: relative; }
 html[data-ui-preset="cmx"] .pl-cover-wrap { align-self: center; margin-top: 4px; margin-bottom: 18px; }
@@ -4579,7 +4599,6 @@ html[data-ui-preset="cmx"] .pl-quality {
   border: 0; background: rgba(255, 255, 255, .14);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-html[data-ui-preset="cmx"] .pl-seek-track { background: rgba(255, 255, 255, .2); }
 html[data-ui-preset="cmx"] .pl-transport {
   justify-content: center;      /* pl-left 是 stretch，不给 justify 会整排贴左 */
   margin-top: 8px; margin-bottom: 22px;
@@ -4685,6 +4704,9 @@ html[data-ui-preset="cmx"] .pl-ctrl { gap: min(16px, 2vw); }
   .pl-waveform { height: 26px; }
   .pl-transport { margin-top: 4px; margin-bottom: 6px; }
 }
+@media (max-height: 500px) {
+  #playerOverlay .pl-progress-stack .pl-waveform { height: 10px; }
+}
 
 /* 自动换行/窄屏保护：CMX 的大标题和封面不抢走播放控件高度 */
 @media (max-width: 380px) {
@@ -4751,16 +4773,6 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp {
 @keyframes sbLpIn {
   from { opacity: 0; transform: scale(1.03); }
   to { opacity: 1; transform: none; }
-}
-
-/* 翱翔鸟Music 关闭动态背景时显示模糊封面。 */
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop {
-  position: absolute; inset: 0; overflow: hidden; background: #2a2a30;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-backdrop:not(.grad)::before {
-  content: ''; position: absolute; inset: -60px;
-  background: var(--pl-cover-image, none) center / cover;
-  filter: blur(60px) brightness(.55) saturate(1.35);
 }
 
 /* ---- 收起按钮（参考 .lp-close） ---- */
@@ -4926,43 +4938,8 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-meta p {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* ---- 进度：4px 轨道 / 12px 圆点 / 双端时间 + 居中音质胶囊 ---- */
+/* 进度下方保留居中的音质入口。 */
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber { width: 100%; align-self: center; position: relative; }
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar {
-  position: relative; height: 16px; display: flex; align-items: center;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-track {
-  position: absolute; top: 50%; left: 0; right: 0; height: 4px; margin-top: -2px;
-  border-radius: 2px; background: hsla(0, 0%, 100%, .25); overflow: visible;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-track i {
-  position: absolute; top: 0; left: 0; height: 4px; width: 100%;
-  border-radius: 2px; transform-origin: left center;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-track #plBuf {
-  background: hsla(0, 0%, 100%, .32);
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-track #plFill { background: #fff; }
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-thumb {
-  position: absolute; top: 50%; left: var(--playback-progress, 0%);
-  width: 12px; height: 12px; margin-left: -6px; border-radius: 50%;
-  background: #fff; pointer-events: none;
-  transform: translateY(-50%) scale(0); transition: transform .15s ease;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar:hover .pl-seek-thumb,
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar:focus-within .pl-seek-thumb {
-  transform: translateY(-50%) scale(1);
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar .pl-seek-time { display: none; }
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar input[type="range"] {
-  -webkit-appearance: none; appearance: none; position: absolute;
-  inset: -6px 0; width: 100%; height: auto;
-  margin: 0; padding: 0; background: transparent; cursor: pointer; outline: none;
-}
-html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__bar input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; width: 28px; height: 28px;
-  border-radius: 50%; background: transparent; border: 0;
-}
 html[data-ui-preset="soaringbird"] #playerOverlay .lp-scrubber__times {
   position: relative; display: flex; justify-content: space-between; align-items: center;
   margin-top: 4px; font-size: 12px; color: hsla(0, 0%, 100%, .55); font-variant-numeric: tabular-nums;
@@ -5195,7 +5172,7 @@ html[data-ui-preset="soaringbird"] #playerOverlay .lp-nolyrics__sub {
 }
 @media (max-width: 980px) {
   html[data-ui-preset="soaringbird"] #playerOverlay .lp { overflow-y: auto; }
-  /* 关键：必须保持定位。若改成 static，.lp-backdrop（absolute）会盖住这一层里
+  /* 关键：必须保持定位。若改成 static，.pl-background（absolute）会盖住这一层里
      所有非定位内容——走带按钮整行因此不可见（封面/元信息/进度/音量各自有
      position:relative 才幸免）。relative 即可让整块栅格重新回到定位层。 */
   html[data-ui-preset="soaringbird"] #playerOverlay .lp-grid {

@@ -225,7 +225,7 @@ def _validate_normalized(payload, meta, allow_line=False):
             words = []
         if w:
             line["w"] = w
-            if len(w) >= 2:
+            if len(w) >= 2 and not raw.get("wSynth") and w[0][0] < w[-1][0]:
                 word_lines += 1
         if words:
             line["words"] = words
@@ -509,31 +509,30 @@ def finalize_lines(lines):
     return out
 
 
-def merge_with_base(base, external):
-    """复核 LDDC 正文后替换主轨，从网易云结果补齐缺失的翻译/罗马音。
-
-    只在 LDDC 完全没给逐字轴的某一行才回填网易云的估算轴，并保留 ``wSynth``
-    标记；LDDC 的实际时间轴永不覆盖。
-    """
-    if not external or not external.get("lines"):
-        return None
-    base_lines = (base or {}).get("lines") or []
-
+def matches_lyric_text(reference, candidate):
     def lyric_keys(lines):
         return [key for line in merge_bilingual(lines)
-                if not _CREDIT_HINT.match(line["txt"])
+                if not _CREDIT_HINT.match(line["txt"].strip())
                 and (key := _simplify(line["txt"]))]
 
     # 同歌手的不同语言版本可能共享曲名、时长和制作名单。用两轨正文的有序
     # 行匹配复核，避免仅凭一段共同的副歌或制作名单就替换整首网易云歌词。
-    official = lyric_keys(base_lines)
-    if official:
-        candidate = lyric_keys(external["lines"])
-        alignment = SequenceMatcher(None, official, candidate, autojunk=False)
-        matched_lines = sum(block.size for block in alignment.get_matching_blocks())
-        # 分别要求超过半数，避免只包含其中一段的候选通过。
-        if matched_lines * 2 <= max(len(official), len(candidate)):
-            return None
+    official = lyric_keys(reference)
+    if not official:
+        return True
+    external = lyric_keys(candidate)
+    alignment = SequenceMatcher(None, official, external, autojunk=False)
+    matched_lines = sum(block.size for block in alignment.get_matching_blocks())
+    return matched_lines * 2 > max(len(official), len(external))
+
+
+def merge_with_base(base, external):
+    """复核正文后替换主轨，补齐缺失的翻译、罗马音及同文行的估算轴。"""
+    if not external or not external.get("lines"):
+        return None
+    base_lines = (base or {}).get("lines") or []
+    if not matches_lyric_text(base_lines, external["lines"]):
+        return None
 
     by_text = defaultdict(list)
     for line in base_lines:
@@ -569,7 +568,8 @@ def merge_with_base(base, external):
                 line["trans"] = b["trans"]
             if not line.get("roma") and b.get("roma"):
                 line["roma"] = b["roma"]
-            if not line.get("w") and b.get("w"):
+            if (not line.get("w") and b.get("w") and b.get("wSynth")
+                    and b["txt"] == line["txt"] and b["t"] == line["t"]):
                 line["w"] = [list(x) for x in b["w"] if isinstance(x, (list, tuple)) and len(x) >= 2]
                 if b.get("words"):
                     line["words"] = b["words"]
@@ -618,7 +618,7 @@ def _match_verified(meta, match):
     return True
 
 
-def fetch(meta, allow_line=False, timeout=None):
+def fetch(meta, allow_line=False, timeout=None, *, auto_base=None):
     """请求本机 LDDC 桥接服务；未配置/熔断/失败/无匹配时返回 None。"""
     if not enabled() or not _circuit_available():
         return None
@@ -626,14 +626,25 @@ def fetch(meta, allow_line=False, timeout=None):
     if isinstance(raw_artists, str):
         raw_artists = [x.strip() for x in raw_artists.split(" / ")]
     artists = [str(a).strip() for a in raw_artists if str(a).strip()]
-    body = json.dumps({
+    query = {
         "title": meta.get("name") or "",
         "artists": artists,
         "album": meta.get("album") or "",
         "duration": int(meta.get("duration") or 0),
         "ncmId": meta.get("ncm_id") or 0,
         "allowLine": bool(allow_line),
-    }, ensure_ascii=False).encode("utf-8")
+    }
+    if auto_base is not None:
+        reference = []
+        size = 0
+        for line in auto_base["lines"][:500]:
+            text = line["txt"][:512]
+            size += len(json.dumps(text, ensure_ascii=False).encode("utf-8")) + 40
+            if size > 48000:
+                break
+            reference.append({"t": line["t"], "txt": text})
+        query.update(strategy="auto", reference=reference, qqOnly=auto_base["wordLevel"])
+    body = json.dumps(query, ensure_ascii=False).encode("utf-8")
     headers = {"Content-Type": "application/json; charset=utf-8",
                "User-Agent": "CurrentMusic-LDDC/1.0"}
     if LDDC_TOKEN:
@@ -680,9 +691,11 @@ def fetch(meta, allow_line=False, timeout=None):
     return result
 
 
-def cache_ttl(result):
+def cache_ttl(result, *, auto=False):
     """只拿到网易云 LRC/估算轴时缩短缓存，给 LDDC 后续补词留出重试窗口。"""
     source = str((result or {}).get("source") or "")
+    if auto and enabled() and source != "ncm:inst" and (source != "lddc:qm" or not result.get("wordLevel")):
+        return max(600, SYNTH_RETRY_TTL)
     if (result or {}).get("isYrc") or source.startswith("lddc:") or source == "ncm:inst" or not enabled():
         return 7 * 86400
     return max(600, SYNTH_RETRY_TTL)

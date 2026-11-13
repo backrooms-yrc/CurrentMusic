@@ -1026,13 +1026,8 @@ def _synth_words(text, start, end):
     return out
 
 
-def lyric(ncm_id):
-    """归一化歌词：官方 YRC → LDDC 逐字源 → 自研逐字估算。
-
-    网易云官方 YRC 始终优先；没有官方逐字数据时，才向本机 LDDC 桥接服务
-    询问逐字歌词（QQ/酷狗/网易云等源）。有官方 LRC 正文时用它复核候选歌词，
-    候选不可用或复核未通过时使用官方 LRC 和按行时长估算的 ``w``。
-    """
+def lyric(ncm_id, *, auto=False):
+    """归一化歌词。auto 模式优先查找 QQ 真实逐字歌词，逐行兜底。"""
     try:
         d = call("/lyric/new", {"id": int(ncm_id)}, timeout=20.0, retries=1)
     except NcmError:
@@ -1042,9 +1037,12 @@ def lyric(ncm_id):
     raw = yrc_raw or lrc_raw
     parsed = [l for l in _parse_lines_ex(raw) if l[1] or l[0] == 0]
     # YRC 字段偶尔只返回元数据/残缺行：不要让残缺 YRC 把完整 LRC 遮掉。
-    if yrc_raw and lrc_raw and len(parsed) < 2:
-        parsed = [l for l in _parse_lines_ex(lrc_raw) if l[1] or l[0] == 0]
-        yrc_raw = ""       # 实际用了 LRC：允许 LDDC 补逐字，而不是把残缺 YRC 当官方数据
+    yrc_usable = any(len(words) >= 2 and words[0][0] < words[-1][0] for _, _, words in parsed)
+    if yrc_raw and ((lrc_raw and len(parsed) < 2) or (auto and not yrc_usable)):
+        if lrc_raw:
+            raw = lrc_raw
+            parsed = [l for l in _parse_lines_ex(raw) if l[1] or l[0] == 0]
+        yrc_raw = ""
     lines = [(t, x) for t, x, _ in parsed]
     # LRC 轨另存一份：翻译/罗马音常只与它精确对齐（见 _merge_aux_by_text 注释）
     lrc_parsed = [l for l in _parse_lines_ex(lrc_raw) if l[1] or l[0] == 0]
@@ -1056,7 +1054,7 @@ def lyric(ncm_id):
     out = []
     for idx, (t, x, words) in enumerate(parsed):
         item = {"t": t, "txt": x, "trans": trans.get(idx, ""), "roma": roma.get(idx, "")}
-        if not words and x:
+        if not auto and not words and x:
             nxt = parsed[idx + 1][0] if idx + 1 < len(parsed) else t + 5000
             words = _synth_words(x, t, nxt)
             if words:
@@ -1072,21 +1070,28 @@ def lyric(ncm_id):
         "wordLevel": is_yrc,
     }
 
-    if not is_yrc:
+    if auto or not is_yrc:
         texts = [(line.get("txt") or "").strip() for line in out if (line.get("txt") or "").strip()]
         instrumental = len(texts) <= 3 and any("纯音乐" in text or "instrumental" in text.lower()
                                                for text in texts)
         if instrumental:
             result["source"] = "ncm:inst"
             result["instrumental"] = True
-        else:
+            if auto:
+                result.update(isYrc=False, wordLevel=False)
+        elif not auto or cm_lddc.enabled():
             try:
                 meta = song_detail([int(ncm_id)])
                 if meta:
                     # 网易云只有制作人员/纯音乐提示时，允许 LDDC 的逐行歌词兜底；
                     # 正常歌词则只接受真正的逐字结果，避免覆盖本地估算轴。
                     real_lines = sum(1 for line in out if (line.get("txt") or "").strip())
-                    external = cm_lddc.fetch(meta[0], allow_line=real_lines < 3)
+                    if auto:
+                        external = cm_lddc.fetch(meta[0], allow_line=not is_yrc, auto_base=result)
+                        if is_yrc and (not external or external["source"] != "lddc:qm" or not external["wordLevel"]):
+                            external = None
+                    else:
+                        external = cm_lddc.fetch(meta[0], allow_line=real_lines < 3)
                     merged = cm_lddc.merge_with_base(result, external)
                     if merged:
                         result = merged
@@ -1096,6 +1101,11 @@ def lyric(ncm_id):
     cm_lddc.ensure_words(result["lines"])
     # 双语 LRC 常见「原文一行、中文译文一行」：先合并成 txt + trans，再做时间轴清洗。
     result["lines"] = cm_lddc.merge_bilingual(result["lines"])
+    if auto and not result["wordLevel"]:
+        for line in result["lines"]:
+            line.pop("wSynth", None)
+            line.pop("w", None)
+            line.pop("words", None)
     # 出口统一清洗（官方 YRC / LDDC / 估算全部经过）：制作名单行、同起始逐字
     # token、end<=start、相邻行同 t——任何一条都会让 CurrentMusicX 的解析器
     # 丢 token 或把制作名单当歌词唱出来（用户反馈的「歌词显示错乱」即源于此）。

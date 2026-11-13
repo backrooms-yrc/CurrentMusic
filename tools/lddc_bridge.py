@@ -2,9 +2,9 @@
 """LDDC 本机歌词桥接服务（独立进程，GPL-3.0 边界）。
 
 LDDC 在独立 venv 中运行；本服务只暴露 127.0.0.1 上的 JSON 接口，供
-CurrentMusic 后端在“网易云没有官方 YRC”时获取逐字歌词：
+CurrentMusic 后端获取逐字歌词：
 
-    POST /lyrics  {title, artists, album, duration, ncmId, allowLine}
+    POST /lyrics  {title, artists, album, duration, ncmId, allowLine, strategy?, reference?, qqOnly?}
     GET  /health
 
 返回的歌词已经过归一化/清洗，但最终的质量判定、与网易云翻译的合并由
@@ -36,6 +36,7 @@ sys.path.insert(0, str(HEADLESS))
 sys.path.insert(0, LDDC_SRC)
 
 import cm_lddc  # noqa: E402
+import cm_qq  # noqa: E402
 
 log = logging.getLogger("lddc-bridge")
 
@@ -59,13 +60,15 @@ def _load_lddc():
     global _lddc_version, _import_error
     try:
         import LDDC.common.version as version
-        from LDDC.common.models import SearchType, SongInfo, Source
+        from LDDC.common.models import Artist, LyricsType, SearchType, SongInfo, Source
         from LDDC.core.algorithm import calculate_artist_score, calculate_title_score, text_difference
         from LDDC.core.api.lyrics import get_lyrics, get_lyricslist, lyrics_api, search
 
         _lddc_version = version.__version__
         return {
             "SearchType": SearchType,
+            "Artist": Artist,
+            "LyricsType": LyricsType,
             "SongInfo": SongInfo,
             "Source": Source,
             "calculate_artist_score": calculate_artist_score,
@@ -136,10 +139,32 @@ def _score(meta, item):
     return score
 
 
-def _search_candidates(src, meta, keyword):
+def _qq_songs(src, keyword, deadline):
+    status, result, _ = cm_qq.call("GET", "/search",
+                                 {"keyword": keyword[:60], "type": "song", "limit": 10},
+                                 timeout=max(.1, min(2.5, deadline - time.monotonic())))
+    if status != 200 or result.get("code") not in (0, 200) or not isinstance(result.get("items"), list):
+        raise ValueError("QQ 曲库搜索响应不可用")
+    songs = []
+    for row in result["items"]:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), int):
+            continue
+        album = row.get("album") or {}
+        artists = [artist["name"] for artist in row.get("singer") or []
+                   if isinstance(artist, dict) and isinstance(artist.get("name"), str)]
+        interval = row.get("interval")
+        songs.append(API["SongInfo"](source=src, id=str(row["id"]), mid=row.get("mid"),
+                                     title=row.get("title") or row.get("name"), artist=API["Artist"](artists),
+                                     album=album.get("name", ""), duration=interval * 1000 if isinstance(interval, int) else None))
+    return songs
+
+
+def _search_candidates(src, meta, keyword, deadline, auto):
     try:
-        result = API["search"](src, keyword, API["SearchType"].SONG)
-        items = list(result)
+        if auto and src.name == "QM" and cm_qq.BASE:
+            items = _qq_songs(src, keyword, deadline)
+        else:
+            items = list(API["search"](src, keyword, API["SearchType"].SONG))
     except Exception as exc:  # noqa: BLE001 单个歌词源失败不影响其它源
         log.info("%s 搜索失败：%s", src.name, str(exc)[:180])
         return []
@@ -174,30 +199,35 @@ def _candidate_lyrics(src, song, meta):
         yield API["get_lyrics"](song)
 
 
-def _try_source(src, meta, allow_line, deadline):
-    full_keyword = f"{meta['artist_text']} - {meta['title']}" if meta["artist_text"] else meta["title"]
+def _try_source(src, meta, allow_line, deadline, reference=None):
+    auto = reference is not None
+    if auto and src.name == "QM" and cm_qq.BASE:
+        full_keyword = " ".join([meta["title"], *meta["artists"][:1]])
+    else:
+        full_keyword = f"{meta['artist_text']} - {meta['title']}" if meta["artist_text"] else meta["title"]
     keywords = [full_keyword]
     if full_keyword != meta["title"]:
         keywords.append(meta["title"])
 
     seen = set()
+    fallback = None
     for keyword in keywords:
         if time.monotonic() >= deadline:
-            return None
-        for score, song in _search_candidates(src, meta, keyword)[:4]:
+            break
+        for score, song in _search_candidates(src, meta, keyword, deadline, auto)[:4]:
             key = (src.name, str(getattr(song, "id", "")), getattr(song, "title", None),
                    str(getattr(song, "artist", "")), getattr(song, "duration", None))
             if key in seen:
                 continue
             seen.add(key)
             if time.monotonic() >= deadline:
-                return None
+                return fallback
             try:
                 lyrics = API["get_lyrics"](song) if src.name != "KG" else None
                 iterator = ([lyrics] if lyrics else _candidate_lyrics(src, song, meta))
                 for lyric in iterator:
                     if time.monotonic() >= deadline:
-                        return None
+                        return fallback
                     fs = lyric.get_fslyrics(meta["duration"] or getattr(song, "duration", None))
                     payload = {
                         "orig": _payload(fs.get("orig")),
@@ -209,6 +239,13 @@ def _try_source(src, meta, allow_line, deadline):
                         payload, meta, allow_line=allow_line)
                     if not normalized:
                         continue
+                    if auto and lyric.types.get("orig") != API["LyricsType"].VERBATIM:
+                        if not allow_line:
+                            continue
+                        normalized["wordLevel"] = False
+                        for line in normalized["lines"]:
+                            line.pop("w", None)
+                            line.pop("words", None)
                     normalized["score"] = round(score, 1)
                     normalized["match"] = {
                         "title": getattr(song, "title", None),
@@ -217,11 +254,18 @@ def _try_source(src, meta, allow_line, deadline):
                         "duration": getattr(song, "duration", None),
                         "id": getattr(song, "id", None),
                     }
+                    if reference is not None:
+                        if (not cm_lddc._match_verified(meta, normalized["match"])
+                                or not cm_lddc.matches_lyric_text(reference, normalized["lines"])):
+                            continue
+                        if not normalized["wordLevel"]:
+                            fallback = fallback or normalized
+                            continue
                     return normalized
             except Exception as exc:  # noqa: BLE001
                 log.info("%s 取词失败：%s", src.name, str(exc)[:180])
                 continue
-    return None
+    return fallback
 
 
 def lookup(body):
@@ -237,6 +281,16 @@ def lookup(body):
         duration = 0
     duration = max(0, min(duration, 3_600_000))
     allow_line = bool(body.get("allowLine"))
+    auto = body.get("strategy") == "auto"
+    qq_only = auto and body.get("qqOnly") is True
+    reference = None
+    if auto:
+        reference = body.get("reference", [])
+        if not isinstance(reference, list) or not all(
+            isinstance(line, dict) and isinstance(line.get("t"), int) and isinstance(line.get("txt"), str)
+            for line in reference
+        ):
+            raise ValueError("invalid reference")
     if not title:
         raise ValueError("title 不能为空")
     if not API:
@@ -249,7 +303,8 @@ def lookup(body):
         "album": album,
         "duration": duration,
     }
-    cache_key = (title.lower(), tuple(a.lower() for a in artists), album.lower(), duration, allow_line)
+    cache_key = (title.lower(), tuple(a.lower() for a in artists), album.lower(), duration, allow_line,
+                 auto, qq_only, tuple((line["t"], line["txt"]) for line in reference or ()))
     now = time.time()
     with _cache_lock:
         hit = _cache.get(cache_key)
@@ -259,27 +314,38 @@ def lookup(body):
             return result
 
     deadline = time.monotonic() + DEADLINE
-    result = None
-    for name in SOURCE_PRIORITY:
+    sources = SOURCE_PRIORITY
+    if auto and "QM" in sources:
+        sources = ("QM",) + tuple(name for name in sources if name != "QM" and not qq_only)
+    elif qq_only:
+        sources = ()
+    result = fallback = None
+    for name in sources:
         if time.monotonic() >= deadline:
             break
         src = _source(name)
         if not src:
             continue
-        result = _try_source(src, meta, allow_line, deadline)
-        if result:
+        source_deadline = min(deadline, time.monotonic() + 3.5) if auto and name == "QM" and not qq_only else deadline
+        candidate = _try_source(src, meta, allow_line, source_deadline, reference)
+        if candidate and (not auto or candidate["wordLevel"]):
+            result = candidate
             break
+        fallback = fallback or candidate
 
+    result = result or fallback
     if not result:
         return {"ok": True, "found": False}
     result["ok"] = True
     result["found"] = True
     result["cached"] = False
-    with _cache_lock:
-        if len(_cache) >= MAX_CACHE:
-            oldest = min(_cache, key=lambda k: _cache[k][0])
-            _cache.pop(oldest, None)
-        _cache[cache_key] = (now, result)
+    # 自动模式的其他结果由后端短缓存，之后可重试 QQ。
+    if not auto or (result["source"] == "lddc:qm" and result["wordLevel"]):
+        with _cache_lock:
+            if len(_cache) >= MAX_CACHE:
+                oldest = min(_cache, key=lambda k: _cache[k][0])
+                _cache.pop(oldest, None)
+            _cache[cache_key] = (now, result)
     return result
 
 

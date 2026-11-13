@@ -77,6 +77,7 @@ async function play(page, id, pic) {
       document.dispatchEvent(new Event('cm-comments-visibility'));
     });
     await page.locator('#plMore').click();
+    await page.locator('#mBackground').click();
     const speed = page.getByRole('slider', { name: '背景速度' });
     assert.equal(await speed.inputValue(), '1');
     await speed.press('Home');
@@ -98,7 +99,7 @@ async function play(page, id, pic) {
       drift.play();
       return progress;
     }), phase, 'changing speed preserves the position of the gradient');
-    await page.getByText('关闭', { exact: true }).click();
+    await page.getByText('完成', { exact: true }).click();
     await speed.waitFor({ state: 'hidden' });
 
     const oldThumb = covers + 'old.svg?param=240y240';
@@ -131,22 +132,38 @@ async function play(page, id, pic) {
     await paletteIs('');
 
     await page.locator('#plMore').click();
-    const toggle = page.locator('#mGrad');
-    assert(await toggle.evaluate(el => el.checked));
-    await toggle.click();
-    assert.equal(await page.evaluate(() => localStorage.getItem('cm.bgGrad')), '0');
+    await page.locator('#mBackground').click();
+    const flow = page.getByRole('button', { name: '流动背景', exact: true });
+    const frosted = page.getByRole('button', { name: '封面毛玻璃', exact: true });
+    const custom = page.getByRole('button', { name: '自定义图片', exact: true });
+    const blur = page.getByRole('slider', { name: '模糊度' });
+    assert.equal(await flow.getAttribute('aria-pressed'), 'true');
+    await frosted.click();
+    assert.equal(await page.evaluate(() => localStorage.getItem('cm.playerBgMode')), 'frosted');
     assert.equal(await ambient.isVisible(), false);
-    assert(await speed.isDisabled());
+    assert.equal(await speed.isVisible(), false);
+    assert.equal(await blur.inputValue(), '35');
+    await blur.press('End');
     await play(page, 7, covers + 'red.svg');
+    assert((await bg.evaluate(el => getComputedStyle(el, '::before').backgroundImage)).includes(covers + 'red.svg'));
+    await page.locator('#plBgFile').setInputFiles({
+      name: 'test.svg', mimeType: 'image/svg+xml', buffer: Buffer.from(svg(blue)),
+    });
+    await page.waitForFunction(() => localStorage.getItem('cm.playerBgMode') === 'custom');
+    assert.equal(await custom.getAttribute('aria-pressed'), 'true');
+    assert((await bg.evaluate(el => getComputedStyle(el, '::before').backgroundImage)).includes('data:image/jpeg;base64,'));
     await page.reload();
     await page.evaluate(() => { MiniTest.player.restore(); MiniTest.notifyState(); });
     await page.locator('.cm-mini-inner').click();
-    assert.equal(await ambient.isVisible(), false, 'saved preference must survive reload');
-    assert((await bg.evaluate(el => getComputedStyle(el).backgroundImage)).includes(covers + 'red.svg'));
+    assert.equal(await ambient.isVisible(), false);
+    assert((await bg.evaluate(el => getComputedStyle(el, '::before').backgroundImage)).includes('data:image/jpeg;base64,'));
     await page.locator('#plMore').click();
+    await page.locator('#mBackground').click();
+    assert.equal(await blur.inputValue(), '100', 'saved blur must survive reload');
+    await page.locator('#plBgClear').click();
+    assert.equal(await page.evaluate(() => localStorage.getItem('cm.playerBgImage')), null);
     assert.equal(await speed.inputValue(), '2', 'saved speed must survive reload');
-    await toggle.click();
-    assert(await speed.isEnabled());
+    assert(await speed.isVisible());
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     assert.deepEqual(await durations(), ['12s', '16.5s']);
     assert.deepEqual(errors, []);

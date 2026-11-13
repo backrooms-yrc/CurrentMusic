@@ -81,11 +81,8 @@
   /* 波形是装饰：手表上让位给控制；进度条保住可用性 */
   .pl-progress-stack { grid-area: prog; margin: 0; }
   .pl-waveform { display: none; }
-  .pl-seek { font-size: 8px; gap: 5px; }
-  .pl-seekbar { height: 28px; }
-  .pl-seek-track { height: 3px; margin-top: -1.5px; }
-  .pl-seek-thumb { width: 9px; height: 9px; }
-  .pl-seek > span { min-width: 3em; }
+  .pl-seek-times { font-size: 9px; }
+  .pl-seekbar { height: 28px; --pl-seek-thickness: 3px; --pl-seek-active-thickness: 6px; }
   .pl-stall { font-size: 9px; }
 
   /* 走带沉底：网格最后一行占满剩余高度，主操作永远在腕部易点处 */
