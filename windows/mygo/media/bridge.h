@@ -14,7 +14,7 @@ enum cm_media_state {
 };
 
 enum cm_media_event {
-    CM_OPENED = 1, CM_SEEKED = 2, CM_ENDED = 4
+    CM_OPENED = 1, CM_SEEKED = 2, CM_ENDED = 4, CM_OUTPUT_CHANGED = 8
 };
 
 typedef struct cm_media_snapshot {

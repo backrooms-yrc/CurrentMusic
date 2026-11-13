@@ -76,6 +76,10 @@ CREATE TABLE IF NOT EXISTS passkeys(id TEXT PRIMARY KEY,uid INTEGER NOT NULL,rp 
  public_key BLOB NOT NULL,counter INTEGER NOT NULL,name TEXT NOT NULL,created INTEGER NOT NULL,last_used INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS passkey_challenges(id TEXT PRIMARY KEY,kind TEXT NOT NULL,uid INTEGER,
  sid TEXT NOT NULL,origin TEXT NOT NULL,challenge BLOB NOT NULL,expires INTEGER NOT NULL,rp TEXT);
+CREATE TABLE IF NOT EXISTS windows_passkey_codes(id TEXT PRIMARY KEY,uid INTEGER NOT NULL,
+ origin TEXT NOT NULL,flow TEXT NOT NULL,challenge TEXT NOT NULL,expires INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS windows_passkey_enrollments(id TEXT PRIMARY KEY,uid INTEGER NOT NULL,
+ origin TEXT NOT NULL,session_hash TEXT NOT NULL,options TEXT NOT NULL,name TEXT NOT NULL,expires INTEGER NOT NULL);
 '''
 Error = cm_2fa.Error
 
@@ -156,7 +160,8 @@ def begin(origin, uid=None, sid='', password='', factor='', name=''):
     finally:
         c.close()
 
-def finish(origin, ident, credential, uid=None, sid='', name='', device='', platform=''):
+def finish(origin, ident, credential, uid=None, sid='', name='', device='', platform='',
+           windows_flow=None, active_session_hash=None):
     rp = origin_check(origin)
     c = connect()
     try:
@@ -175,6 +180,11 @@ def finish(origin, ident, credential, uid=None, sid='', name='', device='', plat
         c.execute('BEGIN IMMEDIATE')
         try:
             if uid is not None:
+                if active_session_hash:
+                    if not active_session(c, uid, active_session_hash) or not c.execute(
+                            'DELETE FROM windows_passkey_enrollments WHERE id=? AND expires>?',
+                            (hashlib.sha256(sid.encode()).hexdigest(), int(time.time()))).rowcount:
+                        raise ValueError('revoked enrollment session')
                 result = verify_registration_response(credential=credential, expected_challenge=bytes(row['challenge']),
                     expected_origin=origin, expected_rp_id=rp, require_user_verification=True)
                 if c.execute('SELECT count(*) FROM passkeys WHERE uid=?',(uid,)).fetchone()[0] >= 20:
@@ -195,6 +205,16 @@ def finish(origin, ident, credential, uid=None, sid='', name='', device='', plat
                 expected_origin=origin, expected_rp_id=rp, credential_public_key=bytes(stored['public_key']),
                 credential_current_sign_count=stored['counter'], require_user_verification=True)
             c.execute('UPDATE passkeys SET counter=?,last_used=? WHERE id=?', (result.new_sign_count,int(time.time()),stored['id']))
+            if windows_flow is not None:
+                flow, challenge = windows_flow
+                code = secrets.token_urlsafe(32)
+                now = int(time.time())
+                c.execute('DELETE FROM windows_passkey_codes WHERE expires <= ?', (now,))
+                c.execute('INSERT INTO windows_passkey_codes VALUES(?,?,?,?,?,?)',
+                          (hashlib.sha256(code.encode()).hexdigest(), stored['uid'], origin,
+                           flow, challenge, now + 60))
+                c.commit()
+                return {'code': code}
             token = cm_db.issue_token(stored['uid'],device,platform,_conn=c)
             c.commit()
             return {'token': token, 'uid': stored['uid']}
@@ -212,3 +232,11 @@ def remove(uid, key, password, factor):
         return {'ok': True}
     finally:
         c.close()
+
+
+def active_session(db, uid, digest):
+    return db.execute(
+        "SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id "
+        "WHERE s.token_hash=? AND u.id=? AND u.disabled=0",
+        (digest, uid),
+    ).fetchone() is not None
