@@ -8,6 +8,7 @@ import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr
 
 log = logging.getLogger("cm")
 
@@ -34,7 +35,7 @@ def send_code_email(to_email, code, ttl_min=5, purpose="注册"):
         raise RuntimeError("SMTP 未配置")
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"CurrentMusic {purpose}验证码：{code}"
-    msg["From"] = f"CurrentMusic <{user}>"
+    msg["From"] = formataddr(("CurrentMusic Engine  流声引擎", user), charset="utf-8")
     msg["To"] = to_email
     text = f"你的 CurrentMusic {purpose}验证码是：{code}\n{ttl_min} 分钟内有效。若非本人操作请忽略本邮件。"
     html = f"""\
