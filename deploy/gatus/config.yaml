@@ -149,6 +149,44 @@ endpoints:
     client:
       timeout: 15s
 
+  # ── CDN 镜像（与 App 内「服务器与连接」测速同款探针语义）────────────────
+  # 三个镜像回源同一份 data/app/ 与后端，公网链路各自独立（见
+  # docs/network-performance.md「镜像同步与回源排查」）。
+  # 校验 service=CurrentMusic 且 ok=true，能同时发现 DNS/回源配错
+  # （此类故障往往返回 CDN 错误页而非本服务 JSON）。
+  - name: CTCEHS 镜像
+    group: CDN 镜像
+    url: https://music.ctcehs.com/cm/network/probe
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].ok == true"
+      - "[BODY].service == CurrentMusic"
+    client:
+      timeout: 15s
+
+  - name: Geekertao 镜像
+    group: CDN 镜像
+    url: https://currentmusic.geekertao.com/cm/network/probe
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].ok == true"
+      - "[BODY].service == CurrentMusic"
+    client:
+      timeout: 15s
+
+  - name: Bileizhen 镜像
+    group: CDN 镜像
+    url: https://cm.bileizhen.top/cm/network/probe
+    interval: 30s
+    conditions:
+      - "[STATUS] == 200"
+      - "[BODY].ok == true"
+      - "[BODY].service == CurrentMusic"
+    client:
+      timeout: 15s
+
   # ── 后端进程（直连本机，绕过 nginx/Cloudflare）─────────────────────────
   - name: CurrentMusic 后端（127.0.0.1:3010）
     group: 后端进程
