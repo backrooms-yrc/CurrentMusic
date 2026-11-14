@@ -28,6 +28,7 @@ GROUPS = {
     'likes': '收藏与红心', 'favs': '收藏与红心', 'songs': '音乐与媒体', 'search': '搜索历史',
     'roaming': '私人漫游', 'share': '分享', 'plays': '播放历史', 'decorations': '头像挂件',
     'download': '客户端与资源', 'x': '客户端与资源', 'cast': '客户端与资源', 'badges': '客户端与资源',
+    'lx': '客户端与资源',
 }
 GUIDES = {
     'user-levels-api': '用户等级、试炼与发现排序',
@@ -45,6 +46,7 @@ GUIDES = {
     'currentmusic-ai': '聊天 AI 与 SSE', 'chat-api': '聊天室消息、SSE 与互动',
     'share-api': '分享元数据与图片',
     'engine-badge-api': '流声引擎署名徽章',
+    'lx-music-source': '落雪音乐自定义音源',
     'realip': 'RealIP 规则', 'third-party-ncm-sync': '第三方客户端绑定同步', 'donations-api': '官方捐赠与第三方接入',
     'rooms-design': '一起听房间 API 与同步协议', 'network-lines-api': '线路测速',
 }

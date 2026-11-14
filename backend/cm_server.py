@@ -26,6 +26,7 @@ import cm_2fa
 import cm_passkeys
 import cm_db
 import cm_decor
+import cm_lx
 import cm_lddc
 import cm_levels
 import cm_mail
@@ -102,6 +103,8 @@ _AUTH_PATHS = {
     "/auth/2fa/login", "/auth/2fa/setup", "/auth/2fa/enable", "/auth/2fa/disable",
     "/profile/password", "/profile/password/code",
     "/ncmbind/import",
+    # 落雪音源直链带个人令牌（与 SSE 查询参数同口径）：按认证入口限速，防脚本地址被扫
+    "/lx/source.js",
 }
 
 # ---------- 网易云扫码绑定会话：key → (user_id, 创建时间) ----------
@@ -2144,6 +2147,26 @@ def route(handler, method):
         handler.wfile.write(data)
         return
 
+    # ======================== 落雪音乐（LX Music）自定义音源（未发布）========================
+    # 把 Engine 的取链能力包装成 LX Music 可导入的音源脚本（生成逻辑见 cm_lx）。
+    # 直链带个人令牌：与 SSE 的 ?token= 查询参数同口径，令牌失效即 401。
+    # 脚本内容因人而异（内嵌令牌），绝不落缓存；已在 _AUTH_PATHS 按认证入口限速。
+    if path == "/lx/source.js" and method in ("GET", "HEAD"):
+        token = q.get("token") or ""
+        if not token:
+            raise ApiError(401, "缺少 token：请在 CurrentMusic 设置页复制带个人令牌的落雪音源直链")
+        if not cm_db.user_by_token(token):
+            raise ApiError(401, "令牌无效或已下线：请重新登录 CurrentMusic，再到设置页生成新的音源直链")
+        script = cm_lx.build_source_script(cm_lx.api_base_for(handler), token).encode("utf-8")
+        handler.send_response(200)
+        handler.send_header("Content-Type", "text/javascript; charset=utf-8")
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Access-Control-Allow-Origin", "*")
+        handler.send_header("Content-Length", str(len(script)))
+        handler.end_headers()
+        handler.wfile.write(script)
+        return
+
     # ======================== 弹窗公告（v1.28.22） ========================
     # 客户端每次打开网页/App 都会拉 /announcements 并弹窗；管理员在管理后台增删改。
     # 公开读、写需管理员；普通管理员只能改自己发布的，超管可改全部。
@@ -2701,6 +2724,7 @@ def route(handler, method):
         own = [
             ("GET", "/health", "公开", "服务健康检查"),
             ("GET", "/badges/powered-by.svg", "公开", "流声引擎署名徽章，返回 SVG；lang 可选 zh-CN（默认）或 en。嵌入示例 /api-docs/reference/guide-engine-badge-api/"),
+            ("GET", "/lx/source.js", "token 查询参数", "落雪音乐（LX Music）自定义音源脚本：`?token=` 为 CurrentMusic 个人登录令牌（与 SSE 查询参数同口径），返回内嵌该令牌的音源 JS（wy 源 musicUrl/lyric，回连 /ncm/song/url 与公开 /ncm/lyric）。脚本因人而异且含令牌，no-store 不缓存；令牌失效返回 401；按认证入口限速。详见 /api-docs/reference/guide-lx-music-source/"),
             ("GET", "/network/lines", "公开", "主站及全部 CDN 镜像线路与服务端 HTTPS 测速结果；measure=0 仅目录；结果缓存 60 秒，perspective=server，不代表用户网络延迟。详细文档 /api-docs/reference/guide-network-lines-api/"),
             ("GET", "/network/probe", "公开", "浏览器线路测速探针：返回 service=CurrentMusic，支持 CORS；页面 /app/auto 从用户设备直接测量 HTTPS 请求耗时"),
             ("GET", "/network/docs", "公开", "兼容入口，302 跳转至 /api-docs/reference/guide-network-lines-api/"),

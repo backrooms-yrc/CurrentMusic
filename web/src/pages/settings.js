@@ -112,6 +112,7 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="secure"><span class="material-icons-outlined">lock</span>安全连接<i>${settings.secureMode ? 'HTTPS 已启用' : '已关闭'}</i></div>
       <div class="cm-setting" id="network"><span class="material-icons-outlined">network_check</span>CDN 与音源<i>自动测速 · 可用性测试</i></div>
+      ${auth.token ? `<div class="cm-setting" id="lxSource"><span class="material-icons-outlined">extension</span>落雪音乐音源<i>LX Music · 个人直链</i></div>` : ''}
       <div class="cm-setting" id="server"><span class="material-icons-outlined">dns</span>服务器地址<i>${esc(settings.base).replace(/(:\/\/|\/|\.)/g, '$1<wbr>')}</i></div>
     </div>
     <div class="cm-sec-head"><h2>关于</h2></div>
@@ -364,6 +365,31 @@ export async function render(el) {
     if (!w) location.href = url;
   };
   el.querySelector('#ppDocs')?.addEventListener('click', openPassportDocs);
+
+  // ---- 落雪音乐（LX Music）音源：生成带个人令牌的直链，复制到 LX 客户端导入 ----
+  el.querySelector('#lxSource')?.addEventListener('click', () => {
+    const link = `${settings.base}/lx/source.js?token=${encodeURIComponent(auth.token)}`;
+    const diag = mdui.dialog({
+      headline: '落雪音乐音源',
+      body: `<div class="cm-more">
+        <div class="cm-more-s">把 CurrentMusic 流声引擎接入落雪音乐（LX Music）桌面版/移动版：设置 → 自定义源 → 从 URL 导入，粘贴下面的直链。导入后「网易音乐」源的播放与歌词走你的 CurrentMusic 账号（自动音质、灰色曲目匹配、逐字歌词）。</div>
+        <mdui-text-field id="lxLink" label="音源直链（含个人令牌）" variant="outlined" readonly value="${esc(link)}" style="width:100%;margin-top:10px"></mdui-text-field>
+        <div class="cm-more-s" style="margin-top:8px">直链等同于你的登录凭证，<b>请勿分享给他人</b>；提示「登录已失效」时重新登录后到这里取新直链。怀疑泄露可在「登录设备」里下线对应设备使其立即失效。</div>
+      </div>`,
+      actions: [
+        {
+          text: '复制直链',
+          onClick: () => {
+            navigator.clipboard.writeText(link)
+              .then(() => toast('已复制，请在 LX Music「自定义源 → 从 URL 导入」粘贴'))
+              .catch(() => { diag.querySelector('#lxLink')?.focus(); toast('复制失败，请长按手动复制'); });
+            return false;   // 保持弹窗打开，方便手动复制
+          },
+        },
+        { text: '关闭' },
+      ],
+    });
+  });
 
   // ---- 玻璃效果：模糊 + 浓度，拖动即时生效（关闭时才重建折射透镜）----
   el.querySelector('#glassFx').onclick = () => {
