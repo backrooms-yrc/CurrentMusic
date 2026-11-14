@@ -1,5 +1,15 @@
 # Third-party notices
 
+## Gatus (service status page)
+
+- Project: https://github.com/TwiN/gatus
+- License: **Apache-2.0**
+- Version deployed: v5.38.0 (built from the upstream source tarball with
+  `CGO_ENABLED=0 go build`; the repository's embedded frontend is used as-is)
+- Installation location: `/opt/gatus/gatus` (binary only; no source copied into
+  this repository)
+- Configuration: `deploy/gatus/config.yaml` (declarative endpoint list)
+
 ## LDDC (optional, separate installation)
 
 - Project: https://github.com/chenmozhijin/LDDC

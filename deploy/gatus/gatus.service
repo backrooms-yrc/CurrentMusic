@@ -1,0 +1,28 @@
+# CurrentMusic 服务状态页（Gatus）
+# ----------------------------------------------------------------------------
+# 安装：cp deploy/gatus/gatus.service /etc/systemd/system/gatus.service
+#       && systemctl daemon-reload && systemctl enable --now gatus
+# 配置：deploy/gatus/config.yaml（随仓库提交，改后 systemctl restart gatus）
+# 二进制：/opt/gatus/gatus（源码构建，升级见 deploy/README.md「服务状态页」）
+# 数据：/opt/gatus/data/（sqlite，勿删；仓库不追踪）
+[Unit]
+Description=CurrentMusic status page (Gatus v5.38.0)
+Documentation=https://github.com/TwiN/gatus
+After=network-online.target currentmusic.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Gatus v5 通过环境变量定位配置（无 -config CLI 参数）
+Environment=GATUS_CONFIG_PATH=/opt/currentmusic/deploy/gatus/config.yaml
+ExecStart=/opt/gatus/gatus
+WorkingDirectory=/opt/gatus
+Restart=on-failure
+RestartSec=5
+# 状态页数据本地保留即可，动态能力不需要更高权限
+NoNewPrivileges=true
+ProtectSystem=full
+ReadWritePaths=/opt/gatus/data
+
+[Install]
+WantedBy=multi-user.target

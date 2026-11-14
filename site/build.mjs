@@ -212,6 +212,8 @@ const allowedUrls = [
   'https://music.20110208.xyz/app',
   'https://music.20110208.xyz/api-docs/',
   'https://music.20110208.xyz/cm/download/latest',   // 概念版「服务器源」下载
+  // 服务状态页（Gatus，公网端口直连入口，部署见 deploy/gatus/）
+  'http://45.207.204.178:39530/',
   'https://github.com/bileizhen/CurrentMusicX',   // 仅用于 JSON-LD sameAs
   'https://github.com/bileizhen/CurrentMusicX/releases',
   // 主项目仓库（README「相关仓库」/ App 内更新检查所用）

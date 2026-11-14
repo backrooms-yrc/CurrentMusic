@@ -25,6 +25,16 @@ automatically installed.
   mirror bundles with the local files. See [mirror troubleshooting](../docs/network-performance.md#镜像同步与回源排查).
 - `php/` — optional PHP front-controller entry for PHP-only hosts (Apache/nginx+FPM),
   with SSE/Range streaming and a php2shell runtime gate. See `php/README.md`.
+- `gatus/` — service status page (Gatus v5.38.0, Apache-2.0). `gatus/config.yaml`
+  defines all monitored endpoints; `gatus/gatus.service` is the systemd unit.
+  Live deployment on this host: binary at `/opt/gatus/gatus` (built from source,
+  CGO disabled, frontend embedded), data at `/opt/gatus/data/`, listening on
+  `127.0.0.1:8080`, published at `http://45.207.204.178:39530/` through nginx
+  (`/www/server/panel/vhost/nginx/status-music-39530.conf`; the port sits in the
+  ufw-allowed `39000:40000` range). UI auto-refreshes every 10s; public endpoints
+  are probed every 30s. To upgrade: rebuild with Go ≥ 1.26 (`CGO_ENABLED=0 go build`)
+  and `systemctl restart gatus`. To change coverage, edit `gatus/config.yaml`
+  and restart — no UI configuration, everything is declarative.
 
 ## First boot
 
