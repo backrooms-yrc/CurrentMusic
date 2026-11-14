@@ -27,14 +27,21 @@ automatically installed.
   with SSE/Range streaming and a php2shell runtime gate. See `php/README.md`.
 - `gatus/` — service status page (Gatus v5.38.0, Apache-2.0). `gatus/config.yaml`
   defines all monitored endpoints; `gatus/gatus.service` is the systemd unit.
-  Live deployment on this host: binary at `/opt/gatus/gatus` (built from source,
-  CGO disabled, frontend embedded), data at `/opt/gatus/data/`, listening on
-  `127.0.0.1:8080`, published at `http://45.207.204.178:39530/` through nginx
-  (`/www/server/panel/vhost/nginx/status-music-39530.conf`; the port sits in the
-  ufw-allowed `39000:40000` range). UI auto-refreshes every 10s; public endpoints
-  are probed every 30s. To upgrade: rebuild with Go ≥ 1.26 (`CGO_ENABLED=0 go build`)
-  and `systemctl restart gatus`. To change coverage, edit `gatus/config.yaml`
-  and restart — no UI configuration, everything is declarative.
+  Live deployment on this host: binary at `/opt/gatus/gatus`, data at
+  `/opt/gatus/data/`, listening on `127.0.0.1:8080`, published at
+  **https://music.20110208.xyz/status/** (same-domain path, following the
+  `/app`, `/api-docs/` convention; nginx strips the `/status/` prefix) with an
+  emergency direct entry at `http://45.207.204.178:39530/status/`.
+  UI auto-refreshes every 10s; public endpoints are probed every 30s.
+  To change coverage, edit `gatus/config.yaml` and `systemctl restart gatus` —
+  no UI configuration, everything is declarative. To upgrade Gatus itself:
+  build the upstream source tarball, but first re-apply the subpath frontend
+  patch — set `publicPath: '/status/'` in `web/app/vue.config.js` and prefix
+  the `/api/v1`/`/oidc` literals in `web/app/src` with `process.env.BASE_URL`
+  (plus `/apple-touch-icon.png`, `/manifest.json`, `/css/custom.css`,
+  `/favicon.ico` in `web/app/public/index.html`), run `npm ci && npm run build`
+  in `web/app` (outputs into `web/static/`), then
+  `CGO_ENABLED=0 go build` with Go ≥ 1.26 and restart the unit.
 
 ## First boot
 

@@ -97,7 +97,7 @@ location = / {
 | `/home/engine/` | 流声引擎官网，与主站共用 `/home/` 的静态部署 |
 | `/station` | CurrentStation 控制台（`backend/station.html`，反代后端 3010） |
 | `/developer`、`/ui-preview/` | 其他既有页面，官网不接管 |
-| `http://45.207.204.178:39530/` | 服务状态页（Gatus，见 `deploy/gatus/`；页脚友情链接指向它） |
+| `/status/` | 服务状态页（Gatus，见 `deploy/gatus/`；页脚友情链接指向它） |
 
 ```bash
 cd site

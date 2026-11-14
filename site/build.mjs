@@ -212,8 +212,8 @@ const allowedUrls = [
   'https://music.20110208.xyz/app',
   'https://music.20110208.xyz/api-docs/',
   'https://music.20110208.xyz/cm/download/latest',   // 概念版「服务器源」下载
-  // 服务状态页（Gatus，公网端口直连入口，部署见 deploy/gatus/）
-  'http://45.207.204.178:39530/',
+  // 服务状态页（Gatus，同域 /status/ 路径，部署见 deploy/gatus/）
+  'https://music.20110208.xyz/status/',
   'https://github.com/bileizhen/CurrentMusicX',   // 仅用于 JSON-LD sameAs
   'https://github.com/bileizhen/CurrentMusicX/releases',
   // 主项目仓库（README「相关仓库」/ App 内更新检查所用）
@@ -236,7 +236,7 @@ check(unexpected.length === 0, `页面内 ${allUrls.length} 个地址全部来�
 // 例外：同域下由其他服务提供的路径（音乐网页版 / 控制台 / 后端接口），
 // 它们不属于本产物，无法也不应在这里校验。
 const SELF_ORIGIN = 'https://music.20110208.xyz/';
-const OTHER_SERVICES = ['app', 'station', 'cm', 'developer', 'ui-preview', 'api-docs'];
+const OTHER_SERVICES = ['app', 'station', 'cm', 'developer', 'ui-preview', 'api-docs', 'status'];
 const selfUrls = allUrls.filter(u => u.startsWith(SELF_ORIGIN));
 const brokenSelf = [];
 for (const u of selfUrls) {

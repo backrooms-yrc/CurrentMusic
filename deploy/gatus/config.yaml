@@ -2,11 +2,13 @@
 # CurrentMusic 服务状态页 —— Gatus 监控配置
 # ----------------------------------------------------------------------------
 # 框架：Gatus v5.38.0（Apache-2.0，https://github.com/TwiN/gatus）
-# 二进制：/opt/gatus/gatus（源码构建，CGO 关闭，内嵌前端）
+# 二进制：/opt/gatus/gatus（源码构建，CGO 关闭；前端已按 /status/ 前缀重新
+#   打包并内嵌——vue publicPath + API 路径补丁，重构建步骤见 deploy/README.md）
 # 运行数据：/opt/gatus/data/gatus.db（sqlite，勿提交、勿删除）
-# 对外访问：nginx 公网端口 39530 反代 127.0.0.1:8080（见
-#   /www/server/panel/vhost/nginx/status-music-39530.conf），
-#   即 http://45.207.204.178:39530/
+# 对外访问：https://music.20110208.xyz/status/（与 /app、/api-docs/ 同域路径惯例，
+#   nginx location /status/ 剥前缀反代 127.0.0.1:8080）；
+#   备用直连入口 http://45.207.204.178:39530/status/（Cloudflare 故障时应急，
+#   见 /www/server/panel/vhost/nginx/status-music-39530.conf）
 #
 # 分层策略：
 #   · 公网入口走 https://music.20110208.xyz/**（覆盖 Cloudflare → nginx 全链路）
