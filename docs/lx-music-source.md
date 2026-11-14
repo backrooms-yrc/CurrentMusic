@@ -9,8 +9,10 @@ https://music.20110208.xyz/cm/lx/source.js?token=<音源专用令牌>
 直链由 CurrentMusic 网页端「设置 → 服务器 → 落雪音乐音源」生成并复制。脚本导入后生效的能力：
 
 - **musicUrl**（wy 源）：`128k / 320k / flac / flac24bit` 四档，分别映射 Engine 的 `standard / exhigh / lossless / jymaster` 档位，享受注册用户级取链与[灰色曲目匹配](playback-sources.md)；
-- **lyric**（wy 源）：歌词走 Engine 归一化接口，主歌词、翻译与罗马音按毫秒时间轴转换成 LRC；
+- **lyric**（wy 源）：歌词走 Engine 归一化接口，主歌词、翻译与罗马音按毫秒时间轴转换成 LRC。官方客户端的 `wy` 动作白名单只开放 `musicUrl`，因此不在 `inited` 中声明；支持该协议的衍生客户端可直接调用；
 - 其余音源（kw/kg/tx/mg）与动作会明确返回不支持，不会误解析。
+
+脚本遵循官方自定义源运行时协议：`request` 事件的 handler **返回 Promise**（官方沙箱直接对返回值 `.then()`，不传 callback），同时兼容老式 callback 调用；沙箱已预解析的 JSON 响应（`resp.body` 为对象）与字符串响应都能处理；整体包在 IIFE 中，重复载入不会因顶层重复声明而失败。
 
 ## 专用令牌
 

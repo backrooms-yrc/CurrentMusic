@@ -32,6 +32,8 @@ from unittest import mock  # noqa: E402
 NODE_BIN = shutil.which("node")
 
 # Node 侧最小 LX 沙箱：录制 request 调用，按 URL 前缀回放预设响应。
+# 两种协议模式都覆盖：官方 v2（handler 返回 Promise、resp.body 已被沙箱
+# JSON.parse 成对象）与老式 callback（body 为字符串）。
 _NODE_HARNESS = r"""
 'use strict';
 const fs = require('fs');
@@ -41,9 +43,10 @@ const requests = [];
 let inited = null;
 let requestHandler = null;
 
-function reply(body, statusCode) {
+function reply(body, statusCode, raw) {
   return (url, options, cb) => {
-    setTimeout(() => cb(null, { statusCode: statusCode, headers: {}, body: JSON.stringify(body) }), 0);
+    const payload = raw ? body : JSON.stringify(body);   // raw=官方沙箱：body 已是对象
+    setTimeout(() => cb(null, { statusCode, headers: {}, body: payload }), 0);
   };
 }
 
@@ -68,29 +71,139 @@ globalThis.lx = {
 
 eval(script);
 
-function fire(payload) {
-  return new Promise((resolve) => {
-    let settled = false;
-    payload.callback = (err, data) => {
-      if (settled) return;
-      settled = true;
-      resolve({ err: err ? String(err && err.message || err) : null, data });
-    };
-    requestHandler(payload);
-  });
+// 重复 eval 安全性：部分客户端会在复用上下文里重新载入脚本，
+// 顶层 const 重复声明会直接抛错并被判为「音源解析失败」。
+let reevalOk = true;
+let reevalError = null;
+try { eval(script) } catch (e) { reevalOk = false; reevalError = String(e && e.message || e) }
+
+function fire(payload, mode) {
+  if (mode === 'callback') {
+    return new Promise((resolve) => {
+      let settled = false;
+      payload.callback = (err, data) => {
+        if (settled) return;
+        settled = true;
+        resolve({ protocol: 'callback', err: err ? String(err && err.message || err) : null, data });
+      };
+      const ret = requestHandler(payload);
+      if (ret && typeof ret.catch === 'function') ret.catch(() => {});
+    });
+  }
+  // 官方 v2：handler 的返回值必须 thenable（沙箱直接对它 .then()）
+  const ret = requestHandler(payload);
+  if (!ret || typeof ret.then !== 'function') return Promise.resolve({ protocol: 'bad-return' });
+  return ret.then(
+    (data) => ({ protocol: 'promise', err: null, data }),
+    (err) => ({ protocol: 'promise', err: String(err && err.message || err) }));
 }
 
 (async () => {
-  const out = { inited, requests, cases: [] };
-  for (const c of fixtures) {
+  const out = { inited, requests, cases: [], reevalOk, reevalError };  for (const c of fixtures) {
     responders.length = 0;
-    if (c.replyPrefix) onGet(c.replyPrefix, reply(c.replyBody, c.replyStatus));
-    const res = await fire({ source: c.source, action: c.action, info: c.info, callback: null });
+    if (c.replyPrefix) onGet(c.replyPrefix, reply(c.replyBody, c.replyStatus, c.rawBody));
+    const res = await fire({ source: c.source, action: c.action, info: c.info }, c.mode || 'v2');
     res.name = c.name;
     out.cases.push(res);
   }
   console.log(JSON.stringify(out));
 })();
+"""
+
+# 复刻官方 preload 的 init/request 契约（lx-music-desktop v2 preload.js）：
+#   - handleInit 按 supportQualitys/supportActions 白名单过滤；
+#   - handleRequest 直接对 handler 返回值 .then()，并校验 musicUrl 是
+#     ≤2048 字符的 http(s) 字符串、lyric 的字段类型与长度上限；
+#   - request 回调的 body 已被沙箱 JSON.parse。
+_OFFICIAL_CONTRACT_HARNESS = r"""
+'use strict';
+const fs = require('fs');
+const script = fs.readFileSync(process.argv[2], 'utf8');
+
+const ALL_SOURCES = ['kw', 'kg', 'tx', 'wy', 'mg', 'local'];
+const SUPPORT_QUALITYS = {
+  kw: ['128k', '320k', 'flac', 'flac24bit'],
+  kg: ['128k', '320k', 'flac', 'flac24bit'],
+  tx: ['128k', '320k', 'flac', 'flac24bit'],
+  wy: ['128k', '320k', 'flac', 'flac24bit'],
+  mg: ['128k', '320k', 'flac', 'flac24bit'],
+  local: [],
+};
+const SUPPORT_ACTIONS = {
+  kw: ['musicUrl'], kg: ['musicUrl'], tx: ['musicUrl'], wy: ['musicUrl'],
+  mg: ['musicUrl'], local: ['musicUrl', 'lyric', 'pic'],
+};
+
+let initResult = null, initError = null, requestHandler = null;
+
+function verifyLyricInfo(info) {
+  if (typeof info != 'object' || typeof info.lyric != 'string') throw new Error('failed');
+  if (info.lyric.length > 51200) throw new Error('failed');
+  return {
+    lyric: info.lyric,
+    tlyric: (typeof info.tlyric == 'string' && info.tlyric.length < 5120) ? info.tlyric : null,
+    rlyric: (typeof info.rlyric == 'string' && info.rlyric.length < 5120) ? info.rlyric : null,
+    lxlyric: (typeof info.lxlyric == 'string' && info.lxlyric.length < 8192) ? info.lxlyric : null,
+  };
+}
+
+function handleInit(info) {
+  if (!info) { initError = 'Missing required parameter init info'; return; }
+  const sourceInfo = { sources: {} };
+  try {
+    for (const source of ALL_SOURCES) {
+      const userSource = info.sources[source];
+      if (!userSource || userSource.type !== 'music') continue;
+      sourceInfo.sources[source] = {
+        type: 'music',
+        actions: SUPPORT_ACTIONS[source].filter(a => userSource.actions.includes(a)),
+        qualitys: SUPPORT_QUALITYS[source].filter(q => userSource.qualitys.includes(q)),
+      };
+    }
+  } catch (e) { initError = e.message; return; }
+  initResult = sourceInfo;
+}
+
+function handleRequest(data) {
+  if (!requestHandler) throw new Error('Request event is not defined');
+  return requestHandler({ source: data.source, action: data.action, info: data.info }).then(response => {
+    switch (data.action) {
+      case 'musicUrl':
+        if (typeof response != 'string' || response.length > 2048 || !/^https?:/.test(response)) throw new Error('failed');
+        return { type: data.info.type, url: response };
+      case 'lyric':
+        return verifyLyricInfo(response);
+      default:
+        throw new Error('unexpected action');
+    }
+  });
+}
+
+globalThis.lx = {
+  EVENT_NAMES: { request: 'request', inited: 'inited', updateAlert: 'updateAlert' },
+  request(url, { method = 'get', timeout, headers }, callback) {
+    setTimeout(() => {
+      // 官方沙箱：body 自动 JSON.parse
+      callback(null, { statusCode: 200, headers: {}, body: {
+        url: 'https://m804.music.126.net/official.mp3',
+        level: 'exhigh',
+        lines: [{ t: 1000, txt: '官方契约', trans: '', roma: '' }],
+      } });
+    }, 0);
+  },
+  send(eventName, data) { if (eventName === 'inited') handleInit(data); },
+  on(eventName, handler) { if (eventName === 'request') requestHandler = handler; },
+};
+
+eval(script);
+
+(async () => {
+  const url = await handleRequest({ source: 'wy', action: 'musicUrl',
+    info: { type: '320k', musicInfo: { songmid: '186016' } } });
+  const lyric = await handleRequest({ source: 'wy', action: 'lyric',
+    info: { type: '320k', musicInfo: { songmid: '186016' } } });
+  console.log(JSON.stringify({ initResult, initError, url, lyric }));
+})().catch(e => { console.log(JSON.stringify({ fatal: String(e && e.message || e) })); });
 """
 
 
@@ -180,40 +293,74 @@ class LxSourceTests(unittest.TestCase):
                          "https://a.example/cm")
 
     # ---------- 脚本语义（Node 模拟 LX 环境） ----------
+    @unittest.skipUnless(NODE_BIN, "需要 Node 运行时")
+    def test_official_preload_contract(self):
+        """直接复刻官方 preload 的 init/request 校验，确保脚本被官方客户端接受。"""
+        script = cm_lx.build_source_script("https://engine.example/cm", "tok-lx-123")
+        with tempfile.TemporaryDirectory() as tmp:
+            script_path = os.path.join(tmp, "lx-source.js")
+            harness_path = os.path.join(tmp, "official.cjs")
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(script)
+            with open(harness_path, "w", encoding="utf-8") as f:
+                f.write(_OFFICIAL_CONTRACT_HARNESS)
+            proc = subprocess.run([NODE_BIN, harness_path, script_path],
+                                  capture_output=True, text=True, timeout=60, cwd=tmp)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            out = json.loads(proc.stdout.strip().splitlines()[-1])
+        self.assertNotIn("fatal", out, out.get("fatal"))
+        self.assertIsNone(out["initError"])           # init 不能失败
+        wy = out["initResult"]["sources"]["wy"]       # 官方白名单过滤后仍存在
+        self.assertEqual(wy["type"], "music")
+        self.assertEqual(wy["actions"], ["musicUrl"])  # 官方 wy 只接受 musicUrl
+        self.assertEqual(wy["qualitys"], ["128k", "320k", "flac", "flac24bit"])
+        # handleRequest 的 .then() 链路与官方字段校验均应通过
+        self.assertEqual(out["url"]["url"], "https://m804.music.126.net/official.mp3")
+        self.assertEqual(out["url"]["type"], "320k")
+        self.assertIn("[00:01.00]官方契约", out["lyric"]["lyric"])
 
     @unittest.skipUnless(NODE_BIN, "需要 Node 运行时")
     def test_script_semantics_in_lx_sandbox(self):
         script = cm_lx.build_source_script("https://engine.example/cm", "tok-lx-123")
+        # mode=v2 模拟官方 lx-music-desktop/mobile 沙箱：handler 返回 Promise、
+        # resp.body 已被沙箱 JSON.parse 成对象（rawBody=True）；
+        # mode=callback 模拟老式/衍生运行时：传入 callback、body 为字符串。
         cases = [
             # musicUrl：四档映射到 Engine level，带 Bearer
-            dict(name="128k", source="wy", action="musicUrl",
+            dict(name="128k", mode="v2", rawBody=True, source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "186001"}, "type": "128k"},
                  replyPrefix="https://engine.example/cm/ncm/song/url",
                  replyBody={"url": "https://m804.music.126.net/a.mp3", "level": "standard"},
                  replyStatus=200),
-            dict(name="320k", source="wy", action="musicUrl",
+            dict(name="320k", mode="v2", rawBody=True, source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "186001"}, "type": "320k"},
                  replyPrefix="https://engine.example/cm/ncm/song/url",
                  replyBody={"url": "https://m804.music.126.net/b.mp3", "level": "exhigh"},
                  replyStatus=200),
-            dict(name="flac24bit", source="wy", action="musicUrl",
+            dict(name="flac24bit", mode="v2", rawBody=True, source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "186001"}, "type": "flac24bit"},
                  replyPrefix="https://engine.example/cm/ncm/song/url",
                  replyBody={"url": "https://m804.music.126.net/c.flac", "level": "jymaster"},
                  replyStatus=200),
+            # 老式 callback 运行时（body 为字符串）也要能解析
+            dict(name="legacy_callback", mode="callback", source="wy", action="musicUrl",
+                 info={"musicInfo": {"songmid": "186001"}, "type": "320k"},
+                 replyPrefix="https://engine.example/cm/ncm/song/url",
+                 replyBody={"url": "https://m804.music.126.net/d.mp3", "level": "exhigh"},
+                 replyStatus=200),
             # 401 → 引导用户重新生成直链
-            dict(name="expired", source="wy", action="musicUrl",
+            dict(name="expired", mode="v2", rawBody=True, source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "186001"}, "type": "320k"},
                  replyPrefix="https://engine.example/cm/ncm/song/url",
                  replyBody={"error": "未登录"}, replyStatus=401),
             # 502 错误透传
-            dict(name="match_failed", source="wy", action="musicUrl",
+            dict(name="match_failed", mode="v2", rawBody=True, source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "999"}, "type": "flac"},
                  replyPrefix="https://engine.example/cm/ncm/song/url",
                  replyBody={"error": "官方音源未取得可用地址", "code": "playback_match_failed"},
                  replyStatus=502),
-            # lyric：归一化 lines → LRC
-            dict(name="lyric", source="wy", action="lyric",
+            # lyric：归一化 lines → LRC（官方 wy 白名单不含 lyric，但协议仍响应）
+            dict(name="lyric", mode="v2", rawBody=True, source="wy", action="lyric",
                  info={"musicInfo": {"songmid": "186001"}},
                  replyPrefix="https://engine.example/cm/ncm/lyric",
                  replyBody={"lines": [
@@ -222,11 +369,11 @@ class LxSourceTests(unittest.TestCase):
                  ]},
                  replyStatus=200),
             # 非 wy 源 / 未知动作 / 未知音质 → 明确报错
-            dict(name="tx_rejected", source="tx", action="musicUrl",
+            dict(name="tx_rejected", mode="v2", source="tx", action="musicUrl",
                  info={"musicInfo": {"songmid": "x"}, "type": "320k"}),
-            dict(name="pic_rejected", source="wy", action="pic",
+            dict(name="pic_rejected", mode="v2", source="wy", action="pic",
                  info={"musicInfo": {"songmid": "186001"}}),
-            dict(name="bad_quality", source="wy", action="musicUrl",
+            dict(name="bad_quality", mode="v2", source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "186001"}, "type": "192k"}),
         ]
         with tempfile.TemporaryDirectory() as tmp:
@@ -242,33 +389,42 @@ class LxSourceTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, proc.stderr)
             out = json.loads(proc.stdout.strip().splitlines()[-1])
 
-        # inited 事件声明：仅 wy，四档音质，musicUrl + lyric
+        # inited 事件声明：仅 wy，四档音质；动作只声明 musicUrl
+        # （官方 wy 白名单如此，多余声明会被过滤或被衍生版严格校验拒绝）
+        self.assertTrue(out["reevalOk"], out["reevalError"])   # 重复 eval 必须不抛错
         self.assertTrue(out["inited"]["status"])
         self.assertEqual(out["inited"]["sources"]["wy"]["type"], "music")
-        self.assertEqual(out["inited"]["sources"]["wy"]["actions"], ["musicUrl", "lyric"])
+        self.assertEqual(out["inited"]["sources"]["wy"]["actions"], ["musicUrl"])
         self.assertEqual(out["inited"]["sources"]["wy"]["qualitys"],
                          ["128k", "320k", "flac", "flac24bit"])
 
         by_name = {c["name"]: c for c in out["cases"]}
-        # 请求 URL / 鉴权头断言（四个成功/失败用例各发一次取链请求）
+        # 官方 v2 模式：handler 在所有分支都必须返回 thenable（沙箱直接 .then()）
+        for c in out["cases"]:
+            if c["name"] == "legacy_callback":
+                self.assertEqual(c["protocol"], "callback")
+            else:
+                self.assertEqual(c["protocol"], "promise", c["name"])
+        # 请求 URL / 鉴权头断言（三个 v2 成功/失败用例 + 一个 callback 用例各发一次）
         song_calls = [r for r in out["requests"] if "/ncm/song/url" in r["url"]]
-        self.assertEqual(len(song_calls), 5)
-        by_level = {r["url"].split("level=")[1]: r for r in song_calls
-                    if "level=" in r["url"]}
-        self.assertEqual(set(by_level), {"standard", "exhigh", "lossless", "jymaster"})
+        self.assertEqual(len(song_calls), 6)
+        by_level = {r["url"].split("level=")[1] for r in song_calls if "level=" in r["url"]}
+        self.assertEqual(by_level, {"standard", "exhigh", "lossless", "jymaster"})
         for r in song_calls:
             self.assertEqual(r["options"]["headers"]["Authorization"], "Bearer tok-lx-123")
-        self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 4)
+        self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 5)
         self.assertEqual(sum("id=999" in r["url"] for r in song_calls), 1)
         lyric_calls = [r for r in out["requests"] if "/ncm/lyric" in r["url"]]
         self.assertEqual(len(lyric_calls), 1)
         self.assertNotIn("Authorization", lyric_calls[0]["options"]["headers"])   # 公开接口不带令牌
 
-        # musicUrl 成功路径
+        # musicUrl 成功路径（v2：body 已是对象；callback：body 是字符串）
         self.assertEqual(by_name["128k"]["err"], None)
         self.assertEqual(by_name["128k"]["data"], "https://m804.music.126.net/a.mp3")
         self.assertEqual(by_name["320k"]["data"], "https://m804.music.126.net/b.mp3")
         self.assertEqual(by_name["flac24bit"]["data"], "https://m804.music.126.net/c.flac")
+        self.assertEqual(by_name["legacy_callback"]["err"], None)
+        self.assertEqual(by_name["legacy_callback"]["data"], "https://m804.music.126.net/d.mp3")
         # 失败路径
         self.assertIn("登录已失效", by_name["expired"]["err"])
         self.assertIn("未取得可用地址", by_name["match_failed"]["err"])

@@ -11,13 +11,25 @@
 
 脚本语法刻意保持 ES2015 级别：LX 各端内置的 JS 运行时（QuickJS / WebView）
 对更激进的语法支持不一，兼容面优先。
+
+脚本遵循 lx-music-desktop v2 / lx-music-mobile 的自定义源运行时协议
+（对照其 userApi 沙箱实现校准过，v1.0.1）：
+
+- ``request`` 事件的 handler **必须返回 Promise**（官方 handleRequest 直接对
+  返回值 ``.then()``，不传 callback）；老式 callback 形态作为兼容路径保留；
+- 沙箱的 ``request`` 已对 JSON 响应自动 ``JSON.parse``，``resp.body`` 可能
+  已经是对象，也可能是字符串（parse 失败或衍生环境），两种都要处理；
+- 官方 ``wy`` 源的动作白名单只有 ``musicUrl``（``lyric``/``pic`` 仅 local 源
+  开放，多余的声明会被过滤；个别衍生版甚至严格校验直接判失败），
+  因此 ``inited`` 只声明 ``musicUrl`` —— handler 仍响应 ``lyric``，
+  支持 wy 歌词的衍生客户端可以照常调用。
 """
 from __future__ import annotations
 
 import json
 
 # 音源脚本自身的版本。LX 客户端靠它判断「检查更新」是否需要拉新脚本。
-SOURCE_VERSION = "1.0.0"
+SOURCE_VERSION = "1.0.1"
 
 # 兜底基址：仅在请求头完全推不出对外域名时使用（正常线上永远走 Host 头）。
 DEFAULT_API_BASE = "https://music.20110208.xyz/cm"
@@ -37,12 +49,24 @@ _SCRIPT_TEMPLATE = r"""
  * 提示「登录已失效」时，请到 CurrentMusic 网页端「设置 → 落雪音乐音源」重新生成直链并更新。
  */
 
+// 整体包进 IIFE（与官方 dist 脚本同构）：客户端可能在复用上下文里重复 eval，
+// 顶层 const 重复声明会直接抛错并被判为「音源解析失败」；同时也避免污染全局。
+;(function () {
+'use strict'
+
 const { EVENT_NAMES, request } = globalThis.lx
 
 const API_BASE = __API_BASE__
 const TOKEN = __TOKEN__
 const REQUEST_TIMEOUT = __REQUEST_TIMEOUT_MS__
 const UA = 'CurrentMusic-LX/__SOURCE_VERSION__ (lx-music custom source)'
+
+// 部分精简 JS 运行时（QuickJS 等）没有 setTimeout；没有超时计时也要能跑，
+// 只依赖 request() 自带的 timeout 选项。
+const setTimer = typeof setTimeout === 'function'
+  ? (fn, ms) => setTimeout(fn, ms) : () => 0
+const clearTimer = typeof clearTimeout === 'function'
+  ? (t) => { if (t) clearTimeout(t) } : () => {}
 
 // LX 音质档 → Engine /ncm/song/url 的 level（Engine 不支持 192k，故不声明）。
 const QUALITY_LEVELS = {
@@ -57,7 +81,7 @@ function httpGet(url, needAuth) {
   return new Promise((resolve, reject) => {
     let done = false
     const finish = (fn, arg) => { if (!done) { done = true; fn(arg) } }
-    const timer = setTimeout(() => finish(reject, new Error('请求 CurrentMusic 超时')), REQUEST_TIMEOUT)
+    const timer = setTimer(() => finish(reject, new Error('请求 CurrentMusic 超时')), REQUEST_TIMEOUT)
     const headers = { Accept: 'application/json', 'User-Agent': UA }
     if (needAuth) headers.Authorization = 'Bearer ' + TOKEN
     let settled = false
@@ -65,20 +89,22 @@ function httpGet(url, needAuth) {
       request(url, { method: 'GET', headers: headers, timeout: REQUEST_TIMEOUT }, (err, resp) => {
         if (settled) return
         settled = true
-        clearTimeout(timer)
+        clearTimer(timer)
         if (err) return finish(reject, err)
-        let data = null
-        let parseOk = true
-        try { data = JSON.parse(resp.body) } catch (e) { parseOk = false }
+        // 官方沙箱已对 JSON 响应自动解析，resp.body 可能是对象；衍生环境可能是字符串。
+        let data = resp.body
+        if (typeof data === 'string') {
+          try { data = JSON.parse(data) } catch (e) { data = null }
+        }
         if (resp.statusCode === 401) {
           return finish(reject, new Error('CurrentMusic 登录已失效：请到网页端「设置 → 落雪音乐音源」重新生成直链'))
         }
         if (resp.statusCode === 429) return finish(reject, new Error('请求过于频繁，请稍后再试'))
         if (resp.statusCode >= 400) {
-          const msg = (parseOk && data && data.error) ? data.error : ('请求失败（HTTP ' + resp.statusCode + '）')
+          const msg = (data && data.error) ? data.error : ('请求失败（HTTP ' + resp.statusCode + '）')
           return finish(reject, new Error(msg))
         }
-        if (!parseOk) return finish(reject, new Error('响应解析失败（HTTP ' + resp.statusCode + '）'))
+        if (!data || typeof data !== 'object') return finish(reject, new Error('响应解析失败（HTTP ' + resp.statusCode + '）'))
         finish(resolve, data)
       })
     } catch (err) {
@@ -133,24 +159,44 @@ function lyric(musicInfo) {
   })
 }
 
+// 官方 v2 运行时对 request handler 的返回值直接 .then()（不传 callback），
+// 所以必须返回 Promise；老式 callback 客户端同时兼容。
+const fail = (cb, message) => {
+  const err = new Error(message)
+  if (cb) cb(err)
+  return Promise.reject(err)
+}
+
 globalThis.lx.on(EVENT_NAMES.request, ({ source, action, info, callback }) => {
-  const cb = typeof callback === 'function' ? callback : function () {}
-  if (source !== 'wy') return cb(new Error('CurrentMusic 音源目前仅支持网易云（wy）音源'))
+  const cb = typeof callback === 'function' ? callback : null
   let work
   switch (action) {
     case 'musicUrl':
-      if (!info || qualitys.indexOf(info.type) < 0) {
-        return cb(new Error('不支持的音质：' + (info && info.type)))
+      if (source !== 'wy') {
+        work = fail(cb, 'CurrentMusic 音源目前仅支持网易云（wy）音源')
+      } else if (!info || qualitys.indexOf(info.type) < 0) {
+        work = fail(cb, '不支持的音质：' + (info && info.type))
+      } else {
+        work = musicUrl(info.musicInfo, info.type)
       }
-      work = musicUrl(info.musicInfo, info.type)
       break
     case 'lyric':
-      work = lyric(info.musicInfo)
+      // inited 不声明 lyric（官方 wy 白名单只有 musicUrl），但支持该协议的
+      // 衍生客户端仍可直接调用。
+      if (source !== 'wy') {
+        work = fail(cb, 'CurrentMusic 音源目前仅支持网易云（wy）音源')
+      } else {
+        work = lyric(info.musicInfo)
+      }
       break
     default:
-      return cb(new Error('不支持的操作：' + action))
+      work = fail(cb, '不支持的操作：' + action)
   }
-  work.then((data) => cb(null, data), (err) => cb(err || new Error('请求失败')))
+  if (cb) {
+    work.then((data) => cb(null, data), (err) => cb(err || new Error('请求失败')))
+    work.catch(function () {})   // 已交给 callback，防未处理 rejection 告警
+  }
+  return work
 })
 
 globalThis.lx.send(EVENT_NAMES.inited, {
@@ -160,11 +206,12 @@ globalThis.lx.send(EVENT_NAMES.inited, {
     wy: {
       name: 'CurrentMusic 流声引擎',
       type: 'music',
-      actions: ['musicUrl', 'lyric'],
+      actions: ['musicUrl'],
       qualitys: qualitys,
     },
   },
 })
+})()
 """.lstrip("\n")
 
 
