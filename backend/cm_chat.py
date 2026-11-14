@@ -8,7 +8,10 @@
     但落本机盘而非转发上游）：魔法字节校验 + 1.5MB 上限（MAX_BODY=2MB，
     base64 膨胀 4/3 后仍在请求体上限内）；前端发送前会压缩到 ≤1280px。
   · @ 提及只存 user_id 列表（JSON），展示层负责高亮——不在存储里冗余昵称，
-    用户改昵称后历史消息依然正确关联。
+    用户改昵称后历史消息依然正确关联。@全体成员（mentionAll）是管理员专属
+    标记：不进 mentions 列表，权限校验在路由层（cm_server）。
+  · 引用（quote）只存被引用消息 id：昵称/摘要在读取时从原消息行实时生成
+    （软删行仍在库，显示不受影响）；环形清理淘汰原消息后客户端显示占位。
   · 保留最近 500 条（环形清理，与 room_events 同思路），公共聊天不做法务级
     归档；删除为软删（管理员/本人），列表过滤 deleted=1。
 """
@@ -28,6 +31,8 @@ MAX_MSG_LEN = 500          # 文本上限（Unicode 字符）
 MAX_MENTIONS = 10          # @ 提及人数上限
 MAX_ATTS = 5               # 引用内容（单曲/专辑/歌手/歌单）上限
 ATT_TYPES = ("song", "album", "artist", "playlist")
+QUOTE_EXCERPT_LEN = 100    # 引用气泡里的原文摘要长度上限
+QUOTE_SNIPPET = "@全体成员"  # @全体成员 的文本标记（发送时内容里必须包含）
 MAX_IMAGE_BYTES = int(1.5 * 1024 * 1024)   # 图片解码后上限（请求体走 MAX_BODY=2MB 的 base64）
 KEEP_MESSAGES = 500        # 消息环形保留条数
 SEND_INTERVAL = 1.5        # 同一用户两次发言最小间隔（秒）
@@ -119,6 +124,8 @@ def init_chat_tables(conn):
       image TEXT DEFAULT '',
       mentions TEXT DEFAULT '',
       atts TEXT DEFAULT '',
+      quote INTEGER DEFAULT 0,
+      mention_all INTEGER DEFAULT 0,
       deleted INTEGER DEFAULT 0,
       created_at INTEGER NOT NULL
     );
@@ -132,6 +139,10 @@ def init_chat_tables(conn):
     cols = {r[1] for r in conn.execute("PRAGMA table_info(chat_messages)")}
     if "atts" not in cols:                     # 旧库补列：引用内容（单曲/专辑/歌手/歌单）
         conn.execute("ALTER TABLE chat_messages ADD COLUMN atts TEXT DEFAULT ''")
+    if "quote" not in cols:                    # 旧库补列：引用的消息 id（0=无引用）
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN quote INTEGER DEFAULT 0")
+    if "mention_all" not in cols:              # 旧库补列：@全体成员 标记（管理员专属）
+        conn.execute("ALTER TABLE chat_messages ADD COLUMN mention_all INTEGER DEFAULT 0")
     os.makedirs(CHAT_DIR, exist_ok=True)
 
 
@@ -167,7 +178,7 @@ def _user_out(u):
             "isOwner": bool(u["is_owner"]), "isBot": bool(u.get("is_bot"))}
 
 
-def _row_out(msg, user, mention_users, streaming=False):
+def _row_out(msg, user, mention_users, streaming=False, quote=None):
     """msg=消息行，user=发送者 users 行（可 None，已删用户），mention_users=被 @ 者列表。"""
     try:
         atts = json.loads(msg.get("atts") or "[]")
@@ -177,11 +188,62 @@ def _row_out(msg, user, mention_users, streaming=False):
             "image": msg["image"] or "", "atts": atts, "createdAt": msg["created_at"],
             "user": _user_out(user) if user else None,
             "mentions": [_user_out(m) for m in mention_users],
+            "quote": quote or None,
+            "mentionAll": bool(msg.get("mention_all")),
             "streaming": bool(streaming)}
 
 
+def _quote_summary(r):
+    """引用摘要：正文优先，纯图给「[图片]」，纯卡片给卡片名；超长截断。
+    r 必须含 id/user_id/content/image/atts/nickname（LEFT JOIN users 的产物）。"""
+    text = (r["content"] or "").strip()
+    if not text and r["image"]:
+        text = "[图片]"
+    if not text:
+        try:
+            atts = json.loads(r["atts"] or "[]")
+        except ValueError:
+            atts = []
+        text = "[引用] " + str(atts[0].get("name") or "") if atts else "[消息]"
+    if len(text) > QUOTE_EXCERPT_LEN:
+        text = text[:QUOTE_EXCERPT_LEN] + "…"
+    return {"id": r["id"], "userId": r["user_id"],
+            "nickname": r["nickname"] or "已注销用户", "excerpt": text}
+
+
+def quotes_out(conn, ids):
+    """批量取引用摘要（读取时实时生成，不冗余存昵称）。"""
+    uniq = set()
+    for x in ids:
+        try:
+            x = int(x)
+        except (TypeError, ValueError):
+            continue
+        if x > 0:
+            uniq.add(x)
+    if not uniq:
+        return {}
+    ids = sorted(uniq)
+    ph = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"""SELECT m.id, m.user_id, m.content, m.image, m.atts, u.nickname
+            FROM chat_messages m LEFT JOIN users u ON u.id = m.user_id
+            WHERE m.id IN ({ph})""", ids).fetchall()
+    return {r["id"]: _quote_summary(r) for r in rows}
+
+
+def quote_exists(mid):
+    """被引用的消息是否可引用：存在且未被软删（环形清理淘汰的同样算不存在）。"""
+    conn = cm_db.connect()
+    try:
+        return conn.execute(
+            "SELECT 1 FROM chat_messages WHERE id=? AND deleted=0", (int(mid),)).fetchone() is not None
+    finally:
+        conn.close()
+
+
 def _with_users(rows):
-    """批量补发送者与提及者信息（各查一次，聊天单页 ≤50 条，量级无压力）。"""
+    """批量补发送者、提及者与引用摘要（各查一次，聊天单页 ≤50 条，量级无压力）。"""
     conn = cm_db.connect()
     try:
         all_ids = set()
@@ -194,24 +256,29 @@ def _with_users(rows):
             for u in conn.execute(f"SELECT {_USER_FIELDS} FROM users u WHERE u.id IN ({ph})",
                                   tuple(all_ids)):
                 users[u["id"]] = dict(u)
+        quotes = quotes_out(conn, [r["quote"] for r in rows if r.get("quote")])
         out = []
         for r in rows:
             mids = json.loads(r["mentions"] or "[]")
             out.append(_row_out(r, users.get(r["user_id"]),
-                                [users[i] for i in mids if i in users]))
+                                [users[i] for i in mids if i in users],
+                                quote=quotes.get(r["quote"])))
         return out
     finally:
         conn.close()
 
 
-def send(user, content, image, mentions, atts=None, streaming=False):
-    """落库一条消息并广播。调用方负责鉴权、频控与文本清洗。"""
+def send(user, content, image, mentions, atts=None, quote=0, mention_all=False, streaming=False):
+    """落库一条消息并广播。调用方负责鉴权、频控与文本清洗
+    （quote 须先经 quote_exists 校验，mention_all 须先校验管理员权限）。"""
     conn = cm_db.connect()
     try:
         cur = conn.execute(
-            "INSERT INTO chat_messages(user_id, content, image, mentions, atts, created_at) VALUES(?,?,?,?,?,?)",
+            "INSERT INTO chat_messages(user_id, content, image, mentions, atts, quote, mention_all, created_at) "
+            "VALUES(?,?,?,?,?,?,?,?)",
             (user["id"], content, image or "", json.dumps(mentions or []),
-             json.dumps(atts or [], ensure_ascii=False), int(time.time())))
+             json.dumps(atts or [], ensure_ascii=False), int(quote or 0),
+             1 if mention_all else 0, int(time.time())))
         mid = cur.lastrowid
         # 环形清理：只留最近 KEEP_MESSAGES 条
         old = conn.execute(
@@ -219,22 +286,24 @@ def send(user, content, image, mentions, atts=None, streaming=False):
             (KEEP_MESSAGES,)).fetchone()
         if old:
             conn.execute("DELETE FROM chat_messages WHERE id<=?", (old["id"],))
-        # 提及者信息一并带出（SSE 收端无需再查库）
+        # 提及者与引用摘要一并带出（SSE 收端无需再查库）
         ph = ",".join("?" * len(mentions)) if mentions else ""
         mrows = conn.execute(
             f"SELECT {_USER_FIELDS} FROM users u WHERE u.id IN ({ph})",
             tuple(mentions)) if mentions else []
         mops = [dict(m) for m in mrows]     # Row 绑定连接，必须在 close 前转 dict
+        qout = quotes_out(conn, [quote]) if quote else {}
         conn.commit()
     finally:
         conn.close()
     out = _row_out({"id": mid, "user_id": user["id"], "content": content,
                     "image": image or "", "atts": json.dumps(atts or [], ensure_ascii=False),
+                    "quote": int(quote or 0), "mention_all": 1 if mention_all else 0,
                     "created_at": int(time.time())},
                    {k: user.get(k) for k in
                     ("id", "username", "nickname", "avatar", "avatar_decoration",
                      "title", "is_admin", "is_super", "is_owner", "is_bot")},
-                   mops, streaming)
+                   mops, streaming, quote=qout.get(int(quote or 0)))
     emit("message", out)
     return out
 

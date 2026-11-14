@@ -214,6 +214,7 @@ CREATE TABLE IF NOT EXISTS post_comments (
   post_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   content TEXT NOT NULL,
+  reply_to INTEGER NOT NULL DEFAULT 0,        /* 被回复的评论 id；0=直接评论（不是回复） */
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pc_post ON post_comments(post_id, id);
@@ -617,6 +618,10 @@ def init():
     dncols = {r[1] for r in conn.execute("PRAGMA table_info(donations)")}
     if dncols and "created_by" not in dncols:
         conn.execute("ALTER TABLE donations ADD COLUMN created_by INTEGER DEFAULT 0")
+    # post_comments 后加的列（老库补列；新库由 SCHEMA 直接建全）：回复目标评论 id
+    pccols = {r[1] for r in conn.execute("PRAGMA table_info(post_comments)")}
+    if pccols and "reply_to" not in pccols:
+        conn.execute("ALTER TABLE post_comments ADD COLUMN reply_to INTEGER NOT NULL DEFAULT 0")
     conn.commit()
     conn.close()
     # 头像挂件目录同步（清单文件缺失/损坏时静默跳过，不影响服务启动）
@@ -1629,12 +1634,17 @@ def post_set_like(user_id, post_id, on):
 
 
 def post_comments_list(post_id, limit=100):
+    """帖子评论（时间升序）。回复带 replyTo（被回复评论 id + 作者昵称）；
+    被回复的评论已被删除时 replyTo 为 null，该条按普通评论展示。"""
     c = connect()
     try:
         rows = c.execute(
-            "SELECT pc.id, pc.post_id, pc.user_id, pc.content, pc.created_at, "
-            "u.nickname, u.avatar, u.avatar_decoration, u.is_admin, u.is_super, u.is_owner, u.title "
+            "SELECT pc.id, pc.post_id, pc.user_id, pc.content, pc.reply_to, pc.created_at, "
+            "u.nickname, u.avatar, u.avatar_decoration, u.is_admin, u.is_super, u.is_owner, u.title, "
+            "r.id AS _rid, r.user_id AS _ruid, ru.nickname AS _rnick "
             "FROM post_comments pc JOIN users u ON u.id = pc.user_id "
+            "LEFT JOIN post_comments r ON r.id = pc.reply_to "
+            "LEFT JOIN users ru ON ru.id = r.user_id "
             "WHERE pc.post_id = ? ORDER BY pc.id ASC LIMIT ?",
             (int(post_id), int(limit))).fetchall()
     finally:
@@ -1646,15 +1656,18 @@ def post_comments_list(post_id, limit=100):
                    "isAdmin": bool(r["is_admin"]), "isSuper": bool(r["is_super"]),
                    "isOwner": bool(r["is_owner"]),
                    "title": r["title"] or ""},
+        "replyTo": ({"id": r["_rid"], "userId": r["_ruid"], "nickname": r["_rnick"] or ""}
+                    if r["_rid"] else None),
     } for r in rows]
 
 
-def post_comment_add(user_id, post_id, content):
+def post_comment_add(user_id, post_id, content, reply_to=0):
     content = (content or "").strip()
     if not content:
         raise ValueError("评论不能为空")
     if len(content) > 500:
         raise ValueError("评论最多 500 字")
+    reply_to = int(reply_to or 0)
     now = int(time.time())
     c = connect()
     try:
@@ -1662,9 +1675,15 @@ def post_comment_add(user_id, post_id, content):
         post = c.execute("SELECT user_id FROM posts WHERE id = ?", (int(post_id),)).fetchone()
         if post is None:
             raise ValueError("帖子不存在")
+        if reply_to:
+            # 回复目标必须是同一帖子的评论（防跨帖串 id）
+            parent = c.execute("SELECT id FROM post_comments WHERE id = ? AND post_id = ?",
+                               (reply_to, int(post_id))).fetchone()
+            if parent is None:
+                raise ValueError("回复的评论不存在")
         cur = c.execute(
-            "INSERT INTO post_comments(post_id, user_id, content, created_at) VALUES(?,?,?,?)",
-            (int(post_id), int(user_id), content, now))
+            "INSERT INTO post_comments(post_id, user_id, content, reply_to, created_at) VALUES(?,?,?,?,?)",
+            (int(post_id), int(user_id), content, reply_to, now))
         if post["user_id"] != int(user_id):
             _reward_points(c, int(user_id), cm_levels.day_start(now), "comment", int(post_id))
         c.commit()

@@ -2813,7 +2813,7 @@ def route(handler, method):
             ("POST", "/ncm/comment", "Bearer + 网易云绑定", "JSON {id,type,t,commentId?,content?,threadId?,confirm:1}；t=1 发评、2 回复、0 删除"),
             ("POST", "/ncm/comment/like", "Bearer + 网易云绑定", "JSON {id,type,cid,t,threadId?,confirm:1}；t=1 点赞、0 取消"),
             ("GET", "/chat/messages", "公开", "公共聊天室：最近消息（含 atts 引用卡片；?before=<id> 向更早翻页，?limit=1~50）"),
-            ("POST", "/chat/messages", "Bearer", "发送消息 {content≤500字, image?: 图片文件名, mentions?: [@用户id], atts?: [{type: song|album|artist|playlist, id, name, sub?, pic?}]≤5}（1.5s 频控）。**@CurrentMusicAI 可提问（卡片可选）；按用户保存近 6 轮上下文，服务端异步联网检索后以 AI 账号回复：先发空消息占位，再经 /chat/live 的 edit 事件流式更新（streaming=true），最终内容为 Markdown，可带 ≤3 张 atts 卡片；消息带 image 时图片会作为视觉输入发送给 AI**"),
+            ("POST", "/chat/messages", "Bearer", "发送消息 {content≤500字, image?: 图片文件名, mentions?: [@用户id], atts?: [{type: song|album|artist|playlist, id, name, sub?, pic?}]≤5, quoteId?: 引用消息id（须存在且未删，摘要读取时实时生成）, mentionAll?: @全体成员（仅管理员，且 content 须含 @全体成员）}（1.5s 频控）。**@CurrentMusicAI 可提问（卡片可选）；按用户保存近 6 轮上下文，服务端异步联网检索后以 AI 账号回复：先发空消息占位，再经 /chat/live 的 edit 事件流式更新（streaming=true），最终内容为 Markdown，可带 ≤3 张 atts 卡片；消息带 image 时图片会作为视觉输入发送给 AI**"),
             ("DELETE", "/chat/messages/{id}", "Bearer", "删除消息（本人或管理员/超管/站长，软删）"),
             ("POST", "/chat/image", "Bearer", "上传聊天图片 {file: base64, filename, contentType}（魔法字节校验，≤1.5MB，5s 频控）"),
             ("GET", "/chat/image/{file}", "公开", "聊天图片直链"),
@@ -2824,6 +2824,8 @@ def route(handler, method):
             ("GET", "/posts", "可选登录", "发现动态列表"),
             ("POST", "/posts", "Bearer", "发布动态"),
             ("POST", "/posts/{id}/like", "Bearer", "点赞动态"),
+            ("GET", "/posts/{id}/comments", "公开", "帖子评论（升序）：每条含 author 与 replyTo（被回复评论 id/作者，被删后为 null）"),
+            ("POST", "/posts/{id}/comments", "Bearer", "发评论 {content≤500字, replyTo?: 被回复评论id（须属同一帖子）}；DELETE /posts/comments/{id} 删除（本人或管理员）"),
             ("GET", "/plays/recent", "Bearer", "最近播放"),
             ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId，platform 可选 web/x/app；上报 {playId,totalMs,finished}，Web 播放中增量同步，结束时补报尾段；兼容旧版 ms 增量"),
             ("GET", "/songs/status", "可选登录", "歌曲列表状态：liked/faved 为本地状态，counts 为本地计数，ncmCounts 为网易云红心数"),
@@ -4100,7 +4102,7 @@ def route(handler, method):
         u = require_user(handler)
         b = body or {}   # route() 顶部已统一读过 body，这里不能再读（会阻塞）
         try:
-            cid = cm_db.post_comment_add(u["id"], int(m.group(1)), b.get("content"))
+            cid = cm_db.post_comment_add(u["id"], int(m.group(1)), b.get("content"), b.get("replyTo"))
         except ValueError as e:
             raise ApiError(400, str(e))
         return jresp(handler, 200, {"id": cid})
@@ -4893,7 +4895,22 @@ def route(handler, method):
         bot = cm_ai.bot_uid()
         if bot and bot not in mentions and f"@{cm_ai.BOT_NICKNAME}" in (content or ""):
             mentions.append(bot)
-        sent = cm_chat.send(u, content, image, mentions, atts)
+        # 引用：只收消息 id，目标必须存在且未删除；摘要读取时从原消息实时生成
+        try:
+            quote_id = int(b.get("quoteId") or 0)
+        except (TypeError, ValueError):
+            quote_id = 0
+        if quote_id and not cm_chat.quote_exists(quote_id):
+            raise ApiError(400, "引用的消息不存在或已删除")
+        # @全体成员：管理员专属（防普通用户刷屏骚扰全站），且文本里必须真的带标记
+        mention_all = bool(b.get("mentionAll"))
+        if mention_all:
+            if not (u.get("is_admin") or u.get("is_super") or u.get("is_owner")):
+                raise ApiError(403, "只有管理员可以 @全体成员")
+            if cm_chat.QUOTE_SNIPPET not in (content or ""):
+                raise ApiError(400, "内容中需要包含 @全体成员")
+        sent = cm_chat.send(u, content, image, mentions, atts,
+                            quote=quote_id, mention_all=mention_all)
         if cm_ai.should_reply(u, mentions):
             cm_ai.spawn_reply(u, content, atts, image)
         return jresp(handler, 200, sent)

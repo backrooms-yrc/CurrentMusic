@@ -3394,6 +3394,20 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 .cm-pcmt-who span { opacity: .5; }
 .cm-pcmt-text { font-size: calc(13.5px * var(--cm-fs, 1)); line-height: 1.55; margin-top: 2px; word-break: break-word; }
 .cm-pcmt-input { display: flex; align-items: center; gap: 8px; }
+/* 评论回复（回复某条评论；被回复评论已删时该条按普通评论展示） */
+.cm-pcmt-rto { font-style: normal; color: var(--cm-primary); cursor: pointer; }
+.cm-pcmt-rto:hover { text-decoration: underline; }
+.cm-pcmt-reply { font-size: calc(12px * var(--cm-fs, 1)); color: var(--cm-primary); cursor: pointer;
+  text-decoration: none; padding: 1px 4px; border-radius: 6px; }
+.cm-pcmt-reply:active { background: color-mix(in srgb, var(--cm-primary) 12%, transparent); }
+.cm-pcmt-rbar { display: flex; align-items: center; font-size: calc(12.5px * var(--cm-fs, 1));
+  color: var(--cm-primary); padding: 3px 8px; border-left: 3px solid color-mix(in srgb, var(--cm-primary) 55%, transparent);
+  background: color-mix(in srgb, currentColor 5%, transparent); border-radius: 8px; }
+.cm-pcmt-rbar[hidden] { display: none; }
+.cm-pcmt-rbar-t { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-pcmt-rbar .material-icons-outlined { flex: none; font-size: 15px; cursor: pointer; opacity: .6; padding: 2px; }
+.cm-pcmt-rbar .material-icons-outlined:active { opacity: 1; color: #e53935; }
 
 /* ---------- 发现页「音乐」TAB（阶段一新增）----------
    仅作用于 .cm-disc 内部：该类只由 web/src/discover.js 挂载，
@@ -3626,6 +3640,23 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 .cm-chatp-text .cm-chatp-at { color: var(--cm-primary); font-weight: 600; cursor: pointer; }
 .mdui-theme-dark .cm-chatp-bubble { background: #36343b; background: color-mix(in srgb, currentColor 7%, transparent); }
 .mdui-theme-dark .mine .cm-chatp-bubble { background: color-mix(in srgb, var(--cm-primary) 26%, transparent); }
+/* 引用消息 / @全体成员 / 回跳原消息高亮 */
+.cm-chatp-quote { display: flex; flex-direction: column; gap: 1px; cursor: pointer; margin: -2px -6px 6px;
+  padding: 5px 8px; border-left: 3px solid color-mix(in srgb, var(--cm-primary) 55%, transparent);
+  border-radius: 6px; background: color-mix(in srgb, currentColor 5%, transparent);
+  font-size: calc(12.5px * var(--cm-fs, 1)); max-width: 100%; }
+.cm-chatp-quote b { font-weight: 600; color: var(--cm-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-chatp-quote span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; opacity: .75; }
+.cm-chatp-quote:active { background: color-mix(in srgb, var(--cm-primary) 12%, transparent); }
+.cm-chatp-qt { font-size: 15px; opacity: .4; cursor: pointer; padding: 2px; }
+.cm-chatp-qt:active { opacity: 1; color: var(--cm-primary); }
+.cm-chatp-atall { color: #d84315; font-weight: 700; }
+.cm-chatp-msg.atall .cm-chatp-bubble { border-color: color-mix(in srgb, var(--cm-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--cm-primary) 10%, transparent); }
+@keyframes cm-chatp-flash { from { background: color-mix(in srgb, var(--cm-primary) 24%, transparent); }
+  to { background: transparent; } }
+.cm-chatp-msg.flash .cm-chatp-bubble { animation: cm-chatp-flash 1.2s ease-out; }
 
 .cm-chatp-picker { position: absolute; bottom: 74px; left: 46px; z-index: 30; display: none;
   box-sizing: border-box; overflow-x: hidden;
@@ -3636,6 +3667,12 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
   overflow: hidden; border: none; background: none; text-align: left; font: inherit; font-size: calc(13px * var(--cm-fs, 1));
   color: inherit; padding: 6px 10px; border-radius: 9px; cursor: pointer; }
 .cm-chatp-pk:active { background: color-mix(in srgb, var(--cm-primary) 14%, transparent); }
+/* @全体成员（管理员专属）：选择器置顶项 */
+.cm-chatp-pk-ic { flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%; font-size: 16px; color: #fff; background: #e65100; }
+.cm-chatp-pk-tag { font-style: normal; font-size: calc(10px * var(--cm-fs, 1)); line-height: 1; padding: 2px 5px;
+  border-radius: 4px; margin-left: 4px; color: #e65100; white-space: nowrap;
+  background: color-mix(in srgb, #e65100 12%, transparent); }
 
 .cm-chatp-composer { flex: none; position: relative; display: flex; align-items: flex-end; gap: 6px; padding: 8px 2px 4px; }
 .cm-chatp-composer > mdui-button { flex: none; }
@@ -3671,6 +3708,17 @@ html[data-ui-preset="frost"] .navItem .material-icons-outlined { font-size: calc
 .cm-chatp-preview img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
 .cm-chatp-rm { position: absolute; top: -8px; right: -8px; background: rgba(0,0,0,.55); color: #fff;
   border-radius: 50%; font-size: 14px; padding: 2px; cursor: pointer; }
+/* 输入框上方的引用条（发送带 quoteId，可取消） */
+.cm-chatp-quotebar { flex: none; display: flex; align-items: center; gap: 8px; margin: 0 2px 4px;
+  padding: 6px 10px; border-radius: 12px; border-left: 3px solid color-mix(in srgb, var(--cm-primary) 55%, transparent);
+  background: color-mix(in srgb, currentColor 6%, transparent); font-size: calc(12.5px * var(--cm-fs, 1)); }
+.cm-chatp-quotebar[hidden] { display: none; }
+.cm-chatp-qb-info { flex: 1; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; overflow: hidden; }
+.cm-chatp-qb-info b { color: var(--cm-primary); font-weight: 600; margin-right: 6px; }
+.cm-chatp-quotebar .material-icons-outlined { flex: none; font-size: 16px; opacity: .55; cursor: pointer;
+  padding: 4px; border-radius: 50%; }
+.cm-chatp-quotebar .material-icons-outlined:active { opacity: 1; color: #e53935; }
 
 /* 未登录播放拦截弹窗（v1.28.34） */
 .cm-login-req { display: flex; gap: 12px; align-items: flex-start;

@@ -207,12 +207,13 @@ export function mountPosts(box) {
     });
   }
 
-  /** 评论弹层：列表 + 输入框。 */
+  /** 评论弹层：列表 + 输入框；点「回复」针对某条评论（发送带 replyTo）。 */
   async function openComments(postId, onAdded) {
     const diag = mdui.dialog({
       headline: '评论',
       body: `<div class="cm-pcmt">
         <div class="cm-pcmt-list" id="pcmtList"><div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div></div>
+        <div class="cm-pcmt-rbar" id="pcmtRbar" hidden></div>
         <div class="cm-pcmt-input">
           <mdui-text-field id="pcmtText" label="${auth.token ? '说点什么…' : '登录后可评论'}" variant="outlined"
             ${auth.token ? '' : 'disabled'} style="width:100%"></mdui-text-field>
@@ -222,18 +223,42 @@ export function mountPosts(box) {
       actions: [{ text: '关闭' }],
     });
     const listBox = diag.querySelector('#pcmtList');
+    const rbar = diag.querySelector('#pcmtRbar');
+    const tf = diag.querySelector('#pcmtText');
+    let replyTo = null;                      // {id, nickname}：当前正在回复的评论
+    const setReply = (c) => {
+      replyTo = c;
+      if (c) {
+        rbar.hidden = false;
+        rbar.innerHTML = `<span class="cm-pcmt-rbar-t">回复 @${esc(c.nickname)}<span class="material-icons-outlined" id="pcmtRcancel" title="取消回复">close</span></span>`;
+        rbar.querySelector('#pcmtRcancel').onclick = () => setReply(null);
+        tf.setAttribute('label', `回复 @${c.nickname}…`);
+      } else {
+        rbar.hidden = true;
+        rbar.innerHTML = '';
+        tf.setAttribute('label', auth.token ? '说点什么…' : '登录后可评论');
+      }
+    };
     const draw = list => {
       listBox.innerHTML = list.length ? list.map(c => `
         <div class="cm-pcmt-item" data-id="${c.id}">
           <span class="cm-pcmt-ava" data-uid="${c.author.id}">${avatarHTML(c.author, 32)}</span>
           <div class="cm-pcmt-main">
             <div class="cm-pcmt-who"><b data-uid="${c.author.id}">${esc(c.author.nickname || '用户' + c.author.id)}</b>${userTags(c.author)}
-              <span>${fmtAgo(c.createdAt)}</span></div>
+              ${c.replyTo ? `<i class="cm-pcmt-rto" data-uid="${c.replyTo.userId}" title="查看被回复的评论">回复 @${esc(c.replyTo.nickname || '用户' + c.replyTo.userId)}</i>` : ''}
+              <span>${fmtAgo(c.createdAt)}</span>
+              ${auth.token ? `<u class="cm-pcmt-reply" data-reply="${c.id}" data-nick="${esc(c.author.nickname || '')}" title="回复这条评论">回复</u>` : ''}</div>
             <div class="cm-pcmt-text">${esc(c.content)}</div>
           </div>
         </div>`).join('') : `<div class="cm-empty small">还没有评论，来说第一句</div>`;
       listBox.querySelectorAll('[data-uid]').forEach(el => {
         el.onclick = () => { diag.open = false; location.hash = `#/u/${el.dataset.uid}`; };
+      });
+      listBox.querySelectorAll('.cm-pcmt-reply').forEach(el => {
+        el.onclick = () => {
+          setReply({ id: +el.dataset.reply, nickname: el.dataset.nick || `用户${el.dataset.reply}` });
+          try { tf.focus(); } catch { /* 忽略 */ }
+        };
       });
     };
     try {
@@ -242,23 +267,23 @@ export function mountPosts(box) {
     } catch (e) { listBox.innerHTML = `<div class="cm-empty small">加载失败：${esc(e.message)}</div>`; }
 
     const send = async () => {
-      const tf = diag.querySelector('#pcmtText');
       const text = (tf.value || '').trim();
       if (!text) return;
       const btn = diag.querySelector('#pcmtSend');
       btn.disabled = true;
+      const wasReply = !!replyTo;
       try {
-        await api.postComment(postId, text);
+        await api.postComment(postId, text, replyTo ? replyTo.id : 0);
         tf.value = '';
+        setReply(null);
         const d = await api.postComments(postId);
         draw(d.comments || []);
         onAdded && onAdded();
-        toast('已评论');
+        toast(wasReply ? '已回复' : '已评论');
       } catch (e) { toast('评论失败：' + e.message); }
       finally { btn.disabled = false; }
     };
     diag.querySelector('#pcmtSend').onclick = send;
-    const tf = diag.querySelector('#pcmtText');
     if (tf) tf.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
   }
 

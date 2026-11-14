@@ -86,6 +86,43 @@ class TestParseAtts(unittest.TestCase):
         self.assertEqual(C.parse_atts(None), [])
 
 
+class TestQuoteSummary(unittest.TestCase):
+    """引用摘要：正文优先、纯图/纯卡片兜底、超长截断、注销用户占位。"""
+
+    @staticmethod
+    def row(**kw):
+        base = {"id": 1, "user_id": 2, "content": "", "image": "", "atts": "[]", "nickname": "小明"}
+        base.update(kw)
+        return base
+
+    def test_text_truncated(self):
+        out = C._quote_summary(self.row(content="字" * 300))
+        self.assertEqual(len(out["excerpt"]), C.QUOTE_EXCERPT_LEN + 1)   # 100 字 + 省略号
+        self.assertTrue(out["excerpt"].endswith("…"))
+
+    def test_short_text_kept(self):
+        out = C._quote_summary(self.row(content="你好"))
+        self.assertEqual(out["excerpt"], "你好")
+        self.assertEqual(out["nickname"], "小明")
+
+    def test_image_fallback(self):
+        out = C._quote_summary(self.row(image="aabbccddeeff0011.jpg"))
+        self.assertEqual(out["excerpt"], "[图片]")
+
+    def test_atts_fallback(self):
+        import json
+        out = C._quote_summary(self.row(atts=json.dumps([{"type": "song", "id": 1, "name": "歌名"}])))
+        self.assertEqual(out["excerpt"], "[引用] 歌名")
+
+    def test_deleted_user_placeholder(self):
+        out = C._quote_summary(self.row(nickname=None))
+        self.assertEqual(out["nickname"], "已注销用户")
+
+    def test_empty_message_placeholder(self):
+        out = C._quote_summary(self.row())
+        self.assertEqual(out["excerpt"], "[消息]")
+
+
 class TestLikePattern(unittest.TestCase):
     """@ 提及搜索的 LIKE 模式：通配符必须转义，否则 %/_ 会变成任意匹配。"""
 

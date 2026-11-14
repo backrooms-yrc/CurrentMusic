@@ -7,6 +7,10 @@
 //     ui.js 的 avatarHTML（自带挂件叠加）与 userTags（头衔+角色徽章）。
 //   · @ 提及：输入 @ 弹出成员选择（/chat/members 近期活跃），选中插入 @昵称；
 //     发送时把「内容里确实出现的 @昵称」换算成 user id 列表（服务端只存 id）。
+//   · 引用：消息头部「引用」按钮把目标消息挂到输入框上方（quoteId 随发送提交，
+//     服务端只存 id、摘要读取时实时生成）；气泡内引用卡可点击回跳原消息。
+//   · @全体成员：管理员专属（服务端 403 强制），选择器置顶提供；消息带
+//     mentionAll 标记，气泡以主题色描边强调。
 //   · 图片：本地 canvas 压到 ≤1280px JPEG（长边）再 base64 上传（服务端 ≤1.5MB、
 //     魔法字节校验），直链由后端 /chat/image/<file> 分发。
 import { api, auth, call, settings } from './api.js';
@@ -31,6 +35,7 @@ let fitChat = null;         // 聊天区高度自适应解绑函数
 let ptrHost = null;         // Chat 期间给 #out 打的下拉刷新禁用标记
 let pickerFit = null;        // 键盘/旋转时重新约束 @ 选择器
 let myId = 0;               // 自己的 user id（标记「我」的消息、删除权限）
+let myAdmin = false;        // 是否管理员（含超管/站长）：@全体成员 的选择器入口
 
 /** 关闭聊天 SSE（切到其它 TAB / 离开发现页时调用，避免连接悬挂）。 */
 let navWatcher = null;
@@ -52,9 +57,10 @@ const fmtTime = ts => {
   return (d >= today) ? hm : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
 };
 
-/** 文本转 HTML：转义 → 换行保留 → @昵称 高亮（提及者与成员昵称都算）。 */
+/** 文本转 HTML：转义 → 换行保留 → @全体成员/@昵称 高亮（提及者与成员昵称都算）。 */
 function contentHTML(m, members) {
   let text = esc(m.content || '');
+  text = text.split('@全体成员').join('<span class="cm-chatp-at cm-chatp-atall">@全体成员</span>');
   const names = new Map();
   (m.mentions || []).forEach(u => names.set(u.nickname, u.id));
   (members || []).forEach(u => names.set(u.nickname, u.id));
@@ -65,9 +71,20 @@ function contentHTML(m, members) {
   return text.replace(/\n/g, '<br>');
 }
 
+/** 引用摘要（与服务端口径一致）：正文优先、纯图/纯卡片兜底、超长截断。 */
+function quoteExcerpt(m) {
+  let t = (m.content || '').trim();
+  if (!t && m.image) t = '[图片]';
+  if (!t) t = (m.atts && m.atts.length && m.atts[0].name) ? `[引用] ${m.atts[0].name}` : '[消息]';
+  return t.length > 100 ? t.slice(0, 100) + '…' : t;
+}
+
 function msgHTML(m) {
   const mine = m.user && m.user.id === myId;
   const isBot = !!(m.user && (m.user.isBot || m.user.is_bot));
+  const quote = m.quote
+    ? `<div class="cm-chatp-quote" data-quote="${m.quote.id}" title="查看原消息"><b>${esc(m.quote.nickname)}</b><span>${esc(m.quote.excerpt)}</span></div>`
+    : '';
   const body = m.content
     ? (isBot
         ? `<div class="cm-chatp-md${m.streaming ? ' streaming' : ''}">${renderMarkdown(m.content)}</div>`
@@ -77,7 +94,7 @@ function msgHTML(m) {
     ? `<img class="cm-chatp-img" src="${esc(settings.base)}/chat/image/${esc(m.image)}" loading="lazy" onclick="window.open(this.src,'_blank')">`
     : '';
   return `
-  <div class="cm-chatp-msg${mine ? ' mine' : ''}${m.streaming ? ' streaming' : ''}" data-id="${m.id}"
+  <div class="cm-chatp-msg${mine ? ' mine' : ''}${m.streaming ? ' streaming' : ''}${m.mentionAll ? ' atall' : ''}" data-id="${m.id}"
        data-uid="${m.user ? m.user.id : 0}" data-bot="${isBot ? '1' : '0'}">
     <span class="cm-chatp-ava" data-uid="${m.user ? m.user.id : 0}" data-nick="${m.user ? esc(m.user.nickname) : ''}"
           title="长按 @ TA">${m.user ? avatarHTML(m.user, 40) : '<div class="cm-avatar ph" style="width:40px;height:40px">?</div>'}</span>
@@ -88,9 +105,10 @@ function msgHTML(m) {
         ${m.user && m.user.username && m.user.username !== m.user.nickname
           ? `<span class="cm-chatp-un">@${esc(m.user.username)}</span>` : ''}
         <span class="cm-chatp-time">${fmtTime(m.createdAt)}</span>
+        ${auth.token ? `<span class="cm-chatp-qt material-icons-outlined" data-qt="${m.id}" title="引用这条消息">format_quote</span>` : ''}
         ${mine ? `<span class="cm-chatp-del material-icons-outlined" data-del="${m.id}" title="删除">delete</span>` : ''}
       </div>
-      ${(body || img) ? `<div class="cm-chatp-bubble">${body}${img}</div>` : ''}
+      ${(quote || body || img) ? `<div class="cm-chatp-bubble">${quote}${body}${img}</div>` : ''}
       ${m.atts && m.atts.length ? `<div class="cm-chatp-atts">${attachHTML(m.atts, { compact: true })}</div>` : ''}
     </div>
   </div>`;
@@ -161,6 +179,7 @@ export async function mountChat(box) {
       </div>
       <div class="cm-chatp-picker" id="chatPicker"></div>
       <div class="cm-chatp-suggest" id="chatSuggest" hidden></div>
+      <div class="cm-chatp-quotebar" id="chatQuoteBar" hidden></div>
       <div class="cm-chatp-composer">
         <button class="cm-chatp-tool material-icons-outlined" id="chatAddBtn" title="添加内容" aria-label="添加内容" aria-expanded="false">add</button>
         <div class="cm-chatp-addmenu" id="chatAddMenu" hidden>
@@ -242,6 +261,21 @@ export async function mountChat(box) {
   const picker = box.querySelector('#chatPicker');
   const suggest = box.querySelector('#chatSuggest');
   const preview = box.querySelector('#chatPreview');
+  const quoteBar = box.querySelector('#chatQuoteBar');
+
+  // ---- 引用状态：目标消息挂在输入框上方，随发送提交 quoteId ----
+  let quotedMsg = null;             // {id, nickname, excerpt}
+  const setQuote = (m) => {
+    quotedMsg = m || null;
+    if (!m) { quoteBar.hidden = true; quoteBar.innerHTML = ''; return; }
+    quoteBar.hidden = false;
+    quoteBar.innerHTML = `<span class="cm-chatp-qb-info"><b>${esc(m.nickname)}</b>${esc(m.excerpt || '')}</span>
+      <span class="material-icons-outlined" id="chatQuoteCancel" title="取消引用" role="button" tabindex="0">close</span>`;
+    const cancel = quoteBar.querySelector('#chatQuoteCancel');
+    const off = () => setQuote(null);
+    cancel.onclick = off;
+    cancel.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); off(); } };
+  };
 
   // ---- @ 提及选择器：本地即时过滤 + 服务端实时搜索（QQ 式） ----
   let mentionTimer = 0, mentionSeq = 0, pickerIndex = -1, pickerItems = [], pickerOpen = false;
@@ -276,6 +310,7 @@ export async function mountChat(box) {
     const cr = layoutRect(chatEl);
     let anchor = layoutRect(composer).top;
     if (!suggest.hidden) anchor = Math.min(anchor, layoutRect(suggest).top);
+    if (!quoteBar.hidden) anchor = Math.min(anchor, layoutRect(quoteBar).top);
     picker.style.bottom = Math.max(56, Math.round(cr.bottom - anchor + 8)) + 'px';
     picker.style.maxHeight = Math.max(120, Math.min(260, Math.round(anchor - cr.top - 12))) + 'px';
   }
@@ -300,6 +335,17 @@ export async function mountChat(box) {
   const pickUser = (u) => {
     if (!u) return;
     const pos = input.selectionStart || 0;
+    if (u.all) {
+      // @全体成员：只插入文本标记（mentionAll 随发送提交，服务端校验管理员）
+      const before = input.value.slice(0, pos).replace(/@([^\s@]*)$/, () => '@全体成员 ');
+      input.value = before + input.value.slice(pos);
+      hidePicker();
+      input.focus();
+      try { input.setSelectionRange(before.length, before.length); } catch { /* 忽略 */ }
+      growInput();
+      updateSuggest();
+      return;
+    }
     const before = input.value.slice(0, pos).replace(/@([^\s@]*)$/, () => '@' + u.nickname + ' ');
     input.value = before + input.value.slice(pos);
     pickedMentions.set(u.id, u);
@@ -358,7 +404,12 @@ export async function mountChat(box) {
   }
   const drawPicker = (list, q) => {
     closeAddMenu();
-    pickerItems = (list || []).slice(0, 8);
+    // @全体成员（管理员专属）置顶：关键词命中「全体成员/all」或刚输入 @ 时可见
+    const kw = (q || '').toLowerCase();
+    const showAll = myAdmin && auth.token && (!kw || '全体成员'.includes(kw) || 'all'.includes(kw));
+    pickerItems = [];
+    if (showAll) pickerItems.push({ id: 0, all: true, nickname: '全体成员' });
+    pickerItems = pickerItems.concat((list || []).slice(0, 8));
     pickerIndex = pickerItems.length ? 0 : -1;
     if (!pickerItems.length) {
       picker.innerHTML = '<div class="cm-chatp-pk-empty">没有匹配的用户</div>';
@@ -367,7 +418,14 @@ export async function mountChat(box) {
       requestAnimationFrame(placePicker);
       return;
     }
-    picker.innerHTML = pickerItems.map((u, i) => `
+    picker.innerHTML = pickerItems.map((u, i) => u.all ? `
+      <button type="button" class="cm-chatp-pk cm-chatp-pk-all${i === 0 ? ' on' : ''}" data-i="${i}">
+        <span class="cm-chatp-pk-ic material-icons-outlined">campaign</span>
+        <span class="cm-chatp-pk-t">
+          <span class="cm-chatp-pk-n"><span class="cm-chatp-atall">@全体成员</span><i class="cm-chatp-pk-tag">管理员</i></span>
+          <span class="cm-chatp-pk-u">通知聊天室全体成员</span>
+        </span>
+      </button>` : `
       <button type="button" class="cm-chatp-pk${i === 0 ? ' on' : ''}" data-i="${i}">
         ${avatarHTML(u, 28)}
         <span class="cm-chatp-pk-t">
@@ -414,6 +472,7 @@ export async function mountChat(box) {
   if (auth.token) {
     api.me().then(u => {
       myId = (u && u.id) || 0;
+      myAdmin = !!(u && (u.isAdmin || u.isSuper || u.isOwner));   // @全体成员 仅管理员可选
       // 历史消息先于 me 渲染：补上「我的消息」高亮
       msgsEl.querySelectorAll('.cm-chatp-msg').forEach(n => {
         if (+n.dataset.uid === myId) n.classList.add('mine');
@@ -426,11 +485,13 @@ export async function mountChat(box) {
 
   // ---- 消息渲染 ----
   let oldest = 0, count = 0;
+  const msgMap = new Map();       // id -> message：点「引用」时取原消息（含摘要素材）
   const nearBottom = () => list.scrollHeight - list.scrollTop - list.clientHeight < 120;
   const scrollBottom = () => { list.scrollTop = list.scrollHeight; };
 
   function appendMsg(m) {
     if (msgsEl.querySelector(`[data-id="${m.id}"]`)) return;      // SSE 与发送响应去重
+    msgMap.set(m.id, m);
     msgsEl.insertAdjacentHTML('beforeend', msgHTML(m));
     const node = msgsEl.lastElementChild;
     if (node && m.atts && m.atts.length) bindAttach(node, m.atts);
@@ -480,6 +541,31 @@ export async function mountChat(box) {
         if (!confirm('删除这条消息？')) return;
         try { await api.chatDelete(+el.dataset.del); msgsEl.querySelector(`[data-id="${el.dataset.del}"]`)?.remove(); }
         catch (e) { toast(e.message || '删除失败'); }
+      };
+    });
+    // 引用按钮：把这条消息挂到输入框上方（发送时带 quoteId）
+    msgsEl.querySelectorAll('.cm-chatp-qt').forEach(el => {
+      if (el.dataset.b) return; el.dataset.b = '1';
+      el.onclick = () => {
+        const m = msgMap.get(+el.dataset.qt);
+        if (!m) return toast('原消息不在当前列表');
+        setQuote({ id: m.id, nickname: m.user ? (m.user.nickname || '已注销用户') : '已注销用户',
+                   excerpt: quoteExcerpt(m) });
+        try { input.focus(); } catch { /* 忽略 */ }
+      };
+    });
+    // 气泡内引用卡：回跳原消息并高亮一下（不在当前列表时提示）
+    msgsEl.querySelectorAll('.cm-chatp-quote').forEach(el => {
+      if (el.dataset.b) return; el.dataset.b = '1';
+      el.onclick = e => {
+        e.stopPropagation();
+        const target = msgsEl.querySelector(`.cm-chatp-msg[data-id="${el.dataset.quote}"]`);
+        if (!target) return toast('原消息不在当前列表');
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        target.classList.remove('flash');
+        void target.offsetWidth;                                    // 重启动画
+        target.classList.add('flash');
+        setTimeout(() => target.classList.remove('flash'), 1400);
       };
     });
   }
@@ -553,6 +639,7 @@ export async function mountChat(box) {
       } else if (type === 'edit') {
         updateMessage(raw.payload);
       } else if (type === 'delete') {
+        msgMap.delete(raw.payload.id);
         msgsEl.querySelector(`[data-id="${raw.payload.id}"]`)?.remove();
       }
       if (raw.seq) since = Math.max(since, raw.seq);
@@ -599,6 +686,7 @@ export async function mountChat(box) {
       const keep = list.scrollHeight - list.scrollTop;
       msgsEl.insertAdjacentHTML('afterbegin', list2.map(msgHTML).join(''));
       list2.forEach(m => {
+        msgMap.set(m.id, m);
         const node = msgsEl.querySelector(`.cm-chatp-msg[data-id="${m.id}"]`);
         if (node && m.atts && m.atts.length) bindAttach(node, m.atts);
       });
@@ -635,10 +723,14 @@ export async function mountChat(box) {
     if (!auth.token) return toast('登录后即可聊天');
     sendBtn.setAttribute('loading', '');
     try {
-      const m = await api.chatSend({ content, image: pendingImage, mentions: mentionsFromContent(content), atts: pendingAtts });
+      // mentionAll 只在文本真的带 @全体成员 时提交（服务端还会再校验管理员）
+      const m = await api.chatSend({ content, image: pendingImage, mentions: mentionsFromContent(content), atts: pendingAtts,
+        quoteId: quotedMsg ? quotedMsg.id : 0,
+        mentionAll: myAdmin && content.includes('@全体成员') });
       appendMsg(m); bindMsgs(); scrollBottom();
       input.value = ''; growInput();
       pendingImage = ''; pendingAtts = []; pickedMentions.clear(); closeAddMenu(); setPreview();
+      setQuote(null);
     } catch (e) {
       toast(e.message || '发送失败');
     } finally { sendBtn.removeAttribute('loading'); }
