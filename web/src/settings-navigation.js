@@ -17,8 +17,9 @@ const CATEGORIES = [
     { id: 'passport', title: '通行证与授权', description: '统一身份、应用授权与开发者入口', items: ['ppId', 'ppGrants', 'ppDev', 'ppDocs'] },
     { id: 'privacy', title: '隐私与公开范围', description: '决定是否出现在发现页', items: ['sqPublic'] },
   ] },
-  { id: 'connection', title: '网络与连接', icon: 'public', description: '服务器地址与安全连接', groups: [
+  { id: 'connection', title: '网络与连接', icon: 'public', description: '服务器地址、安全连接与外部客户端接入', groups: [
     { id: 'server', title: '服务器与连接', description: '配置 API 地址和 HTTPS 连接', items: ['network', 'server', 'secure'] },
+    { id: 'clients', title: '第三方客户端', description: '把音源接入落雪音乐等外部播放器', items: ['lxSource'] },
   ] },
   { id: 'about', title: '关于与帮助', icon: 'info', description: '版本更新、使用引导与服务协议', groups: [
     { id: 'app', title: '版本与应用', description: '检查更新、下载应用和查看运行环境', items: ['checkUpd', 'dlApk', 'engine'] },
@@ -30,6 +31,7 @@ const ALIASES = {
   fontScale: '字号 大字 文字 font', bgImage: '壁纸 图片 wallpaper', glassFx: '模糊 透明 毛玻璃 blur',
   coverShape: '圆形 方形 专辑', waveStyle: '可视化 频谱 波形', waveTilt: '高频 补偿 频谱',
   network: 'CDN 音源 自动 测速 可用性 测试 镜像 LeiZ 网易云 线路',
+  lxSource: '落雪 LX Music 自定义源 音源 直链 令牌 token JS 导入 轮换 撤销 第三方客户端',
   quality: '音质 无损 HiRes SQ FLAC 高清', soundFx: '均衡器 EQ 杜比 Dolby 环绕 声音',
   dlDir: '保存 路径 文件 download', desktopLyrics: '悬浮窗 字幕 歌词 lyric', likeMode: '红心 点赞 我喜欢 网易云 收藏',
   securityQuestion: '密保 问题 答案 登录 保护 安全 security question answer',
