@@ -640,6 +640,9 @@ mdui-icon {
   margin-bottom: clamp(44px, 7vw, 68px);
 }
 .hero-actions mdui-button { --shape-corner: 999px; }
+/* 大号 CTA：宿主与内部按钮必须同高——MDUI 的宿主元素自带 40px 固定高，
+   只改 ::part(button) 会让 56px 的内按钮向下溢出宿主 16px，与同行按钮错位 */
+.hero-actions .btn-lg { height: 56px; }
 .hero-actions .btn-lg::part(button) { height: 56px; }
 /* 图标与文字尺寸按 MDUI 部件选择器对齐 */
 .hero-actions mdui-button::part(icon) { font-size: 20px; }
@@ -1025,9 +1028,10 @@ mdui-button[disabled] { opacity: .72; }
   transform: translateY(-2px);
 }
 .highlight-list .tile {
-  width: 38px;
-  height: 38px;
-  margin-top: 2px;
+  width: 34px;
+  height: 34px;
+  /* 瓦片中心对齐标题首行中心（首行行盒中心距内容顶 13px，34px 瓦片需上移 4px） */
+  margin-top: -4px;
 }
 .highlight-list .tile mdui-icon { font-size: 20px; }
 .highlight-list b {
@@ -1206,7 +1210,9 @@ mdui-button[disabled] { opacity: .72; }
   gap: 12px;
   margin-top: auto;
 }
-.group-actions mdui-button { --shape-corner: 999px; }
+/* 与相邻的 .copy-link-btn（44px）统一高度，避免同一行按钮高低不齐 */
+.group-actions mdui-button { --shape-corner: 999px; height: 44px; }
+.group-actions mdui-button::part(button) { height: 44px; }
 
 .copy-link-btn {
   display: inline-flex;
@@ -1422,6 +1428,7 @@ a.copy-link-btn:hover { text-decoration: none; }
     align-items: stretch;
   }
   .hero-actions mdui-button { width: 100%; }
+  .hero-actions .btn-lg { height: 52px; }
   .hero-actions .btn-lg::part(button) { height: 52px; }
 
   .hero-features { grid-template-columns: minmax(0, 1fr); }
