@@ -1,12 +1,103 @@
 /* ============================================================================
-   CurrentMusic 官方网站样式
+   CurrentMusic 官方网站样式 —— 深色流光 Aurora 设计语言
    ----------------------------------------------------------------------------
-   全部颜色、圆角、阴影、动效时长均取自 MDUI 设计令牌（--mdui-color-*、
-   --mdui-shape-corner-*、--mdui-elevation-*、--mdui-motion-*），
-   因此浅色 / 深色主题可自动切换，无需重复维护两套配色。
+   视觉体系：
+     · 深空底色 + 三团极光渐变光晕（紫罗兰 / 青 / 品红）缓慢漂移；
+     · 玻璃拟态卡片（半透明面 + backdrop-blur + 发丝描边）；
+     · 品牌渐变只用于文字高光、主按钮与描边，正文保持高对比纯色；
+     · 浅色主题为「日出色调」变体：近白底 + 低饱和极光 + 白玻璃。
+   实现方式：
+     · 先把 MDUI 的浅色/深色调色板令牌整体重映射为 Aurora 色板，
+       MDUI 组件（按钮 / 抽屉 / 提示条）即自动跟随新配色；
+     · 站点自有令牌以 --site-* 命名，浅色定义在 :root，深色覆盖在
+       .mdui-theme-dark，圆角 / 阴影 / 动效时长仍取 MDUI 形状与运动令牌。
    ========================================================================== */
 
-/* ── 1. 设计令牌与基础 ─────────────────────────────────────────────────── */
+/* ── 0. Aurora 调色板：重映射 MDUI 令牌 ─────────────────────────────────── */
+
+:root {
+  /* —— 浅色（日出色调）：近白底 + 深紫主色 / 青副色 / 品红第三色 —— */
+  --mdui-color-primary-light: 99, 66, 235;
+  --mdui-color-on-primary-light: 255, 255, 255;
+  --mdui-color-primary-container-light: 233, 224, 255;
+  --mdui-color-on-primary-container-light: 40, 22, 110;
+  --mdui-color-inverse-primary-light: 198, 176, 255;
+  --mdui-color-secondary-light: 7, 130, 153;
+  --mdui-color-on-secondary-light: 255, 255, 255;
+  --mdui-color-secondary-container-light: 205, 243, 250;
+  --mdui-color-on-secondary-container-light: 4, 58, 74;
+  --mdui-color-tertiary-light: 201, 61, 130;
+  --mdui-color-on-tertiary-light: 255, 255, 255;
+  --mdui-color-tertiary-container-light: 251, 224, 238;
+  --mdui-color-on-tertiary-container-light: 88, 20, 53;
+  --mdui-color-surface-light: 250, 250, 253;
+  --mdui-color-surface-dim-light: 219, 218, 231;
+  --mdui-color-surface-bright-light: 250, 250, 253;
+  --mdui-color-surface-container-lowest-light: 255, 255, 255;
+  --mdui-color-surface-container-low-light: 246, 246, 251;
+  --mdui-color-surface-container-light: 241, 241, 248;
+  --mdui-color-surface-container-high-light: 234, 234, 244;
+  --mdui-color-surface-container-highest-light: 227, 227, 239;
+  --mdui-color-surface-variant-light: 231, 231, 240;
+  --mdui-color-on-surface-light: 26, 25, 38;
+  --mdui-color-on-surface-variant-light: 96, 94, 120;
+  --mdui-color-inverse-surface-light: 45, 43, 66;
+  --mdui-color-inverse-on-surface-light: 240, 239, 250;
+  --mdui-color-background-light: 247, 246, 252;
+  --mdui-color-on-background-light: 26, 25, 38;
+  --mdui-color-error-light: 186, 42, 60;
+  --mdui-color-on-error-light: 255, 255, 255;
+  --mdui-color-error-container-light: 252, 229, 231;
+  --mdui-color-on-error-container-light: 66, 10, 18;
+  --mdui-color-outline-light: 122, 119, 145;
+  --mdui-color-outline-variant-light: 224, 224, 234;
+  --mdui-color-shadow-light: 23, 20, 48;
+  --mdui-color-surface-tint-color-light: 99, 66, 235;
+  --mdui-color-scrim-light: 23, 20, 48;
+}
+
+.mdui-theme-dark {
+  /* —— 深色（展示形态）：深空底 + 亮紫 / 亮青 / 亮品红 —— */
+  --mdui-color-primary-dark: 167, 139, 250;
+  --mdui-color-on-primary-dark: 36, 19, 87;
+  --mdui-color-primary-container-dark: 73, 45, 168;
+  --mdui-color-on-primary-container-dark: 233, 221, 255;
+  --mdui-color-inverse-primary-dark: 99, 66, 235;
+  --mdui-color-secondary-dark: 103, 232, 249;
+  --mdui-color-on-secondary-dark: 8, 51, 68;
+  --mdui-color-secondary-container-dark: 14, 83, 116;
+  --mdui-color-on-secondary-container-dark: 207, 250, 254;
+  --mdui-color-tertiary-dark: 240, 171, 252;
+  --mdui-color-on-tertiary-dark: 73, 25, 91;
+  --mdui-color-tertiary-container-dark: 116, 42, 130;
+  --mdui-color-on-tertiary-container-dark: 251, 219, 255;
+  --mdui-color-surface-dark: 13, 12, 22;
+  --mdui-color-surface-dim-dark: 13, 12, 22;
+  --mdui-color-surface-bright-dark: 56, 54, 74;
+  --mdui-color-surface-container-lowest-dark: 7, 6, 13;
+  --mdui-color-surface-container-low-dark: 19, 18, 30;
+  --mdui-color-surface-container-dark: 24, 22, 37;
+  --mdui-color-surface-container-high-dark: 31, 29, 46;
+  --mdui-color-surface-container-highest-dark: 40, 38, 58;
+  --mdui-color-surface-variant-dark: 72, 69, 92;
+  --mdui-color-on-surface-dark: 233, 231, 245;
+  --mdui-color-on-surface-variant-dark: 168, 164, 192;
+  --mdui-color-inverse-surface-dark: 233, 231, 245;
+  --mdui-color-inverse-on-surface-dark: 45, 43, 66;
+  --mdui-color-background-dark: 10, 9, 19;
+  --mdui-color-on-background-dark: 233, 231, 245;
+  --mdui-color-error-dark: 242, 153, 163;
+  --mdui-color-on-error-dark: 65, 14, 23;
+  --mdui-color-error-container-dark: 96, 20, 32;
+  --mdui-color-on-error-container-dark: 255, 217, 214;
+  --mdui-color-outline-dark: 96, 92, 122;
+  --mdui-color-outline-variant-dark: 46, 44, 64;
+  --mdui-color-shadow-dark: 0, 0, 0;
+  --mdui-color-surface-tint-color-dark: 167, 139, 250;
+  --mdui-color-scrim-dark: 0, 0, 0;
+}
+
+/* ── 1. 站点令牌与基础 ─────────────────────────────────────────────────── */
 
 :root {
   --site-max: 1180px;
@@ -16,6 +107,73 @@
   --radius-panel: var(--mdui-shape-corner-extra-large, 1.75rem);
   --ease: var(--mdui-motion-easing-emphasized-decelerate, cubic-bezier(.05, .7, .1, 1));
   --dur: var(--mdui-motion-duration-medium2, 300ms);
+
+  /* 极光三原色（同一色相在浅/深主题各自定义透明度） */
+  --aurora-violet: 139, 92, 246;
+  --aurora-cyan: 34, 211, 238;
+  --aurora-pink: 236, 72, 153;
+
+  /* 极光光团颜色（含透明度） */
+  --blob-1: rgba(var(--aurora-violet), .16);
+  --blob-2: rgba(var(--aurora-cyan), .13);
+  --blob-3: rgba(var(--aurora-pink), .11);
+
+  /* 星点 */
+  --star: rgba(99, 66, 235, .16);
+  --star-faint: rgba(7, 130, 153, .12);
+
+  /* 页面底色：近白 → 更亮，保留一丝冷调 */
+  --site-bg: linear-gradient(180deg, #f4f2fb 0%, #fbfaff 40%, #fdfdff 100%);
+
+  /* 玻璃面 */
+  --glass: linear-gradient(165deg, rgba(255, 255, 255, .78), rgba(255, 255, 255, .5));
+  --glass-soft: rgba(255, 255, 255, .55);
+  --glass-border: rgba(26, 25, 38, .09);
+  --glass-border-strong: rgba(99, 66, 235, .3);
+  --glass-hover-shadow: 0 14px 44px rgba(53, 40, 116, .14), 0 2px 8px rgba(53, 40, 116, .06);
+
+  /* 主按钮：深色渐变保证白字对比度 */
+  --cta-grad: linear-gradient(135deg, #7a45ee 0%, #5b54ea 55%, #4a4de0 100%);
+  --cta-glow: rgba(99, 91, 242, .38);
+
+  /* 文字渐变高光（浅色下辉光更收敛，避免把渐变端点糊脏） */
+  --text-grad: linear-gradient(110deg, #7a45ee, #0aa2c0 55%, #c93d82);
+  --title-glow: rgba(var(--aurora-violet), .22);
+
+  /* 发丝分隔线 */
+  --hairline: linear-gradient(90deg, transparent, rgba(var(--aurora-violet), .45), rgba(var(--aurora-cyan), .4), transparent);
+
+  /* 图标瓦片配色（浅色用深色前景） */
+  --tile-fg-v: #6d3ef0;
+  --tile-fg-c: #077f9b;
+  --tile-fg-p: #c22e77;
+  --tile-fg-b: #4f46e5;
+}
+
+.mdui-theme-dark {
+  --blob-1: rgba(var(--aurora-violet), .56);
+  --blob-2: rgba(var(--aurora-cyan), .44);
+  --blob-3: rgba(var(--aurora-pink), .38);
+
+  --title-glow: rgba(var(--aurora-violet), .38);
+
+  --star: rgba(255, 255, 255, .34);
+  --star-faint: rgba(214, 208, 255, .16);
+
+  --site-bg: linear-gradient(180deg, #0c0a18 0%, #0a0913 45%, #08070f 100%);
+
+  --glass: linear-gradient(165deg, rgba(255, 255, 255, .062), rgba(255, 255, 255, .022) 58%, rgba(var(--aurora-violet), .045));
+  --glass-soft: rgba(17, 15, 30, .55);
+  --glass-border: rgba(255, 255, 255, .1);
+  --glass-border-strong: rgba(167, 139, 250, .42);
+  --glass-hover-shadow: 0 16px 48px rgba(0, 0, 0, .5), 0 0 24px rgba(var(--aurora-violet), .12);
+
+  --text-grad: linear-gradient(110deg, #a78bfa, #22d3ee 55%, #f0abfc);
+
+  --tile-fg-v: #c4b0ff;
+  --tile-fg-c: #6fe6f9;
+  --tile-fg-p: #f5a8d8;
+  --tile-fg-b: #a5b4ff;
 }
 
 *,
@@ -36,8 +194,16 @@ body {
   font-size: 16px;
   line-height: 1.75;
   color: rgb(var(--mdui-color-on-background));
+  /* 底色令牌保证浅/深主题各自有明确背景色（无障碍对比、无渐变回退），
+     之上再叠一层固定视口的纵向渐变 */
   background-color: rgb(var(--mdui-color-background));
+  background-image: var(--site-bg);
+  background-attachment: fixed;
   overflow-x: hidden;                      /* 防止装饰元素撑出横向滚动条 */
+}
+
+::selection {
+  background: rgba(var(--aurora-violet), .32);
 }
 
 /* 仅在有 JS 时启用滚动入场动画：脚本失效时内容依然完整可见 */
@@ -125,7 +291,60 @@ img, svg { max-width: 100%; height: auto; }
   transition-delay: 0s;
 }
 
-/* ── 2. 顶部导航栏 ─────────────────────────────────────────────────────── */
+/* ── 2. 极光背景层 ─────────────────────────────────────────────────────── */
+/* 固定在页面最底层的三个光团 + 双层星点；radial-gradient 自带柔和衰减，
+   不需要 filter: blur，开销低；漂移动画只动 transform，走合成器。 */
+
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.aurora i {
+  position: absolute;
+  display: block;
+  width: 68vmax;
+  height: 68vmax;
+  border-radius: 50%;
+  will-change: transform;
+  animation: aurora-drift 26s ease-in-out infinite alternate;
+}
+.aurora i:nth-child(1) {
+  top: -20vmax; left: -14vmax;
+  background: radial-gradient(circle, var(--blob-1) 0%, transparent 62%);
+}
+.aurora i:nth-child(2) {
+  top: 20%; right: -22vmax;
+  background: radial-gradient(circle, var(--blob-2) 0%, transparent 64%);
+  animation-duration: 34s;
+  animation-delay: -9s;
+}
+.aurora i:nth-child(3) {
+  bottom: -26vmax; left: 20%;
+  background: radial-gradient(circle, var(--blob-3) 0%, transparent 60%);
+  animation-duration: 30s;
+  animation-delay: -17s;
+}
+/* 星点：两层不同密度的点阵 */
+.aurora::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle, var(--star) 1px, transparent 1.6px),
+    radial-gradient(circle, var(--star-faint) .8px, transparent 1.4px);
+  background-size: 300px 300px, 210px 210px;
+  background-position: 0 0, 130px 90px;
+}
+
+@keyframes aurora-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(7vmax, 4vmax, 0) scale(1.16); }
+}
+
+/* ── 3. 顶部导航栏（玻璃）──────────────────────────────────────────────── */
 
 .site-header {
   position: sticky;
@@ -134,15 +353,14 @@ img, svg { max-width: 100%; height: auto; }
   height: var(--header-h);
   display: flex;
   align-items: center;
-  background: rgba(var(--mdui-color-surface-container), 0.86);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  backdrop-filter: blur(16px) saturate(180%);
-  border-bottom: 1px solid transparent;
-  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  background: rgba(var(--mdui-color-background), .62);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  border-bottom: 1px solid var(--glass-border);
+  transition: box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .site-header.is-scrolled {
-  border-bottom-color: rgb(var(--mdui-color-outline-variant));
-  box-shadow: var(--mdui-elevation-level2, 0 1px 3px rgba(0, 0, 0, .16));
+  box-shadow: 0 10px 36px rgba(var(--mdui-color-shadow), .22);
 }
 
 .header-inner {
@@ -195,10 +413,8 @@ mdui-icon {
   flex: none;
   border-radius: var(--mdui-shape-corner-medium, .75rem);
   background: transparent;
-  color: rgb(var(--mdui-color-on-primary));
-  box-shadow: var(--mdui-elevation-level1);
+  box-shadow: 0 0 0 1px var(--glass-border), 0 4px 18px rgba(var(--aurora-violet), .25);
 }
-.brand-mark { box-shadow: none; }
 .brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
 
 .site-nav { margin-inline-start: auto; }
@@ -219,7 +435,8 @@ mdui-icon {
   font-weight: 500;
   white-space: nowrap;
   transition: background-color var(--mdui-motion-duration-short4, 200ms) var(--ease),
-              color var(--mdui-motion-duration-short4, 200ms) var(--ease);
+              color var(--mdui-motion-duration-short4, 200ms) var(--ease),
+              box-shadow var(--mdui-motion-duration-short4, 200ms) var(--ease);
 }
 .nav-link:hover {
   text-decoration: none;
@@ -229,7 +446,8 @@ mdui-icon {
 /* 键盘/滚动定位到当前区块时高亮 */
 .nav-link[aria-current="true"] {
   color: rgb(var(--mdui-color-primary));
-  background: rgba(var(--mdui-color-primary), 0.12);
+  background: rgba(var(--mdui-color-primary), 0.13);
+  box-shadow: inset 0 0 0 1px rgba(var(--mdui-color-primary), 0.3);
   font-weight: 600;
 }
 .nav-link mdui-icon { font-size: 16px; opacity: .8; }
@@ -318,61 +536,83 @@ mdui-icon {
 }
 .drawer-actions { padding: 16px; }
 
-/* ── 3. 首屏品牌区 ─────────────────────────────────────────────────────── */
+/* ── 4. 首屏品牌区 ─────────────────────────────────────────────────────── */
 
 .hero {
   position: relative;
   overflow: hidden;
-  padding-block: clamp(56px, 11vw, 112px) clamp(48px, 9vw, 88px);
+  padding-block: clamp(64px, 12vw, 128px) clamp(48px, 9vw, 88px);
   text-align: center;
-}
-
-.hero-glow {
-  position: absolute;
-  inset: -30% -10% auto;
-  height: 720px;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(46% 52% at 22% 32%, rgba(var(--mdui-color-primary), 0.30), transparent 70%),
-    radial-gradient(42% 48% at 78% 24%, rgba(var(--mdui-color-tertiary), 0.26), transparent 70%),
-    radial-gradient(50% 50% at 52% 78%, rgba(var(--mdui-color-secondary), 0.20), transparent 72%);
-  filter: blur(28px);
 }
 
 .hero-inner { position: relative; z-index: 1; }
 
+/* 均衡器：品牌音乐符号，五根渐变光柱轻幅跳动 */
+.eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 16px;
+  margin-right: 2px;
+}
+.eq i {
+  display: block;
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgb(var(--aurora-cyan)), rgb(var(--aurora-violet)));
+  transform-origin: bottom;
+  animation: eq-bounce 1.15s ease-in-out infinite alternate;
+}
+.eq i:nth-child(1) { height: 55%; animation-delay: -.2s; }
+.eq i:nth-child(2) { height: 85%; animation-delay: -.65s; }
+.eq i:nth-child(3) { height: 100%; animation-delay: -.1s; }
+.eq i:nth-child(4) { height: 70%; animation-delay: -.9s; }
+.eq i:nth-child(5) { height: 45%; animation-delay: -.45s; }
+
+@keyframes eq-bounce {
+  from { transform: scaleY(.45); }
+  to   { transform: scaleY(1); }
+}
+
 .hero-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 22px;
-  padding: 7px 16px;
+  gap: 10px;
+  margin-bottom: 24px;
+  padding: 8px 18px;
   border-radius: var(--mdui-shape-corner-full, 999px);
-  background: rgba(var(--mdui-color-surface-container-high), 0.75);
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  background: var(--glass-soft);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 24px rgba(var(--mdui-color-shadow), .1);
   color: rgb(var(--mdui-color-on-surface-variant));
   font-size: .8125rem;
   font-weight: 500;
-}
-.hero-eyebrow mdui-icon {
-  font-size: 17px;
-  color: rgb(var(--mdui-color-primary));
+  letter-spacing: .04em;
 }
 
 .hero-title {
-  font-size: clamp(2.5rem, 8vw, 4.25rem);
-  font-weight: 700;
-  letter-spacing: -0.035em;
-  margin-bottom: 18px;
+  font-size: clamp(2.75rem, 9vw, 5rem);
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.12;
+  margin-bottom: 20px;
 }
 .hero-title-accent {
-  background: linear-gradient(120deg,
-              rgb(var(--mdui-color-primary)),
-              rgb(var(--mdui-color-tertiary)));
+  background: var(--text-grad);
+  background-size: 220% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  filter: drop-shadow(0 8px 30px var(--title-glow));
+  animation: text-shimmer 9s linear infinite alternate;
+}
+
+@keyframes text-shimmer {
+  from { background-position: 0% center; }
+  to   { background-position: 100% center; }
 }
 
 .hero-tagline {
@@ -386,7 +626,7 @@ mdui-icon {
 
 .hero-sub {
   max-width: 60ch;
-  margin: 0 auto 32px;
+  margin: 0 auto 36px;
   color: rgb(var(--mdui-color-on-surface-variant));
   font-size: clamp(.9375rem, 1.6vw, 1.0625rem);
 }
@@ -397,13 +637,26 @@ mdui-icon {
   justify-content: center;
   align-items: center;
   gap: 12px;
-  margin-bottom: clamp(40px, 7vw, 64px);
+  margin-bottom: clamp(44px, 7vw, 68px);
 }
 .hero-actions mdui-button { --shape-corner: 999px; }
 .hero-actions .btn-lg::part(button) { height: 56px; }
 /* 图标与文字尺寸按 MDUI 部件选择器对齐 */
 .hero-actions mdui-button::part(icon) { font-size: 20px; }
 
+/* 主 CTA：极光渐变底 + 光晕（渐变色阶都经过白字对比度校验） */
+.cta-primary::part(button) {
+  background: var(--cta-grad);
+  color: #fff;
+  box-shadow: 0 10px 34px var(--cta-glow), inset 0 1px 0 rgba(255, 255, 255, .22);
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease), filter var(--dur) var(--ease);
+}
+.cta-primary::part(button):hover {
+  box-shadow: 0 14px 46px var(--cta-glow), inset 0 1px 0 rgba(255, 255, 255, .28);
+  filter: saturate(1.15);
+}
+
+/* 核心卖点：玻璃瓦片 */
 .hero-features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(196px, 100%), 1fr));
@@ -419,23 +672,54 @@ mdui-icon {
   gap: 2px;
   padding: 18px 18px 16px;
   border-radius: var(--radius-card);
-  background: rgba(var(--mdui-color-surface-container-low), 0.85);
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
-  box-shadow: var(--mdui-elevation-level1);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--glass-border);
   transition: transform var(--dur) var(--ease),
               box-shadow var(--dur) var(--ease),
               border-color var(--dur) var(--ease);
 }
 .feature-chip:hover {
   transform: translateY(-3px);
-  box-shadow: var(--mdui-elevation-level3);
-  border-color: rgba(var(--mdui-color-primary), 0.4);
+  box-shadow: var(--glass-hover-shadow);
+  border-color: var(--glass-border-strong);
 }
-.feature-chip mdui-icon {
-  font-size: 26px;
-  margin-bottom: 8px;
-  color: rgb(var(--mdui-color-primary));
+
+/* 图标瓦片：按语义分别取极光三原色 + 靛蓝 */
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  border-radius: var(--mdui-shape-corner-medium, .75rem);
+  border: 1px solid transparent;
 }
+.tile mdui-icon { font-size: 25px; }
+.tile-v {
+  background: rgba(var(--aurora-violet), .16);
+  border-color: rgba(var(--aurora-violet), .38);
+  color: var(--tile-fg-v);
+}
+.tile-c {
+  background: rgba(var(--aurora-cyan), .14);
+  border-color: rgba(var(--aurora-cyan), .36);
+  color: var(--tile-fg-c);
+}
+.tile-p {
+  background: rgba(var(--aurora-pink), .13);
+  border-color: rgba(var(--aurora-pink), .36);
+  color: var(--tile-fg-p);
+}
+.tile-b {
+  background: rgba(99, 102, 241, .15);
+  border-color: rgba(99, 102, 241, .38);
+  color: var(--tile-fg-b);
+}
+
+.feature-chip .tile { width: 42px; height: 42px; margin-bottom: 10px; }
 .feature-chip b {
   font-size: 1rem;
   font-weight: 650;
@@ -447,12 +731,12 @@ mdui-icon {
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-/* ── 4. 通用区块 ───────────────────────────────────────────────────────── */
+/* ── 5. 通用区块 ───────────────────────────────────────────────────────── */
 
 .section { padding-block: clamp(56px, 8vw, 92px); }
 .section-alt {
-  background: rgba(var(--mdui-color-surface-container-low), 0.55);
-  border-block: 1px solid rgba(var(--mdui-color-outline-variant), 0.7);
+  background: rgba(var(--mdui-color-surface-container), .35);
+  border-block: 1px solid var(--glass-border);
 }
 
 .section-head {
@@ -462,18 +746,17 @@ mdui-icon {
 .section-head h2 {
   font-size: clamp(1.5rem, 3.6vw, 2rem);
   letter-spacing: -0.02em;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .section-head h2::after {
   content: "";
   display: block;
-  width: 48px;
-  height: 4px;
+  width: 64px;
+  height: 3px;
   margin-top: 12px;
   border-radius: 999px;
-  background: linear-gradient(90deg,
-              rgb(var(--mdui-color-primary)),
-              rgb(var(--mdui-color-tertiary)));
+  background: var(--text-grad);
+  box-shadow: 0 0 14px rgba(var(--aurora-violet), .5);
 }
 .section-sub {
   margin: 0;
@@ -488,7 +771,10 @@ mdui-icon {
   margin-top: 24px;
   padding: 14px 16px;
   border-radius: var(--radius-card);
-  background: rgba(var(--mdui-color-surface-container), 0.7);
+  background: var(--glass-soft);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
   color: rgb(var(--mdui-color-on-surface-variant));
   font-size: .875rem;
 }
@@ -498,13 +784,15 @@ mdui-icon {
   margin-top: 3px;
 }
 
-/* ── 5. 客户端与入口卡片 ───────────────────────────────────────────────── */
+/* ── 6. 客户端与入口卡片（玻璃面板）────────────────────────────────────── */
 
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(288px, 100%), 1fr));
   gap: 20px;
-  align-items: stretch;
+  /* 各卡片内容量差异大（概念版含长提示），等高拉伸会在短卡里留下大片空洞，
+     改为自然高度，卡片各自完整、行内不强行对齐底边 */
+  align-items: start;
 }
 
 .client-card {
@@ -512,17 +800,47 @@ mdui-icon {
   flex-direction: column;
   padding: 24px;
   border-radius: var(--radius-panel);
-  background: rgb(var(--mdui-color-surface-container-low));
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
-  box-shadow: var(--mdui-elevation-level1);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+  backdrop-filter: blur(18px) saturate(155%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 2px 10px rgba(var(--mdui-color-shadow), .1);
   transition: transform var(--dur) var(--ease),
               box-shadow var(--dur) var(--ease),
               border-color var(--dur) var(--ease);
 }
 .client-card:hover {
   transform: translateY(-4px);
-  box-shadow: var(--mdui-elevation-level3);
-  border-color: rgba(var(--mdui-color-primary), 0.42);
+  box-shadow: var(--glass-hover-shadow);
+  border-color: var(--glass-border-strong);
+}
+
+/* 推荐位：极光渐变发丝描边 + 恒定微光（描边用 mask 镂空实现，
+   只描一圈 1px 渐变，不会覆盖玻璃面） */
+.client-card--featured { position: relative; }
+.client-card--featured::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg,
+              rgba(var(--aurora-violet), .75),
+              rgba(var(--aurora-cyan), .55) 50%,
+              rgba(var(--aurora-pink), .6));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.client-card--featured::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 42px rgba(var(--aurora-violet), .14);
+  pointer-events: none;
 }
 
 .card-top {
@@ -533,38 +851,44 @@ mdui-icon {
   margin-bottom: 16px;
 }
 
-.card-icon {
+/* 徽章：原生 span 实现以保证配色完全可控 */
+.badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
+  gap: 5px;
   flex: none;
-  border-radius: var(--mdui-shape-corner-medium, .75rem);
-  background: rgb(var(--mdui-color-primary-container));
-  color: rgb(var(--mdui-color-on-primary-container));
+  padding: 5px 13px;
+  border-radius: var(--mdui-shape-corner-full, 999px);
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  border: 1px solid transparent;
 }
-.card-icon mdui-icon { font-size: 26px; }
+.badge mdui-icon { font-size: 15px; }
+.badge-recommend {
+  background: linear-gradient(135deg, rgba(var(--aurora-violet), .92), rgba(99, 102, 241, .92));
+  border-color: rgba(255, 255, 255, .18);
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(var(--aurora-violet), .4);
+}
+.badge-outline {
+  background: var(--glass-soft);
+  border-color: var(--glass-border-strong);
+  color: rgb(var(--mdui-color-primary));
+}
 
 .client-card h3 {
   font-size: 1.1875rem;
   margin-bottom: 12px;
 }
 
-.badge-recommend,
-.badge-concept,
-.badge-web,
-.badge-api {
-  --shape-corner: 999px;
-  font-size: .75rem;
-}
-.badge-recommend { flex: none; }
-
 .meta-list {
   margin: 0 0 14px;
   padding: 12px 14px;
   border-radius: var(--mdui-shape-corner-medium, .75rem);
-  background: rgba(var(--mdui-color-surface-container-high), 0.6);
+  background: rgba(var(--mdui-color-surface-container-high), .55);
+  border: 1px solid var(--glass-border);
   font-size: .8438rem;
 }
 .meta-row {
@@ -617,6 +941,7 @@ mdui-icon {
   margin-bottom: 18px;
   padding: 12px 14px;
   border-radius: var(--mdui-shape-corner-medium, .75rem);
+  border: 1px solid transparent;
   font-size: .8125rem;
   line-height: 1.65;
 }
@@ -626,11 +951,13 @@ mdui-icon {
   margin-top: 2px;
 }
 .note-info {
-  background: rgba(var(--mdui-color-secondary-container), 0.7);
+  background: rgba(var(--mdui-color-secondary-container), .62);
+  border-color: rgba(var(--mdui-color-secondary), .3);
   color: rgb(var(--mdui-color-on-secondary-container));
 }
 .note-warn {
-  background: rgba(var(--mdui-color-error-container), 0.72);
+  background: rgba(var(--mdui-color-error-container), .72);
+  border-color: rgba(var(--mdui-color-error), .32);
   color: rgb(var(--mdui-color-on-error-container));
 }
 .note-warn b { font-weight: 700; }
@@ -650,7 +977,7 @@ mdui-icon {
 /* 禁用按钮的可读性兜底 */
 mdui-button[disabled] { opacity: .72; }
 
-/* ── 6. 项目简介 ───────────────────────────────────────────────────────── */
+/* ── 7. 项目简介 ───────────────────────────────────────────────────────── */
 
 .about-layout {
   display: grid;
@@ -687,15 +1014,22 @@ mdui-button[disabled] { opacity: .72; }
   gap: 12px;
   padding: 16px;
   border-radius: var(--radius-card);
-  background: rgba(var(--mdui-color-surface-container-lowest), 0.9);
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.highlight-list mdui-icon {
-  font-size: 22px;
-  flex: none;
-  margin-top: 3px;
-  color: rgb(var(--mdui-color-primary));
+.highlight-list li:hover {
+  border-color: var(--glass-border-strong);
+  transform: translateY(-2px);
 }
+.highlight-list .tile {
+  width: 38px;
+  height: 38px;
+  margin-top: 2px;
+}
+.highlight-list .tile mdui-icon { font-size: 20px; }
 .highlight-list b {
   display: block;
   font-size: .9375rem;
@@ -718,6 +1052,11 @@ mdui-button[disabled] { opacity: .72; }
   --shape-corner: var(--radius-panel);
   padding: 22px;
   display: block;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 2px 10px rgba(var(--mdui-color-shadow), .08);
 }
 .aside-card h3 {
   display: flex;
@@ -749,16 +1088,17 @@ mdui-button[disabled] { opacity: .72; }
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: rgb(var(--mdui-color-primary));
+  background: linear-gradient(135deg, rgb(var(--aurora-violet)), rgb(var(--aurora-cyan)));
+  box-shadow: 0 0 8px rgba(var(--aurora-violet), .6);
 }
 .aside-card-warn {
-  background: rgba(var(--mdui-color-error-container), 0.55);
-  border: 1px solid rgba(var(--mdui-color-error), 0.35);
+  background: rgba(var(--mdui-color-error-container), .5);
+  border: 1px solid rgba(var(--mdui-color-error), .35);
 }
 .aside-card-warn p { color: rgb(var(--mdui-color-on-error-container)); }
 .aside-card-warn h3 mdui-icon { color: rgb(var(--mdui-color-error)); }
 
-/* ── 7. 联系我们 ───────────────────────────────────────────────────────── */
+/* ── 8. 联系我们 ───────────────────────────────────────────────────────── */
 
 .group-grid {
   display: grid;
@@ -771,14 +1111,17 @@ mdui-button[disabled] { opacity: .72; }
   flex-direction: column;
   padding: 24px;
   border-radius: var(--radius-panel);
-  background: rgb(var(--mdui-color-surface-container-low));
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
-  box-shadow: var(--mdui-elevation-level1);
-  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+  backdrop-filter: blur(18px) saturate(155%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 2px 10px rgba(var(--mdui-color-shadow), .1);
+  transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 .group-card:hover {
-  box-shadow: var(--mdui-elevation-level2);
-  border-color: rgba(var(--mdui-color-primary), 0.35);
+  box-shadow: var(--glass-hover-shadow);
+  border-color: var(--glass-border-strong);
+  transform: translateY(-3px);
 }
 
 .group-head {
@@ -787,18 +1130,6 @@ mdui-button[disabled] { opacity: .72; }
   gap: 14px;
   margin-bottom: 18px;
 }
-.group-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
-  flex: none;
-  border-radius: var(--mdui-shape-corner-medium, .75rem);
-  background: rgb(var(--mdui-color-primary-container));
-  color: rgb(var(--mdui-color-on-primary-container));
-}
-.group-icon mdui-icon { font-size: 24px; }
 .group-head h3 { font-size: 1.0625rem; }
 .group-sub {
   margin: 4px 0 0;
@@ -814,7 +1145,8 @@ mdui-button[disabled] { opacity: .72; }
   margin-bottom: 16px;
   border-radius: var(--mdui-shape-corner-medium, .75rem);
   background: rgba(var(--mdui-color-primary), 0.1);
-  border: 1px solid rgba(var(--mdui-color-primary), 0.22);
+  border: 1px solid rgba(var(--mdui-color-primary), 0.24);
+  box-shadow: inset 0 0 24px rgba(var(--aurora-violet), .08);
 }
 .gn-label {
   flex: none;
@@ -836,7 +1168,7 @@ mdui-button[disabled] { opacity: .72; }
   width: 38px;
   height: 38px;
   color: rgb(var(--mdui-color-primary));
-  background: rgba(var(--mdui-color-surface-container-lowest), 0.7);
+  background: rgba(var(--mdui-color-surface-container-lowest), 0.55);
 }
 .copy-btn mdui-icon { font-size: 19px; }
 
@@ -854,8 +1186,8 @@ mdui-button[disabled] { opacity: .72; }
      超长内容靠 pre-wrap + break-all 自然折行。 */
   padding: 12px 14px;
   border-radius: var(--mdui-shape-corner-medium, .75rem);
-  background: rgba(var(--mdui-color-surface-container-high), 0.75);
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
+  background: rgba(var(--mdui-color-surface-container-high), .6);
+  border: 1px solid var(--glass-border);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: .75rem;
   line-height: 1.65;
@@ -905,7 +1237,7 @@ mdui-button[disabled] { opacity: .72; }
   color: rgb(var(--mdui-color-primary));
 }
 
-/* ── 8. GitHub 仓库列表 ────────────────────────────────────────────────── */
+/* ── 9. GitHub 仓库列表 ────────────────────────────────────────────────── */
 
 .repo-list {
   display: flex;
@@ -920,14 +1252,17 @@ mdui-button[disabled] { opacity: .72; }
   gap: 14px 20px;
   padding: 18px 22px;
   border-radius: var(--radius-card);
-  background: rgba(var(--mdui-color-surface-container-lowest), 0.9);
-  border: 1px solid rgb(var(--mdui-color-outline-variant));
-  box-shadow: var(--mdui-elevation-level1);
-  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 2px 8px rgba(var(--mdui-color-shadow), .08);
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
 .repo-item:hover {
-  border-color: rgba(var(--mdui-color-primary), 0.42);
+  border-color: var(--glass-border-strong);
   transform: translateX(3px);
+  box-shadow: var(--glass-hover-shadow);
 }
 
 .repo-main { flex: 1 1 320px; min-width: 0; }
@@ -990,6 +1325,7 @@ a.copy-link-btn:hover { text-decoration: none; }
 .status-ok {
   background: rgba(var(--mdui-color-primary), 0.14);
   color: rgb(var(--mdui-color-primary));
+  box-shadow: inset 0 0 0 1px rgba(var(--mdui-color-primary), 0.35);
 }
 .status-todo {
   background: rgb(var(--mdui-color-surface-container-highest));
@@ -997,12 +1333,28 @@ a.copy-link-btn:hover { text-decoration: none; }
   border: 1px dashed rgb(var(--mdui-color-outline));
 }
 
-/* ── 9. 页脚 ───────────────────────────────────────────────────────────── */
+/* ── 10. 页脚 ──────────────────────────────────────────────────────────── */
 
 .site-footer {
+  position: relative;
   padding-block: clamp(44px, 6vw, 68px) 36px;
-  background: rgba(var(--mdui-color-surface-container), 0.6);
-  border-top: 1px solid rgb(var(--mdui-color-outline-variant));
+  background: rgba(var(--mdui-color-surface-container), .5);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--glass-border);
+}
+/* 顶部极光发丝线 */
+.site-footer::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, 82%);
+  height: 2px;
+  border-radius: 999px;
+  background: var(--hairline);
+  filter: drop-shadow(0 0 8px rgba(var(--aurora-violet), .5));
 }
 
 .footer-inner {
@@ -1049,7 +1401,7 @@ a.copy-link-btn:hover { text-decoration: none; }
   color: rgb(var(--mdui-color-on-surface-variant));
 }
 
-/* ── 10. 响应式 ────────────────────────────────────────────────────────── */
+/* ── 11. 响应式 ────────────────────────────────────────────────────────── */
 
 /* 平板及以下：隐藏桌面导航，显示抽屉按钮，单列布局 */
 @media (max-width: 899px) {
@@ -1064,7 +1416,7 @@ a.copy-link-btn:hover { text-decoration: none; }
 @media (max-width: 599px) {
   :root { --header-h: 58px; }
 
-  .hero { padding-block: 44px 40px; }
+  .hero { padding-block: 48px 40px; }
   .hero-actions {
     flex-direction: column;
     align-items: stretch;
@@ -1096,7 +1448,7 @@ a.copy-link-btn:hover { text-decoration: none; }
   .feature-chip { padding: 16px 14px; }
 }
 
-/* ── 11. 动效降级与打印 ────────────────────────────────────────────────── */
+/* ── 12. 动效降级与打印 ────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -1109,15 +1461,32 @@ a.copy-link-btn:hover { text-decoration: none; }
   .client-card:hover,
   .feature-chip:hover,
   .repo-item:hover { transform: none; }
+  .hero-title-accent { animation: none; }
+  .aurora i { animation: none; }
+  .eq i { animation: none; transform: scaleY(.8); }
 }
 
 /* 不支持 backdrop-filter 时改用不透明底色，保证文字对比度 */
 @supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
   .site-header { background: rgb(var(--mdui-color-surface-container)); }
+  .hero-eyebrow,
+  .section-footnote { background: rgb(var(--mdui-color-surface-container-high)); }
+  .client-card,
+  .group-card,
+  .feature-chip,
+  .aside-card,
+  .highlight-list li,
+  .repo-item { background: rgb(var(--mdui-color-surface-container-low)); }
+  .site-footer { background: rgb(var(--mdui-color-surface-container)); }
 }
 
 @media print {
   html.js .reveal { opacity: 1; transform: none; }
-  .site-header, .hero-glow, .copy-btn, .copy-link-btn, .nav-toggle { display: none; }
+  .site-header, .aurora, .copy-btn, .copy-link-btn, .nav-toggle { display: none; }
   .repo-url, .ll-url { white-space: pre-wrap; word-break: break-all; }
+  body { background: #fff; }
+  .client-card, .group-card, .feature-chip, .aside-card, .repo-item {
+    border: 1px solid #ccc;
+    background: #fff;
+  }
 }

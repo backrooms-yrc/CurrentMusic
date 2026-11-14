@@ -2,7 +2,7 @@
   "name": "currentmusic-site",
   "private": true,
   "version": "1.0.0",
-  "description": "CurrentMusic 官方网站（单页，MDUI 设计规范）",
+  "description": "CurrentMusic 官方网站（单页，深色流光 Aurora 设计语言，基于 MDUI 组件）",
   "type": "module",
   "scripts": {
     "build": "node build.mjs"

@@ -41,7 +41,7 @@ function applyTheme(dark) {
   // 同步浏览器地址栏配色（只改当前生效的那一条）
   document.querySelectorAll('meta[name="theme-color"]').forEach(meta => {
     const isDarkMeta = (meta.getAttribute('media') || '').includes('dark');
-    meta.setAttribute('content', isDarkMeta ? '#141218' : '#6750a4');
+    meta.setAttribute('content', isDarkMeta ? '#0a0913' : '#f4f2fb');
   });
 }
 

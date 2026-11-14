@@ -9,8 +9,8 @@
   <meta name="description" content="CurrentMusic 是一个免费畅听网易云音乐 SVIP 曲目的音乐社区，提供 Android 客户端、Web 网页端与开放 API，支持多设备流转音乐资产，鼓励社区开发者参与生态建设。">
   <meta name="keywords" content="CurrentMusic,网易云音乐,SVIP,免费听歌,音乐社区,Android 客户端,Web 网页端,开放 API,CurrentMusicX,CurrentStation">
   <meta name="author" content="CurrentMusic">
-  <meta name="theme-color" content="#6750a4" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#141218" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f2fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0a0913" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <link rel="canonical" href="https://music.20110208.xyz/">
@@ -75,6 +75,9 @@
 <body>
   <!-- 键盘用户跳过导航 -->
   <a class="skip-link" href="#hero">跳到主要内容</a>
+
+  <!-- 极光背景层：三团光晕 + 星点，纯装饰 -->
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 
   <!-- ═══════════════════════════════════════════════════════════════════
        顶部导航栏
@@ -147,10 +150,9 @@
          首屏品牌区
          ═════════════════════════════════════════════════════════════════ -->
     <section class="hero" id="hero" aria-labelledby="heroTitle">
-      <div class="hero-glow" aria-hidden="true"></div>
       <div class="container hero-inner">
         <p class="hero-eyebrow">
-          <mdui-icon name="verified" aria-hidden="true"></mdui-icon>
+          <span class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
           免费 · 社区驱动 · 多端同步
         </p>
 
@@ -174,22 +176,22 @@
         <!-- 核心卖点 -->
         <ul class="hero-features" aria-label="核心卖点">
           <li class="feature-chip">
-            <mdui-icon name="music_note" aria-hidden="true"></mdui-icon>
+            <span class="tile tile-v" aria-hidden="true"><mdui-icon name="music_note"></mdui-icon></span>
             <b>免费畅听</b>
             <span>无需会员即可试听 SVIP 曲目</span>
           </li>
           <li class="feature-chip">
-            <mdui-icon name="groups" aria-hidden="true"></mdui-icon>
+            <span class="tile tile-c" aria-hidden="true"><mdui-icon name="groups"></mdui-icon></span>
             <b>社区驱动</b>
             <span>由社区开发者共同维护</span>
           </li>
           <li class="feature-chip">
-            <mdui-icon name="sync" aria-hidden="true"></mdui-icon>
+            <span class="tile tile-b" aria-hidden="true"><mdui-icon name="sync"></mdui-icon></span>
             <b>多端同步</b>
             <span>登录即流转音乐资产</span>
           </li>
           <li class="feature-chip">
-            <mdui-icon name="api" aria-hidden="true"></mdui-icon>
+            <span class="tile tile-p" aria-hidden="true"><mdui-icon name="api"></mdui-icon></span>
             <b>开放 API</b>
             <span>免费接入你自己的应用</span>
           </li>
@@ -210,10 +212,10 @@
         <div class="card-grid">
 
           <!-- 1. CurrentMusicX -->
-          <article class="client-card reveal" aria-labelledby="cardCmx">
+          <article class="client-card client-card--featured reveal" aria-labelledby="cardCmx">
             <div class="card-top">
-              <span class="card-icon" aria-hidden="true"><mdui-icon name="android"></mdui-icon></span>
-              <mdui-chip class="badge-recommend" variant="filled"><mdui-icon slot="icon" name="star" aria-hidden="true"></mdui-icon>推荐</mdui-chip>
+              <span class="tile tile-v" aria-hidden="true"><mdui-icon name="android"></mdui-icon></span>
+              <span class="badge badge-recommend"><mdui-icon name="star" aria-hidden="true"></mdui-icon>推荐</span>
             </div>
             <h3 id="cardCmx">CurrentMusicX</h3>
             <dl class="meta-list">
@@ -245,8 +247,8 @@
           <!-- 2. CurrentMusic 概念版 -->
           <article class="client-card reveal" aria-labelledby="cardConcept">
             <div class="card-top">
-              <span class="card-icon" aria-hidden="true"><mdui-icon name="science"></mdui-icon></span>
-              <mdui-chip class="badge-concept" variant="outlined"><mdui-icon slot="icon" name="polyline" aria-hidden="true"></mdui-icon>概念版</mdui-chip>
+              <span class="tile tile-p" aria-hidden="true"><mdui-icon name="science"></mdui-icon></span>
+              <span class="badge badge-outline"><mdui-icon name="polyline" aria-hidden="true"></mdui-icon>概念版</span>
             </div>
             <h3 id="cardConcept">CurrentMusic 概念版</h3>
             <dl class="meta-list">
@@ -286,8 +288,8 @@
           <!-- 3. CurrentMusic 流声屿 -->
           <article class="client-card reveal" aria-labelledby="cardWeb">
             <div class="card-top">
-              <span class="card-icon" aria-hidden="true"><mdui-icon name="language"></mdui-icon></span>
-              <mdui-chip class="badge-web" variant="outlined"><mdui-icon slot="icon" name="public" aria-hidden="true"></mdui-icon>网页端</mdui-chip>
+              <span class="tile tile-c" aria-hidden="true"><mdui-icon name="language"></mdui-icon></span>
+              <span class="badge badge-outline"><mdui-icon name="public" aria-hidden="true"></mdui-icon>网页端</span>
             </div>
             <h3 id="cardWeb">CurrentMusic 流声屿</h3>
             <dl class="meta-list">
@@ -319,8 +321,8 @@
           <!-- 4. CurrentStation 控制台 -->
           <article class="client-card reveal" aria-labelledby="cardStation">
             <div class="card-top">
-              <span class="card-icon" aria-hidden="true"><mdui-icon name="terminal"></mdui-icon></span>
-              <mdui-chip class="badge-api" variant="outlined"><mdui-icon slot="icon" name="api" aria-hidden="true"></mdui-icon>开放 API</mdui-chip>
+              <span class="tile tile-b" aria-hidden="true"><mdui-icon name="terminal"></mdui-icon></span>
+              <span class="badge badge-outline"><mdui-icon name="api" aria-hidden="true"></mdui-icon>开放 API</span>
             </div>
             <h3 id="cardStation">CurrentStation 控制台</h3>
             <dl class="meta-list">
@@ -383,28 +385,28 @@
             <h3 class="about-sub">功能亮点</h3>
             <ul class="highlight-list">
               <li>
-                <mdui-icon name="library_music" aria-hidden="true"></mdui-icon>
+                <span class="tile tile-v" aria-hidden="true"><mdui-icon name="library_music"></mdui-icon></span>
                 <div>
                   <b>免费畅听 SVIP 曲目</b>
                   <span>无需开通会员，直接收听原本需要会员权限的曲目。</span>
                 </div>
               </li>
               <li>
-                <mdui-icon name="devices" aria-hidden="true"></mdui-icon>
+                <span class="tile tile-c" aria-hidden="true"><mdui-icon name="devices"></mdui-icon></span>
                 <div>
                   <b>多端覆盖</b>
                   <span>Web 网页端、Android 客户端（CurrentMusicX / 概念版）按需选择。</span>
                 </div>
               </li>
               <li>
-                <mdui-icon name="sync_alt" aria-hidden="true"></mdui-icon>
+                <span class="tile tile-b" aria-hidden="true"><mdui-icon name="sync_alt"></mdui-icon></span>
                 <div>
                   <b>音乐资产流转</b>
                   <span>登录后歌单、收藏与播放数据在多设备间同步。</span>
                 </div>
               </li>
               <li>
-                <mdui-icon name="code" aria-hidden="true"></mdui-icon>
+                <span class="tile tile-p" aria-hidden="true"><mdui-icon name="code"></mdui-icon></span>
                 <div>
                   <b>开放 API 与社区生态</b>
                   <span>通过 CurrentStation 控制台免费接入，文档完善，便于二次开发。</span>
@@ -459,7 +461,7 @@
           <!-- 群 1 -->
           <article class="group-card reveal" aria-labelledby="groupCurrent">
             <div class="group-head">
-              <span class="group-icon" aria-hidden="true"><mdui-icon name="forum"></mdui-icon></span>
+              <span class="tile tile-c" aria-hidden="true"><mdui-icon name="forum"></mdui-icon></span>
               <div>
                 <h3 id="groupCurrent">Current 系项目 QQ 交流群</h3>
                 <p class="group-sub">200+ 人</p>
@@ -491,7 +493,7 @@
           <!-- 群 2 -->
           <article class="group-card reveal" aria-labelledby="groupCmx">
             <div class="group-head">
-              <span class="group-icon" aria-hidden="true"><mdui-icon name="forum"></mdui-icon></span>
+              <span class="tile tile-p" aria-hidden="true"><mdui-icon name="forum"></mdui-icon></span>
               <div>
                 <h3 id="groupCmx">CurrentMusicX 项目 QQ 交流群</h3>
                 <p class="group-sub">由社区开发者 bileizhen 创建 · 25+ 人</p>
