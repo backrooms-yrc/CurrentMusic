@@ -9,7 +9,7 @@ import { player, playLevel } from '../player.js';
 const FX_LABELS = { off: '关闭', jyeffect: '高清臻音', dolby: '杜比全景声', vivid: '臻音全景声', sky: '沉浸环绕声·5.1', 'sky-ste': '沉浸环绕声·环绕' };
 const LIKE_MODE_LABELS = { auto: '自动（已绑定走网易云）', ncm: '网易云红心', local: 'CurrentMusic 我喜欢' };
 const fxLabel = () => FX_LABELS[settings.effect] || '关闭';
-import { esc, toast, promptDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel, FONT_SCALES, getFontScaleKey, setFontScaleKey, userTagsText } from '../ui.js';
+import { esc, toast, promptDialog, confirmDialog, COLOR_SCHEMES, getColorSchemeKey, setColorSchemeKey, QUALITY_TIERS, tierLabel, FONT_SCALES, getFontScaleKey, setFontScaleKey, userTagsText } from '../ui.js';
 import { checkUpdate } from '../update.js';
 import { currentVersion, engineChrome, engineOutdated, ENGINE_MIN_RECOMMENDED } from '../version.js';
 import { UI_PRESETS, uiPresetKey, uiPresetName, setUiPreset } from '../uipreset.js';
@@ -112,7 +112,7 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="secure"><span class="material-icons-outlined">lock</span>安全连接<i>${settings.secureMode ? 'HTTPS 已启用' : '已关闭'}</i></div>
       <div class="cm-setting" id="network"><span class="material-icons-outlined">network_check</span>CDN 与音源<i>自动测速 · 可用性测试</i></div>
-      ${auth.token ? `<div class="cm-setting" id="lxSource"><span class="material-icons-outlined">extension</span>落雪音乐音源<i>LX Music · 个人直链</i></div>` : ''}
+      ${auth.token ? `<div class="cm-setting" id="lxSource"><span class="material-icons-outlined">extension</span>落雪音乐音源<i>LX Music · 令牌管理</i></div>` : ''}
       <div class="cm-setting" id="server"><span class="material-icons-outlined">dns</span>服务器地址<i>${esc(settings.base).replace(/(:\/\/|\/|\.)/g, '$1<wbr>')}</i></div>
     </div>
     <div class="cm-sec-head"><h2>关于</h2></div>
@@ -366,30 +366,95 @@ export async function render(el) {
   };
   el.querySelector('#ppDocs')?.addEventListener('click', openPassportDocs);
 
-  // ---- 落雪音乐（LX Music）音源：生成带个人令牌的直链，复制到 LX 客户端导入 ----
-  el.querySelector('#lxSource')?.addEventListener('click', () => {
-    const link = `${settings.base}/lx/source.js?token=${encodeURIComponent(auth.token)}`;
+  // ---- 落雪音乐（LX Music）音源：专用令牌的获取 / 轮换 / 撤销 ----
+  // 明文令牌只在「生成 / 轮换」响应里出现一次；本机缓存到 localStorage 以便随时复制。
+  // 换设备或清缓存后拿不到明文，找回方式就是轮换一次（旧客户端随之失效）。
+  const LX_LINK_KEY = 'cm.lxSourceUrl';
+  const lxRemember = url => { try { localStorage.setItem(LX_LINK_KEY, url); } catch { /* 私隐模式等：忽略 */ } };
+  const lxForget = () => { try { localStorage.removeItem(LX_LINK_KEY); } catch { /* 忽略 */ } };
+
+  function openLxSource() {
     const diag = mdui.dialog({
       headline: '落雪音乐音源',
-      body: `<div class="cm-more">
-        <div class="cm-more-s">把 CurrentMusic 流声引擎接入落雪音乐（LX Music）桌面版/移动版：设置 → 自定义源 → 从 URL 导入，粘贴下面的直链。导入后「网易音乐」源的播放与歌词走你的 CurrentMusic 账号（自动音质、灰色曲目匹配、逐字歌词）。</div>
-        <mdui-text-field id="lxLink" label="音源直链（含个人令牌）" variant="outlined" readonly value="${esc(link)}" style="width:100%;margin-top:10px"></mdui-text-field>
-        <div class="cm-more-s" style="margin-top:8px">直链等同于你的登录凭证，<b>请勿分享给他人</b>；提示「登录已失效」时重新登录后到这里取新直链。怀疑泄露可在「登录设备」里下线对应设备使其立即失效。</div>
-      </div>`,
-      actions: [
-        {
-          text: '复制直链',
-          onClick: () => {
-            navigator.clipboard.writeText(link)
-              .then(() => toast('已复制，请在 LX Music「自定义源 → 从 URL 导入」粘贴'))
-              .catch(() => { diag.querySelector('#lxLink')?.focus(); toast('复制失败，请长按手动复制'); });
-            return false;   // 保持弹窗打开，方便手动复制
-          },
-        },
-        { text: '关闭' },
-      ],
+      body: `<div id="lxBody"><div class="cm-more-s" style="text-align:center;padding:12px 0">正在加载音源状态…</div></div>`,
+      actions: [{ text: '关闭' }],
     });
-  });
+    // mdui dialog 的 body 渲染进 light DOM slot：固定容器 + 自绘按钮行，
+    // 全部用 querySelector 操作，不依赖组件内部结构。
+    const bodyEl = () => diag.querySelector('#lxBody');
+    const setBody = html => { const n = bodyEl(); if (n) n.innerHTML = html; };
+    const desc = `把 CurrentMusic 流声引擎接入落雪音乐（LX Music）：其「设置 → 自定义源 → 从 URL 导入」粘贴直链后，「网易音乐」源的播放与歌词走你的账号（自动音质、灰色曲目匹配、翻译/罗马音歌词）。`;
+    const warn = `直链是仅限取链的<b>专用令牌</b>（不能登录、不能读资料），仍请勿分享；泄露或换设备时<b>轮换</b>即可让旧直链立即失效。`;
+
+    const renderActive = (info, rememberedUrl) => {
+      const url = rememberedUrl || '';
+      const stat = `创建于 ${fmtTime(info.createdAt)}${info.lastSeen ? ` · 最近使用 ${fmtTime(info.lastSeen)}` : ' · 尚未使用'}`;
+      setBody(`
+        <div class="cm-more">
+          <div class="cm-more-s">${desc}</div>
+          ${url ? `<mdui-text-field id="lxLink" label="音源直链（含专用令牌）" variant="outlined" readonly value="${esc(url)}" style="width:100%;margin-top:10px"></mdui-text-field>` : ''}
+          <div class="cm-more-s" style="margin-top:8px">${esc(stat)}${url ? '' : '<br>本机没有保存直链明文（令牌只在生成/轮换时显示一次）。点「轮换」取得新直链，旧客户端需更新。'}</div>
+          <div class="cm-more-s" style="margin-top:6px;opacity:.85">${warn}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px">
+            <mdui-button variant="tonal" id="lxCopy">复制直链</mdui-button>
+            <mdui-button variant="tonal" id="lxRotate">轮换令牌</mdui-button>
+            <mdui-button variant="tonal" id="lxRevoke" style="--mdui-color-primary:var(--mdui-color-error,#b3261e)">撤销</mdui-button>
+          </div>
+        </div>`);
+      const show = (id, on) => { const n = diag.querySelector(id); if (n) n.style.display = on ? '' : 'none'; };
+      show('#lxCopy', !!url);
+      diag.querySelector('#lxCopy')?.addEventListener('click', () => {
+        navigator.clipboard.writeText(url)
+          .then(() => toast('已复制，请在 LX Music「自定义源 → 从 URL 导入」粘贴'))
+          .catch(() => { diag.querySelector('#lxLink')?.focus(); toast('复制失败，请长按手动复制'); });
+      });
+      diag.querySelector('#lxRotate')?.addEventListener('click', () => confirmDialog({
+        title: '轮换音源令牌？',
+        body: `<div class="cm-more-s">旧直链立即失效，所有已导入的落雪客户端都要改用新直链。继续？</div>`,
+        onOk: async () => {
+          const d = await api.lxTokenRotate();
+          lxRemember(d.sourceUrl);
+          renderActive(d, d.sourceUrl);
+          toast('已轮换，请在落雪客户端更新直链');
+        },
+      }));
+      diag.querySelector('#lxRevoke')?.addEventListener('click', () => confirmDialog({
+        title: '撤销音源令牌？',
+        body: `<div class="cm-more-s">全部落雪客户端的直链立即失效，音源功能停用。之后可随时重新生成。</div>`,
+        onOk: async () => {
+          await api.lxTokenRevoke();
+          lxForget();
+          renderDisabled();
+          toast('已撤销');
+        },
+      }));
+    };
+
+    const renderDisabled = () => {
+      setBody(`
+        <div class="cm-more">
+          <div class="cm-more-s">${desc}</div>
+          <div class="cm-more-s" style="margin-top:8px">${warn}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px">
+            <mdui-button variant="tonal" id="lxGen">生成直链</mdui-button>
+          </div>
+        </div>`);
+      diag.querySelector('#lxGen')?.addEventListener('click', async () => {
+        try {
+          const d = await api.lxTokenCreate();
+          if (!d.created) { renderActive(d, ''); return; }   // 已有令牌：只回状态
+          lxRemember(d.sourceUrl);
+          renderActive(d, d.sourceUrl);
+          toast('已生成，请在 LX Music「自定义源 → 从 URL 导入」粘贴');
+        } catch (e) { toast(e.message); }
+      });
+    };
+
+    api.lxTokenStatus()
+      .then(info => { info.enabled ? renderActive(info, localStorage.getItem(LX_LINK_KEY) || '') : renderDisabled(); })
+      .catch(e => setBody(`<div class="cm-more-s" style="padding:8px 0">加载失败：${esc(e.message)}</div>`));
+  }
+  el.querySelector('#lxSource')?.addEventListener('click', openLxSource);
 
   // ---- 玻璃效果：模糊 + 浓度，拖动即时生效（关闭时才重建折射透镜）----
   el.querySelector('#glassFx').onclick = () => {

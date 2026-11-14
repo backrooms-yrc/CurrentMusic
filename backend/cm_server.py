@@ -1386,6 +1386,22 @@ def require_user(handler):
     return u
 
 
+def require_music_user(handler):
+    """音源调用方身份：优先落雪音源专用令牌（clx_），回退登录会话。
+
+    只用于媒体取链族端点（/ncm/song/url、/lx/source.js）——专用令牌的活动
+    范围被钉死在这两处，拿它访问其它任何接口都会 401。管理专用令牌走
+    ``/lx/token`` 系列，要求真正的登录会话。
+    """
+    auth = handler.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        u = cm_db.lx_token_user(auth[7:].strip())
+        if u is not None:
+            cm_region.note(u["id"], cm_ncm_gateway.client_ip(handler))
+            return u
+    return require_user(handler)
+
+
 def _room_out(room):
     return {
         "id": room["id"], "code": room["code"], "name": room["name"],
@@ -2149,14 +2165,15 @@ def route(handler, method):
 
     # ======================== 落雪音乐（LX Music）自定义音源（未发布）========================
     # 把 Engine 的取链能力包装成 LX Music 可导入的音源脚本（生成逻辑见 cm_lx）。
-    # 直链带个人令牌：与 SSE 的 ?token= 查询参数同口径，令牌失效即 401。
-    # 脚本内容因人而异（内嵌令牌），绝不落缓存；已在 _AUTH_PATHS 按认证入口限速。
+    # 直链令牌优先用音源专用令牌（clx_，见 /lx/token 管理），兼容登录会话令牌；
+    # 两种令牌失效即 401。脚本内容因人而异（内嵌令牌），绝不落缓存；
+    # 已在 _AUTH_PATHS 按认证入口限速。
     if path == "/lx/source.js" and method in ("GET", "HEAD"):
         token = q.get("token") or ""
         if not token:
-            raise ApiError(401, "缺少 token：请在 CurrentMusic 设置页复制带个人令牌的落雪音源直链")
-        if not cm_db.user_by_token(token):
-            raise ApiError(401, "令牌无效或已下线：请重新登录 CurrentMusic，再到设置页生成新的音源直链")
+            raise ApiError(401, "缺少 token：请在 CurrentMusic 设置页「落雪音乐音源」获取直链")
+        if not (cm_db.lx_token_user(token) or cm_db.user_by_token(token)):
+            raise ApiError(401, "令牌无效或已下线：请到 CurrentMusic 设置页重新生成音源直链")
         script = cm_lx.build_source_script(cm_lx.api_base_for(handler), token).encode("utf-8")
         handler.send_response(200)
         handler.send_header("Content-Type", "text/javascript; charset=utf-8")
@@ -2166,6 +2183,52 @@ def route(handler, method):
         handler.end_headers()
         handler.wfile.write(script)
         return
+
+    # ---- 落雪音源专用令牌管理：查看 / 生成 / 轮换 / 撤销（须登录会话 Bearer；
+    #      专用令牌本身不能管理自身，避免持有直链者永久固化访问权）----
+    if path == "/lx/token" and method == "GET":
+        u = require_user(handler)
+        t = cm_db.lx_token_get(u["id"])
+        return jresp(handler, 200, {
+            "enabled": bool(t),
+            "createdAt": t["created_at"] if t else 0,
+            "lastSeen": t["last_seen"] if t else 0,
+        }, cache_control="no-store")   # 状态含使用痕迹，不落共享缓存
+
+    if path == "/lx/token" and method == "POST":
+        u = require_user(handler)
+        t = cm_db.lx_token_get(u["id"])
+        if t:
+            # 已有专用令牌：幂等返回现状。明文只在生成/轮换时返回一次，
+            # 找回直链的方式是轮换（旧客户端随之失效）。
+            return jresp(handler, 200, {"enabled": True, "created": False,
+                                        "createdAt": t["created_at"], "lastSeen": t["last_seen"]},
+                         cache_control="no-store")
+        token = cm_db.lx_token_issue(u["id"])
+        log.info("落雪音源令牌签发 user=%s", u["id"])
+        return jresp(handler, 200, {
+            "enabled": True, "created": True, "token": token,
+            "sourceUrl": f"{cm_lx.api_base_for(handler)}/lx/source.js?token={token}",
+        }, cache_control="no-store")
+
+    if path == "/lx/token/rotate" and method == "POST":
+        u = require_user(handler)
+        if str((body or {}).get("confirm") or "") not in ("1", "true", "True"):
+            raise ApiError(400, "轮换会使旧直链立即失效，需要二次确认（confirm=1）")
+        token = cm_db.lx_token_issue(u["id"])   # 单令牌模型：签发即替换
+        log.info("落雪音源令牌轮换 user=%s", u["id"])
+        return jresp(handler, 200, {
+            "enabled": True, "rotated": True, "token": token,
+            "sourceUrl": f"{cm_lx.api_base_for(handler)}/lx/source.js?token={token}",
+        }, cache_control="no-store")
+
+    if path == "/lx/token" and method == "DELETE":
+        u = require_user(handler)
+        if str((body or {}).get("confirm") or "") not in ("1", "true", "True"):
+            raise ApiError(400, "撤销会使全部落雪客户端的直链失效，需要二次确认（confirm=1）")
+        cm_db.lx_token_revoke(u["id"])
+        log.info("落雪音源令牌撤销 user=%s", u["id"])
+        return jresp(handler, 200, {"enabled": False})
 
     # ======================== 弹窗公告（v1.28.22） ========================
     # 客户端每次打开网页/App 都会拉 /announcements 并弹窗；管理员在管理后台增删改。
@@ -2724,7 +2787,11 @@ def route(handler, method):
         own = [
             ("GET", "/health", "公开", "服务健康检查"),
             ("GET", "/badges/powered-by.svg", "公开", "流声引擎署名徽章，返回 SVG；lang 可选 zh-CN（默认）或 en。嵌入示例 /api-docs/reference/guide-engine-badge-api/"),
-            ("GET", "/lx/source.js", "token 查询参数", "落雪音乐（LX Music）自定义音源脚本：`?token=` 为 CurrentMusic 个人登录令牌（与 SSE 查询参数同口径），返回内嵌该令牌的音源 JS（wy 源 musicUrl/lyric，回连 /ncm/song/url 与公开 /ncm/lyric）。脚本因人而异且含令牌，no-store 不缓存；令牌失效返回 401；按认证入口限速。详见 /api-docs/reference/guide-lx-music-source/"),
+            ("GET", "/lx/source.js", "token 查询参数", "落雪音乐（LX Music）自定义音源脚本：`?token=` 为落雪音源专用令牌（clx_ 前缀，见 /lx/token 管理）或 CurrentMusic 登录会话令牌，返回内嵌该令牌的音源 JS（wy 源 musicUrl/lyric，回连 /ncm/song/url 与公开 /ncm/lyric）。脚本因人而异且含令牌，no-store 不缓存；令牌失效返回 401；按认证入口限速。详见 /api-docs/reference/guide-lx-music-source/"),
+            ("GET", "/lx/token", "Bearer", "查看本人落雪音源专用令牌状态 `{enabled, createdAt, lastSeen}`（不返回明文；明文只在生成/轮换时返回一次）"),
+            ("POST", "/lx/token", "Bearer", "生成本人专用令牌，一次性返回 `{token, sourceUrl}` 直链；已有令牌时幂等返回现状（`created:false`），找回直链须轮换"),
+            ("POST", "/lx/token/rotate", "Bearer", "轮换专用令牌（`{confirm:1}` 二次确认）：旧直链立即失效，一次性返回新 `{token, sourceUrl}`"),
+            ("DELETE", "/lx/token", "Bearer", "撤销专用令牌（`{confirm:1}`）：全部落雪客户端的直链立即失效"),
             ("GET", "/network/lines", "公开", "主站及全部 CDN 镜像线路与服务端 HTTPS 测速结果；measure=0 仅目录；结果缓存 60 秒，perspective=server，不代表用户网络延迟。详细文档 /api-docs/reference/guide-network-lines-api/"),
             ("GET", "/network/probe", "公开", "浏览器线路测速探针：返回 service=CurrentMusic，支持 CORS；页面 /app/auto 从用户设备直接测量 HTTPS 请求耗时"),
             ("GET", "/network/docs", "公开", "兼容入口，302 跳转至 /api-docs/reference/guide-network-lines-api/"),
@@ -4469,8 +4536,9 @@ def route(handler, method):
         return jresp(handler, 200, d)
 
     if path == "/ncm/song/url" and method == "GET":
-        # v1.28.33：音源仅限注册用户（其他功能不受影响；游客仍可搜索/浏览/看歌词）
-        require_user(handler)
+        # v1.28.33：音源仅限注册用户（其他功能不受影响；游客仍可搜索/浏览/看歌词）。
+        # 未发布：接受落雪音源专用令牌（clx_）——它只被允许到达这里和 /lx/source.js。
+        require_music_user(handler)
         """播放地址解析（抗卡顿增强版，见 resolve_play_url）。
 
         参数：``id``（必填）、``level``（默认 auto）、``immerse``（仅 sky）、

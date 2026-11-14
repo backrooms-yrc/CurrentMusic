@@ -27,6 +27,7 @@ import cm_lx  # noqa: E402
 import cm_server  # noqa: E402
 
 import test_password_reset as harness  # noqa: E402
+from unittest import mock  # noqa: E402
 
 NODE_BIN = shutil.which("node")
 
@@ -281,6 +282,130 @@ class LxSourceTests(unittest.TestCase):
         self.assertIn("仅支持网易云", by_name["tx_rejected"]["err"])
         self.assertIn("不支持的操作", by_name["pic_rejected"]["err"])
         self.assertIn("不支持的音质", by_name["bad_quality"]["err"])
+
+
+class LxDedicatedTokenTests(unittest.TestCase):
+    """音源专用令牌（clx_）：签发/轮换/撤销的生命周期与最小权限范围。"""
+
+    def setUp(self):
+        harness.TestPasswordReset.setUp(self)
+        patch = mock.patch.object(cm_server.cm_region, "note")
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.uid = self.make_user()
+        self.session = cm_db.issue_token(self.uid, "Web 设备", "web")
+
+    # ---------- 数据层 ----------
+
+    def test_db_issue_get_revoke(self):
+        self.assertIsNone(cm_db.lx_token_get(self.uid))
+        token = cm_db.lx_token_issue(self.uid)
+        self.assertTrue(token.startswith("clx_"))
+        row = cm_db.lx_token_get(self.uid)
+        self.assertEqual(row["last_seen"], 0)
+        # 哈希口径：库里绝无明文
+        import hashlib
+        with cm_db.connect() as conn:
+            th = conn.execute("SELECT token_hash FROM lx_tokens WHERE user_id=?", (self.uid,)).fetchone()[0]
+        self.assertEqual(th, hashlib.sha256(token.encode()).hexdigest())
+        # 重复签发即轮换：单令牌模型整行替换
+        token2 = cm_db.lx_token_issue(self.uid)
+        self.assertNotEqual(token, token2)
+        self.assertIsNone(cm_db.lx_token_user(token))       # 旧令牌立即失效
+        self.assertIsNotNone(cm_db.lx_token_user(token2))
+        cm_db.lx_token_revoke(self.uid)
+        self.assertIsNone(cm_db.lx_token_get(self.uid))
+        self.assertIsNone(cm_db.lx_token_user(token2))
+
+    def test_db_user_lookup_rejects_sessions_and_disabled(self):
+        # 非专用令牌（如登录会话）不走 lx_tokens 这条链
+        self.assertIsNone(cm_db.lx_token_user(self.session))
+        token = cm_db.lx_token_issue(self.uid)
+        self.assertIsNotNone(cm_db.lx_token_user(token))
+        # 禁用账号即时失效
+        with cm_db.connect() as conn:
+            conn.execute("UPDATE users SET disabled=1 WHERE id=?", (self.uid,))
+        self.assertIsNone(cm_db.lx_token_user(token))
+
+    # ---------- 管理 API ----------
+
+    def test_management_lifecycle(self):
+        st, d = self.call("GET", "/lx/token", token=self.session)
+        self.assertEqual((st, d["enabled"]), (200, False))
+
+        st, d = self.call("POST", "/lx/token", token=self.session)
+        self.assertEqual(st, 200)
+        self.assertTrue(d["created"])
+        self.assertIn("clx_", d["token"])
+        self.assertIn(d["token"], d["sourceUrl"])
+        first = d["token"]
+
+        # 重复生成幂等：只回状态，不再返回明文
+        st, d = self.call("POST", "/lx/token", token=self.session)
+        self.assertEqual((st, d["created"]), (200, False))
+        self.assertNotIn("token", d)
+
+        # 专用令牌不能管理自身（须登录会话）
+        self.assertEqual(self.call("GET", "/lx/token", token=first)[0], 401)
+        self.assertEqual(self.call("POST", "/lx/token/rotate", {"confirm": 1}, token=first)[0], 401)
+
+        # 轮换需要 confirm；成功后旧直链立即失效、新直链可用
+        self.assertEqual(self.call("POST", "/lx/token/rotate", {}, token=self.session)[0], 400)
+        st, d = self.call("POST", "/lx/token/rotate", {"confirm": 1}, token=self.session)
+        self.assertEqual(st, 200)
+        self.assertTrue(d["rotated"])
+        second = d["token"]
+        self.assertNotEqual(first, second)
+        status, _ = self.raw_source(first)
+        self.assertEqual(status, 401)
+        status, script = self.raw_source(second)
+        self.assertEqual(status, 200)
+        self.assertIn(json.dumps(second), script)
+
+        # 状态含使用痕迹
+        st, d = self.call("GET", "/lx/token", token=self.session)
+        self.assertEqual((st, d["enabled"]), (200, True))
+        self.assertGreaterEqual(d["lastSeen"], 0)
+
+        # 撤销需要 confirm；撤销后直链 401、状态回到未启用
+        self.assertEqual(self.call("DELETE", "/lx/token", {}, token=self.session)[0], 400)
+        st, d = self.call("DELETE", "/lx/token", {"confirm": 1}, token=self.session)
+        self.assertEqual((st, d["enabled"]), (200, False))
+        self.assertEqual(self.raw_source(second)[0], 401)
+        self.assertEqual(self.call("GET", "/lx/token", token=self.session)[1]["enabled"], False)
+
+    def test_management_requires_session(self):
+        self.assertEqual(self.call("GET", "/lx/token")[0], 401)   # 未登录
+
+    # ---------- 权限范围 ----------
+
+    def test_dedicated_token_scope_limited(self):
+        clx = cm_db.lx_token_issue(self.uid)
+        # 取链端点接受专用令牌（上游解析 mock 掉，只验证鉴权层）
+        with mock.patch.object(cm_server, "resolve_play_url",
+                               return_value={"url": "https://m804.music.126.net/a.mp3", "level": "exhigh"}):
+            st, d = self.call("GET", "/ncm/song/url?id=186016&level=exhigh", token=clx)
+            self.assertEqual(st, 200)
+            self.assertEqual(d["url"], "https://m804.music.126.net/a.mp3")
+        # 登录会话照常可用（兼容旧直链）
+        with mock.patch.object(cm_server, "resolve_play_url",
+                               return_value={"url": "https://m804.music.126.net/b.mp3", "level": "exhigh"}):
+            st, _ = self.call("GET", "/ncm/song/url?id=186016&level=exhigh", token=self.session)
+            self.assertEqual(st, 200)
+        # 专用令牌访问其它任何端点一律 401
+        for method, path, body in (("GET", "/auth/me", None),
+                                   ("GET", "/auth/sessions", None),
+                                   ("GET", "/plays/recent", None)):
+            with self.subTest(path=path):
+                self.assertEqual(self.call(method, path, body, token=clx)[0], 401)
+
+    def raw_source(self, token):
+        return self.raw_body(f"/lx/source.js?token={token}")
+
+    call = harness.TestPasswordReset.call
+    make_user = harness.TestPasswordReset.make_user
+    _cleanup = harness.TestPasswordReset._cleanup
+    raw_body = LxSourceTests.raw_body
 
 
 if __name__ == "__main__":

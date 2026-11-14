@@ -3,7 +3,7 @@
 CurrentMusic Engine 可以包装成[落雪音乐（LX Music）](https://github.com/lyswhut/lx-music-desktop)的自定义音源：在 LX Music 的「设置 → 自定义源」中通过 URL 导入一条直链，「网易音乐」源的播放地址与歌词即由 Engine 以你的 CurrentMusic 账号解析。
 
 ```
-https://music.20110208.xyz/cm/lx/source.js?token=<你的登录令牌>
+https://music.20110208.xyz/cm/lx/source.js?token=<音源专用令牌>
 ```
 
 直链由 CurrentMusic 网页端「设置 → 服务器 → 落雪音乐音源」生成并复制。脚本导入后生效的能力：
@@ -12,21 +12,43 @@ https://music.20110208.xyz/cm/lx/source.js?token=<你的登录令牌>
 - **lyric**（wy 源）：歌词走 Engine 归一化接口，主歌词、翻译与罗马音按毫秒时间轴转换成 LRC；
 - 其余音源（kw/kg/tx/mg）与动作会明确返回不支持，不会误解析。
 
-## API
+## 专用令牌
+
+直链中的令牌优先使用**音源专用令牌**（`clx_` 前缀，每账号一个）：
+
+- 只能用于 `/lx/source.js` 与 `/ncm/song/url` 两个端点——不能登录、不能读取资料、不能调用任何其它接口；
+- 独立于登录会话：退出登录、修改密码、「下线其他设备」都不会使它失效；
+- 服务端只保存其 sha256 哈希，明文只在生成/轮换时返回一次；网页端会把直链缓存在本机（localStorage）以便随时复制，换设备后可轮换取得新直链；
+- 退出登录之外的失效方式只有两种：**轮换**（旧直链立即作废，返回新直链）与**撤销**（音源功能停用）。
+
+直链也兼容登录会话令牌（早期行为）：它随会话生命周期失效，可在「登录设备」中下线。推荐所有用户改用专用令牌。
+
+## 音源脚本
 
 `GET /cm/lx/source.js` 按查询参数中的个人令牌返回定制的音源脚本。
 
 | 查询参数 | 说明 |
 | --- | --- |
-| `token` | CurrentMusic 个人登录令牌（与 SSE 查询参数同口径），必填 |
+| `token` | 音源专用令牌（`clx_`）或登录会话令牌，必填 |
 
 - 成功返回 HTTP 200，`Content-Type: text/javascript`，头部携带 LX 客户端解析的 `@name/@description/@version/@author` 注释，主体监听 `globalThis.lx` 的 `request` 事件并回连 `/cm/ncm/song/url`（带 `Authorization: Bearer`）与公开的 `/cm/ncm/lyric`。
-- 缺少或失效令牌（退出登录、修改密码、下线设备）返回 HTTP 401；此时重新登录 CurrentMusic 并更新 LX 中的音源直链即可。
+- 缺少或失效令牌返回 HTTP 401；此时重新登录 CurrentMusic 并轮换/生成音源直链即可。
 - 响应声明 `Cache-Control: no-store`：脚本内容因人而异且内嵌令牌，不允许任何中间缓存。
 - 端点按认证入口限速（30 次/分钟/IP）。令牌为高熵随机值，路径本身不泄露额外信息。
 
+## 管理 API
+
+以下端点均需登录会话 Bearer（专用令牌不能管理自身，避免持有直链者永久固化访问权）。
+
+| 端点 | 说明 |
+| --- | --- |
+| `GET /cm/lx/token` | 令牌状态 `{enabled, createdAt, lastSeen}`；不返回明文 |
+| `POST /cm/lx/token` | 生成专用令牌，一次性返回 `{token, sourceUrl}`；已有令牌时幂等返回 `{created:false}` 与状态 |
+| `POST /cm/lx/token/rotate` | 轮换（`{confirm:1}`）：旧直链立即失效，一次性返回新 `{token, sourceUrl}` |
+| `DELETE /cm/lx/token` | 撤销（`{confirm:1}`）：全部落雪客户端的直链立即失效 |
+
 ## 安全边界
 
-- 直链与导入后的脚本内容都等同于登录凭证，**请勿分享给他人**；它只能以你自己的账号取链，不能读取你的网易云 Cookie 或其他凭据。
-- 怀疑泄露时，在「设置 → 登录设备」中下线对应设备（或修改密码），旧直链立即失效。
+- 直链与导入后的脚本内容都等同于「仅限取链」的凭证，仍**请勿分享给他人**；它只能以你自己的账号取链，不能读取你的网易云 Cookie 或其他凭据。
+- 怀疑泄露时轮换令牌即可；彻底停用走撤销。
 - 取链请求仍受[播放音源策略](playback-sources.md)约束：按调用方 IP 隔离缓存、匹配音频须通过完整时长与音频头校验，不会因第三方客户端调用而放宽。

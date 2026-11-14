@@ -220,6 +220,11 @@ export const api = {
   enable2FA: (code) => call('POST', '/auth/2fa/enable', { body: { code }, auth: true }),
   disable2FA: (password, code) => call('POST', '/auth/2fa/disable', { body: { password, code }, auth: true }),
   verify2FA: (challengeToken, code) => call('POST', '/auth/2fa/login', { body: { challengeToken, code } }),
+  // 落雪音源专用令牌：明文只在生成/轮换响应里出现一次，Web 端缓存到 localStorage
+  lxTokenStatus: () => call('GET', '/lx/token', { auth: true }),
+  lxTokenCreate: () => call('POST', '/lx/token', { auth: true }),
+  lxTokenRotate: () => call('POST', '/lx/token/rotate', { body: { confirm: 1 }, auth: true }),
+  lxTokenRevoke: () => call('DELETE', '/lx/token', { body: { confirm: 1 }, auth: true }),
   // 认证/资料
   register: (payload) => call('POST', '/auth/register', { body: { ...payload, ...deviceInfo() } }),
   sendEmailCode: (email) => call('POST', '/auth/email/code', { body: { email } }),

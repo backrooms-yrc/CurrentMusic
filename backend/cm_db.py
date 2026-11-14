@@ -158,6 +158,14 @@ CREATE TABLE IF NOT EXISTS sessions (
   last_seen INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, last_seen);
+-- 落雪音源专用令牌：每账号一条（user_id 主键），轮换即整行替换。
+-- 与 sessions 同口径只存 sha256；明文令牌仅签发时返回一次。
+CREATE TABLE IF NOT EXISTS lx_tokens (
+  user_id INTEGER PRIMARY KEY,
+  token_hash TEXT UNIQUE NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS qq_session_owners (
   token_hash TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL,
@@ -1094,6 +1102,87 @@ def user_by_token(token):
             return None
         user = dict(r)
         user.pop("session_last_seen", None)
+        return user
+    finally:
+        conn.close()
+
+
+# ---------- 落雪音源专用令牌（每账号一条；轮换即替换，撤销即删除） ----------
+
+def lx_token_issue(uid):
+    """签发（或替换）落雪音源专用令牌，返回明文；库中只存 sha256。
+
+    每账号同时只有一个有效令牌：重复签发即轮换，旧令牌立即失效。
+    """
+    import hashlib
+    token = "clx_" + secrets.token_urlsafe(32)
+    th = hashlib.sha256(token.encode()).hexdigest()
+    now = int(time.time())
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT INTO lx_tokens(user_id,token_hash,created_at,last_seen) VALUES(?,?,?,0)"
+            " ON CONFLICT(user_id) DO UPDATE SET token_hash=excluded.token_hash,"
+            " created_at=excluded.created_at, last_seen=0",
+            (uid, th, now))
+        conn.commit()
+    finally:
+        conn.close()
+    return token
+
+
+def lx_token_get(uid):
+    """该账号当前专用令牌的状态（不含明文，明文只在签发时返回）。"""
+    conn = connect()
+    try:
+        r = conn.execute(
+            "SELECT token_hash, created_at, last_seen FROM lx_tokens WHERE user_id=?", (uid,)
+        ).fetchone()
+        return dict(r) if r else None
+    finally:
+        conn.close()
+
+
+def lx_token_revoke(uid):
+    """撤销专用令牌（下线全部使用该直链的落雪客户端）。"""
+    conn = connect()
+    try:
+        conn.execute("DELETE FROM lx_tokens WHERE user_id=?", (uid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def lx_token_user(token):
+    """校验落雪音源专用令牌；last_seen 刷新与活跃记账和 :func:`user_by_token` 同口径。"""
+    import hashlib
+    if not token.startswith("clx_"):
+        return None
+    th = hashlib.sha256(token.encode()).hexdigest()
+    conn = connect()
+    try:
+        r = conn.execute(
+            "SELECT u.*, t.last_seen AS lx_last_seen "
+            "FROM lx_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash=?", (th,)
+        ).fetchone()
+        if not r or r["disabled"]:
+            return None
+        now = int(time.time())
+        day_start = cm_levels.day_start(now)
+        credit = r["activity_at"] < day_start
+        if credit or now - (r["lx_last_seen"] or 0) > 60:
+            cur = conn.execute("UPDATE lx_tokens SET last_seen=MAX(last_seen, ?) WHERE token_hash=?",
+                               (now, th))
+            if not cur.rowcount:
+                return None
+            _record_activity(conn, r["id"], now, day_start)
+            if credit:
+                r = conn.execute("SELECT * FROM users WHERE id=?", (r["id"],)).fetchone()
+            conn.commit()
+        if not r or r["disabled"]:
+            return None
+        user = dict(r)
+        user.pop("lx_last_seen", None)
         return user
     finally:
         conn.close()
