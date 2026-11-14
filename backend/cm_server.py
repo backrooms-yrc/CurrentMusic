@@ -2172,9 +2172,15 @@ def route(handler, method):
         token = q.get("token") or ""
         if not token:
             raise ApiError(401, "缺少 token：请在 CurrentMusic 设置页「落雪音乐音源」获取直链")
-        if not (cm_db.lx_token_user(token) or cm_db.user_by_token(token)):
-            raise ApiError(401, "令牌无效或已下线：请到 CurrentMusic 设置页重新生成音源直链")
-        script = cm_lx.build_source_script(cm_lx.api_base_for(handler), token).encode("utf-8")
+        user = cm_db.lx_token_user(token) or cm_db.user_by_token(token)
+        if user:
+            script = cm_lx.build_source_script(cm_lx.api_base_for(handler), token)
+        else:
+            # 客户端只显示 HTTP 状态码、不显示响应体，裸 401 用户完全无从判断。
+            # 下发一段「直链已失效」的合法脚本，源列表里就能看到明确指引。
+            log.info("落雪音源直链失效（令牌无法校验，已返回提示脚本）")
+            script = cm_lx.build_expired_script()
+        script = script.encode("utf-8")
         handler.send_response(200)
         handler.send_header("Content-Type", "text/javascript; charset=utf-8")
         handler.send_header("Cache-Control", "no-store")

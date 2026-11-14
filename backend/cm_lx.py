@@ -238,3 +238,34 @@ def api_base_for(handler) -> str:
     if not proto:
         proto = "https" if not host.startswith(("localhost", "127.")) else "http"
     return f"{proto}://{host}/cm"
+
+
+# 令牌失效时下发的提示脚本：客户端只显示 HTTP 状态码、不显示响应体，
+# 裸 401 只会变成「下载音源失败（HTTP 401）」；而如果给它一段合法脚本，
+# 源列表里会直接显示下面这段说明，用户能立刻知道该怎么做。
+# 该脚本不声明任何可用音源（sources 为空），因此不会产生错误播放尝试。
+_EXPIRED_TEMPLATE = r"""
+/*!
+ * @name CurrentMusic 流声引擎（直链已失效）
+ * @description ⚠ 直链已失效：请打开 CurrentMusic 网页端「设置 → 服务器 → 落雪音乐音源」重新复制直链，再到本页「从链接导入」覆盖。令牌被轮换、撤销或原登录会话已退出都会导致失效。
+ * @version __SOURCE_VERSION__
+ * @author Rcst20
+ */
+;(function () {
+'use strict'
+var lx = globalThis.lx
+lx.on(lx.EVENT_NAMES.request, function () {
+  return Promise.reject(new Error('音源直链已失效，请到 CurrentMusic 设置页重新获取'))
+})
+lx.send(lx.EVENT_NAMES.inited, {
+  status: true,
+  openDevTools: false,
+  sources: {},
+})
+})()
+""".lstrip("\n")
+
+
+def build_expired_script() -> str:
+    """令牌失效时下发的提示脚本（不含任何令牌，可安全公开返回）。"""
+    return _EXPIRED_TEMPLATE.replace("__SOURCE_VERSION__", SOURCE_VERSION)

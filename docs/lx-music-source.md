@@ -34,7 +34,8 @@ https://music.20110208.xyz/cm/lx/source.js?token=<音源专用令牌>
 | `token` | 音源专用令牌（`clx_`）或登录会话令牌，必填 |
 
 - 成功返回 HTTP 200，`Content-Type: text/javascript`，头部携带 LX 客户端解析的 `@name/@description/@version/@author` 注释，主体监听 `globalThis.lx` 的 `request` 事件并回连 `/cm/ncm/song/url`（带 `Authorization: Bearer`）与公开的 `/cm/ncm/lyric`。
-- 缺少或失效令牌返回 HTTP 401；此时重新登录 CurrentMusic 并轮换/生成音源直链即可。
+- 缺少 `token` 返回 HTTP 401。
+- **令牌无效或已失效**（轮换/撤销后的旧直链、已退出的登录会话）：客户端只显示 HTTP 状态码、不显示响应体，裸 401 会让用户看到「下载音源失败（HTTP 401）」而无从判断。因此这里返回 HTTP 200 的**失效提示脚本**：源列表中直接显示「直链已失效，请到 CurrentMusic 设置页重新复制」的说明，且不声明任何可用音源（不会产生错误播放）。提示脚本不含任何令牌。
 - 响应声明 `Cache-Control: no-store`：脚本内容因人而异且内嵌令牌，不允许任何中间缓存。
 - 端点按认证入口限速（30 次/分钟/IP）。令牌为高熵随机值，路径本身不泄露额外信息。
 

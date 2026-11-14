@@ -237,10 +237,14 @@ class LxSourceTests(unittest.TestCase):
         self.assertEqual(status, 401)
         self.assertIn("缺少 token", body)
 
-    def test_invalid_token_rejected(self):
-        status, body = self.raw_body("/lx/source.js?token=not-a-real-token")
-        self.assertEqual(status, 401)
-        self.assertIn("令牌无效", body)
+    def test_invalid_token_gets_expired_script(self):
+        # 客户端只显示 HTTP 码，裸 401 用户无从判断；改为下发合法提示脚本
+        status, script = self.raw_body("/lx/source.js?token=not-a-real-token")
+        self.assertEqual(status, 200)
+        self.assertIn("直链已失效", script)
+        self.assertIn("设置 → 服务器 → 落雪音乐音源", script)
+        self.assertIn("sources: {}", script)          # 不声明可用源，避免错误播放
+        self.assertNotIn("not-a-real-token", script)  # 绝不回显无效令牌
 
     def test_valid_token_returns_script(self):
         status, script = self.raw_body(f"/lx/source.js?token={self.token}")
@@ -254,10 +258,11 @@ class LxSourceTests(unittest.TestCase):
         self.assertIn("/ncm/song/url", script)
         self.assertIn("/ncm/lyric", script)
 
-    def test_revoked_token_rejected(self):
+    def test_revoked_token_gets_expired_script(self):
         cm_db.revoke_token(self.uid, self.token)
-        status, body = self.raw_body(f"/lx/source.js?token={self.token}")
-        self.assertEqual(status, 401)
+        status, script = self.raw_body(f"/lx/source.js?token={self.token}")
+        self.assertEqual(status, 200)
+        self.assertIn("直链已失效", script)
 
     def test_auth_rate_limit(self):
         for i in range(30):                                  # 30/min 上限用满
@@ -512,8 +517,10 @@ class LxDedicatedTokenTests(unittest.TestCase):
         self.assertTrue(d["rotated"])
         second = d["token"]
         self.assertNotEqual(first, second)
-        status, _ = self.raw_source(first)
-        self.assertEqual(status, 401)
+        status, old_script = self.raw_source(first)
+        self.assertEqual(status, 200)
+        self.assertIn("直链已失效", old_script)     # 旧直链：提示脚本，不含旧令牌
+        self.assertNotIn(json.dumps(first), old_script)
         status, script = self.raw_source(second)
         self.assertEqual(status, 200)
         self.assertIn(json.dumps(second), script)
@@ -523,11 +530,13 @@ class LxDedicatedTokenTests(unittest.TestCase):
         self.assertEqual((st, d["enabled"]), (200, True))
         self.assertGreaterEqual(d["lastSeen"], 0)
 
-        # 撤销需要 confirm；撤销后直链 401、状态回到未启用
+        # 撤销需要 confirm；撤销后直链返回失效提示脚本、状态回到未启用
         self.assertEqual(self.call("DELETE", "/lx/token", {}, token=self.session)[0], 400)
         st, d = self.call("DELETE", "/lx/token", {"confirm": 1}, token=self.session)
         self.assertEqual((st, d["enabled"]), (200, False))
-        self.assertEqual(self.raw_source(second)[0], 401)
+        status, revoked_script = self.raw_source(second)
+        self.assertEqual(status, 200)
+        self.assertIn("直链已失效", revoked_script)
         self.assertEqual(self.call("GET", "/lx/token", token=self.session)[1]["enabled"], False)
 
     def test_management_requires_session(self):
