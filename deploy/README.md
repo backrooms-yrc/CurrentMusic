@@ -35,13 +35,23 @@ automatically installed.
   UI auto-refreshes every 10s; public endpoints are probed every 30s.
   To change coverage, edit `gatus/config.yaml` and `systemctl restart gatus` —
   no UI configuration, everything is declarative. To upgrade Gatus itself:
-  build the upstream source tarball, but first re-apply the subpath frontend
-  patch — set `publicPath: '/status/'` in `web/app/vue.config.js` and prefix
+  build the upstream source tarball, but first re-apply the frontend patches —
+  (a) subpath: set `publicPath: '/status/'` in `web/app/vue.config.js`, prefix
   the `/api/v1`/`/oidc` literals in `web/app/src` with `process.env.BASE_URL`
-  (plus `/apple-touch-icon.png`, `/manifest.json`, `/css/custom.css`,
-  `/favicon.ico` in `web/app/public/index.html`), run `npm ci && npm run build`
-  in `web/app` (outputs into `web/static/`), then
-  `CGO_ENABLED=0 go build` with Go ≥ 1.26 and restart the unit.
+  and prefix `/apple-touch-icon.png`, `/manifest.json`, `/css/custom.css`,
+  `/favicon.ico` in `web/app/public/index.html` with `/status`;
+  (b) localization: the deployed UI is Chinese — re-translate the display
+  strings in `web/app/src` (App/SearchBar/Settings/StatusBadge/EndpointCard/
+  Home/EndpointDetails/SuiteDetails plus the relative-time strings in
+  `utils/time.js`, and `lang="zh-CN"` in `public/index.html`); a mismatched
+  string count means upstream changed wording, adjust accordingly;
+  (c) cache busting: after `npm ci && npm run build` in `web/app`, append
+  `?v=<sha1[:10]>` of each file to the `/status/js|css/...` references in
+  `web/static/index.html` (the bundle has no filename hash and Cloudflare
+  caches by URL; the query forces a fresh fetch after every rebuild). Then
+  `CGO_ENABLED=0 go build` with Go ≥ 1.26 and restart the unit. nginx serves
+  `/status/` with `Cache-Control: no-store`, so new deploys are picked up
+  as soon as the index is fetched.
 
 ## First boot
 
