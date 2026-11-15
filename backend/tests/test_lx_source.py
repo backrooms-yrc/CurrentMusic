@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -596,6 +597,105 @@ class LxDedicatedTokenTests(unittest.TestCase):
 
     def raw_source(self, token):
         return self.raw_body(f"/lx/source.js?token={token}")
+
+    call = harness.TestPasswordReset.call
+    make_user = harness.TestPasswordReset.make_user
+    _cleanup = harness.TestPasswordReset._cleanup
+    raw_body = LxSourceTests.raw_body
+
+
+class LxSharedTokenTests(unittest.TestCase):
+    """公用（内部测试）令牌：多条并存、到期、撤销、最小权限范围。"""
+
+    def setUp(self):
+        harness.TestPasswordReset.setUp(self)
+        patch = mock.patch.object(cm_server.cm_region, "note")
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.uid = self.make_user()
+        self.session = cm_db.issue_token(self.uid, "Web 设备", "web")
+
+    # ---------- 数据层 ----------
+
+    def test_db_issue_list_expire_revoke(self):
+        token = cm_db.lx_shared_token_issue(self.uid, self.uid, label="内测", expires_at=0)
+        self.assertTrue(token.startswith("clx_sh_"))
+        rows = cm_db.lx_shared_token_list()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["label"], "内测")
+        self.assertEqual(rows[0]["revoked"], 0)
+        self.assertIsNotNone(cm_db.lx_shared_token_user(token))
+        # 多条并存：互不影响
+        second = cm_db.lx_shared_token_issue(self.uid, self.uid, label="内测2")
+        self.assertEqual(len(cm_db.lx_shared_token_list()), 2)
+        self.assertTrue(cm_db.lx_shared_token_revoke(rows[0]["id"]))
+        self.assertIsNone(cm_db.lx_shared_token_user(token))          # 被撤销的那条失效
+        self.assertIsNotNone(cm_db.lx_shared_token_user(second))      # 另一条不受影响
+        # 到期时间：过去时刻立即无效
+        expired = cm_db.lx_shared_token_issue(self.uid, self.uid, label="过期", expires_at=1)
+        self.assertIsNone(cm_db.lx_shared_token_user(expired))
+        # 归属账号被禁用 → 立即无效
+        third = cm_db.lx_shared_token_issue(self.uid, self.uid, label="禁用")
+        with cm_db.connect() as conn:
+            conn.execute("UPDATE users SET disabled=1 WHERE id=?", (self.uid,))
+        self.assertIsNone(cm_db.lx_shared_token_user(third))
+
+    # ---------- 管理 API ----------
+
+    def test_admin_endpoints_and_scope(self):
+        # 普通用户无权管理公用令牌
+        self.assertEqual(self.call("GET", "/lx/shared", token=self.session)[0], 403)
+        self.assertEqual(self.call("POST", "/lx/shared", {}, token=self.session)[0], 403)
+        with cm_db.connect() as conn:
+            conn.execute("UPDATE users SET is_admin=1 WHERE id=?", (self.uid,))
+
+        st, d = self.call("POST", "/lx/shared", {"label": "内部测试"}, token=self.session)
+        self.assertEqual(st, 200)
+        shared = d["token"]
+        self.assertTrue(shared.startswith("clx_sh_"))
+        self.assertEqual(d["expiresAt"], 0)
+        self.assertIn(shared, d["sourceUrl"])
+
+        st, d = self.call("GET", "/lx/shared", token=self.session)
+        self.assertEqual(st, 200)
+        self.assertEqual(len(d["items"]), 1)
+        sid = d["items"][0]["id"]
+
+        # 公用令牌可用于拉脚本与取链
+        status, script = self.raw_body(f"/lx/source.js?token={shared}")
+        self.assertEqual(status, 200)
+        self.assertIn(json.dumps(shared), script)
+        with mock.patch.object(cm_server, "resolve_play_url",
+                               return_value={"url": "https://m804.music.126.net/s.mp3", "level": "exhigh"}):
+            st, d = self.call("GET", "/ncm/song/url?id=186016&level=exhigh", token=shared)
+            self.assertEqual(st, 200)
+            self.assertEqual(d["url"], "https://m804.music.126.net/s.mp3")
+
+        # 但不能越权：管理自身、访问账号接口都 401
+        self.assertEqual(self.call("GET", "/lx/shared", token=shared)[0], 401)
+        self.assertEqual(self.call("GET", "/auth/me", token=shared)[0], 401)
+
+        # 撤销后直链下发提示脚本、取链 401
+        st, d = self.call("POST", f"/lx/shared/{sid}/revoke", {}, token=self.session)
+        self.assertEqual(st, 200)
+        status, script = self.raw_body(f"/lx/source.js?token={shared}")
+        self.assertEqual(status, 200)
+        self.assertIn("直链已失效", script)
+        with mock.patch.object(cm_server, "resolve_play_url",
+                               return_value={"url": "https://m804.music.126.net/x.mp3", "level": "exhigh"}):
+            self.assertEqual(self.call("GET", "/ncm/song/url?id=186016&level=exhigh", token=shared)[0], 401)
+        # 重复撤销/未知 id → 404
+        self.assertEqual(self.call("POST", f"/lx/shared/{sid}/revoke", {}, token=self.session)[0], 404)
+        self.assertEqual(self.call("POST", "/lx/shared/99999/delete", {}, token=self.session)[0], 404)
+
+    def test_admin_days_expiry(self):
+        with cm_db.connect() as conn:
+            conn.execute("UPDATE users SET is_admin=1 WHERE id=?", (self.uid,))
+        st, d = self.call("POST", "/lx/shared", {"label": "一天", "days": 1}, token=self.session)
+        self.assertEqual(st, 200)
+        self.assertGreater(d["expiresAt"], time.time() + 86000)
+        self.assertEqual(self.call("POST", "/lx/shared", {"expiresAt": 1},
+                                   token=self.session)[0], 400)   # 过去时间拒绝
 
     call = harness.TestPasswordReset.call
     make_user = harness.TestPasswordReset.make_user

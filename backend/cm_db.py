@@ -166,6 +166,19 @@ CREATE TABLE IF NOT EXISTS lx_tokens (
   created_at INTEGER NOT NULL,
   last_seen INTEGER NOT NULL DEFAULT 0
 );
+-- 公用（内部测试）音源令牌：可多条、可设到期时间（0=手动撤销）、可单独撤销。
+-- 归属账号只决定取链身份；权限与个人令牌相同（仅 /lx/source.js 与 /ncm/song/url）。
+CREATE TABLE IF NOT EXISTS lx_shared_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token_hash TEXT UNIQUE NOT NULL,
+  label TEXT DEFAULT '',
+  user_id INTEGER NOT NULL,
+  created_by INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL DEFAULT 0,
+  revoked INTEGER NOT NULL DEFAULT 0,
+  last_seen INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS qq_session_owners (
   token_hash TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL,
@@ -1183,6 +1196,102 @@ def lx_token_user(token):
             return None
         user = dict(r)
         user.pop("lx_last_seen", None)
+        return user
+    finally:
+        conn.close()
+
+
+# ---------- 落雪音源公用（内部测试）令牌 ----------
+
+def lx_shared_token_issue(user_id, created_by, label="", expires_at=0):
+    """签发公用音源令牌，返回明文；库中只存 sha256，可多条并存、可单独撤销。"""
+    import hashlib
+    token = "clx_sh_" + secrets.token_urlsafe(32)
+    th = hashlib.sha256(token.encode()).hexdigest()
+    conn = connect()
+    try:
+        conn.execute(
+            "INSERT INTO lx_shared_tokens(token_hash,label,user_id,created_by,created_at,expires_at)"
+            " VALUES(?,?,?,?,?,?)",
+            (th, str(label or "")[:120], int(user_id), int(created_by), int(time.time()), int(expires_at or 0)))
+        conn.commit()
+    finally:
+        conn.close()
+    return token
+
+
+def lx_shared_token_list():
+    """全部公用令牌的状态（不含明文），附归属账号用户名；管理员专用。"""
+    conn = connect()
+    try:
+        rows = conn.execute(
+            "SELECT s.id, s.label, s.user_id, s.created_by, s.created_at, s.expires_at,"
+            " s.revoked, s.last_seen, u.username"
+            " FROM lx_shared_tokens s LEFT JOIN users u ON u.id = s.user_id"
+            " ORDER BY s.id DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def lx_shared_token_revoke(token_id):
+    """撤销一条公用令牌；返回是否命中。"""
+    conn = connect()
+    try:
+        cur = conn.execute("UPDATE lx_shared_tokens SET revoked=1 WHERE id=? AND revoked=0", (int(token_id),))
+        conn.commit()
+        return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
+def lx_shared_token_delete(token_id):
+    """彻底删除一条公用令牌（清理用）；返回是否命中。"""
+    conn = connect()
+    try:
+        cur = conn.execute("DELETE FROM lx_shared_tokens WHERE id=?", (int(token_id),))
+        conn.commit()
+        return bool(cur.rowcount)
+    finally:
+        conn.close()
+
+
+def lx_shared_token_user(token):
+    """校验公用令牌：未撤销、未到期、归属账号未禁用。刷新 last_seen 与活跃记账。"""
+    import hashlib
+    if not token.startswith("clx_sh_"):
+        return None
+    th = hashlib.sha256(token.encode()).hexdigest()
+    conn = connect()
+    try:
+        r = conn.execute(
+            "SELECT u.*, s.last_seen AS shared_last_seen, s.revoked AS shared_revoked,"
+            " s.expires_at AS shared_expires"
+            " FROM lx_shared_tokens s JOIN users u ON u.id = s.user_id WHERE s.token_hash=?", (th,)
+        ).fetchone()
+        if not r or r["disabled"] or r["shared_revoked"]:
+            return None
+        now = int(time.time())
+        if r["shared_expires"] and now > r["shared_expires"]:
+            return None
+        day_start = cm_levels.day_start(now)
+        credit = r["activity_at"] < day_start
+        if credit or now - (r["shared_last_seen"] or 0) > 60:
+            cur = conn.execute(
+                "UPDATE lx_shared_tokens SET last_seen=MAX(last_seen, ?) WHERE token_hash=? AND revoked=0",
+                (now, th))
+            if not cur.rowcount:
+                return None
+            _record_activity(conn, r["id"], now, day_start)
+            if credit:
+                r = conn.execute("SELECT * FROM users WHERE id=?", (r["id"],)).fetchone()
+            conn.commit()
+        if not r or r["disabled"]:
+            return None
+        user = dict(r)
+        for key in ("shared_last_seen", "shared_revoked", "shared_expires"):
+            user.pop(key, None)
         return user
     finally:
         conn.close()

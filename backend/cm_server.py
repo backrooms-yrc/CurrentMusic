@@ -1387,15 +1387,16 @@ def require_user(handler):
 
 
 def require_music_user(handler):
-    """音源调用方身份：优先落雪音源专用令牌（clx_），回退登录会话。
+    """音源调用方身份：落雪专用令牌（clx_）、公用令牌（clx_sh_），回退登录会话。
 
-    只用于媒体取链族端点（/ncm/song/url、/lx/source.js）——专用令牌的活动
-    范围被钉死在这两处，拿它访问其它任何接口都会 401。管理专用令牌走
-    ``/lx/token`` 系列，要求真正的登录会话。
+    只用于媒体取链族端点（/ncm/song/url、/lx/source.js）——专用/公用令牌的活动
+    范围被钉死在这两处，拿它访问其它任何接口都会 401。管理令牌走 /lx/token 与
+    /lx/shared 系列，要求真正的登录会话（共享令牌再加管理员校验）。
     """
     auth = handler.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
-        u = cm_db.lx_token_user(auth[7:].strip())
+        raw = auth[7:].strip()
+        u = cm_db.lx_shared_token_user(raw) or cm_db.lx_token_user(raw)
         if u is not None:
             cm_region.note(u["id"], cm_ncm_gateway.client_ip(handler))
             return u
@@ -2172,7 +2173,8 @@ def route(handler, method):
         token = q.get("token") or ""
         if not token:
             raise ApiError(401, "缺少 token：请在 CurrentMusic 设置页「落雪音乐音源」获取直链")
-        user = cm_db.lx_token_user(token) or cm_db.user_by_token(token)
+        user = (cm_db.lx_shared_token_user(token) or cm_db.lx_token_user(token)
+                or cm_db.user_by_token(token))
         if user:
             script = cm_lx.build_source_script(cm_lx.api_base_for(handler), token)
         else:
@@ -2235,6 +2237,50 @@ def route(handler, method):
         cm_db.lx_token_revoke(u["id"])
         log.info("落雪音源令牌撤销 user=%s", u["id"])
         return jresp(handler, 200, {"enabled": False})
+
+    # ---- 公用（内部测试）音源令牌：管理员签发/查看/撤销 ----
+    # 与个人令牌同权限（仅 /lx/source.js 与 /ncm/song/url），可多条并存、可设到期
+    # 时间（expiresAt=0 表示不过期，由管理员手动撤销）。
+    if path == "/lx/shared" and method == "GET":
+        require_admin(handler)
+        return jresp(handler, 200, {"items": cm_db.lx_shared_token_list()}, cache_control="no-store")
+
+    if path == "/lx/shared" and method == "POST":
+        admin = require_admin(handler)
+        b = body or {}
+        try:
+            expires_at = int(b.get("expiresAt") or 0)
+            days = float(b.get("days") or 0)
+        except (TypeError, ValueError):
+            raise ApiError(400, "expiresAt/days 必须是数字")
+        if days > 0:
+            expires_at = int(time.time() + days * 86400)
+        if expires_at and expires_at <= time.time():
+            raise ApiError(400, "到期时间必须晚于当前时间")
+        owner = admin   # 归属账号 = 签发者（仅用于取链身份与审计展示）
+        token = cm_db.lx_shared_token_issue(owner["id"], admin["id"],
+                                           label=b.get("label") or "", expires_at=expires_at)
+        log.info("落雪公用令牌签发 by=%s expiresAt=%s", admin["id"], expires_at)
+        return jresp(handler, 200, {
+            "token": token,
+            "sourceUrl": f"{cm_lx.api_base_for(handler)}/lx/source.js?token={token}",
+            "expiresAt": expires_at,
+        }, cache_control="no-store")
+
+    if path.startswith("/lx/shared/") and method == "POST":
+        admin = require_admin(handler)
+        m = re.fullmatch(r"/lx/shared/(\d+)/(revoke|delete)", path)
+        if not m:
+            raise ApiError(404, "未知操作")
+        token_id, action = int(m.group(1)), m.group(2)
+        if action == "revoke":
+            ok = cm_db.lx_shared_token_revoke(token_id)
+        else:
+            ok = cm_db.lx_shared_token_delete(token_id)
+        if not ok:
+            raise ApiError(404, "令牌不存在或已撤销")
+        log.info("落雪公用令牌 %s id=%s by=%s", action, token_id, admin["id"])
+        return jresp(handler, 200, {"ok": True})
 
     # ======================== 弹窗公告（v1.28.22） ========================
     # 客户端每次打开网页/App 都会拉 /announcements 并弹窗；管理员在管理后台增删改。
@@ -2798,6 +2844,10 @@ def route(handler, method):
             ("POST", "/lx/token", "Bearer", "生成本人专用令牌，一次性返回 `{token, sourceUrl}` 直链；已有令牌时幂等返回现状（`created:false`），找回直链须轮换"),
             ("POST", "/lx/token/rotate", "Bearer", "轮换专用令牌（`{confirm:1}` 二次确认）：旧直链立即失效，一次性返回新 `{token, sourceUrl}`"),
             ("DELETE", "/lx/token", "Bearer", "撤销专用令牌（`{confirm:1}`）：全部落雪客户端的直链立即失效"),
+            ("GET", "/lx/shared", "管理员 Bearer", "列出公用（内部测试）音源令牌状态（不含明文）"),
+            ("POST", "/lx/shared", "管理员 Bearer", "签发公用令牌 `{label, expiresAt|days}`（0/省略=不过期），一次性返回 `{token, sourceUrl}`"),
+            ("POST", "/lx/shared/{id}/revoke", "管理员 Bearer", "撤销指定公用令牌，使用它的直链立即失效"),
+            ("POST", "/lx/shared/{id}/delete", "管理员 Bearer", "删除指定公用令牌记录（撤销后的清理）"),
             ("GET", "/network/lines", "公开", "主站及全部 CDN 镜像线路与服务端 HTTPS 测速结果；measure=0 仅目录；结果缓存 60 秒，perspective=server，不代表用户网络延迟。详细文档 /api-docs/reference/guide-network-lines-api/"),
             ("GET", "/network/probe", "公开", "浏览器线路测速探针：返回 service=CurrentMusic，支持 CORS；页面 /app/auto 从用户设备直接测量 HTTPS 请求耗时"),
             ("GET", "/network/docs", "公开", "兼容入口，302 跳转至 /api-docs/reference/guide-network-lines-api/"),
