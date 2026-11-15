@@ -1772,6 +1772,17 @@ html[data-ui-preset="soaringbird"] .cm-hot-chart { --chart-accent: var(--accent)
 .cm-role-chip i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .cm-role-chip b { margin-left: 2px; }
 .cm-system-note { font-size: calc(11.5px * var(--cm-fs, 1)); opacity: .6; line-height: 1.6; margin-top: 8px; }
+.cm-ai-history { margin-top: 20px; }
+.cm-ai-history-head, .cm-ai-history-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cm-ai-history-head h2 { min-width: 0; overflow-wrap: anywhere; }
+.cm-ai-history-filters { margin-bottom: 10px; }
+.cm-ai-history-list { display: grid; gap: 8px; }
+.cm-ai-history-user {
+  padding: 0; border: 0; background: transparent; color: var(--cm-primary);
+  font: inherit; font-weight: 650; text-align: start; cursor: pointer; word-break: break-word;
+}
+.cm-ai-history-user small { font-weight: 400; }
+.cm-ai-history-text { margin-top: 8px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
 /* ---------- 管理台 · 客户端版本 ---------- */
 .cm-client-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
 @media (min-width: 900px) { .cm-client-grid { grid-template-columns: 1fr 1fr; } }

@@ -277,6 +277,39 @@ def load_history(uid: int, scope: str = "chat"):
         conn.close()
 
 
+def admin_history(uid=None, scope="", before=None, limit=20):
+    """读取当前保留的上下文，按消息 ID 倒序翻页。"""
+    conn = cm_db.connect()
+    try:
+        user = None
+        filters = ["h.created_at >= ?"]
+        params = [int(time.time()) - HISTORY_TTL]
+        if uid is not None:
+            user = conn.execute("SELECT id, username, nickname FROM users WHERE id=?", (uid,)).fetchone()
+            if user is None:
+                return None
+            filters.append("h.user_id = ?")
+            params.append(uid)
+        if scope:
+            filters.append("h.scope = ?")
+            params.append(scope)
+        if before is not None:
+            filters.append("h.id < ?")
+            params.append(before)
+        where = " AND ".join(filters)
+        rows = conn.execute(
+            f"""SELECT h.id, h.user_id AS userId, u.username, u.nickname,
+                       h.scope, h.role, h.content, h.created_at AS createdAt
+                FROM ai_history h JOIN users u ON u.id=h.user_id
+                WHERE {where} ORDER BY h.id DESC LIMIT ?""", [*params, limit + 1]
+        ).fetchall()
+        return {"user": dict(user) if user is not None else None,
+                "items": [dict(row) for row in rows[:limit]],
+                "nextBefore": rows[limit - 1]["id"] if len(rows) > limit else None}
+    finally:
+        conn.close()
+
+
 def append_exchange(uid: int, question: str, answer: str, scope: str = "chat"):
     now = int(time.time())
     turns = [(int(uid), role, text.strip()[:800], scope, now)

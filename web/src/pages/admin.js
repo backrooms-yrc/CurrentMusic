@@ -51,7 +51,7 @@ const TAB_DESC = {
   announcements: '发布与维护客户端弹窗公告',
   devices: '全部在线设备与强制下线',
   clients: 'CurrentMusic 与 CurrentMusicX 版本与更新说明',
-  ai: 'CurrentMusicAI 模型设置与连通性测试',
+  ai: 'CurrentMusicAI 模型设置、连通性测试与对话历史',
   system: '数据量、角色与缓存维护',
 };
 const ROLE_COLORS = ['#6750a4', '#0088cc', '#ff8d28', '#8e8e93'];
@@ -242,6 +242,23 @@ export async function render(el) {
 
       <section class="cm-apane" data-pane="ai" id="pane-ai" hidden>
         <div id="aiBody"></div>
+        <div class="cm-ai-history">
+          <div class="cm-sec-head cm-ai-history-head">
+            <h2 id="aiHistoryTitle" tabindex="-1">最近对话</h2>
+            <mdui-button variant="text" id="aiHistoryUsers">按用户查找</mdui-button>
+          </div>
+          <div class="cm-ai-history-filters">
+            <div class="cm-aseg" id="aiHistoryScopes" role="group" aria-label="对话场景">
+              <button type="button" data-scope="" class="on" aria-pressed="true">全部场景</button>
+              <button type="button" data-scope="chat" aria-pressed="false">聊天室</button>
+              <button type="button" data-scope="player" aria-pressed="false">播放页</button>
+            </div>
+            <mdui-button variant="text" id="aiHistoryReset" hidden>返回最近对话</mdui-button>
+          </div>
+          <div id="aiHistoryList" class="cm-ai-history-list"></div>
+          <div id="aiHistoryStatus" role="status" class="cm-usub"></div>
+          <div class="cm-pager"><mdui-button variant="tonal" id="aiHistoryMore" hidden>加载更早对话</mdui-button></div>
+        </div>
       </section>
 
       <section class="cm-apane" data-pane="system" id="pane-system" hidden>
@@ -328,8 +345,10 @@ export async function render(el) {
     else if (k === 'clients') {
       if (!S.clients) loadClients();
       else requestAnimationFrame(drawClientsChart);
-    } else if (k === 'ai') loadAi();
-    else if (k === 'system') renderSystem();
+    } else if (k === 'ai') {
+      loadAi();
+      loadAiHistory();
+    } else if (k === 'system') renderSystem();
   };
   el.querySelectorAll('.cm-atab').forEach(b => { b.onclick = () => setTab(b.dataset.tab); });
 
@@ -694,6 +713,7 @@ export async function render(el) {
       ];
     }
     const acts = [
+      { k: 'ai-history', label: '查看 AI 对话', icon: 'chat' },
       { k: 'kick', label: u.sessions ? `踢下线（${u.sessions} 台设备）` : '踢下线（无在线设备）', icon: 'logout' },
       ...(meSuper ? [{ k: 'donate', label: '代录捐赠', icon: 'volunteer_activism' }] : []),
       { k: 'pw', label: '重置密码', icon: 'password' },
@@ -714,7 +734,8 @@ export async function render(el) {
           const k = it.dataset.k;
           diag.open = false;
           try {
-            if (k === 'kick') { const r = await api.adminKick(id); toast(`已踢下线（${r.kicked} 个会话）`); await afterUserChange(); }
+            if (k === 'ai-history') viewAiUser(id);
+            else if (k === 'kick') { const r = await api.adminKick(id); toast(`已踢下线（${r.kicked} 个会话）`); await afterUserChange(); }
             else if (k === 'donate') {
               const diag = mdui.dialog({
                 headline: `为「${u.nickname || u.username}」代录捐赠`,
@@ -1160,7 +1181,7 @@ export async function render(el) {
     });
   }
 
-  // ---------- 系统 ----------
+  // ---------- AI 管理 ----------
   const aiBody = el.querySelector('#aiBody');
   let aiBusy = false;
 
@@ -1245,6 +1266,86 @@ export async function render(el) {
     });
   }
 
+  const aiHistoryTitle = el.querySelector('#aiHistoryTitle');
+  const aiHistoryScopes = el.querySelector('#aiHistoryScopes');
+  const aiHistoryList = el.querySelector('#aiHistoryList');
+  const aiHistoryStatus = el.querySelector('#aiHistoryStatus');
+  const aiHistoryMore = el.querySelector('#aiHistoryMore');
+  const aiHistoryReset = el.querySelector('#aiHistoryReset');
+  const aiScopeLabels = { chat: '聊天室', player: '播放页' };
+  let aiUserId = null, aiScope = '', aiHistorySeq = 0;
+
+  function viewAiUser(id) {
+    aiUserId = id;
+    aiScope = '';
+    if (S.tab === 'ai') loadAiHistory();
+    else setTab('ai');
+    aiHistoryTitle.focus();
+  }
+
+  async function loadAiHistory(before = null) {
+    const seq = ++aiHistorySeq;
+    if (!before) {
+      aiHistoryTitle.textContent = aiUserId ? `用户 #${aiUserId} 的对话` : '最近对话';
+      aiHistoryReset.hidden = !aiUserId;
+      aiHistoryScopes.querySelectorAll('[data-scope]').forEach(button => {
+        const active = button.dataset.scope === aiScope;
+        button.classList.toggle('on', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      aiHistoryList.innerHTML = rowSkeleton(3);
+      aiHistoryMore.hidden = true;
+    }
+    aiHistoryStatus.textContent = before ? '正在加载更早对话…' : '';
+    aiHistoryList.setAttribute('aria-busy', 'true');
+    aiHistoryMore.loading = Boolean(before);
+    try {
+      const { user, items, nextBefore } = await api.adminAiHistory({ userId: aiUserId, scope: aiScope, before });
+      if (seq !== aiHistorySeq || !el.isConnected) return;
+      if (!before) {
+        if (user) aiHistoryTitle.textContent = `${user.nickname || user.username} 的对话 · @${user.username}`;
+        aiHistoryList.innerHTML = '';
+      }
+      aiHistoryList.insertAdjacentHTML('beforeend', items.map(item => `
+        <article class="cm-acard cm-ai-history-item">
+          <button type="button" class="cm-ai-history-user" data-ai-user="${esc(item.userId)}">
+            ${esc(item.nickname || item.username)} <small>@${esc(item.username)} · #${esc(item.userId)}</small>
+          </button>
+          <div class="cm-usub">${esc(aiScopeLabels[item.scope] || item.scope)} · ${item.role === 'assistant' ? 'AI 回复' : '用户提问'} · ${fmtStamp(item.createdAt)}</div>
+          <div class="cm-ai-history-text">${esc(item.content)}</div>
+        </article>`).join(''));
+      aiHistoryStatus.textContent = items.length ? '' : before ? '没有更早的对话' : '没有保留的对话';
+      aiHistoryMore.hidden = !nextBefore;
+      aiHistoryMore.onclick = nextBefore ? () => loadAiHistory(nextBefore) : null;
+    } catch (e) {
+      if (seq !== aiHistorySeq || !el.isConnected) return;
+      if (!before) aiHistoryList.innerHTML = '';
+      aiHistoryStatus.textContent = e.message || '对话加载失败';
+    } finally {
+      if (seq === aiHistorySeq) {
+        aiHistoryMore.loading = false;
+        aiHistoryList.removeAttribute('aria-busy');
+      }
+    }
+  }
+
+  aiHistoryScopes.onclick = e => {
+    const button = e.target.closest('[data-scope]');
+    if (!button || button.dataset.scope === aiScope) return;
+    aiScope = button.dataset.scope;
+    loadAiHistory();
+  };
+  aiHistoryList.onclick = e => {
+    const button = e.target.closest('[data-ai-user]');
+    if (button && +button.dataset.aiUser !== aiUserId) viewAiUser(+button.dataset.aiUser);
+  };
+  aiHistoryReset.onclick = () => viewAiUser(null);
+  el.querySelector('#aiHistoryUsers').onclick = () => {
+    setTab('users');
+    el.querySelector('#uq').focus();
+  };
+
+  // ---------- 系统 ----------
   function renderSystem() {
     const box = el.querySelector('#systemBody');
     if (!box) return;
@@ -1312,7 +1413,7 @@ export async function render(el) {
       } else if (S.tab === 'clients') {
         await loadClients();
       } else if (S.tab === 'ai') {
-        await loadAi();
+        await Promise.all([loadAi(), loadAiHistory()]);
       } else if (S.tab === 'system') {
         await loadOverview();
         renderSystem();

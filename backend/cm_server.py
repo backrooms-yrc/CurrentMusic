@@ -2934,6 +2934,7 @@ def route(handler, method):
             ("GET", "/admin/ai", "管理员", "AI 管理：主模型与回退模型的配置状态（仅返回密钥是否已配置）"),
             ("POST", "/admin/ai", "管理员", "保存 z.ai 启用状态与思考强度 {enabled: boolean, effort: low|high|max}"),
             ("POST", "/admin/ai/test", "管理员", "单独测试指定模型的连通性 {provider: zai|deepseek}"),
+            ("GET", "/admin/ai/history", "管理员", "近期 AI 对话消息，支持按 userId、scope 筛选并以 before 翻页"),
             ("GET", "/admin/traffic", "管理员", "站点出站流量（需 CM_TRAFFIC_LOG；服务端 20s 缓存）"),
             ("GET", "/admin/users", "管理员", "用户搜索/分页/排序（含 points、level）；sort=reg/reg_asc/name/active/sessions/likes/plays/role"),
             ("POST", "/admin/users/{id}/progression", "管理员", "为指定账号设置积分和等级 {points,level}，7 表示 Lv.6 Plus"),
@@ -5422,6 +5423,26 @@ def route(handler, method):
         if provider not in ("zai", "deepseek"):
             raise ApiError(400, "模型提供方无效")
         return jresp(handler, 200, cm_ai.probe_provider(provider))
+
+    if path == "/admin/ai/history" and method == "GET":
+        require_admin(handler)
+        uid = q.get("userId")
+        before = q.get("before")
+        scope = q.get("scope", "")
+        try:
+            uid = int(uid) if uid is not None else None
+            before = int(before) if before is not None else None
+            limit = int(q.get("limit", "20"))
+        except ValueError:
+            raise ApiError(400, "用户 ID、分页游标和条数必须是整数") from None
+        if any(value is not None and not 0 < value < 2**63 for value in (uid, before)):
+            raise ApiError(400, "用户 ID 或分页游标无效")
+        if scope not in ("", "chat", "player") or not 1 <= limit <= 50:
+            raise ApiError(400, "对话场景或分页条数无效")
+        result = cm_ai.admin_history(uid=uid, scope=scope, before=before, limit=limit)
+        if result is None:
+            raise ApiError(404, "用户不存在")
+        return jresp(handler, 200, result, cache_control="no-store")
 
     if path == "/admin/overview" and method == "GET":
         require_admin(handler)

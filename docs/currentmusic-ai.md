@@ -108,6 +108,10 @@ CM_AI_EFFORT=none
 
 更新环境文件后重启 `currentmusic` 服务。管理员面板的「AI 管理」可即时启停 z.ai、设置思考强度、分别测试两个模型的连通性。开关和强度保存在数据库中。密钥状态仅显示「已配置」或「未配置」。
 
+「AI 管理 → 最近对话」按最新消息优先显示提问和回复，可筛选聊天室或播放页。点击列表里的用户，或从「用户」列表的用户操作菜单选择「查看 AI 对话」，即可查看该用户的记录。
+
+每个用户在聊天室和播放页各保留最近 7 天内最多 6 轮已保存的问答。清除上下文也会清除管理员列表里对应场景的记录。
+
 ### 管理接口
 
 以下路径均要求 CurrentMusic 管理员 Bearer 会话。
@@ -117,6 +121,9 @@ CM_AI_EFFORT=none
 | `GET /cm/admin/ai` | — | `primary` 含 `model`、`effort`、`enabled`、`configured`，`fallback` 含 `model`、`effort`、`configured` |
 | `POST /cm/admin/ai` | `enabled` 为布尔值，`effort` 为 `low`、`high` 或 `max` | 保存设置并返回同一结构 |
 | `POST /cm/admin/ai/test` | `provider` 为 `zai` 或 `deepseek` | `ok`、`elapsedMs`，失败时附 `error`。测试仅调用指定模型 |
+| `GET /cm/admin/ai/history` | 可选 `userId` 为用户 ID，`scope` 为 `chat` 或 `player`，`limit` 默认 20、范围 1–50，`before` 为上页的 `nextBefore` | `user` 为所选用户的 `{id, username, nickname}`（查看全站时为 `null`），`items` 为消息列表，`nextBefore` 为下一页游标或 `null` |
+
+对话消息字段包括 `id`、`userId`、`username`、`nickname`、`scope`、`role`（`user` 或 `assistant`）、`content`、`createdAt`（Unix 秒）。接口响应禁止缓存。筛选的用户不存在时返回 `404`。
 
 ## 频率与并发
 
@@ -126,7 +133,7 @@ CM_AI_EFFORT=none
 
 ## 隐私说明
 
-问题、近期对话、引用的卡片信息和本轮附带的压缩图片会作为模型输入发送给 z.ai。回退时，这些输入也会发送给原模型服务。联网检索服务接收搜索词与要抓取的网址。聊天室 AI 的最终回答作为普通聊天消息保存。请勿在提问中发送身份证、住址、联系方式等敏感信息。
+问题、近期对话、引用的卡片信息和本轮附带的压缩图片会作为模型输入发送给 z.ai。回退时，这些输入也会发送给原模型服务。联网检索服务接收搜索词与要抓取的网址。聊天室 AI 的最终回答作为普通聊天消息保存。站点管理员可查看聊天室和播放页已保留的 AI 对话正文。请勿在提问中发送身份证、住址、联系方式等敏感信息。
 
 
 ## 系统提示词

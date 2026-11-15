@@ -278,10 +278,13 @@ class TestAdminAi(unittest.TestCase):
         self.enterContext(mock.patch.dict(os.environ, {"CM_AI_ZAI_KEY": "test-primary",
                                                        "CM_AI_KEY": "test-fallback"}))
         cm_db.init()
+        A._init_history()
         uid = cm_db.create_user("ai_admin", "password123", "AI Admin")
         cm_db.set_admin(uid, True)
+        self.admin_id = uid
         self.admin = cm_db.issue_token(uid)
-        self.normal = cm_db.issue_token(cm_db.create_user("ai_user", "password123", "User"))
+        self.normal_id = cm_db.create_user("ai_user", "password123", "User")
+        self.normal = cm_db.issue_token(self.normal_id)
 
     def call(self, method, path, token, body=None):
         encoded = json.dumps(body).encode() if body is not None else b""
@@ -293,6 +296,7 @@ class TestAdminAi(unittest.TestCase):
                 cm_server.route(handler, method)
             except cm_server.ApiError as e:
                 return e.code, {"error": e.msg}
+        self.response_options = response.call_args.kwargs
         return response.call_args.args[1:3]
 
     def test_admin_settings_saved_and_credentials_never_returned(self):
@@ -319,10 +323,56 @@ class TestAdminAi(unittest.TestCase):
         self.assertEqual(upstream.call_args.args[0].full_url, A.ZAI_BASE + "/chat/completions")
 
     def test_non_admin_cannot_read_modify_or_probe(self):
-        for method, path in (("GET", "/admin/ai"), ("POST", "/admin/ai"), ("POST", "/admin/ai/test")):
+        for method, path in (("GET", "/admin/ai"), ("POST", "/admin/ai"), ("POST", "/admin/ai/test"),
+                             ("GET", "/admin/ai/history"),
+                             ("GET", f"/admin/ai/history?userId={self.normal_id}")):
             with self.subTest(method=method, path=path):
                 self.assertEqual(self.call(method, path, self.normal)[0], 403)
                 self.assertEqual(self.call(method, path, "")[0], 401)
+
+    def test_history_paginates_recent_records_without_duplicates(self):
+        old_time = A.time.time() - A.HISTORY_TTL - 5
+        with mock.patch.object(A.time, "time", return_value=old_time):
+            A.append_exchange(self.normal_id, "expired", "expired answer")
+        A.append_exchange(self.normal_id, "older question", "older answer")
+        A.append_exchange(self.admin_id, "newer question", "newer answer", "player")
+        status, first = self.call("GET", "/admin/ai/history?limit=3", self.admin)
+        self.assertEqual(status, 200)
+        self.assertEqual(self.response_options["cache_control"], "no-store")
+        self.assertIsNone(first["user"])
+        self.assertEqual([msg["content"] for msg in first["items"]],
+                         ["newer answer", "newer question", "older answer"])
+        self.assertEqual(first["nextBefore"], first["items"][-1]["id"])
+        self.assertEqual(first["items"][0]["scope"], "player")
+        self.assertEqual(first["items"][0]["role"], "assistant")
+        self.assertEqual(first["items"][0]["username"], "ai_admin")
+
+        A.append_exchange(self.normal_id, "even newer question", "even newer answer")
+        status, second = self.call("GET", f"/admin/ai/history?limit=3&before={first['nextBefore']}", self.admin)
+        self.assertEqual(status, 200)
+        self.assertEqual([msg["content"] for msg in second["items"]], ["older question"])
+        self.assertIsNone(second["nextBefore"])
+
+    def test_history_filters_exact_user_and_scope_and_honors_reset(self):
+        A.append_exchange(self.normal_id, "chat question", "chat answer")
+        A.append_exchange(self.normal_id, "player question", "player answer", "player")
+        A.append_exchange(self.admin_id, "another user's question", "another user's answer", "player")
+        path = f"/admin/ai/history?userId={self.normal_id}&scope=player"
+        status, response = self.call("GET", path, self.admin)
+        self.assertEqual(status, 200)
+        self.assertEqual(response["user"], {"id": self.normal_id, "username": "ai_user", "nickname": "User"})
+        self.assertEqual([(msg["userId"], msg["content"]) for msg in response["items"]],
+                         [(self.normal_id, "player answer"), (self.normal_id, "player question")])
+        A.clear_history(self.normal_id, "player")
+        self.assertEqual(self.call("GET", path, self.admin)[1]["items"], [])
+        self.assertEqual(len(self.call("GET", f"/admin/ai/history?userId={self.normal_id}", self.admin)[1]["items"]), 2)
+
+    def test_history_validates_filters_and_unknown_users(self):
+        for invalid in ("userId=", "userId=0", "before=-1", "before=9223372036854775808",
+                        "scope=unknown", "limit=abc", "limit=0", "limit=51"):
+            with self.subTest(query=invalid):
+                self.assertEqual(self.call("GET", "/admin/ai/history?" + invalid, self.admin)[0], 400)
+        self.assertEqual(self.call("GET", "/admin/ai/history?userId=99999", self.admin)[0], 404)
 
 
 if __name__ == "__main__":
