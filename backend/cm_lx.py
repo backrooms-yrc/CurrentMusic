@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 
 # 音源脚本自身的版本。LX 客户端靠它判断「检查更新」是否需要拉新脚本。
-SOURCE_VERSION = "1.0.3"
+SOURCE_VERSION = "1.0.4"
 
 # 兜底基址：仅在请求头完全推不出对外域名时使用（正常线上永远走 Host 头）。
 DEFAULT_API_BASE = "https://music.20110208.xyz/cm"
@@ -68,21 +68,27 @@ const setTimer = typeof setTimeout === 'function'
 const clearTimer = typeof clearTimeout === 'function'
   ? (t) => { if (t) clearTimeout(t) } : () => {}
 
-// 音质值必须落在 LX 自己的枚举里（common.d.ts: '128k'|'320k'|'flac'|'flac24bit'
-// '192k'|'ape'|'wav'），否则客户端无法映射、会漏掉高档位。其中 flac24bit 就是
-// 客户端的最高档（FLAC Hires / 超清母带），这里映射到 Engine 的 jymaster。
-// handler 另外容忍部分衍生客户端传过的旧档位名（ape/wav 按无损处理），
-// 但它们**不声明**在 qualitys 里，避免任何一个客户端因未知值解析失败。
+// 音质声明按落雪客户端实际支持的档位枚举给出：
+//   - 官方 lx-music-desktop/mobile：wy 白名单为 128k/320k/flac/flac24bit，
+//     多出的值会被客户端过滤，不影响官方端；
+//   - CurrentMusicX 最新 CI（LxSource.kt 的 lxQualities）：
+//     128k/320k/flac/flac24bit/hires/atmos/master，分别显示为
+//     标准/极高/无损/24bit/Hi-Res/高清臻音/超清母带。
+// 'jymaster' 不是任何客户端的音质值，不能写进 qualitys——它是 Engine 的
+// 内部档位名，只能出现在请求映射里（master → jymaster）。
 const QUALITY_LEVELS = {
   '128k': 'standard',
   '320k': 'exhigh',
   'flac': 'lossless',
-  'flac24bit': 'jymaster',   // 超清母带（客户端最高档）
-  '192k': 'exhigh',
+  'flac24bit': 'hires',     // 24bit（Engine 无独立 24bit 档，用 hires 承载）
+  'hires': 'hires',         // Hi-Res
+  'atmos': 'jyeffect',      // 高清臻音
+  'master': 'jymaster',     // 超清母带
+  '192k': 'exhigh',         // 部分客户端的历史档位名
   'ape': 'lossless',
   'wav': 'lossless',
 }
-const qualitys = ['128k', '320k', 'flac', 'flac24bit']
+const qualitys = ['128k', '320k', 'flac', 'flac24bit', 'hires', 'atmos', 'master']
 
 function httpGet(url, needAuth) {
   return new Promise((resolve, reject) => {

@@ -345,7 +345,23 @@ class LxSourceTests(unittest.TestCase):
             dict(name="flac24bit", mode="v2", rawBody=True, source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "186001"}, "type": "flac24bit"},
                  replyPrefix="https://engine.example/cm/ncm/song/url",
-                 replyBody={"url": "https://m804.music.126.net/c.flac", "level": "jymaster"},
+                 replyBody={"url": "https://m804.music.126.net/c.flac", "level": "hires"},
+                 replyStatus=200),
+            # CurrentMusicX 最新 CI 的扩展档位（LxSource.kt lxQualities）
+            dict(name="master", mode="v2", rawBody=True, source="wy", action="musicUrl",
+                 info={"musicInfo": {"songmid": "186001"}, "type": "master"},
+                 replyPrefix="https://engine.example/cm/ncm/song/url",
+                 replyBody={"url": "https://m8.music.126.net/m.flac", "level": "jymaster"},
+                 replyStatus=200),
+            dict(name="atmos", mode="v2", rawBody=True, source="wy", action="musicUrl",
+                 info={"musicInfo": {"songmid": "186001"}, "type": "atmos"},
+                 replyPrefix="https://engine.example/cm/ncm/song/url",
+                 replyBody={"url": "https://m8.music.126.net/a.flac", "level": "jyeffect"},
+                 replyStatus=200),
+            dict(name="hires", mode="v2", rawBody=True, source="wy", action="musicUrl",
+                 info={"musicInfo": {"songmid": "186001"}, "type": "hires"},
+                 replyPrefix="https://engine.example/cm/ncm/song/url",
+                 replyBody={"url": "https://m8.music.126.net/h.flac", "level": "hires"},
                  replyStatus=200),
             # 文档枚举内的 192k（部分客户端用它）→ exhigh
             dict(name="192k", mode="v2", rawBody=True, source="wy", action="musicUrl",
@@ -406,9 +422,11 @@ class LxSourceTests(unittest.TestCase):
         self.assertEqual(out["inited"]["sources"]["wy"]["type"], "music")
         self.assertEqual(out["inited"]["sources"]["wy"]["actions"], ["musicUrl"])
         self.assertEqual(out["inited"]["sources"]["wy"]["qualitys"],
-                         ["128k", "320k", "flac", "flac24bit"])
+                         ["128k", "320k", "flac", "flac24bit", "hires", "atmos", "master"])
+        # 只允许客户端认识的档位值；Engine 内部档位名（jymaster 等）不得出现
+        allowed = ("128k", "320k", "flac", "flac24bit", "hires", "atmos", "master")
         for q in out["inited"]["sources"]["wy"]["qualitys"]:
-            self.assertIn(q, ("128k", "320k", "flac", "flac24bit", "192k", "ape", "wav"))
+            self.assertIn(q, allowed)
 
         by_name = {c["name"]: c for c in out["cases"]}
         # 官方 v2 模式：handler 在所有分支都必须返回 thenable（沙箱直接 .then()）
@@ -419,12 +437,12 @@ class LxSourceTests(unittest.TestCase):
                 self.assertEqual(c["protocol"], "promise", c["name"])
         # 请求 URL / 鉴权头断言（各 musicUrl 用例各发一次取链请求）
         song_calls = [r for r in out["requests"] if "/ncm/song/url" in r["url"]]
-        self.assertEqual(len(song_calls), 7)
+        self.assertEqual(len(song_calls), 10)
         by_level = {r["url"].split("level=")[1] for r in song_calls if "level=" in r["url"]}
-        self.assertEqual(by_level, {"standard", "exhigh", "lossless", "jymaster"})
+        self.assertEqual(by_level, {"standard", "exhigh", "lossless", "hires", "jymaster", "jyeffect"})
         for r in song_calls:
             self.assertEqual(r["options"]["headers"]["Authorization"], "Bearer tok-lx-123")
-        self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 6)   # 含 401 用例
+        self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 9)   # 含 401 用例
         self.assertEqual(sum("id=999" in r["url"] for r in song_calls), 1)
         self.assertEqual(sum("id=x" in r["url"] for r in song_calls), 0)   # tx 源在发请求前即拒绝
         lyric_calls = [r for r in out["requests"] if "/ncm/lyric" in r["url"]]
@@ -437,6 +455,9 @@ class LxSourceTests(unittest.TestCase):
         self.assertEqual(by_name["320k"]["data"], "https://m804.music.126.net/b.mp3")
         self.assertEqual(by_name["flac24bit"]["data"], "https://m804.music.126.net/c.flac")
         self.assertEqual(by_name["192k"]["data"], "https://m804.music.126.net/g.mp3")
+        self.assertEqual(by_name["master"]["data"], "https://m8.music.126.net/m.flac")
+        self.assertEqual(by_name["atmos"]["data"], "https://m8.music.126.net/a.flac")
+        self.assertEqual(by_name["hires"]["data"], "https://m8.music.126.net/h.flac")
         self.assertEqual(by_name["legacy_callback"]["err"], None)
         self.assertEqual(by_name["legacy_callback"]["data"], "https://m804.music.126.net/d.mp3")
         # 失败路径

@@ -8,8 +8,20 @@ https://music.20110208.xyz/cm/lx/source.js?token=<音源专用令牌>
 
 直链由 CurrentMusic 网页端「设置 → 服务器 → 落雪音乐音源」生成并复制。脚本导入后生效的能力：
 
-- **musicUrl**（wy 源）：只声明落雪音质枚举内的 `128k / 320k / flac / flac24bit` 四档（`qualitys` 必须用这些值，否则客户端无法正确映射档位）。其中 **`flac24bit` 就是客户端的最高档**（界面显示 FLAC Hires / 超清母带），映射 Engine 的 `jymaster`；`128k / 320k / flac` 分别映射 `standard / exhigh / lossless`。客户端若传 `192k`、`ape`、`wav` 也按 `exhigh / lossless / lossless` 处理。取链享受注册用户级匹配与[灰色曲目匹配](playback-sources.md)；
-- **取流音质**：`/cm/ncm/song/url` 默认携带**服务端 SVIP Cookie**（见 `cm_ncm.call`），因此**所有注册用户**（无需自行绑定网易云会员）都能取得该账号可用的最高档；实测母带档返回 192kHz/24bit、约 4.5Mbps。请求档位在歌曲没有对应资源时由 Engine 自动降档，不会直接失败；
+- **musicUrl**（wy 源）：声明 `128k / 320k / flac / flac24bit / hires / atmos / master` 七档。官方 lx-music-desktop/mobile 的 wy 白名单只有前四档，多余值由客户端过滤；**CurrentMusicX 最新 CI**（`LxSource.kt` 的 `lxQualities`）支持全部七档，界面显示为 标准 / 极高 / 无损 / 24bit / Hi-Res / 高清臻音 / 超清母带。档位映射：
+
+  | 客户端音质 | Engine level | 说明 |
+  | --- | --- | --- |
+  | `128k` | `standard` | 标准 |
+  | `320k` | `exhigh` | 极高 |
+  | `flac` | `lossless` | 无损 |
+  | `flac24bit` | `hires` | 24bit（Engine 无独立 24bit 档） |
+  | `hires` | `hires` | Hi-Res |
+  | `atmos` | `jyeffect` | 高清臻音 |
+  | `master` | `jymaster` | 超清母带 |
+
+  客户端若传 `192k`/`ape`/`wav` 亦按 `exhigh`/`lossless`/`lossless` 处理。**注意 `qualitys` 里绝不能出现 `jymaster` 等 Engine 内部档位名**，客户端不认识会漏掉对应档位。
+- **取流音质**：`/cm/ncm/song/url` 默认携带**服务端 SVIP Cookie**（见 `cm_ncm.call`），因此**所有注册用户**（无需自行绑定网易云会员）都能取得该账号可用的最高档；实测母带档返回 192kHz/24bit、约 4.5Mbps。请求档位在歌曲没有对应资源时由 Engine 自动降档，不会直接失败；CurrentMusicX 的「自动最高」按声明档位从高到低尝试，并在单档解析失败时自动换下一档。
 - **lyric**（wy 源）：歌词走 Engine 归一化接口，主歌词、翻译与罗马音按毫秒时间轴转换成 LRC。官方客户端的 `wy` 动作白名单只开放 `musicUrl`，因此不在 `inited` 中声明；支持该协议的衍生客户端可直接调用；
 - 其余音源（kw/kg/tx/mg）与动作会明确返回不支持，不会误解析。
 
