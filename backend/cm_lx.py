@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 
 # 音源脚本自身的版本。LX 客户端靠它判断「检查更新」是否需要拉新脚本。
-SOURCE_VERSION = "1.0.1"
+SOURCE_VERSION = "1.0.2"
 
 # 兜底基址：仅在请求头完全推不出对外域名时使用（正常线上永远走 Host 头）。
 DEFAULT_API_BASE = "https://music.20110208.xyz/cm"
@@ -40,7 +40,7 @@ REQUEST_TIMEOUT_MS = 20000
 _SCRIPT_TEMPLATE = r"""
 /*!
  * @name CurrentMusic 流声引擎
- * @description CurrentMusic Engine 官方落雪音乐音源：注册用户级取链、自动音质、灰色曲目匹配与逐字歌词。
+ * @description CurrentMusic Engine 官方落雪音乐音源：服务端 SVIP 取流（所有注册用户享最高档）、自动音质、灰色曲目匹配与逐字歌词。
  * @version __SOURCE_VERSION__
  * @author Rcst20
  * @homepage https://music.20110208.xyz/home/engine/
@@ -68,14 +68,22 @@ const setTimer = typeof setTimeout === 'function'
 const clearTimer = typeof clearTimeout === 'function'
   ? (t) => { if (t) clearTimeout(t) } : () => {}
 
-// LX 音质档 → Engine /ncm/song/url 的 level（Engine 不支持 192k，故不声明）。
+// LX 音质档 → Engine /ncm/song/url 的 level。
+// 官方客户端的 wy 白名单只有前四档；能展示更多档位的衍生客户端可直接选
+// hires / jymaster（引擎侧由服务端 SVIP cookie 取流，所有注册用户都可用）。
+// 192k 是部分衍生客户端的旧档位名，映射到 exhigh。
 const QUALITY_LEVELS = {
   '128k': 'standard',
   '320k': 'exhigh',
   'flac': 'lossless',
   'flac24bit': 'jymaster',
+  '192k': 'exhigh',
+  'hires': 'hires',
+  'jymaster': 'jymaster',
 }
-const qualitys = ['128k', '320k', 'flac', 'flac24bit']
+// 声明顺序沿用 LX 的「低 → 高」。官方客户端会按自身白名单取交集（仍是四档），
+// 支持更多档位的客户端则能直接看到母带 / Hi-Res。
+const qualitys = ['128k', '320k', 'flac', 'flac24bit', 'hires', 'jymaster']
 
 function httpGet(url, needAuth) {
   return new Promise((resolve, reject) => {
@@ -174,7 +182,7 @@ globalThis.lx.on(EVENT_NAMES.request, ({ source, action, info, callback }) => {
     case 'musicUrl':
       if (source !== 'wy') {
         work = fail(cb, 'CurrentMusic 音源目前仅支持网易云（wy）音源')
-      } else if (!info || qualitys.indexOf(info.type) < 0) {
+      } else if (!info || !Object.prototype.hasOwnProperty.call(QUALITY_LEVELS, info.type)) {
         work = fail(cb, '不支持的音质：' + (info && info.type))
       } else {
         work = musicUrl(info.musicInfo, info.type)

@@ -347,6 +347,23 @@ class LxSourceTests(unittest.TestCase):
                  replyPrefix="https://engine.example/cm/ncm/song/url",
                  replyBody={"url": "https://m804.music.126.net/c.flac", "level": "jymaster"},
                  replyStatus=200),
+            # 扩展高档位：能展示更多档位的客户端可直接请求母带 / Hi-Res
+            dict(name="hires", mode="v2", rawBody=True, source="wy", action="musicUrl",
+                 info={"musicInfo": {"songmid": "186001"}, "type": "hires"},
+                 replyPrefix="https://engine.example/cm/ncm/song/url",
+                 replyBody={"url": "https://m804.music.126.net/e.flac", "level": "hires"},
+                 replyStatus=200),
+            dict(name="jymaster", mode="v2", rawBody=True, source="wy", action="musicUrl",
+                 info={"musicInfo": {"songmid": "186001"}, "type": "jymaster"},
+                 replyPrefix="https://engine.example/cm/ncm/song/url",
+                 replyBody={"url": "https://m804.music.126.net/f.flac", "level": "jymaster"},
+                 replyStatus=200),
+            # 衍生客户端的旧档位名 192k → exhigh
+            dict(name="192k", mode="v2", rawBody=True, source="wy", action="musicUrl",
+                 info={"musicInfo": {"songmid": "186001"}, "type": "192k"},
+                 replyPrefix="https://engine.example/cm/ncm/song/url",
+                 replyBody={"url": "https://m804.music.126.net/g.mp3", "level": "exhigh"},
+                 replyStatus=200),
             # 老式 callback 运行时（body 为字符串）也要能解析
             dict(name="legacy_callback", mode="callback", source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "186001"}, "type": "320k"},
@@ -379,7 +396,7 @@ class LxSourceTests(unittest.TestCase):
             dict(name="pic_rejected", mode="v2", source="wy", action="pic",
                  info={"musicInfo": {"songmid": "186001"}}),
             dict(name="bad_quality", mode="v2", source="wy", action="musicUrl",
-                 info={"musicInfo": {"songmid": "186001"}, "type": "192k"}),
+                 info={"musicInfo": {"songmid": "186001"}, "type": "999k"}),
         ]
         with tempfile.TemporaryDirectory() as tmp:
             script_path = os.path.join(tmp, "lx-source.js")
@@ -401,7 +418,7 @@ class LxSourceTests(unittest.TestCase):
         self.assertEqual(out["inited"]["sources"]["wy"]["type"], "music")
         self.assertEqual(out["inited"]["sources"]["wy"]["actions"], ["musicUrl"])
         self.assertEqual(out["inited"]["sources"]["wy"]["qualitys"],
-                         ["128k", "320k", "flac", "flac24bit"])
+                         ["128k", "320k", "flac", "flac24bit", "hires", "jymaster"])
 
         by_name = {c["name"]: c for c in out["cases"]}
         # 官方 v2 模式：handler 在所有分支都必须返回 thenable（沙箱直接 .then()）
@@ -410,15 +427,16 @@ class LxSourceTests(unittest.TestCase):
                 self.assertEqual(c["protocol"], "callback")
             else:
                 self.assertEqual(c["protocol"], "promise", c["name"])
-        # 请求 URL / 鉴权头断言（三个 v2 成功/失败用例 + 一个 callback 用例各发一次）
+        # 请求 URL / 鉴权头断言（各 musicUrl 用例各发一次取链请求）
         song_calls = [r for r in out["requests"] if "/ncm/song/url" in r["url"]]
-        self.assertEqual(len(song_calls), 6)
+        self.assertEqual(len(song_calls), 9)
         by_level = {r["url"].split("level=")[1] for r in song_calls if "level=" in r["url"]}
-        self.assertEqual(by_level, {"standard", "exhigh", "lossless", "jymaster"})
+        self.assertEqual(by_level, {"standard", "exhigh", "lossless", "jymaster", "hires"})
         for r in song_calls:
             self.assertEqual(r["options"]["headers"]["Authorization"], "Bearer tok-lx-123")
-        self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 5)
+        self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 8)   # 含 401 用例
         self.assertEqual(sum("id=999" in r["url"] for r in song_calls), 1)
+        self.assertEqual(sum("id=x" in r["url"] for r in song_calls), 0)   # tx 源在发请求前即拒绝
         lyric_calls = [r for r in out["requests"] if "/ncm/lyric" in r["url"]]
         self.assertEqual(len(lyric_calls), 1)
         self.assertNotIn("Authorization", lyric_calls[0]["options"]["headers"])   # 公开接口不带令牌
@@ -428,6 +446,9 @@ class LxSourceTests(unittest.TestCase):
         self.assertEqual(by_name["128k"]["data"], "https://m804.music.126.net/a.mp3")
         self.assertEqual(by_name["320k"]["data"], "https://m804.music.126.net/b.mp3")
         self.assertEqual(by_name["flac24bit"]["data"], "https://m804.music.126.net/c.flac")
+        self.assertEqual(by_name["hires"]["data"], "https://m804.music.126.net/e.flac")
+        self.assertEqual(by_name["jymaster"]["data"], "https://m804.music.126.net/f.flac")
+        self.assertEqual(by_name["192k"]["data"], "https://m804.music.126.net/g.mp3")
         self.assertEqual(by_name["legacy_callback"]["err"], None)
         self.assertEqual(by_name["legacy_callback"]["data"], "https://m804.music.126.net/d.mp3")
         # 失败路径
