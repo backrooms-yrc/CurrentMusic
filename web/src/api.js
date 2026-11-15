@@ -261,6 +261,9 @@ export const api = {
 
   // 管理员
   adminOverview: () => call('GET', '/admin/overview', { auth: true }),
+  adminAi: () => call('GET', '/admin/ai', { auth: true }),
+  adminSaveAi: (enabled, effort) => call('POST', '/admin/ai', { body: { enabled, effort }, auth: true }),
+  adminTestAi: provider => call('POST', '/admin/ai/test', { body: { provider }, auth: true }),
   // 官方捐赠：信息/提交（金额为用户自报，交易单号全站唯一）
   donationInfo: () => call('GET', '/donation/info', { auth: true }),
   donationSubmit: (amount, txnId, note) => call('POST', '/donation', { body: { amount, txnId, note }, auth: true }),

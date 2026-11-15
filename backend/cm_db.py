@@ -189,6 +189,11 @@ CREATE TABLE IF NOT EXISTS cache (
   v TEXT NOT NULL,
   expires INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ai_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  zai_enabled INTEGER NOT NULL CHECK (zai_enabled IN (0, 1)),
+  zai_effort TEXT NOT NULL CHECK (zai_effort IN ('low', 'high', 'max'))
+);
 CREATE INDEX IF NOT EXISTS idx_likes_song ON likes(ncm_id);
 CREATE INDEX IF NOT EXISTS idx_favs_user ON favs(user_id);
 CREATE INDEX IF NOT EXISTS idx_pl_owner ON playlists(user_id);
@@ -457,6 +462,19 @@ def connect():
     # PRAGMA journal_mode=WAL，高频缓存读会反复申请库锁，高峰期可能被拖住。
     conn.execute("PRAGMA busy_timeout=8000")
     return conn
+
+
+def get_ai_settings():
+    with connect() as conn:
+        row = conn.execute("SELECT zai_enabled, zai_effort FROM ai_settings WHERE id=1").fetchone()
+    return (bool(row[0]), row[1]) if row else (True, "max")
+
+
+def set_ai_settings(zai_enabled: bool, zai_effort: str):
+    with connect() as conn:
+        conn.execute("""INSERT INTO ai_settings(id, zai_enabled, zai_effort) VALUES (1, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET zai_enabled=excluded.zai_enabled,
+                        zai_effort=excluded.zai_effort""", (zai_enabled, zai_effort))
 
 
 SEARCH_HISTORY_LIMIT = 10

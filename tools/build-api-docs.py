@@ -43,7 +43,7 @@ GUIDES = {
     'passkeys-api': '通行密钥登录与绑定',
     'two-factor-api': '登录两步验证', 'passport-api': '通行证完整接入', 'password-api': '密码找回与修改', 'lyrics-api': '歌词与逐字轴',
     'private-roaming-api': '私人漫游', 'play-history-sync': '网易云听歌历史同步',
-    'currentmusic-ai': '聊天 AI 与 SSE', 'chat-api': '聊天室消息、SSE 与互动',
+    'currentmusic-ai': '聊天 AI、SSE 与模型管理', 'chat-api': '聊天室消息、SSE 与互动',
     'share-api': '分享元数据与图片',
     'engine-badge-api': '流声引擎署名徽章',
     'lx-music-source': '落雪音乐自定义音源',
@@ -209,6 +209,8 @@ def endpoint_text(method, path, node, title, access=None):
     text = [f'## {method} /cm{path}', '', title, '', f'**权限**：{permission}。', '']
     if path.startswith('/rooms'):
         text += ['请求与响应细节见[一起听房间 API 与同步协议](guide-rooms-design.md)。', '']
+    if path.startswith('/admin/ai'):
+        text += ['配置与响应字段见[CurrentMusicAI 管理接口](guide-currentmusic-ai.md#管理接口)。', '']
     if method == 'PATCH':
         text += ['> 路由分支含 PATCH 别名，但当前 HTTP Handler 没有实现 do_PATCH；公网请使用同路径的 PUT，PATCH 不作为可用入口承诺。', '']
     path_params = re.findall(r'\{([^}]+)\}', path)

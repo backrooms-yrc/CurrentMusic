@@ -32,7 +32,7 @@
 
 - 同一条消息可以带一张聊天图片再 `@CurrentMusicAI`；也可以只发图 + `@`，AI 默认会描述图片。
 - 服务端会把图片（最长边压到 1280px、JPEG）编码成 data URL，作为视觉输入随本轮问题
-  发给 DeepSeek；支持识别画面内容与图中文字。
+  发送给回答所用的模型，可识别画面内容与图中文字。
 - 点击输入框上方的「猜你想问」可直接选「这张图里有什么？」「提取图片里的文字」
   「根据这张图推荐几首歌」。
 - 图片只在**当前这一轮**作为视觉输入发送；历史里保留一条「（附带图片）」文本标记，
@@ -86,36 +86,37 @@ curl -N -X POST https://music.example.com/cm/ai/live \
 
 ## 模型与联网
 
-- 模型提供商：**深度求索（DeepSeek）**
-- 模型：`deepseek-flash`
-- DeepSeek 工具：`POST https://api.deepseek.com/v1/tools/search`（联网搜索）与
-  `POST https://api.deepseek.com/v1/tools/fetch`（抓取网页正文）
+- 聊天室与播放页优先使用 **z.ai** 的 `glm-5.3-flash`，默认 `reasoning_effort: max`（最高）。
+- 主模型超时、请求失败、流式响应中断或无有效回答时，清除本轮已显示的正文，自动用原模型重答。原模型由 `CM_AI_MODEL` 指定，默认 `deepseek-flash`。
+- 联网搜索与网页抓取沿用 `CM_AI_BASE` 下的 `/tools/search` 与 `/tools/fetch`。
 - 站内工具：`search_music`（搜歌曲/专辑/歌手/歌单，供 AI 找可附卡片的条目）与
   `attach_card`（附卡，服务端校验来源）
 - 服务端按「模型 → 工具调用 → 工具结果 → 模型」循环，最多 4 轮；
   单次请求最多搜索 3 次、抓取 1 个网页；回答约 600 字（硬上限 800，按句子边界截断）。
-- **思考强度**：`reasoning_effort` 默认 **`high`**，可用
-  `CM_AI_EFFORT=none|low|high|max` 调整。
-  - `none`：关闭思考，最快最省，但实测自然提问下可能**跳过联网搜索**、直接凭模型记忆回答；
-  - `low`：开启思考但预算较少，仍可能漏掉搜索；
-  - `high`（推荐）：联网搜索/抓取的触发最稳定，首轮推理 token 约 20–130，成本和延迟增量
-    远小于一次漏搜带来的错误回答；
-  - `max`：更深入，适合复杂研究型问题，日常问答没必要。
+- 原模型的思考强度由 `CM_AI_EFFORT` 设置，默认为 `high`，可用 `none`、`low`、`high` 或 `max`。
 
 ## 配置
 
-密钥只从环境变量读取，**不写入仓库**：
+在服务使用的受限 `EnvironmentFile`（如 `/etc/currentmusic/backend.env`，权限 `0600`）中配置模型密钥。
 
 ```ini
-# /etc/systemd/system/currentmusic.service.d/ai.conf  (0600)
-[Service]
-Environment=CM_AI_KEY=sk-...
-Environment=CM_AI_MODEL=deepseek-flash
-Environment=CM_AI_EFFORT=high
+CM_AI_ZAI_KEY=
+CM_AI_KEY=
+CM_AI_MODEL=deepseek-flash
+CM_AI_EFFORT=high
 ```
 
-修改后 `systemctl daemon-reload && systemctl restart currentmusic`。
-未配置密钥时，AI 账号会回复「AI 助手还没接入模型，请联系管理员配置 DeepSeek。」
+更新环境文件后重启 `currentmusic` 服务。管理员面板的「AI 管理」可即时启停 z.ai、设置思考强度、分别测试两个模型的连通性。开关和强度保存在数据库中。密钥状态仅显示「已配置」或「未配置」。
+
+### 管理接口
+
+以下路径均要求 CurrentMusic 管理员 Bearer 会话。
+
+| 方法与路径 | 请求 | 响应 |
+| --- | --- | --- |
+| `GET /cm/admin/ai` | — | `primary` 含 `model`、`effort`、`enabled`、`configured`，`fallback` 含 `model`、`effort`、`configured` |
+| `POST /cm/admin/ai` | `enabled` 为布尔值，`effort` 为 `low`、`high` 或 `max` | 保存设置并返回同一结构 |
+| `POST /cm/admin/ai/test` | `provider` 为 `zai` 或 `deepseek` | `ok`、`elapsedMs`，失败时附 `error`。测试仅调用指定模型 |
 
 ## 频率与并发
 
@@ -125,10 +126,7 @@ Environment=CM_AI_EFFORT=high
 
 ## 隐私说明
 
-用户引用的卡片信息（类型、名称、歌手/作者、ID）、问题文本会发送给 DeepSeek
-及其联网检索工具；**@AI 的消息附带图片时，压缩后的图片也会发送给 DeepSeek 的
-视觉输入**。AI 的回答作为一条普通聊天消息保存在聊天室。请勿在提问中发送
-身份证、住址、联系方式等敏感图片。
+问题、近期对话、引用的卡片信息和本轮附带的压缩图片会作为模型输入发送给 z.ai。回退时，这些输入也会发送给原模型服务。联网检索服务接收搜索词与要抓取的网址。聊天室 AI 的最终回答作为普通聊天消息保存。请勿在提问中发送身份证、住址、联系方式等敏感信息。
 
 
 ## 系统提示词

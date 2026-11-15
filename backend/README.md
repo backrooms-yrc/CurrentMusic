@@ -14,7 +14,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
   有官方 LRC 正文时先复核候选歌词版本，
   最后才回退到自研按行时长估算
 - 播放与社区：最近播放/时长、点赞/收藏、歌单、发现页帖子、公共聊天室（SSE）
-- 播放页问 AI：DeepSeek + 联网 Search/Fetch + 站内搜歌 + 卡片
+- 播放页问 AI：z.ai 主模型、DeepSeek 自动回退、联网搜索/抓取、站内搜歌与卡片
 - 分享：歌曲分享元数据与服务端分享图（Pillow + segno，可选）
 - CurrentStation 通行证：OAuth 2.0 Authorization Code + PKCE
 - IP 属地、CDN 边缘健康度、限速与审计
@@ -32,7 +32,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
     可执行 `pip install -r deploy/requirements-optional.txt`，并安装 Noto CJK 字体
   - SMTP：邮箱验证码
   - 短信 webhook：手机验证码
-  - DeepSeek API key：AI 助手
+  - z.ai 与 DeepSeek API key：AI 助手
   - LDDC（GPL-3.0，独立进程）：为没有官方 YRC 的歌曲补真实逐字歌词；
     运行 `deploy/install-lddc.sh` 一键安装，不安装则继续使用自研估算轴
   - Nginx/Caddy：反向代理与 SSE
@@ -77,7 +77,8 @@ python3 backend/cm_server.py
 | `CM_NCM_COOKIE` | `<CM_DATA_DIR>/ncm-cookie` | 网易云 cookie 文件 |
 | `CM_NCM_MATCH_SOURCE` | 空（上游自动选择） | 官方取址失败后的单个匹配音源；须由上游支持，见 [播放音源说明](../docs/playback-sources.md) |
 | `CM_SEARCH_CATALOG` | `<CM_DATA_DIR>/search-catalog.json` | 可选的公开专辑曲目索引；仅含元数据，不含用户资料或音频 |
-| `CM_AI_KEY` | 空 | DeepSeek API key；空则 AI 降级 |
+| `CM_AI_ZAI_KEY` | 空 | z.ai 主模型 `glm-5.3-flash` 的 API key，默认最高思考强度 |
+| `CM_AI_KEY` | 空 | 原模型及联网搜索/抓取的 API key |
 | `CM_AI_BASE` | `https://api.deepseek.com/v1` | 模型 API |
 | `CM_AI_MODEL` | `deepseek-flash` | 模型名 |
 | `CM_AI_EFFORT` | `high` | `none/low/high/max` |

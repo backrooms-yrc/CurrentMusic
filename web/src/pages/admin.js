@@ -1,4 +1,4 @@
-// 管理员面板：概览 / 用户 / 公告 / 设备 / 系统（仅管理员可用）
+// 管理员面板（仅管理员可用）
 //
 // 这页的数据量小但区块多，旧实现每次搜索/分页/操作都 render(el) 整页重画：
 // 输入框失焦、TAB 位置丢失、图表闪一下白屏。现在页面只渲染一次外壳，
@@ -41,6 +41,7 @@ const TABS = [
   { k: 'announcements', label: '公告', icon: 'campaign' },
   { k: 'devices', label: '设备', icon: 'devices' },
   { k: 'clients', label: '客户端', icon: 'phone_android' },
+  { k: 'ai', label: 'AI 管理', icon: 'auto_awesome' },
   { k: 'system', label: '系统', icon: 'settings' },
 ];
 const TAB_DESC = {
@@ -50,6 +51,7 @@ const TAB_DESC = {
   announcements: '发布与维护客户端弹窗公告',
   devices: '全部在线设备与强制下线',
   clients: 'CurrentMusic 与 CurrentMusicX 版本与更新说明',
+  ai: 'CurrentMusicAI 模型设置与连通性测试',
   system: '数据量、角色与缓存维护',
 };
 const ROLE_COLORS = ['#6750a4', '#0088cc', '#ff8d28', '#8e8e93'];
@@ -238,6 +240,10 @@ export async function render(el) {
         <div id="clientsBody">${clientsSkeleton()}</div>
       </section>
 
+      <section class="cm-apane" data-pane="ai" id="pane-ai" hidden>
+        <div id="aiBody"></div>
+      </section>
+
       <section class="cm-apane" data-pane="system" id="pane-system" hidden>
         <div id="systemBody"></div>
       </section>
@@ -322,7 +328,7 @@ export async function render(el) {
     else if (k === 'clients') {
       if (!S.clients) loadClients();
       else requestAnimationFrame(drawClientsChart);
-    }
+    } else if (k === 'ai') loadAi();
     else if (k === 'system') renderSystem();
   };
   el.querySelectorAll('.cm-atab').forEach(b => { b.onclick = () => setTab(b.dataset.tab); });
@@ -1155,6 +1161,90 @@ export async function render(el) {
   }
 
   // ---------- 系统 ----------
+  const aiBody = el.querySelector('#aiBody');
+  let aiBusy = false;
+
+  async function loadAi() {
+    if (aiBusy) return;
+    aiBusy = true;
+    aiBody.innerHTML = rowSkeleton(2);
+    try {
+      renderAi(await api.adminAi());
+    } catch (e) {
+      aiBody.innerHTML = `<div class="cm-empty">${esc(e.message || '读取 AI 配置失败')}</div>`;
+    } finally {
+      aiBusy = false;
+    }
+  }
+
+  function renderAi({ primary, fallback }) {
+    const effortLabel = { low: '低', high: '高', max: '最高', none: '关闭' };
+    const modelCard = (provider, name, role, model, controls) => `
+      <div class="cm-acard cm-client-card">
+        <div class="cm-client-head">
+          <div class="cm-client-id">
+            <div class="cm-client-name">${name}</div>
+            <div class="cm-client-sub">${role}</div>
+          </div>
+          <span class="cm-tag ${model.configured ? '' : 'banned'}">${model.configured ? '密钥已配置' : '密钥未配置'}</span>
+        </div>
+        <div class="cm-client-kv">
+          <div><span>模型</span><b>${esc(model.model)}</b></div>
+          <div><span>当前思考强度</span><b>${esc(effortLabel[model.effort] || model.effort)}</b></div>
+        </div>
+        ${controls}
+        <div class="cm-client-actions">
+          <mdui-button variant="tonal" data-ai-test="${provider}" ${model.configured ? '' : 'disabled'}>测试连通性</mdui-button>
+          <span class="cm-usub" role="status"></span>
+        </div>
+      </div>`;
+    aiBody.innerHTML = `<div class="cm-client-grid">
+      ${modelCard('zai', 'z.ai', '主模型', primary, `
+        <div class="cm-client-actions">
+          <mdui-switch id="aiEnabled" aria-label="启用 z.ai" ${primary.enabled ? 'checked' : ''}></mdui-switch>
+          <span>启用 z.ai</span>
+        </div>
+        <div class="cm-client-actions">
+          <mdui-segmented-button-group id="aiEffort" aria-label="z.ai 思考强度" selects="single" value="${esc(primary.effort)}">
+            ${['low', 'high', 'max'].map(effort => `<mdui-segmented-button value="${effort}">${effortLabel[effort]}</mdui-segmented-button>`).join('')}
+          </mdui-segmented-button-group>
+          <mdui-button variant="filled" id="aiSave">保存设置</mdui-button>
+        </div>`)}
+      ${modelCard('deepseek', 'DeepSeek', '回退模型 · z.ai 关闭或请求失败时使用', fallback, '')}
+    </div>`;
+
+    const enabled = aiBody.querySelector('#aiEnabled');
+    const effort = aiBody.querySelector('#aiEffort');
+    const save = aiBody.querySelector('#aiSave');
+    save.onclick = async () => {
+      const selection = effort.value || primary.effort;
+      aiBusy = save.loading = enabled.disabled = effort.disabled = true;
+      try {
+        renderAi(await api.adminSaveAi(enabled.checked, selection));
+        toast('AI 设置已保存');
+      } catch (e) {
+        toast(e.message || '保存 AI 设置失败');
+      } finally {
+        aiBusy = save.loading = enabled.disabled = effort.disabled = false;
+      }
+    };
+    aiBody.querySelectorAll('[data-ai-test]').forEach(btn => {
+      btn.onclick = async () => {
+        const status = btn.nextElementSibling;
+        btn.loading = true;
+        status.textContent = '正在测试…';
+        try {
+          const result = await api.adminTestAi(btn.dataset.aiTest);
+          status.textContent = result.ok ? `连通 · ${result.elapsedMs} ms` : `失败 · ${result.error}`;
+        } catch (e) {
+          status.textContent = e.message || '测试失败';
+        } finally {
+          btn.loading = false;
+        }
+      };
+    });
+  }
+
   function renderSystem() {
     const box = el.querySelector('#systemBody');
     if (!box) return;
@@ -1221,6 +1311,8 @@ export async function render(el) {
         await loadDevices();
       } else if (S.tab === 'clients') {
         await loadClients();
+      } else if (S.tab === 'ai') {
+        await loadAi();
       } else if (S.tab === 'system') {
         await loadOverview();
         renderSystem();

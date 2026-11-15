@@ -1,14 +1,15 @@
-"""CurrentMusicAI：聊天室里的联网问答助手（v1.28.51）。
+"""CurrentMusicAI：聊天室和播放页的联网问答助手。
 
-接入 DeepSeek（默认 deepseek-flash），支持 Search / Fetch 两个联网工具：
+优先使用 z.ai GLM-5.3-Flash，失败时用原模型 DeepSeek 重新回答：
   · 用户在 Chat 里引用一张卡片并 @CurrentMusicAI 提问；
   · 服务端异步跑「模型 → 工具调用 → 工具结果 → 模型」循环，最多 4 轮；
   · 回答以机器人账号发回聊天室（走 cm_chat.send，SSE 实时下发）。
-密钥只从环境变量读取（CM_AI_KEY），不落仓库；未配置时机器人会提示未接入。
+模型密钥从服务端环境变量读取，联网搜索与网页抓取继续使用原有工具接口。
 """
 from __future__ import annotations
 
 import base64
+import http.client
 import io
 import json
 import logging
@@ -19,6 +20,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 
 import cm_chat
 import cm_db
@@ -28,6 +30,9 @@ log = logging.getLogger("cm")
 
 API_BASE = os.environ.get("CM_AI_BASE", "https://api.deepseek.com/v1").rstrip("/")
 MODEL = os.environ.get("CM_AI_MODEL", "deepseek-flash")
+ZAI_BASE = "https://api.z.ai/api/paas/v4"
+ZAI_MODEL = "glm-5.3-flash"
+ZAI_EFFORTS = ("low", "high", "max")
 BOT_USERNAME = "CurrentMusicAI"
 BOT_NICKNAME = "CurrentMusicAI"
 BOT_BIO = "我是 CurrentMusic 的 AI 助手：在 Chat 里 @我 提问，可以联网查资料、识别图片；引用歌曲卡片提问会更准确。"
@@ -36,6 +41,7 @@ MAX_ROUNDS = 4          # 模型/工具往返轮数
 MAX_SEARCH = 3          # 单次请求最多搜索次数
 MAX_FETCH = 1           # 单次请求最多抓取网页数
 MAX_TOKENS = 2000       # 含推理 token，留足空间
+ZAI_MAX_TOKENS = 8192   # 为 max 思考和最终回答预留输出空间
 ANSWER_LIMIT = 800      # AI 回复可比用户消息长；按句子边界截断
 AI_IMAGE_SIDE = 1280    # 发给视觉模型的图片最长边（与聊天原图上限一致，保留文字细节）
 AI_IMAGE_QUALITY = 85   # 重新编码 JPEG 的质量
@@ -108,8 +114,52 @@ class AiError(Exception):
     pass
 
 
+@dataclass(frozen=True)
+class ModelProvider:
+    id: str
+    base: str
+    model: str
+    effort: str
+    key_env: str
+    timeout: float
+
+    @property
+    def key(self):
+        return os.environ.get(self.key_env, "").strip()
+
+
+DEEPSEEK = ModelProvider("deepseek", API_BASE, MODEL, EFFORT, "CM_AI_KEY", 120)
+
+
+def _zai(effort):
+    return ModelProvider("zai", ZAI_BASE, ZAI_MODEL, effort, "CM_AI_ZAI_KEY", 35)
+
+
 def api_ready() -> bool:
-    return bool(os.environ.get("CM_AI_KEY", "").strip())
+    return bool(DEEPSEEK.key or (_zai("max").key and cm_db.get_ai_settings()[0]))
+
+
+def admin_status():
+    enabled, effort = cm_db.get_ai_settings()
+    primary = _zai(effort)
+    return {"primary": {"model": primary.model, "effort": effort, "enabled": enabled,
+                        "configured": bool(primary.key)},
+            "fallback": {"model": DEEPSEEK.model, "effort": DEEPSEEK.effort,
+                         "configured": bool(DEEPSEEK.key)}}
+
+
+def probe_provider(provider_id):
+    provider = _zai(cm_db.get_ai_settings()[1]) if provider_id == "zai" else DEEPSEEK
+    started = time.monotonic()
+    error = None
+    try:
+        _chat_stream(provider, [{"role": "user", "content": "只回复 OK 两个字母。"}], timeout=20)
+    except AiError as exc:
+        error = str(exc)
+    result = {"ok": error is None, "elapsedMs": round((time.monotonic() - started) * 1000)}
+    if error:
+        result["error"] = error
+    return result
 
 
 def bot_uid():
@@ -227,15 +277,14 @@ def load_history(uid: int, scope: str = "chat"):
         conn.close()
 
 
-def append_history(uid: int, role: str, content: str, scope: str = "chat"):
-    content = (content or "").strip()[:800]
-    if not content:
-        return
+def append_exchange(uid: int, question: str, answer: str, scope: str = "chat"):
+    now = int(time.time())
+    turns = [(int(uid), role, text.strip()[:800], scope, now)
+             for role, text in (("user", question), ("assistant", answer)) if text.strip()]
     conn = cm_db.connect()
     try:
-        conn.execute(
-            "INSERT INTO ai_history(user_id, role, content, scope, created_at) VALUES(?,?,?,?,?)",
-            (int(uid), role, content, scope, int(time.time())))
+        conn.executemany(
+            "INSERT INTO ai_history(user_id, role, content, scope, created_at) VALUES(?,?,?,?,?)", turns)
         old = conn.execute(
             "SELECT id FROM ai_history WHERE user_id=? AND scope=? ORDER BY id DESC LIMIT 1 OFFSET ?",
             (int(uid), scope, HISTORY_TURNS * 2)).fetchone()
@@ -328,42 +377,28 @@ def user_message(card: str, question: str, image_url: str = ""):
     ]}
 
 
-# ---------------------------------------------------------------- DeepSeek
+# ---------------------------------------------------------------- 模型与联网工具 HTTP
 
-def _post(path: str, payload: dict, timeout: float = 60.0):
-    key = os.environ.get("CM_AI_KEY", "").strip()
+def _request(provider, path, payload):
+    key = provider.key
     if not key:
         raise AiError("AI 未配置")
-    req = urllib.request.Request(
-        API_BASE + path, data=json.dumps(payload, ensure_ascii=False).encode(),
+    return urllib.request.Request(
+        provider.base + path, data=json.dumps(payload, ensure_ascii=False).encode(),
         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
         method="POST")
+
+
+def _post(path: str, payload: dict, timeout: float = 60.0):
+    req = _request(DEEPSEEK, path, payload)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
-        try:
-            msg = e.read().decode("utf-8", "replace")[:300]
-        except Exception:  # noqa: BLE001
-            msg = ""
-        raise AiError(f"上游 HTTP {e.code}：{msg}")
-    except Exception as e:  # noqa: BLE001
-        raise AiError(f"上游请求失败：{e}")
-
-
-def _chat(messages, tools=None):
-    payload = {"model": MODEL, "messages": messages,
-               "max_tokens": MAX_TOKENS, "temperature": 0.6}
-    if EFFORT in EFFORT_LEVELS:
-        payload["reasoning_effort"] = EFFORT
-    if tools:
-        payload["tools"] = tools
-        payload["tool_choice"] = "auto"
-    d = _post("/chat/completions", payload, timeout=90.0)
-    try:
-        return d["choices"][0]["message"]
-    except (KeyError, IndexError, TypeError):
-        raise AiError("模型响应格式异常")
+        e.close()
+        raise AiError(f"上游 HTTP {e.code}") from None
+    except (OSError, ValueError):
+        raise AiError("联网工具请求失败") from None
 
 
 def _has_dsml(text: str) -> bool:
@@ -381,63 +416,85 @@ def _sanitize_dsml(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
 
 
-def _chat_stream(messages, tools=None, on_text=None):
-    """流式 chat completion：累积 tool_calls；content 增量通过 on_text 回调。"""
-    key = os.environ.get("CM_AI_KEY", "").strip()
-    if not key:
-        raise AiError("AI 未配置")
-    payload = {"model": MODEL, "messages": messages,
+def _completion_events(req, timeout):
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            for raw in response:
+                line = raw.decode("utf-8", "replace").strip()
+                if line.startswith("data:"):
+                    yield line[5:].strip()
+    except urllib.error.HTTPError as e:
+        e.close()
+        raise AiError(f"上游 HTTP {e.code}") from None
+    except TimeoutError:
+        raise AiError("上游响应超时") from None
+    except (OSError, http.client.HTTPException):
+        raise AiError("上游连接中断或请求失败") from None
+
+
+def _chat_stream(provider, messages, tools=None, on_text=None, *, timeout=None):
+    """累积 tool_calls 与内部推理，只向客户端推送可见正文。"""
+    payload = {"model": provider.model, "messages": messages,
                "max_tokens": MAX_TOKENS, "temperature": 0.6, "stream": True}
-    if EFFORT in EFFORT_LEVELS:
-        payload["reasoning_effort"] = EFFORT
+    if provider.id == "zai":
+        payload.update(temperature=1, max_tokens=ZAI_MAX_TOKENS,
+                       thinking={"type": "enabled", "clear_thinking": False},
+                       reasoning_effort=provider.effort)
+        if tools:
+            payload["tool_stream"] = True
+    elif provider.effort in EFFORT_LEVELS:
+        payload["reasoning_effort"] = provider.effort
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
-    req = urllib.request.Request(
-        API_BASE + "/chat/completions", data=json.dumps(payload, ensure_ascii=False).encode(),
-        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"},
-        method="POST")
-    calls, text_parts, tool_seen = [], [], False
+    req = _request(provider, "/chat/completions", payload)
+    calls, text_parts, reasoning_parts = {}, [], []
+    done, finish = False, None
+    for data in _completion_events(req, timeout or provider.timeout):
+        if data == "[DONE]":
+            done = True
+            break
+        try:
+            event = json.loads(data)
+            if event.get("error"):
+                raise AiError("上游返回模型错误")
+            choice = (event.get("choices") or [{}])[0]
+            finish = choice.get("finish_reason") or finish
+            delta = choice.get("delta") or {}
+            reasoning = delta.get("reasoning_content")
+            if reasoning:
+                reasoning_parts.append(reasoning)
+            chunk = delta.get("content")
+            if chunk:
+                text_parts.append(chunk)
+            for tc in delta.get("tool_calls") or []:
+                idx = int(tc.get("index") or 0)
+                c = calls.setdefault(idx, {"id": "", "type": "function",
+                                           "function": {"name": "", "arguments": ""}})
+                if tc.get("id"):
+                    c["id"] = tc["id"]
+                fn = tc.get("function") or {}
+                c["function"]["name"] += fn.get("name") or ""
+                c["function"]["arguments"] += fn.get("arguments") or ""
+            visible = "".join(text_parts) if chunk and not calls and on_text else ""
+        except (AttributeError, IndexError, TypeError, ValueError):
+            raise AiError("模型响应格式异常") from None
+        if visible and not _has_dsml(visible):
+            on_text(visible)
+    if finish == "length" and provider.id == "zai":
+        raise AiError("模型输出达到上限")
+    if finish not in (None, "stop", "tool_calls", "length") or (not done and not finish):
+        raise AiError("模型响应未正常结束")
+    calls = [calls[idx] for idx in sorted(calls)]
+    if any(not call["id"] or not call["function"]["name"] for call in calls):
+        raise AiError("模型返回了不完整的工具调用")
+    if not calls and not any(isinstance(part, str) and part.strip() for part in text_parts):
+        raise AiError("模型没有返回内容")
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
-            for raw in r:
-                line = raw.decode("utf-8", "replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    break
-                try:
-                    d = json.loads(data)
-                except ValueError:
-                    continue
-                delta = ((d.get("choices") or [{}])[0].get("delta") or {})
-                chunk = delta.get("content")
-                if chunk:
-                    text_parts.append(chunk)
-                    if on_text and not tool_seen:
-                        visible = "".join(text_parts)
-                        if not _has_dsml(visible):
-                            on_text(visible)
-                for tc in delta.get("tool_calls") or []:
-                    tool_seen = True
-                    idx = int(tc.get("index") or 0)
-                    while len(calls) <= idx:
-                        calls.append({"id": "", "type": "function",
-                                      "function": {"name": "", "arguments": ""}})
-                    c = calls[idx]
-                    if tc.get("id"):
-                        c["id"] = tc["id"]
-                    fn = tc.get("function") or {}
-                    if fn.get("name"):
-                        c["function"]["name"] += fn["name"]
-                    if fn.get("arguments"):
-                        c["function"]["arguments"] += fn["arguments"]
-    except urllib.error.HTTPError as e:
-        raise AiError(f"上游 HTTP {e.code}")
-    except Exception as e:  # noqa: BLE001
-        raise AiError(f"上游流式请求失败：{e}")
-    return {"content": "".join(text_parts), "tool_calls": calls or None}
+        return {"content": "".join(text_parts), "tool_calls": calls,
+                "reasoning_content": "".join(reasoning_parts)}
+    except TypeError:
+        raise AiError("模型响应格式异常") from None
 
 
 def _music_search(type_, query: str):
@@ -558,74 +615,102 @@ def _fallback_cards(text, cards, hits):
     return out
 
 
-def _plain_retry(messages, on_text=None) -> str:
+def _plain_retry(provider, messages, on_text=None) -> str:
     """模型把工具调用误写成正文 DSML 时，要求它直接给最终回答（禁用工具）。"""
     note = {"role": "system", "content":
             "上一轮输出了工具调用标记（DSML），用户看不到这些标记。请直接给出最终可读回答，"
             "不要输出 DSML、XML、工具调用过程或参数。"}
-    msg = _chat_stream(list(messages) + [note], None, on_text)
+    msg = _chat_stream(provider, list(messages) + [note], None, on_text)
     return _sanitize_dsml((msg.get("content") or "").strip())
+
+
+def _web_tool(name, args, question, remaining, results):
+    value = (args.get("query") or question) if name == "search" else (args.get("url") or "")
+    key = (name, str(value))
+    if key in results:
+        return results[key]
+    if remaining[name] <= 0:
+        return "本次请求的检索次数已用完。"
+    remaining[name] -= 1
+    try:
+        if name == "search":
+            content = json.dumps({"results": _search(value)}, ensure_ascii=False)
+        else:
+            content = _fetch(value)
+    except Exception as e:  # noqa: BLE001 让模型继续回答其他内容
+        return f"联网工具失败：{e}" if isinstance(e, AiError) else "联网工具失败"
+    results[key] = content
+    return content
 
 
 def _answer_stream(question: str, card: str, uid: int, on_text=None, quote_atts=None,
                    image_url: str = "", scope: str = "chat"):
-    """流式工具循环；返回 (最终回答, 附带的卡片列表)。"""
-    quote_atts = quote_atts or []
-    turn = user_turn(card, question, bool(image_url))
-    history_turn = turn + ("\n（附带图片）" if image_url else "")
     messages = [{"role": "system", "content": SYSTEM}] + load_history(uid, scope) + \
                [user_message(card, question, image_url)]
-    searches = fetches = 0
+    enabled, effort = cm_db.get_ai_settings()
+    primary = _zai(effort)
+    providers = [p for p in ((primary, DEEPSEEK) if enabled else (DEEPSEEK,)) if p.key]
+    if not providers:
+        raise AiError("AI 助手尚未配置模型")
+
+    remaining = {"search": MAX_SEARCH, "fetch": MAX_FETCH}
+    results = {}
+    for provider in providers:
+        try:
+            text, cards = _answer_with_provider(provider, list(messages), question, on_text,
+                                                quote_atts, remaining, results)
+        except AiError as e:
+            log.warning("AI 模型 %s (%s) 请求失败：%s", provider.id, provider.model, e)
+            if provider == providers[-1]:
+                raise AiError("AI 暂时不可用，请稍后再试") from None
+            if on_text:
+                on_text("")
+        else:
+            history_turn = user_turn(card, question, bool(image_url))
+            if image_url:
+                history_turn += "\n（附带图片）"
+            append_exchange(uid, history_turn, text, scope)
+            return text, cards
+
+
+def _answer_with_provider(provider, messages, question, on_text, quote_atts, remaining, results):
+    """流式工具循环；卡片和模型内部推理只在本次模型尝试内保留。"""
     cards = []
     music_hits = []          # search_music 的结果：模型偶尔会漏掉 attach_card，用于兜底
-    for _ in range(MAX_ROUNDS):
-        msg = _chat_stream(messages, TOOLS, on_text)
-        calls = msg.get("tool_calls") or []
+    for round_index in range(MAX_ROUNDS + 1):
+        tools = TOOLS if round_index < MAX_ROUNDS else None
+        msg = _chat_stream(provider, messages, tools, on_text)
+        calls = msg["tool_calls"]
         if not calls:
-            text = (msg.get("content") or "").strip()
-            if text:
-                if _has_dsml(text):
-                    text = ""
-                    if on_text:
-                        on_text("")
-                    try:
-                        text = _plain_retry(messages, on_text)
-                    except AiError:
-                        text = ""
-                    if not text:
-                        raise AiError("模型返回了无效的工具标记")
-                text = _sanitize_dsml(text)
-                if text:
-                    cards = _fallback_cards(text, cards, music_hits)
-                    append_history(uid, "user", history_turn, scope)
-                    append_history(uid, "assistant", text, scope)
-                    return text, cards
-            break
+            text = msg["content"].strip()
+            if _has_dsml(text):
+                if on_text:
+                    on_text("")
+                text = _plain_retry(provider, messages, on_text)
+            text = _sanitize_dsml(text)
+            if not text or _has_dsml(text):
+                raise AiError("模型没有返回有效回答")
+            return text, _fallback_cards(text, cards, music_hits)
+        if not tools:
+            raise AiError("模型未返回最终回答")
         # 工具轮可能先流出了中间文本：清空占位，等工具执行后的最终回答
-        if (msg.get("content") or "").strip() and on_text:
+        if msg["content"].strip() and on_text:
             on_text("")
-        messages.append({"role": "assistant", "content": msg.get("content") or None,
-                         "tool_calls": calls})
+        assistant = {"role": "assistant", "content": msg["content"] or None, "tool_calls": calls}
+        if msg["reasoning_content"]:
+            assistant["reasoning_content"] = msg["reasoning_content"]
+        messages.append(assistant)
         for tc in calls:
-            fn = tc.get("function") or {}
-            name = fn.get("name")
+            fn = tc["function"]
+            name = fn["name"]
             try:
-                args = json.loads(fn.get("arguments") or "{}")
+                args = json.loads(fn["arguments"] or "{}")
             except ValueError:
                 args = {}
-            if name == "search" and searches < MAX_SEARCH:
-                searches += 1
-                try:
-                    content = json.dumps({"results": _search(args.get("query") or question)},
-                                         ensure_ascii=False)
-                except Exception as e:  # noqa: BLE001
-                    content = f"搜索失败：{e}"
-            elif name == "fetch" and fetches < MAX_FETCH:
-                fetches += 1
-                try:
-                    content = _fetch(args.get("url") or "")
-                except Exception as e:  # noqa: BLE001
-                    content = f"抓取失败：{e}"
+            if not isinstance(args, dict):
+                args = {}
+            if name in remaining:
+                content = _web_tool(name, args, question, remaining, results)
             elif name == "search_music":
                 try:
                     hits = _music_search(args.get("type"), args.get("query"))
@@ -639,18 +724,8 @@ def _answer_stream(question: str, card: str, uid: int, on_text=None, quote_atts=
             elif name == "attach_card":
                 content = _attach_card(args, cards, music_hits, quote_atts)
             else:
-                content = "本次请求的检索次数已用完，或工具不可用。"
-            messages.append({"role": "tool", "tool_call_id": tc.get("id") or "",
-                             "content": content})
-    # 轮数用尽：不带工具再要一次最终回答（仍流式）
-    msg = _chat_stream(messages, None, on_text)
-    text = (msg.get("content") or "").strip()
-    if not text:
-        raise AiError("模型没有返回内容")
-    cards = _fallback_cards(text, cards, music_hits)
-    append_history(uid, "user", history_turn, scope)
-    append_history(uid, "assistant", text, scope)
-    return text, cards
+                content = "工具不可用。"
+            messages.append({"role": "tool", "tool_call_id": tc["id"], "content": content})
 
 
 def answer_player(uid: int, question: str, atts, reset: bool = False, on_text=None):
@@ -768,7 +843,7 @@ def spawn_reply(sender, question, atts, image=""):
     if not uid or not sender or sender.get("id") == uid:
         return
     if not api_ready():
-        _send("AI 助手还没接入模型，请联系管理员配置 DeepSeek。")
+        _send("AI 助手尚未配置模型，请联系管理员。")
         return
     sid = sender["id"]
     now = time.time()

@@ -2931,6 +2931,9 @@ def route(handler, method):
             ("GET", "/admin/announcements", "管理员", "公告管理列表（含已移除；带 canEdit 权限标记）"),
             ("GET", "/admin/overview", "管理员", "管理台概览：总量、注册与播放趋势、角色计数、用户来源 sourceCounts {web,x,other}（按最近一次成功登录或注册归类）"),
             ("GET", "/admin/clients", "管理员", "客户端版本：CurrentMusic 与 CurrentMusicX 的版本/大小/发布时间/更新说明/历史/下载数"),
+            ("GET", "/admin/ai", "管理员", "AI 管理：主模型与回退模型的配置状态（仅返回密钥是否已配置）"),
+            ("POST", "/admin/ai", "管理员", "保存 z.ai 启用状态与思考强度 {enabled: boolean, effort: low|high|max}"),
+            ("POST", "/admin/ai/test", "管理员", "单独测试指定模型的连通性 {provider: zai|deepseek}"),
             ("GET", "/admin/traffic", "管理员", "站点出站流量（需 CM_TRAFFIC_LOG；服务端 20s 缓存）"),
             ("GET", "/admin/users", "管理员", "用户搜索/分页/排序（含 points、level）；sort=reg/reg_asc/name/active/sessions/likes/plays/role"),
             ("POST", "/admin/users/{id}/progression", "管理员", "为指定账号设置积分和等级 {points,level}，7 表示 Lv.6 Plus"),
@@ -5396,6 +5399,30 @@ def route(handler, method):
         return jresp(handler, 200, {"ok": True, "latestSeq": seq})
 
     # ---- 管理员面板（均需 is_admin） ----
+    if path == "/admin/ai" and method == "GET":
+        require_admin(handler)
+        return jresp(handler, 200, cm_ai.admin_status(), cache_control="no-store")
+
+    if path == "/admin/ai" and method == "POST":
+        require_admin(handler)
+        if not isinstance(body, dict):
+            raise ApiError(400, "需要 JSON 对象")
+        enabled = body.get("enabled")
+        effort = body.get("effort")
+        if not isinstance(enabled, bool) or effort not in cm_ai.ZAI_EFFORTS:
+            raise ApiError(400, "请提供启用状态与有效的思考强度")
+        cm_db.set_ai_settings(enabled, effort)
+        return jresp(handler, 200, cm_ai.admin_status())
+
+    if path == "/admin/ai/test" and method == "POST":
+        require_admin(handler)
+        if not isinstance(body, dict):
+            raise ApiError(400, "需要 JSON 对象")
+        provider = body.get("provider")
+        if provider not in ("zai", "deepseek"):
+            raise ApiError(400, "模型提供方无效")
+        return jresp(handler, 200, cm_ai.probe_provider(provider))
+
     if path == "/admin/overview" and method == "GET":
         require_admin(handler)
         out = cm_db.admin_overview()
