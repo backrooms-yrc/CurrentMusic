@@ -46,8 +46,8 @@ ANSWER_LIMIT = 800      # AI 回复可比用户消息长；按句子边界截断
 AI_IMAGE_SIDE = 1280    # 发给视觉模型的图片最长边（与聊天原图上限一致，保留文字细节）
 AI_IMAGE_QUALITY = 85   # 重新编码 JPEG 的质量
 COOLDOWN = 5.0          # 同一用户两次提问的最小间隔（超出则排队等待）
-EFFORT = os.environ.get("CM_AI_EFFORT", "high").strip().lower()
-EFFORT_LEVELS = {"none", "low", "high", "max"}   # none = 关闭思考；high 更可靠地触发联网工具
+EFFORT = os.environ.get("CM_AI_EFFORT", "none").strip().lower()
+EFFORT_LEVELS = {"none", "low", "high", "max"}   # none 关闭思考，仍支持函数工具
 HISTORY_TURNS = 6        # 按用户保留最近 6 轮问答
 HISTORY_TTL = 7 * 86400  # 上下文有效期 7 天
 CLEAR_WORDS = ("清除上下文", "清空上下文", "重置对话", "忘记之前的对话",

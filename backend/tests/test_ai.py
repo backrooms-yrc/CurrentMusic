@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
@@ -249,10 +250,18 @@ class TestModelRouting(unittest.TestCase):
 
     def test_disabled_primary_uses_legacy_model_directly(self):
         cm_db.set_ai_settings(False, "low")
-        upstream = self.mock_streams(_stream({"content": "原模型"}))
-        self.assertEqual(A.answer_player(1, "问题", [self.SONG])[0], "原模型")
-        upstream.assert_called_once()
-        self.assertEqual(upstream.call_args.args[0].full_url, A.API_BASE + "/chat/completions")
+        self.enterContext(mock.patch.object(A, "DEEPSEEK", replace(A.DEEPSEEK, effort="none")))
+        upstream = self.mock_streams(
+            _stream({"tool_calls": [{"index": 0, "id": "card_1", "function": {
+                "name": "attach_card", "arguments": '{"type":"song","id":77}'}}]}, finish="tool_calls"),
+            _stream({"content": "原模型附卡完成"}))
+        self.assertEqual(A.answer_player(1, "请附卡", [self.SONG]), ("原模型附卡完成", [self.SONG]))
+        first, second = [call.args[0] for call in upstream.call_args_list]
+        self.assertEqual(first.full_url, A.API_BASE + "/chat/completions")
+        payload = json.loads(first.data)
+        self.assertEqual(payload["reasoning_effort"], "none")
+        self.assertEqual(payload["tool_choice"], "auto")
+        self.assertEqual(json.loads(second.data)["messages"][-1]["tool_call_id"], "card_1")
 
     def test_disconnected_client_does_not_retry_the_model(self):
         upstream = self.mock_streams(_stream({"content": "正文"}))

@@ -81,7 +81,7 @@ python3 backend/cm_server.py
 | `CM_AI_KEY` | 空 | 原模型及联网搜索/抓取的 API key |
 | `CM_AI_BASE` | `https://api.deepseek.com/v1` | 模型 API |
 | `CM_AI_MODEL` | `deepseek-flash` | 模型名 |
-| `CM_AI_EFFORT` | `high` | `none/low/high/max` |
+| `CM_AI_EFFORT` | `none` | DeepSeek 思考强度，默认关闭思考以节省 Token，仍支持联网搜索与函数工具。可用 `none/low/high/max` |
 | `CM_SMTP_HOST/PORT/USER/PASS/FROM` | 空 | 邮箱验证码 |
 | `CM_SMS_WEBHOOK/TOKEN/SIGN` | 空 | 短信验证码 |
 | `CM_CAST_CACHE` | `<CM_DATA_DIR>/cast` | 投屏音频缓存 |

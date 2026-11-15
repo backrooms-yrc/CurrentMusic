@@ -93,7 +93,7 @@ curl -N -X POST https://music.example.com/cm/ai/live \
   `attach_card`（附卡，服务端校验来源）
 - 服务端按「模型 → 工具调用 → 工具结果 → 模型」循环，最多 4 轮；
   单次请求最多搜索 3 次、抓取 1 个网页；回答约 600 字（硬上限 800，按句子边界截断）。
-- 原模型的思考强度由 `CM_AI_EFFORT` 设置，默认为 `high`，可用 `none`、`low`、`high` 或 `max`。
+- 原模型的思考强度由 `CM_AI_EFFORT` 设置，默认为 `none`。关闭思考可节省推理 Token，DeepSeek 仍可调用联网搜索、网页抓取、站内搜索与附卡工具。可用 `none`、`low`、`high` 或 `max`。
 
 ## 配置
 
@@ -103,7 +103,7 @@ curl -N -X POST https://music.example.com/cm/ai/live \
 CM_AI_ZAI_KEY=
 CM_AI_KEY=
 CM_AI_MODEL=deepseek-flash
-CM_AI_EFFORT=high
+CM_AI_EFFORT=none
 ```
 
 更新环境文件后重启 `currentmusic` 服务。管理员面板的「AI 管理」可即时启停 z.ai、设置思考强度、分别测试两个模型的连通性。开关和强度保存在数据库中。密钥状态仅显示「已配置」或「未配置」。
