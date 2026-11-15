@@ -21,6 +21,10 @@ https://music.20110208.xyz/cm/lx/source.js?token=<音源专用令牌>
   | `master` | `jymaster` | 超清母带 |
 
   客户端若传 `192k`/`ape`/`wav` 亦按 `exhigh`/`lossless`/`lossless` 处理。**注意 `qualitys` 里绝不能出现 `jymaster` 等 Engine 内部档位名**，客户端不认识会漏掉对应档位。
+- **取址加速与国内线路**：脚本取链固定带 `cn=1`，Engine 对落雪请求改走上游 `randomCNIP`
+  （api-enhanced 启动时生成并保持不变的国内 IP，**不会**透传 Cloudflare 边缘的境外对端 IP）：
+  上游按国内位置选择 CDN 边缘，灰色曲目也不会因境外 IP 被误判为地区不可用；所有落雪用户
+  共享同一份解析缓存（缓存键用固定标识），重复播放无需再打上游。Web/App 等其它入口不受影响。
 - **取流音质**：`/cm/ncm/song/url` 默认携带**服务端 SVIP Cookie**（见 `cm_ncm.call`），因此**所有注册用户**（无需自行绑定网易云会员）都能取得该账号可用的最高档；实测母带档返回 192kHz/24bit、约 4.5Mbps。请求档位在歌曲没有对应资源时由 Engine 自动降档，不会直接失败；CurrentMusicX 的「自动最高」按声明档位从高到低尝试，并在单档解析失败时自动换下一档。
 - **lyric**（wy 源）：歌词走 Engine 归一化接口，主歌词、翻译与罗马音按毫秒时间轴转换成 LRC。官方客户端的 `wy` 动作白名单只开放 `musicUrl`，因此不在 `inited` 中声明；支持该协议的衍生客户端可直接调用；
 - 其余音源（kw/kg/tx/mg）与动作会明确返回不支持，不会误解析。

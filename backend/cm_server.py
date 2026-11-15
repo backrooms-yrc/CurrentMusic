@@ -66,6 +66,7 @@ MAX_BODY = 2 * 1024 * 1024
 # 降级为 jyeffect（需设备支持），vivid 偶发返回错误页——由 url_is_audio 拦截后走阶梯降档。
 VALID_LEVELS = ("standard", "exhigh", "lossless", "hires", "sky", "jyeffect", "jymaster", "dolby", "vivid")
 
+
 # 私人漫游模式/场景（与 CurrentMusicX v1.1.18 的目录保持一致）。
 # 上游 /personal/fm/mode 只负责返回歌曲；模式目录由客户端侧固定，场景可用随账号变化。
 ROAMING_MODES = (
@@ -727,10 +728,11 @@ def auth_rate_limited(ip):
 
 # ---------- 服务端自动最高音质：探测特殊档（复用插件 v2.8.x 经验） ----------
 
-def _probe_one(ncm_id, level, real_ip=None):
+def _probe_one(ncm_id, level, real_ip=None, cn_ip=False):
     """取某档的地址与元信息，**不做** 2KB 音频头校验（校验留给胜出档，见 best_level）。"""
     try:
-        r = cm_ncm.song_url(ncm_id, level, real_ip=real_ip, probe=False, require_exact=level == "dolby")
+        r = cm_ncm.song_url(ncm_id, level, real_ip=real_ip, probe=False,
+                            require_exact=level == "dolby", cn_ip=cn_ip)
         if r.get("level") == "dolby" and level != "dolby":
             return level, None
         return level, r
@@ -743,7 +745,7 @@ def _probe_one(ncm_id, level, real_ip=None):
 _resolve_flight = cm_stream.SingleFlight()
 
 
-def best_level(ncm_id, real_ip=None, max_br=0, supports_dolby=False):
+def best_level(ncm_id, real_ip=None, max_br=0, supports_dolby=False, cn_ip=False):
     """探测档位并择优。返回 ``(档位名, 胜出档位的完整结果或 None)``。
 
     v1.28.23 起把「取地址」与「校验地址」拆成两段（见 cm_stream 的「档位策略」）：
@@ -762,7 +764,9 @@ def best_level(ncm_id, real_ip=None, max_br=0, supports_dolby=False):
     「先探测档位、再打一次接口取同一首地址」的第二次上游往返（实测 2.81s → 1.4s）。
     """
     max_br = cm_stream.quantize_max_br(max_br)
-    ip_key = hashlib.sha256((real_ip or '').encode()).hexdigest()[:16]
+    # 国内 RealIP 模式下所有用户共享同一份解析结果（地址与边缘一致），键用固定标识。
+    ip_ident = "cn" if cn_ip else (real_ip or '')
+    ip_key = hashlib.sha256(ip_ident.encode()).hexdigest()[:16]
     capability = ":dolby" if supports_dolby else ""
     key = f"blevel-ip:v1:{int(ncm_id)}:{max_br}:{ip_key}{capability}"
     cached = cm_db.cache_get(key)
@@ -773,13 +777,13 @@ def best_level(ncm_id, real_ip=None, max_br=0, supports_dolby=False):
 
     def _run_plan():
         with ThreadPoolExecutor(max_workers=max(1, len(tiers))) as ex:
-            return list(ex.map(lambda lv: _probe_one(ncm_id, lv, real_ip), tiers))
+            return list(ex.map(lambda lv: _probe_one(ncm_id, lv, real_ip, cn_ip), tiers))
 
     # 单飞键含 real_ip：上游按 realIP 选 CDN 边缘，把「给别人选的节点」发给别人
     # 正是要避免的事（与 surl 缓存键同一口径）。
     t_levels = time.time()
     results = _resolve_flight.do(
-        f"blevel:{int(ncm_id)}:{max_br}:{real_ip or ''}{capability}", _run_plan, timeout=8.0)
+        f"blevel:{int(ncm_id)}:{max_br}:{ip_ident}{capability}", _run_plan, timeout=8.0)
     level_ms = int((time.time() - t_levels) * 1000)
 
     for lv, r in cm_stream.ranked(results, max_br):
@@ -867,8 +871,13 @@ class PlaybackMatchError(cm_ncm.NcmError):
 
 
 def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
-                     max_br=0, refresh=False, alts=False, want_host="", supports_dolby=False):
-    """官方音源优先；失败后仅下发经过严格音频校验的灰色曲目匹配结果。"""
+                     max_br=0, refresh=False, alts=False, want_host="", supports_dolby=False,
+                     cn_ip=False):
+    """官方音源优先；失败后仅下发经过严格音频校验的灰色曲目匹配结果。
+
+    ``cn_ip`` 只在**落雪直链**路径启用：官方取址改走上游 randomCNIP（固定国内 IP），
+    避免 Cloudflare 边缘的境外 IP 影响 CDN 线路选择与地区判定；其它入口不受影响。
+    """
     started = time.monotonic()
     ip_key = hashlib.sha256((real_ip or '').encode()).hexdigest()[:16]
     source = os.environ.get('CM_NCM_MATCH_SOURCE', '').strip()
@@ -882,7 +891,7 @@ def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
     else:
         try:
             return _resolve_official_play_url(ncm_id, level, immerse, real_ip, max_br, refresh, alts, want_host,
-                                              supports_dolby=supports_dolby)
+                                              supports_dolby=supports_dolby, cn_ip=cn_ip)
         except cm_ncm.NcmError:
             pass
         match_started = time.monotonic()
@@ -908,7 +917,8 @@ def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
 
 
 def _resolve_official_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
-                     max_br=0, refresh=False, alts=False, want_host="", supports_dolby=False):
+                     max_br=0, refresh=False, alts=False, want_host="", supports_dolby=False,
+                     cn_ip=False):
     """解析播放地址，返回可直接下发的响应 dict。
 
     与旧实现的差别（都是「后端能做、客户端做不到」的事）：
@@ -931,14 +941,16 @@ def _resolve_official_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
     max_br = cm_stream.quantize_max_br(max_br)
     auto = (level == "auto")
     capability = ":dolby" if supports_dolby else ""
-    req_key = f"surl_req:{ncm_id}:{level}:{immerse or ''}:{max_br}:{real_ip}{capability}"
+    # 国内 RealIP 模式下地址与边缘对所有落雪用户一致，缓存键用固定标识共享命中。
+    ip_ident = "cn" if cn_ip else (real_ip or "")
+    req_key = f"surl_req:{ncm_id}:{level}:{immerse or ''}:{max_br}:{ip_ident}{capability}"
     cached_err = cm_db.cache_get(f"{req_key}:err")
     if cached_err:
         raise cm_ncm.NcmError(cached_err)
     probed = None
     if auto:
         try:
-            level, probed = best_level(ncm_id, real_ip, max_br, supports_dolby)
+            level, probed = best_level(ncm_id, real_ip, max_br, supports_dolby, cn_ip=cn_ip)
         except cm_ncm.NcmError as e:
             _remember_url_error(req_key, e)
             raise
@@ -948,7 +960,7 @@ def _resolve_official_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
     eff_br = max_br if auto else 0
     # v2 discards cached URLs accepted before explicit trial rejection was added.
     auto_dolby = auto and level == "dolby"
-    rt_key = f"surl:v2:{ncm_id}:{level}:{immerse or ''}:{eff_br}:{real_ip}"
+    rt_key = f"surl:v2:{ncm_id}:{level}:{immerse or ''}:{eff_br}:{ip_ident}"
     if auto_dolby:
         rt_key += capability
 
@@ -957,7 +969,7 @@ def _resolve_official_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
     prev_host = (cached or {}).get("host") or cm_stream.host_of((cached or {}).get("url") or "")
     age = (time.time() - (cached or {}).get("cachedAt", 0)) if cached else 0
     # 连续 refresh 要逐条换线，所以「当前线」取**上次下发的那条**，而不是缓存里的主地址。
-    edge_key = f"{ncm_id}:{real_ip or ''}"
+    edge_key = f"{ncm_id}:{ip_ident}"
     handed = _last_edge_get(edge_key)
 
     def _finish(out, from_cache, switched=False):
@@ -1018,12 +1030,14 @@ def _resolve_official_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
         if probed is not None and not immerse:
             r = probed                 # 复用档位探测时已经取到的完整结果
         else:
-            r = cm_ncm.song_url(ncm_id, level, immerse, real_ip=real_ip, timing=timing, require_exact=auto_dolby)
+            r = cm_ncm.song_url(ncm_id, level, immerse, real_ip=real_ip, timing=timing,
+                                require_exact=auto_dolby, cn_ip=cn_ip)
     except cm_ncm.NcmError as e:
         if auto_dolby:
             if cached:
                 cm_db.cache_delete(rt_key)
-            return _resolve_official_play_url(ncm_id, "auto", immerse, real_ip, max_br, refresh, alts, want_host)
+            return _resolve_official_play_url(ncm_id, "auto", immerse, real_ip, max_br, refresh, alts, want_host,
+                                              cn_ip=cn_ip)
         _remember_url_error(req_key, e)
         raise
     out = dict(r)
@@ -4611,6 +4625,11 @@ def route(handler, method):
         level = q.get("level") or "auto"
         if level != "auto" and level not in VALID_LEVELS:
             level = "lossless"
+        # 落雪直链（clx_ 令牌，或脚本显式带 cn=1）固定用国内 RealIP 取址：
+        # Cloudflare 之后的 nginx 对端常是境外边缘节点，透传会让上游按境外位置
+        # 挑 CDN 线路并把灰色曲目判成地区不可用。Web/App 等其它入口不受影响。
+        auth = handler.headers.get("Authorization", "")
+        cn_ip = _truthy(q.get("cn")) or auth.startswith("Bearer clx_")
         try:
             out = resolve_play_url(
                 ncm_id, level,
@@ -4622,6 +4641,7 @@ def route(handler, method):
                 alts=_truthy(q.get("alts")),
                 want_host=(q.get("host") or "").strip(),
                 supports_dolby=_truthy(q.get("supportsDolby", "0")),
+                cn_ip=cn_ip,
             )
         except PlaybackMatchError as e:
             return jresp(handler, 502, {"error": str(e), "code": "playback_match_failed"})

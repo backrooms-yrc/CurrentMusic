@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 
 # 音源脚本自身的版本。LX 客户端靠它判断「检查更新」是否需要拉新脚本。
-SOURCE_VERSION = "1.0.4"
+SOURCE_VERSION = "1.0.5"
 
 # 兜底基址：仅在请求头完全推不出对外域名时使用（正常线上永远走 Host 头）。
 DEFAULT_API_BASE = "https://music.20110208.xyz/cm"
@@ -131,7 +131,10 @@ function musicUrl(musicInfo, quality) {
   const id = musicInfo && musicInfo.songmid
   if (!id) return Promise.reject(new Error('缺少网易云歌曲 ID'))
   const level = QUALITY_LEVELS[quality]
-  const url = API_BASE + '/ncm/song/url?id=' + encodeURIComponent(id) + '&level=' + level
+  // cn=1：让 Engine 用固定国内 RealIP 取址（更快命中国内 CDN 边缘，
+  // 灰色曲目也不会因为 Cloudflare 边缘 IP 被判成地区不可用）。
+  const url = API_BASE + '/ncm/song/url?id=' + encodeURIComponent(id)
+    + '&level=' + level + '&cn=1'
   return httpGet(url, true).then((d) => {
     const playUrl = d && d.url
     if (!playUrl) throw new Error((d && d.error) || '该音质档位无可用地址')

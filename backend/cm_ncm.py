@@ -689,13 +689,19 @@ def _probe_audio_once(url, timeout, strict=False):
 
 
 def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, timing=None,
-             require_exact=False):
+             require_exact=False, cn_ip=False):
     """取某档位的播放地址。
 
-    ``probe=False`` 跳过 2KB 音频头校验（也不返回 sr/bits/ch）：档位择优时先用它
+    ``probe=False`` 跳过 2KB 音频头校验（也不返回 sr/bits/cd）：档位择优时先用它
     并行拿各档的地址与元信息，最后**只对胜出的那一档**做一次校验（见 cm_stream 的
     「档位策略」注释）。校验是「这个地址真能播」的唯一保证——上游确实会在部分歌曲的
     部分档位上返回 HTML 错误页，所以**最终下发给客户端的地址必须校验过**。
+
+    ``cn_ip=True`` 时改用上游的 ``randomCNIP``：它使用 api-enhanced 启动时生成的
+    一个固定中国 IP（``global.cnIp``），**不发送 realIP**（上游 realIP 优先级更高，
+    发了就会覆盖它）。站点在 Cloudflare 之后，nginx 看到的对端常是境外边缘节点，
+    直接透传会按境外位置挑 CDN 线路、并把灰色曲目判成地区不可用；固定国内 IP
+    同时让所有用户共享同一份解析缓存。
     """
     # immerse：仅 level=sky 时生效（API 文档）——c51=5.1 声道（默认）/ ste=环绕立体声类型
     q = {"id": int(ncm_id), "level": level}
@@ -705,7 +711,9 @@ def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, t
     # 泛化转发（cm_server._ncm_forward）早就注入了这个参数，但播放主路径
     # /ncm/song/url 走的是专用分支，以前**没传**——等于让上游按源站所在地
     # （洛杉矶）来选节点，国内用户可能被分到海外边缘，高峰期表现为播放卡顿。
-    if real_ip:
+    if cn_ip:
+        q["randomCNIP"] = "true"
+    elif real_ip:
         q["realIP"] = real_ip
     # 音源地址是首播关键路径：本地 NCM API 正常 <1s，默认 15s×2 次会把一次上游
     # 卡顿放大成 30s。这里单次 4s，外层再有 4.5s 墙钟护栏（防止上游慢速吐字节），

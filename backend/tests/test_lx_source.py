@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import cm_db  # noqa: E402
 import cm_lx  # noqa: E402
+import cm_ncm  # noqa: E402
 import cm_server  # noqa: E402
 
 import test_password_reset as harness  # noqa: E402
@@ -439,10 +440,11 @@ class LxSourceTests(unittest.TestCase):
         # 请求 URL / 鉴权头断言（各 musicUrl 用例各发一次取链请求）
         song_calls = [r for r in out["requests"] if "/ncm/song/url" in r["url"]]
         self.assertEqual(len(song_calls), 10)
-        by_level = {r["url"].split("level=")[1] for r in song_calls if "level=" in r["url"]}
+        by_level = {r["url"].split("level=")[1].split("&")[0] for r in song_calls if "level=" in r["url"]}
         self.assertEqual(by_level, {"standard", "exhigh", "lossless", "hires", "jymaster", "jyeffect"})
         for r in song_calls:
             self.assertEqual(r["options"]["headers"]["Authorization"], "Bearer tok-lx-123")
+            self.assertIn("cn=1", r["url"])          # 落雪直链固定用国内 RealIP 取址
         self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 9)   # 含 401 用例
         self.assertEqual(sum("id=999" in r["url"] for r in song_calls), 1)
         self.assertEqual(sum("id=x" in r["url"] for r in song_calls), 0)   # tx 源在发请求前即拒绝
@@ -602,6 +604,62 @@ class LxDedicatedTokenTests(unittest.TestCase):
     make_user = harness.TestPasswordReset.make_user
     _cleanup = harness.TestPasswordReset._cleanup
     raw_body = LxSourceTests.raw_body
+
+
+class LxCnRealIpTests(unittest.TestCase):
+    """落雪直链路径固定国内 RealIP；其它入口保持原有行为。"""
+
+    def setUp(self):
+        harness.TestPasswordReset.setUp(self)
+        patch = mock.patch.object(cm_server.cm_region, "note")
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.uid = self.make_user()
+        self.session = cm_db.issue_token(self.uid, "Web 设备", "web")
+        self.clx = cm_db.lx_token_issue(self.uid)
+
+    def _capture(self, path, token):
+        """跑 /ncm/song/url，返回传给 resolve_play_url 的 cn_ip。"""
+        seen = {}
+        def fake(ncm_id, level, **kw):
+            seen.update(kw)
+            return {"url": "https://m804.music.126.net/a.mp3", "level": "exhigh"}
+        with mock.patch.object(cm_server, "resolve_play_url", side_effect=fake):
+            st, _ = self.call("GET", path, token=token)
+        self.assertEqual(st, 200)
+        return seen.get("cn_ip")
+
+    def test_lx_token_uses_cn_ip(self):
+        self.assertTrue(self._capture("/ncm/song/url?id=186016&level=exhigh", self.clx))
+        # 脚本显式带 cn=1 时同样启用（兼容旧的会话令牌直链）
+        self.assertTrue(self._capture("/ncm/song/url?id=186016&level=exhigh&cn=1", self.session))
+
+    def test_web_session_not_affected(self):
+        self.assertFalse(self._capture("/ncm/song/url?id=186016&level=exhigh", self.session))
+
+    def test_upstream_params(self):
+        """cn_ip=True → randomCNIP=true 且不带 realIP（realIP 优先级更高会覆盖它）。"""
+        captured = {}
+
+        def fake_call(path, params, timeout, **kw):
+            captured.update(params)
+            return {"data": [{"url": "https://m804.music.126.net/a.mp3", "level": "exhigh",
+                              "type": "mp3", "br": 320000, "size": 100, "code": 200}]}
+
+        with mock.patch.object(cm_ncm, "_bounded_call", side_effect=fake_call):
+            cm_ncm.song_url(186016, "exhigh", real_ip="1.2.3.4", probe=False, cn_ip=True)
+        self.assertEqual(captured.get("randomCNIP"), "true")
+        self.assertNotIn("realIP", captured)
+
+        captured.clear()
+        with mock.patch.object(cm_ncm, "_bounded_call", side_effect=fake_call):
+            cm_ncm.song_url(186016, "exhigh", real_ip="1.2.3.4", probe=False)
+        self.assertEqual(captured.get("realIP"), "1.2.3.4")
+        self.assertNotIn("randomCNIP", captured)
+
+    call = harness.TestPasswordReset.call
+    make_user = harness.TestPasswordReset.make_user
+    _cleanup = harness.TestPasswordReset._cleanup
 
 
 class LxSharedTokenTests(unittest.TestCase):
