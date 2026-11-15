@@ -8,8 +8,8 @@ https://music.20110208.xyz/cm/lx/source.js?token=<音源专用令牌>
 
 直链由 CurrentMusic 网页端「设置 → 服务器 → 落雪音乐音源」生成并复制。脚本导入后生效的能力：
 
-- **musicUrl**（wy 源）：`128k / 320k / flac / flac24bit` 四档，官方客户端会按自身白名单显示这几档；能展示更多档位的衍生客户端还会看到 `hires`（Hi-Res）与 `jymaster`（超清母带），部分客户端的旧档位名 `192k` 也按极高处理。档位对应 Engine 的 `standard / exhigh / lossless / jymaster / hires`，享受注册用户级取链与[灰色曲目匹配](playback-sources.md)；
-- **取流音质**：`/cm/ncm/song/url` 默认携带**服务端 SVIP Cookie**（见 `cm_ncm.call`），因此**所有注册用户**（无需自行绑定网易云会员）都能取得该账号可用的最高档；实测母带档返回 192kHz/24bit、约 4.46Mbps。请求档位在歌曲没有对应资源时由 Engine 自动降档，不会直接失败；
+- **musicUrl**（wy 源）：只声明落雪音质枚举内的 `128k / 320k / flac / flac24bit` 四档（`qualitys` 必须用这些值，否则客户端无法正确映射档位）。其中 **`flac24bit` 就是客户端的最高档**（界面显示 FLAC Hires / 超清母带），映射 Engine 的 `jymaster`；`128k / 320k / flac` 分别映射 `standard / exhigh / lossless`。客户端若传 `192k`、`ape`、`wav` 也按 `exhigh / lossless / lossless` 处理。取链享受注册用户级匹配与[灰色曲目匹配](playback-sources.md)；
+- **取流音质**：`/cm/ncm/song/url` 默认携带**服务端 SVIP Cookie**（见 `cm_ncm.call`），因此**所有注册用户**（无需自行绑定网易云会员）都能取得该账号可用的最高档；实测母带档返回 192kHz/24bit、约 4.5Mbps。请求档位在歌曲没有对应资源时由 Engine 自动降档，不会直接失败；
 - **lyric**（wy 源）：歌词走 Engine 归一化接口，主歌词、翻译与罗马音按毫秒时间轴转换成 LRC。官方客户端的 `wy` 动作白名单只开放 `musicUrl`，因此不在 `inited` 中声明；支持该协议的衍生客户端可直接调用；
 - 其余音源（kw/kg/tx/mg）与动作会明确返回不支持，不会误解析。
 

@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 
 # 音源脚本自身的版本。LX 客户端靠它判断「检查更新」是否需要拉新脚本。
-SOURCE_VERSION = "1.0.2"
+SOURCE_VERSION = "1.0.3"
 
 # 兜底基址：仅在请求头完全推不出对外域名时使用（正常线上永远走 Host 头）。
 DEFAULT_API_BASE = "https://music.20110208.xyz/cm"
@@ -68,22 +68,21 @@ const setTimer = typeof setTimeout === 'function'
 const clearTimer = typeof clearTimeout === 'function'
   ? (t) => { if (t) clearTimeout(t) } : () => {}
 
-// LX 音质档 → Engine /ncm/song/url 的 level。
-// 官方客户端的 wy 白名单只有前四档；能展示更多档位的衍生客户端可直接选
-// hires / jymaster（引擎侧由服务端 SVIP cookie 取流，所有注册用户都可用）。
-// 192k 是部分衍生客户端的旧档位名，映射到 exhigh。
+// 音质值必须落在 LX 自己的枚举里（common.d.ts: '128k'|'320k'|'flac'|'flac24bit'
+// '192k'|'ape'|'wav'），否则客户端无法映射、会漏掉高档位。其中 flac24bit 就是
+// 客户端的最高档（FLAC Hires / 超清母带），这里映射到 Engine 的 jymaster。
+// handler 另外容忍部分衍生客户端传过的旧档位名（ape/wav 按无损处理），
+// 但它们**不声明**在 qualitys 里，避免任何一个客户端因未知值解析失败。
 const QUALITY_LEVELS = {
   '128k': 'standard',
   '320k': 'exhigh',
   'flac': 'lossless',
-  'flac24bit': 'jymaster',
+  'flac24bit': 'jymaster',   // 超清母带（客户端最高档）
   '192k': 'exhigh',
-  'hires': 'hires',
-  'jymaster': 'jymaster',
+  'ape': 'lossless',
+  'wav': 'lossless',
 }
-// 声明顺序沿用 LX 的「低 → 高」。官方客户端会按自身白名单取交集（仍是四档），
-// 支持更多档位的客户端则能直接看到母带 / Hi-Res。
-const qualitys = ['128k', '320k', 'flac', 'flac24bit', 'hires', 'jymaster']
+const qualitys = ['128k', '320k', 'flac', 'flac24bit']
 
 function httpGet(url, needAuth) {
   return new Promise((resolve, reject) => {
