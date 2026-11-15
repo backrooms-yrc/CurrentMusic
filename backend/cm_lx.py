@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 
 # 音源脚本自身的版本。LX 客户端靠它判断「检查更新」是否需要拉新脚本。
-SOURCE_VERSION = "1.0.5"
+SOURCE_VERSION = "1.0.6"
 
 # 兜底基址：仅在请求头完全推不出对外域名时使用（正常线上永远走 Host 头）。
 DEFAULT_API_BASE = "https://music.20110208.xyz/cm"
@@ -45,16 +45,17 @@ _SCRIPT_TEMPLATE = r"""
  * @author Rcst20
  * @homepage https://music.20110208.xyz/home/engine/
  *
- * 本直链内嵌你的 CurrentMusic 个人令牌，请勿分享给他人；
- * 提示「登录已失效」时，请到 CurrentMusic 网页端「设置 → 落雪音乐音源」重新生成直链并更新。
+ * 直链内嵌个人令牌，请勿分享；失效时到 CurrentMusic 设置页重新生成。
  */
 
-// 整体包进 IIFE（与官方 dist 脚本同构）：客户端可能在复用上下文里重复 eval，
-// 顶层 const 重复声明会直接抛错并被判为「音源解析失败」；同时也避免污染全局。
+// IIFE：客户端可能在复用上下文里重复 eval，顶层声明会重复定义；也避免污染全局。
 ;(function () {
 'use strict'
 
-const { EVENT_NAMES, request } = globalThis.lx
+var lx = globalThis.lx
+if (!lx || !lx.EVENT_NAMES) return
+var EVENT_NAMES = lx.EVENT_NAMES
+var request = lx.request
 
 const API_BASE = __API_BASE__
 const TOKEN = __TOKEN__
@@ -68,14 +69,9 @@ const setTimer = typeof setTimeout === 'function'
 const clearTimer = typeof clearTimeout === 'function'
   ? (t) => { if (t) clearTimeout(t) } : () => {}
 
-// 音质声明按落雪客户端实际支持的档位枚举给出：
-//   - 官方 lx-music-desktop/mobile：wy 白名单为 128k/320k/flac/flac24bit，
-//     多出的值会被客户端过滤，不影响官方端；
-//   - CurrentMusicX 最新 CI（LxSource.kt 的 lxQualities）：
-//     128k/320k/flac/flac24bit/hires/atmos/master，分别显示为
-//     标准/极高/无损/24bit/Hi-Res/高清臻音/超清母带。
-// 'jymaster' 不是任何客户端的音质值，不能写进 qualitys——它是 Engine 的
-// 内部档位名，只能出现在请求映射里（master → jymaster）。
+// 音质取值必须是客户端认识的档位：官方四档 + CurrentMusicX 的
+// 128k/320k/flac/flac24bit/hires/atmos/master（标准/极高/无损/24bit/
+// Hi-Res/高清臻音/超清母带）。jymaster 是 Engine 内部档位名，不能声明。
 const QUALITY_LEVELS = {
   '128k': 'standard',
   '320k': 'exhigh',
@@ -183,8 +179,9 @@ const fail = (cb, message) => {
   return Promise.reject(err)
 }
 
-globalThis.lx.on(EVENT_NAMES.request, ({ source, action, info, callback }) => {
-  const cb = typeof callback === 'function' ? callback : null
+var handler = function (payload) {
+  var source = payload.source, action = payload.action, info = payload.info, callback = payload.callback
+  var cb = typeof callback === 'function' ? callback : null
   let work
   switch (action) {
     case 'musicUrl':
@@ -209,24 +206,29 @@ globalThis.lx.on(EVENT_NAMES.request, ({ source, action, info, callback }) => {
       work = fail(cb, '不支持的操作：' + action)
   }
   if (cb) {
-    work.then((data) => cb(null, data), (err) => cb(err || new Error('请求失败')))
+    work.then(function (data) { cb(null, data) }, function (err) { cb(err || new Error('请求失败')) })
     work.catch(function () {})   // 已交给 callback，防未处理 rejection 告警
   }
   return work
-})
+}
 
-globalThis.lx.send(EVENT_NAMES.inited, {
-  status: true,
-  openDevTools: false,
-  sources: {
-    wy: {
-      name: 'CurrentMusic 流声引擎',
-      type: 'music',
-      actions: ['musicUrl'],
-      qualitys: qualitys,
+// 初始化全程兜底：注册失败也不影响 inited 发出，避免客户端判为「初始化失败」。
+try { lx.on(EVENT_NAMES.request, handler) } catch (e) {}
+
+try {
+  lx.send(EVENT_NAMES.inited, {
+    status: true,
+    openDevTools: false,
+    sources: {
+      wy: {
+        name: 'CurrentMusic 流声引擎',
+        type: 'music',
+        actions: ['musicUrl'],
+        qualitys: qualitys,
+      },
     },
-  },
-})
+  })
+} catch (e) {}
 })()
 """.lstrip("\n")
 

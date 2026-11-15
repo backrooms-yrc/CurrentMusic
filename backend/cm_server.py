@@ -4630,6 +4630,9 @@ def route(handler, method):
         # 挑 CDN 线路并把灰色曲目判成地区不可用。Web/App 等其它入口不受影响。
         auth = handler.headers.get("Authorization", "")
         cn_ip = _truthy(q.get("cn")) or auth.startswith("Bearer clx_")
+        if cn_ip:
+            # 诊断：落雪直链走到取链阶段才会打这条（不含令牌），便于排查导入/播放失败。
+            log.info("落雪取链 song=%s level=%s", q.get("id"), q.get("level") or "auto")
         try:
             out = resolve_play_url(
                 ncm_id, level,
