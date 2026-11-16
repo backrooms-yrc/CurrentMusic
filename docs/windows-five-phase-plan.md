@@ -36,7 +36,7 @@
 
 ## 第一阶段验证记录
 
-第一阶段功能代码已交付，尚待 Windows 实机验收。2026-11-01 本地 .NET 10.0.403 检查通过 8 组（含公网探针）；[Windows CI](https://github.com/backrooms-yrc/CurrentMusic/actions/runs/41317927628) 已完成 Linux 核心检查、Windows x64 与 ARM64 核心检查和原生自包含构建，两种架构产物均已上传。实现提交为 `6c4bc88`，构建与运行说明见 `windows/README.md`。编译成功不等于 Windows 运行验收通过。
+第一阶段功能代码已交付，尚待 Windows 实机验收。2026-11-01 本地 .NET 10.0.403 检查通过 8 组（含公网探针）；[Windows CI](https://github.com/CurrentMusic-Team/CurrentMusic/actions/runs/41317927628) 已完成 Linux 核心检查、Windows x64 与 ARM64 核心检查和原生自包含构建，两种架构产物均已上传。实现提交为 `6c4bc88`，构建与运行说明见 `windows/README.md`。编译成功不等于 Windows 运行验收通过。
 
 Windows 实机检查：
 

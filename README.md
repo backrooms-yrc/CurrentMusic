@@ -11,8 +11,8 @@
 逐字歌词 · 云端歌单 · 多人一起听
 
 <p>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/backrooms-yrc/CurrentMusic?style=flat-square&amp;color=216359&amp;label=%E7%89%88%E6%9C%AC" alt="最新发布版本"></a>
-  <a href="https://github.com/backrooms-yrc/CurrentMusic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/backrooms-yrc/CurrentMusic/ci.yml?branch=main&amp;style=flat-square&amp;label=CI" alt="主分支构建状态"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/CurrentMusic-Team/CurrentMusic?style=flat-square&amp;color=216359&amp;label=%E7%89%88%E6%9C%AC" alt="最新发布版本"></a>
+  <a href="https://github.com/CurrentMusic-Team/CurrentMusic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/CurrentMusic-Team/CurrentMusic/ci.yml?branch=main&amp;style=flat-square&amp;label=CI" alt="主分支构建状态"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-216359?style=flat-square" alt="MIT 许可"></a>
 </p>
 
@@ -162,7 +162,7 @@ npm --prefix api-docs run publish
 
 ## 参与贡献
 
-欢迎通过 Issue 反馈问题或提交 PR。提交前按改动范围运行构建与回归检查。后端测试使用临时数据库和数据目录。 [反馈问题](https://github.com/backrooms-yrc/CurrentMusic/issues) · [贡献指南](CONTRIBUTING.md) · [更新日志](CHANGELOG.md)
+欢迎通过 Issue 反馈问题或提交 PR。提交前按改动范围运行构建与回归检查。后端测试使用临时数据库和数据目录。 [反馈问题](https://github.com/CurrentMusic-Team/CurrentMusic/issues) · [贡献指南](CONTRIBUTING.md) · [更新日志](CHANGELOG.md)
 
 <details>
 <summary>常用验证命令</summary>

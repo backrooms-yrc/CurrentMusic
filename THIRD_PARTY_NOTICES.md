@@ -106,7 +106,7 @@ be imported without installing the Qt GUI stack.
 - SoaringBird developed `soaringbird-music` as a discontinued third-party
   CurrentMusic Web client. The author contributed the adapted theme to this
   repository under its MIT license in
-  [PR #3](https://github.com/backrooms-yrc/CurrentMusic/pull/3).
+  [PR #3](https://github.com/CurrentMusic-Team/CurrentMusic/pull/3).
 - CurrentMusic branding in `assets/brand/` was generated for this project;
   provenance is recorded in its README. Third-party decoration metadata does
   not grant rights to the images referenced by it. User uploads, avatars,

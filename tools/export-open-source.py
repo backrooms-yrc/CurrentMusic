@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_URL = "https://github.com/backrooms-yrc/CurrentMusic.git"
+PUBLIC_URL = "https://github.com/CurrentMusic-Team/CurrentMusic.git"
 DIRECTORIES = {".github", "api-docs", "app", "assets", "backend", "decorations", "deploy", "docs", "site", "tools", "windows", "web", "licenses"}
 FILES = {".gitignore", ".gitleaks.toml", "README.md", "LICENSE", "CHANGELOG.md",
          "THIRD_PARTY_NOTICES.md", "CONTRIBUTING.md", "SECURITY.md", "build.sh", "publish_release.py"}

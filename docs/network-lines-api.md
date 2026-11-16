@@ -34,6 +34,6 @@ Nginx 为 `/app/auto` 配置精确静态文件映射（见 `deploy/nginx.conf.ex
 2026-11-03 已修复 `cm.bileizhen.top` 的 Cloudflare Error 1000：原 DNS-only CNAME
 指向 Cloudflare 边缘 IP，现改为代理到真实源站；依赖该链路的 `currentmusic.geekertao.com`
 也恢复正常。四个公网入口的资源内容一致，浏览器均可启动。
-部署与排查细节见[网络传输说明](https://github.com/backrooms-yrc/CurrentMusic/blob/main/docs/network-performance.md#镜像同步与回源排查)。
+部署与排查细节见[网络传输说明](https://github.com/CurrentMusic-Team/CurrentMusic/blob/main/docs/network-performance.md#镜像同步与回源排查)。
 
 验证：`tools/run-tests.sh -p test_network_lines.py`，以及浏览器桌面/手机尺寸测试。

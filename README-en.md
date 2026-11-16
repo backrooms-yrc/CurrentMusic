@@ -11,8 +11,8 @@
 Word-by-word lyrics · Cloud playlists · Listening rooms
 
 <p>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/backrooms-yrc/CurrentMusic?style=flat-square&amp;color=216359" alt="Latest release"></a>
-  <a href="https://github.com/backrooms-yrc/CurrentMusic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/backrooms-yrc/CurrentMusic/ci.yml?branch=main&amp;style=flat-square&amp;label=CI" alt="Main branch build status"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/v/release/CurrentMusic-Team/CurrentMusic?style=flat-square&amp;color=216359" alt="Latest release"></a>
+  <a href="https://github.com/CurrentMusic-Team/CurrentMusic/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/CurrentMusic-Team/CurrentMusic/ci.yml?branch=main&amp;style=flat-square&amp;label=CI" alt="Main branch build status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-216359?style=flat-square" alt="MIT license"></a>
 </p>
 
@@ -162,7 +162,7 @@ The API docs build from backend routes and the registry. Set `NCM_API_DIR` to th
 
 ## Contributing
 
-Open an issue or submit a pull request. Run build and regression checks that cover your change. Backend tests use a temporary database and data directory. [Report an issue](https://github.com/backrooms-yrc/CurrentMusic/issues) · [Contribution guide](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+Open an issue or submit a pull request. Run build and regression checks that cover your change. Backend tests use a temporary database and data directory. [Report an issue](https://github.com/CurrentMusic-Team/CurrentMusic/issues) · [Contribution guide](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 <details>
 <summary>Common validation commands</summary>

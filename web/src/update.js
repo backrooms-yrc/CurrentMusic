@@ -5,7 +5,7 @@ import { esc, toast } from './ui.js';
 import { currentVersion, isNewer } from './version.js';
 
 const SKIP_KEY = 'cm.updateSkip';         // 本会话跳过的版本（避免反复打扰）
-const GH_REPO = 'backrooms-yrc/CurrentMusic';
+const GH_REPO = 'CurrentMusic-Team/CurrentMusic';
 
 const fmtSize = n => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB');
 

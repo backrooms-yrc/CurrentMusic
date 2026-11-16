@@ -3,7 +3,7 @@ module.exports = {
   tagline: '音乐、账户与实时互动，一份完整的接入指南。',
   url: 'https://music.20110208.xyz', baseUrl: '/api-docs/',
   favicon: 'img/logo.svg?v=sage1', trailingSlash: true,
-  organizationName: 'backrooms-yrc', projectName: 'CurrentMusic',
+  organizationName: 'CurrentMusic-Team', projectName: 'CurrentMusic',
   onBrokenLinks: 'throw',
   onBrokenAnchors: 'throw',
   markdown: {format: 'md', hooks: {onBrokenMarkdownLinks: 'throw', onBrokenMarkdownImages: 'throw'}},

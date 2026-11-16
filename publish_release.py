@@ -18,7 +18,7 @@ import time
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(ROOT, "dist")
 RELEASES = os.path.join(ROOT, "data", "releases")
-GH_REPO = "backrooms-yrc/CurrentMusic"
+GH_REPO = "CurrentMusic-Team/CurrentMusic"
 
 
 def pick_apk():

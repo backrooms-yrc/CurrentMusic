@@ -1,6 +1,6 @@
 # 参与 CurrentMusic
 
-完整源码统一在 `backrooms-yrc/CurrentMusic` 维护，默认分支为 `main`。请从最新 main 建分支并提交 PR。历史私有库仅保留非公开历史，不是公开开发的上游。
+完整源码统一在 `CurrentMusic-Team/CurrentMusic` 维护，默认分支为 `main`。请从最新 main 建分支并提交 PR。历史私有库仅保留非公开历史，不是公开开发的上游。
 
 ```bash
 git switch -c codex/your-change

@@ -32,4 +32,4 @@ npm run publish
 
 [下载目录清单](manifest.json) · [CurrentStation 的在线接口目录](/cm/station/api-catalog)
 
-项目完整源码现统一在 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic)，自有代码采用 MIT；第三方内容保留原许可。
+项目完整源码现统一在 [CurrentMusic](https://github.com/CurrentMusic-Team/CurrentMusic)，自有代码采用 MIT；第三方内容保留原许可。

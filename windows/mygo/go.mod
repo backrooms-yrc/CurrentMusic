@@ -1,4 +1,4 @@
-module github.com/backrooms-yrc/CurrentMusic/windows/mygo
+module github.com/CurrentMusic-Team/CurrentMusic/windows/mygo
 
 go 1.27.3
 

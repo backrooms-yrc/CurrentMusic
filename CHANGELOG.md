@@ -1,7 +1,7 @@
 # 更新日志
 
 CurrentMusic 的完整版本历史（最新在上）。每个版本都对应一次 APK 发版，
-下载见 [Releases](https://github.com/backrooms-yrc/CurrentMusic/releases)。
+下载见 [Releases](https://github.com/CurrentMusic-Team/CurrentMusic/releases)。
 
 ---
 
