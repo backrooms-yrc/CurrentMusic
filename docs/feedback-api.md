@@ -2,7 +2,14 @@
 
 CurrentMusic 网页的「设置 → 关于与帮助 → 引导与协议 → 意见反馈」接受问题和建议。用户确认公开后，服务端调用 CurrentMusicAI，再把反馈发布到 [CurrentMusicX Issues](https://github.com/bileizhen/CurrentMusicX/issues)。
 
-反馈复用 CurrentMusicAI 的模型路由，优先使用启用的 z.ai 主模型，失败时使用 DeepSeek。两个模型在反馈任务中均使用 `reasoning_effort: "max"`。所有可用模型调用失败（包括无法解析模型响应）时，直接发布反馈原文，用首行生成标题。模型正常返回空标题或空正文表示没有可发布的反馈，此时不会创建 Issue。
+反馈复用 CurrentMusicAI 的模型路由，优先使用启用的 z.ai 主模型，失败时使用 DeepSeek。两个模型在反馈任务中均使用 `reasoning_effort: "max"`。模型判断没有可公开发布的反馈时，回执状态为 `rejected`。所有可用模型调用失败（包括无法解析模型响应）时，直接发布脱敏后的原文，用首行生成标题。
+
+## Issue 模板
+
+- 故障用 [报告问题模板](https://github.com/bileizhen/CurrentMusicX/blob/main/.github/ISSUE_TEMPLATE/bug.yml)，标题前缀为 `[Bug]`。字段包含版本、设备、安装来源、模块、复现步骤、实际与预期结果、频率、环境和诊断信息。
+- 改进建议用 [功能建议模板](https://github.com/bileizhen/CurrentMusicX/blob/main/.github/ISSUE_TEMPLATE/feature.yml)，标题前缀为 `[Feature]`。字段包含模块、需求与场景、建议方案和补充信息。
+
+AI 从用户提供的信息填写各字段。缺少的必填信息会标为「不清楚」，缺少的可选信息会标为 `_No response_`，无法识别的模块归为「其他」。Bug 模板中的搜索和隐私检查确认框保持未勾选。服务端随创建请求提交模板对应的 `bug` 或 `enhancement` 标签，GitHub 根据发帖身份权限决定是否应用。
 
 服务端对反馈中的常见凭据、联系方式和链接做脱敏。发送给模型和 GitHub 的内容不附带 CurrentMusic 账号资料。反馈接收回执仅存储站内用户 ID、请求标识、时间、状态和 Issue 编号，原始反馈不写入数据库。
 

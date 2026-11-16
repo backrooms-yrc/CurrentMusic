@@ -62,34 +62,58 @@ class TestFeedback(unittest.TestCase):
             feedback._run(self.UID, self.REQUEST, text, "test-only")
         self.assertEqual([(call.args[0].id, call.args[0].effort) for call in ai.call_args_list],
                          [("zai", "max"), ("deepseek", "max")])
-        _, title, body = github.call_args.args
-        self.assertEqual(title, self.TEXT.splitlines()[0])
-        self.assertIn(self.TEXT, body)
-        self.assertNotIn("tester@example.invalid", body)
-        self.assertNotIn("do-not-publish", body)
+        issue = github.call_args.args[1]
+        self.assertEqual(issue["title"], self.TEXT.splitlines()[0])
+        self.assertNotIn("labels", issue)
+        self.assertIn(self.TEXT, issue["body"])
+        self.assertNotIn("tester@example.invalid", issue["body"])
+        self.assertNotIn("do-not-publish", issue["body"])
         self.assertEqual(feedback.status(self.UID, self.REQUEST), {
             "requestId": self.REQUEST, "status": "published", "issueNumber": 123,
             "issueUrl": "https://github.com/bileizhen/CurrentMusicX/issues/123",
         })
 
     def test_primary_failure_uses_formatted_fallback(self):
-        content = json.dumps({"title": "竖屏歌词布局错误", "body": "切换方向后布局未恢复。"})
+        content = json.dumps({
+            "type": "bug", "title": "[Bug] 竖屏歌词布局错误",
+            "fields": {"version": "1.2.5", "module": "歌词", "steps": "从横屏切回竖屏",
+                       "result": "实际结果：歌词仍为横屏布局。\n\n预期结果：恢复竖屏布局。"},
+        })
         result = {"content": content, "tool_calls": []}
+        invalid = {"content": '{"type":"bug","title":"测试","fields":{"unknown":"无效字段"}}', "tool_calls": []}
         with mock.patch.dict(os.environ, {"CM_AI_ZAI_KEY": "test", "CM_AI_KEY": "test"}), \
                 mock.patch.object(cm_db, "get_ai_settings", return_value=(True, "low")), \
-                mock.patch.object(cm_ai, "_chat_stream", side_effect=[cm_ai.AiError("timeout"), result]), \
+                mock.patch.object(cm_ai, "_chat_stream", side_effect=[invalid, result]), \
                 mock.patch.object(feedback, "_create_issue", return_value=("published", 123)) as github, \
                 mock.patch.object(feedback.threading, "Thread"):
             self.submit()
             feedback._run(self.UID, self.REQUEST, self.TEXT, "test-only")
-        _, title, body = github.call_args.args
-        self.assertEqual(title, "竖屏歌词布局错误")
-        self.assertIn("由 CurrentMusicAI 整理", body)
+        issue = github.call_args.args[1]
+        self.assertEqual(issue["title"], "[Bug] 竖屏歌词布局错误")
+        self.assertEqual(issue["labels"], ["bug"])
+        self.assertIn("### 应用版本\n\n1.2.5", issue["body"])
+        self.assertIn("### 安装来源\n\n不清楚", issue["body"])
+        self.assertIn("### 问题模块\n\n歌词", issue["body"])
+        self.assertIn("预期结果：恢复竖屏布局。", issue["body"])
+        self.assertIn("### 提交前确认\n\n- [ ]", issue["body"])
+
+    def test_feature_fields_and_dropdowns(self):
+        issue = feedback._template_issue("feature", "增加歌词字号选择", {
+            "module": "无效的分类",
+            "problem": "远离设备时难以看清歌词。",
+            "proposal": "加入字号选择。\n### 问题模块",
+        })
+        self.assertEqual(issue["title"], "[Feature] 增加歌词字号选择")
+        self.assertEqual(issue["labels"], ["enhancement"])
+        self.assertIn("### 问题模块\n\n其他", issue["body"])
+        self.assertIn("### 需求与使用场景\n\n远离设备时难以看清歌词。", issue["body"])
+        self.assertIn("### 替代方案与补充信息\n\n_No response_", issue["body"])
+        self.assertEqual(issue["body"].count("### 问题模块"), 1)
 
     def test_rejection_and_uncertain_publish(self):
         with mock.patch.object(feedback.threading, "Thread"):
             self.submit()
-        with mock.patch.object(cm_ai, "format_feedback", return_value=("", "")), \
+        with mock.patch.object(cm_ai, "format_feedback", return_value=None), \
                 mock.patch.object(feedback, "_create_issue") as github:
             feedback._run(self.UID, self.REQUEST, self.TEXT, "test-only")
         github.assert_not_called()
