@@ -15,6 +15,7 @@ const pages = {
       ['二、我们如何使用信息', '<p>我们仅将信息用于提供和改进服务、跨设备同步、账户验证、内容展示、客服与故障处理、防止滥用、履行法律义务，以及在获得授权后向通行证应用提供明确列出的资料。我们不出售你的个人信息，也不将其用于与本服务无关的广告画像。</p>'],
       ['三、第三方与信息共享', `
         <p>播放、搜索、歌词、网易云账号功能等请求可能发送至网易云音乐及其内容分发网络；搜索、音源获取及部分账号写操作会携带你的真实出口 IP，以满足地区判断、内容分发、风控和 IP 属地要求。官方音源不可用时，服务器会向音源匹配服务发送歌曲 ID 以尝试获取可用音频，不向其发送你的账号登录凭据；播放匹配音频时，相应服务商会处理必要的网络信息。线路镜像/CDN、邮件或短信服务商会为传输、加速和验证码发送处理必要的网络或联系方式信息。</p>
+        <p>你确认提交意见反馈后，反馈文字会由 CurrentMusicAI 的模型服务处理，整理后的内容会公开发布到 GitHub CurrentMusicX Issues。主模型和备用模型都失败时会发布原文。发布内容不附带本站账号资料。请勿填写个人信息或登录凭据。</p>
         <p>你授权 CurrentStation 通行证第三方应用时，授权页会列出应用名称和权限范围；只有你确认后才会提供相应资料，你可在设置的“授权管理”中撤回。第三方服务适用其自己的隐私规则。</p>`],
       ['四、存储、安全与保留', '<p>服务数据由项目服务器及所使用的镜像/CDN 基础设施处理。我们采用 HTTPS、访问控制、会话撤销、密码哈希、限流和安全审计等措施；但互联网服务不存在绝对安全。信息在实现功能、解决争议和满足安全或法律要求所需期间保留；缓存和备份可能在轮换周期内延迟删除。</p>'],
       ['五、你的权利与选择', '<p>你可以修改昵称和公开设置，管理登录设备、网易云绑定与通行证授权，删除自己可删除的内容，或停止使用服务。需要查阅、更正、导出或删除账户及相关信息时，可通过下方联系方式提出申请；为保护账户，我们可能先验证你的身份。法律另有要求或为处理安全、争议所必需的信息可能无法立即删除。</p>'],
@@ -44,7 +45,7 @@ export function render(el, params = []) {
   const kind = params[0] === 'terms' ? 'terms' : 'privacy';
   const page = pages[kind];
   el.innerHTML = `<article class="cm-legal">
-    <header><span class="material-icons-outlined">${kind === 'privacy' ? 'shield' : 'gavel'}</span><div><h1>${esc(page.title)}</h1><p>生效及最近更新：${UPDATED}</p></div></header>
+    <header><span class="material-icons-outlined">${kind === 'privacy' ? 'shield' : 'gavel'}</span><div><h1>${esc(page.title)}</h1><p>生效及最近更新：${kind === 'privacy' ? '2026 年 11 月 17 日' : UPDATED}</p></div></header>
     <div class="cm-legal-lead">${page.intro}</div>
     ${page.sections.map(([title, body]) => `<section><h2>${title}</h2>${body}</section>`).join('')}
     <nav><a href="#/legal/privacy">隐私政策</a><span>·</span><a href="#/legal/terms">用户协议</a><span>·</span><a href="#/settings">返回设置</a></nav>

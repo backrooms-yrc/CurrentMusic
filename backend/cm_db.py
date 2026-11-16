@@ -194,6 +194,15 @@ CREATE TABLE IF NOT EXISTS ai_settings (
   zai_enabled INTEGER NOT NULL CHECK (zai_enabled IN (0, 1)),
   zai_effort TEXT NOT NULL CHECK (zai_effort IN ('low', 'high', 'max'))
 );
+CREATE TABLE IF NOT EXISTS feedback_receipts (
+  user_id INTEGER NOT NULL,
+  request_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  issue_number INTEGER,
+  PRIMARY KEY (user_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback_receipts(created_at);
 CREATE INDEX IF NOT EXISTS idx_likes_song ON likes(ncm_id);
 CREATE INDEX IF NOT EXISTS idx_favs_user ON favs(user_id);
 CREATE INDEX IF NOT EXISTS idx_pl_owner ON playlists(user_id);

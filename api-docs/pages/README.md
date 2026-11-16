@@ -34,6 +34,7 @@
 - 接入 QQ 音乐：[扫码、个人会话与能力对照](guide-qq-music-api.md) · [QQ 音乐接口清单](qqmusic.md)。
 - 第三方产品登录：[通行证接入](guide-passport-api.md)，使用授权码 + PKCE。
 - 实时能力：[聊天 AI](guide-currentmusic-ai.md)、[一起听](guide-rooms-design.md)。
+- [意见反馈](guide-feedback-api.md)：提交反馈、查询发布状态与 CurrentMusicX Issue。
 - 项目署名：[一行代码嵌入流声引擎徽章](guide-engine-badge-api.md)。
 
 ## 实用链接

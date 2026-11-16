@@ -65,6 +65,7 @@ import { needsWelcome } from './auth-flow.js';
 import * as passkeysPage from './passkeys.js';
 import * as networkPage from './pages/network.js';
 import * as donatePage from './pages/donate.js';
+import * as feedbackPage from './pages/feedback.js';
 import * as settingsPage from './pages/settings.js';
 import * as adminPage from './pages/admin.js';
 import * as roomsPage from './pages/rooms.js';
@@ -140,6 +141,7 @@ const ROUTES = [
   { re: /^#\/passkeys$/, page: passkeysPage, title: '通行密钥' },
   { re: /^#\/network$/, page: networkPage, title: 'CDN 与音源' },
   { re: /^#\/donate$/, page: donatePage, title: '捐赠支持' },
+  { re: /^#\/feedback$/, page: feedbackPage, title: '意见反馈' },
   { re: /^#\/settings(?:\/([a-z-]+)(?:\/([a-z-]+))?)?$/, page: settingsPage, title: '设置' },
   { re: /^#\/legal\/(privacy|terms)$/, page: legalPage, title: '政策与协议', fixed: m => [m[1]] },
   { re: /^#\/admin$/, page: adminPage, title: '管理员' },
@@ -306,7 +308,7 @@ function boot() {
     if (!auth.token) return;                 // 已处理过（并发请求）
     auth.clear();                            // 主动退出，清掉失效会话
     const h = location.hash || '#/home';
-    if (h.startsWith('#/user') || h.startsWith('#/settings') || h.startsWith('#/two-factor') || h.startsWith('#/security-question') || h.startsWith('#/welcome')) {
+    if (h.startsWith('#/user') || h.startsWith('#/settings') || h.startsWith('#/two-factor') || h.startsWith('#/security-question') || h.startsWith('#/welcome') || h === '#/feedback') {
       try { router(); } catch { /* 忽略：重渲染失败不影响退出与提示 */ }
     }
     mdui.dialog({

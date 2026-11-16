@@ -26,6 +26,7 @@ import cm_2fa
 import cm_passkeys
 import cm_db
 import cm_decor
+import cm_feedback
 import cm_lx
 import cm_lddc
 import cm_levels
@@ -2952,6 +2953,8 @@ def route(handler, method):
             ("GET", "/donation/qr", "公开", "官方捐赠二维码图片（backend/assets/donation-qr.jpg，可缓存）"),
             ("GET", "/donation/info", "Bearer", "捐赠引导信息：账号基本信息快照、二维码地址、本人捐赠历史与累计 {mine:{items,count,totalCents}}"),
             ("POST", "/donation", "Bearer", "提交捐赠记录 {amount 元, txnId 交易单号, note? 备注}；金额为用户自报，交易单号全站唯一（重复 409）"),
+            ("POST", "/feedback", "Bearer", "提交意见 {requestId, content, public:true}；异步整理后发布为 CurrentMusicX 公开 Issue"),
+            ("GET", "/feedback", "Bearer", "按 requestId 查询本人反馈进度和公开 Issue 链接"),
             ("GET", "/admin/donations", "管理员", "捐赠用户列表：搜索/分页/聚合（单笔与用户累计金额、次数）；sort=recent/recent_asc/amount/user_total/user_count/name"),
             ("DELETE", "/admin/donations/{id}", "管理员", "删除捐赠记录（清理误报）"),
             ("POST", "/admin/donations", "超管/站长", "为任一用户代录捐赠 {userId 或 username, amount 元, txnId?, note?}；单号可留空自动生成 ADMIN- 前缀占位"),
@@ -4997,6 +5000,22 @@ def route(handler, method):
         return serve_file(handler, fp, "application/vnd.android.package-archive",
                           download_name=name, cache="public, max-age=86400")
 
+    if path == "/feedback" and method == "POST":
+        u = require_user(handler)
+        try:
+            result = cm_feedback.submit(u["id"], body)
+        except cm_feedback.FeedbackError as e:
+            raise ApiError(e.code, str(e))
+        return jresp(handler, 202, result, cache_control="no-store")
+
+    if path == "/feedback" and method == "GET":
+        u = require_user(handler)
+        try:
+            result = cm_feedback.status(u["id"], q.get("requestId"))
+        except cm_feedback.FeedbackError as e:
+            raise ApiError(e.code, str(e))
+        return jresp(handler, 200, result, cache_control="no-store")
+
     # ---- 播放页「问AI」：私有 SSE，复用 CurrentMusicAI 工具/卡片/上下文 ----
     if path == "/ai/live" and method == "POST":
         u = require_user(handler)
@@ -6055,6 +6074,7 @@ def _room_housekeeping():
 
 def main():
     cm_db.init()
+    cm_feedback.recover()
     _rc = cm_db.connect()
     cm_rooms.init_room_tables(_rc)
     cm_chat.init_chat_tables(_rc)

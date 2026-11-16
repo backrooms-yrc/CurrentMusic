@@ -6250,3 +6250,23 @@ html[data-ui-preset="soaringbird"] .cm-empty { color: var(--sb-text-2); }
 .cm-donate-done .material-icons-outlined { font-size: 44px; color: #e91e63; }
 .cm-donate-done h2 { margin: 0; }
 .cm-donate-done p { margin: 0 16px; color: var(--mdui-color-on-surface-variant, #49454f); }
+
+.cm-feedback { max-width: 640px; margin: 0 auto; }
+.cm-feedback p { line-height: 1.6; }
+.cm-feedback a { color: rgb(var(--mdui-color-primary)); }
+.cm-feedback form { display: grid; gap: 12px; }
+.cm-feedback textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid rgb(var(--mdui-color-outline));
+  border-radius: 12px;
+  background: rgb(var(--mdui-color-surface));
+  color: inherit;
+  font: inherit;
+}
+.cm-feedback-consent { display: flex; align-items: center; gap: 8px; }
+.cm-feedback input { accent-color: rgb(var(--mdui-color-primary)); }
+.cm-feedback mdui-button { justify-self: start; }
+.cm-feedback [role="status"]:empty { display: none; }

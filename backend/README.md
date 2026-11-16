@@ -15,6 +15,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
   最后才回退到自研按行时长估算
 - 播放与社区：最近播放/时长、点赞/收藏、歌单、发现页帖子、公共聊天室（SSE）
 - 播放页问 AI：z.ai 主模型、DeepSeek 自动回退、联网搜索/抓取、站内搜歌与卡片
+- 意见反馈：CurrentMusicAI 最高思考强度整理，自动发布到 CurrentMusicX Issues，双模型失败时发布原文
 - 分享：歌曲分享元数据与服务端分享图（Pillow + segno，可选）
 - CurrentStation 通行证：OAuth 2.0 Authorization Code + PKCE
 - IP 属地、CDN 边缘健康度、限速与审计
@@ -82,6 +83,7 @@ python3 backend/cm_server.py
 | `CM_AI_BASE` | `https://api.deepseek.com/v1` | 模型 API |
 | `CM_AI_MODEL` | `deepseek-flash` | 模型名 |
 | `CM_AI_EFFORT` | `none` | DeepSeek 思考强度，默认关闭思考以节省 Token，仍支持联网搜索与函数工具。可用 `none/low/high/max` |
+| `CM_FEEDBACK_GITHUB_TOKEN` | 空 | 意见反馈专用 GitHub 凭据，需可在 `bileizhen/CurrentMusicX` 创建 Issue |
 | `CM_SMTP_HOST/PORT/USER/PASS/FROM` | 空 | 邮箱验证码 |
 | `CM_SMS_WEBHOOK/TOKEN/SIGN` | 空 | 短信验证码 |
 | `CM_CAST_CACHE` | `<CM_DATA_DIR>/cast` | 投屏音频缓存 |
@@ -106,6 +108,7 @@ LDDC 的安装/升级见 `deploy/README.md`；它使用独立 venv，后端认�
 - `docs/private-roaming-api.md`：私人漫游模式/场景、推荐回调与垃圾桶
 - `docs/play-history-sync.md`：播放历史实时写入绑定网易云账号
 - `docs/currentmusic-ai.md`：AI 聊天与播放页问AI
+- `docs/feedback-api.md`：意见反馈、发布回执与 GitHub 配置
 - `docs/share-api.md`：分享元数据/图片
 - `docs/realip.md`：RealIP 透传策略
 - `docs/rooms-design.md`：听歌房
