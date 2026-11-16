@@ -211,6 +211,8 @@ export function shrinkImage(file, maxSide = 1024, quality = 0.86) {
 }
 
 export const api = {
+  submitFeedback: (requestId, content) => call('POST', '/feedback', { body: { requestId, content, public: true }, auth: true }),
+  feedbackStatus: requestId => call('GET', '/feedback?requestId=' + encodeURIComponent(requestId), { auth: true }),
   securityQuestionStatus: () => call('GET', '/auth/security-question', { auth: true }),
   enableSecurityQuestion: (password, question, answer) => call('POST', '/auth/security-question', { body: { password, question, answer }, auth: true }),
   disableSecurityQuestion: (password, answer) => call('DELETE', '/auth/security-question', { body: { password, answer }, auth: true }),

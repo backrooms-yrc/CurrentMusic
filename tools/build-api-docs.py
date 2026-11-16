@@ -23,7 +23,7 @@ import cm_qq_registry
 GROUPS = {
     'auth': '账号与认证', 'profile': '个人资料', 'passport': '通行证与应用授权',
     'users': '用户与社交', 'levels': '用户与社交', 'ncmbind': '网易云绑定与同步', 'ncm': '音乐与媒体',
-    'network': '线路测速', 'rooms': '一起听房间', 'chat': '聊天与 AI', 'ai': '聊天与 AI',
+    'network': '线路测速', 'rooms': '一起听房间', 'chat': '聊天与 AI', 'ai': '聊天与 AI', 'feedback': '聊天与 AI',
     'admin': '管理接口', 'announcements': '公告', 'posts': '动态', 'playlists': '歌单',
     'likes': '收藏与红心', 'favs': '收藏与红心', 'songs': '音乐与媒体', 'search': '搜索历史',
     'roaming': '私人漫游', 'share': '分享', 'plays': '播放历史', 'decorations': '头像挂件',
@@ -44,6 +44,7 @@ GUIDES = {
     'two-factor-api': '登录两步验证', 'passport-api': '通行证完整接入', 'password-api': '密码找回与修改', 'lyrics-api': '歌词与逐字轴',
     'private-roaming-api': '私人漫游', 'play-history-sync': '网易云听歌历史同步',
     'currentmusic-ai': '聊天 AI、SSE 与模型管理', 'chat-api': '聊天室消息、SSE 与互动',
+    'feedback-api': '意见反馈与 CurrentMusicX Issues',
     'share-api': '分享元数据与图片',
     'engine-badge-api': '流声引擎署名徽章',
     'lx-music-source': '落雪音乐自定义音源',
@@ -211,6 +212,8 @@ def endpoint_text(method, path, node, title, access=None):
         text += ['请求与响应细节见[一起听房间 API 与同步协议](guide-rooms-design.md)。', '']
     if path.startswith('/admin/ai'):
         text += ['配置与响应字段见[CurrentMusicAI 管理接口](guide-currentmusic-ai.md#管理接口)。', '']
+    if path == '/feedback':
+        text += ['请求、回执和原文回退见[意见反馈与 CurrentMusicX Issues](guide-feedback-api.md)。', '']
     if method == 'PATCH':
         text += ['> 路由分支含 PATCH 别名，但当前 HTTP Handler 没有实现 do_PATCH；公网请使用同路径的 PUT，PATCH 不作为可用入口承诺。', '']
     path_params = re.findall(r'\{([^}]+)\}', path)
