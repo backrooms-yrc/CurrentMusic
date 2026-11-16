@@ -239,7 +239,7 @@ endpoints:
   # ── 外部依赖 ────────────────────────────────────────────────────────────
   - name: GitHub Releases（CurrentMusic 主仓库）
     group: 外部依赖
-    url: https://github.com/backrooms-yrc/CurrentMusic/releases
+    url: https://github.com/CurrentMusic-Team/CurrentMusic/releases
     interval: 5m
     conditions:
       - "[STATUS] == 200"

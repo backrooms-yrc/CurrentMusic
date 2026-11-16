@@ -150,23 +150,23 @@ CDP_WS="$WS" SITE_URL=https://music.20110208.xyz/ node tools/verify.mjs
 - **两处群号与加群链接、CurrentMusicX Releases 链接**必须完整保留，不得截断；
   长链接以 `<code>` 全文展示并提供复制按钮。
 - **仓库地址来源（已核实，勿凭印象改）**：
-  - 主仓库 / 概念版客户端：`backrooms-yrc/CurrentMusic`（公共仓库，Web 客户端与公开代码）。
+  - 主仓库 / 概念版客户端：`CurrentMusic-Team/CurrentMusic`（公共仓库，Web 客户端与公开代码）。
     依据：[`README.md`](../README.md) 「相关仓库」小节，以及 App 内更新检查
-    [`web/src/update.js`](../web/src/update.js) 里的 `GH_REPO = 'backrooms-yrc/CurrentMusic'`；
+    [`web/src/update.js`](../web/src/update.js) 里的 `GH_REPO = 'CurrentMusic-Team/CurrentMusic'`；
     `data/releases/latest.json` 的 `githubUrl` 同样指向该仓库的 Releases。
-  - 完整源码：`backrooms-yrc/CurrentMusic`（后端、客户端、部署模板与文档）。
+  - 完整源码：`CurrentMusic-Team/CurrentMusic`（后端、客户端、部署模板与文档）。
   - 概念版客户端**没有独立仓库**：它就是开发者本人基于 Android WebView 的客户端，
     与主仓库同源，安装包在主仓库 Releases 发布。因此“概念版仓库”指向主仓库 Releases。
   - 概念版的两个下载源取自后端 `/version/latest`：
     服务器源 `https://music.20110208.xyz/cm/download/latest`（302 到最新 APK）、
-    GitHub Releases `https://github.com/backrooms-yrc/CurrentMusic/releases`。
+    GitHub Releases `https://github.com/CurrentMusic-Team/CurrentMusic/releases`。
   - **CurrentStation 没有仓库**：通行证与控制台不单独开源，随主仓库一同分发。
     页面上不单列条目，只用一句说明交代这一事实（不再写“待补充”）。
     `build.mjs` 会做两重防护：拦截臆测的 GitHub 地址（白名单精确匹配，
     且只允许 `music.20110208.xyz` / `qun.qq.com` 带子路径），
     并禁止页面出现“待补充 / TODO / TBD / 占位”等占位符。
 - **导航栏与页脚的 GitHub 落点必须指向本项目主仓库**
-  （`https://github.com/backrooms-yrc/CurrentMusic`），不是 CurrentMusicX。
+  （`https://github.com/CurrentMusic-Team/CurrentMusic`），不是 CurrentMusicX。
   导航项用内联 SVG 画 GitHub 标记：内置图标字体（Material Icons Outlined，
   2182 个字形）里**没有** GitHub logo，只能用 CSS `mask` + `currentColor`，
   这样能自动跟随文字颜色，浅色/深色主题无需各维护一份。

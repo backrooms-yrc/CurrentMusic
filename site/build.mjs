@@ -80,9 +80,9 @@ const REQUIRED_IN_HTML = [
   'https://music.20110208.xyz/api-docs/',
   // 概念版的两个下载源（服务器源 + 本仓库 Releases）必须都在
   'https://music.20110208.xyz/cm/download/latest',
-  'https://github.com/backrooms-yrc/CurrentMusic/releases',
+  'https://github.com/CurrentMusic-Team/CurrentMusic/releases',
   // 主仓库（取自 README「相关仓库」）与导航栏/页脚的 GitHub 落点
-  'https://github.com/backrooms-yrc/CurrentMusic',
+  'https://github.com/CurrentMusic-Team/CurrentMusic',
   // CurrentStation 不单独开源，页面上的说明文字
   'CurrentStation 通行证与控制台不单独开源',
   // 页脚
@@ -217,8 +217,8 @@ const allowedUrls = [
   'https://github.com/bileizhen/CurrentMusicX',   // 仅用于 JSON-LD sameAs
   'https://github.com/bileizhen/CurrentMusicX/releases',
   // 主项目仓库（README「相关仓库」/ App 内更新检查所用）
-  'https://github.com/backrooms-yrc/CurrentMusic',
-  'https://github.com/backrooms-yrc/CurrentMusic/releases',
+  'https://github.com/CurrentMusic-Team/CurrentMusic',
+  'https://github.com/CurrentMusic-Team/CurrentMusic/releases',
   'https://schema.org',
   'https://qun.qq.com/',
 ];
@@ -254,8 +254,8 @@ check(brokenSelf.length === 0,
 const KNOWN_GH = [
   'https://github.com/bileizhen/CurrentMusicX',
   'https://github.com/bileizhen/CurrentMusicX/releases',
-  'https://github.com/backrooms-yrc/CurrentMusic',
-  'https://github.com/backrooms-yrc/CurrentMusic/releases',
+  'https://github.com/CurrentMusic-Team/CurrentMusic',
+  'https://github.com/CurrentMusic-Team/CurrentMusic/releases',
 ];
 const fabricated = allUrls
   .filter(u => u.startsWith('https://github.com/'))

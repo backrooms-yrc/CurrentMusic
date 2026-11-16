@@ -20,7 +20,7 @@ d0ea7e73721dbcea2d7ed0ff2ccdf0acc26aca847132d1b1364ae96415598346  CurrentMusic-F
 
 ## 构建与验证证据
 
-源码提交：`f916190e7ecfdd9b4df00e3d1b38de8baf9207e3`。历史私有 CI 41322433938 的 Linux Core、Windows x64、Windows ARM64 三项任务均通过；该运行记录仍保密。迁移后的构建请查看 [公开 Windows 工作流](https://github.com/backrooms-yrc/CurrentMusic/actions/workflows/windows.yml)，本记录不代表新的公开运行已完成。
+源码提交：`f916190e7ecfdd9b4df00e3d1b38de8baf9207e3`。历史私有 CI 41322433938 的 Linux Core、Windows x64、Windows ARM64 三项任务均通过；该运行记录仍保密。迁移后的构建请查看 [公开 Windows 工作流](https://github.com/CurrentMusic-Team/CurrentMusic/actions/workflows/windows.yml)，本记录不代表新的公开运行已完成。
 
 - 本地 .NET 10.0.403：`dotnet run --project windows/CurrentMusic.Core.Tests -c Release -- --live`，10 组检查通过，含探针、实际公网搜索（30 首）与歌词契约（38 行）。纯逻辑检查覆盖队列、随机历史、歌词边界、会话隔离、两步挑战字段、401 分流、取消与响应大小等。
 - Windows x64：发布目录和实际 MSI 安装后的程序均通过 13 项原生检查：窗口加载、账号表单、凭据管理器读写、搜索结果绑定、队列、云端列表、深色主题、偏好持久化、置顶歌词窗、MediaPlayer/SMTC 初始化、原生 MP3/FLAC 解码及设置导航。
