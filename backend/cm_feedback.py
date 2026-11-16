@@ -14,6 +14,11 @@ import cm_db
 
 log = logging.getLogger("cm")
 REPOSITORY = "bileizhen/CurrentMusicX"
+ISSUE_TYPES = {"bug": ("[Bug]", "bug"), "feature": ("[Feature]", "enhancement")}
+BUG_CONFIRMATION = (
+    "### 提交前确认\n\n"
+    "- [ ] 我已搜索现有 Issue，并检查所附信息不包含密码、Cookie、Token 等敏感内容。"
+)
 RETENTION = 7 * 86400
 DAILY_LIMIT = 5
 CONCURRENCY = 2
@@ -129,8 +134,33 @@ def recover():
         conn.execute("UPDATE feedback_receipts SET status='unconfirmed' WHERE status='publishing'")
 
 
-def _create_issue(token, title, body):
-    payload = json.dumps({"title": title, "body": body}, ensure_ascii=False).encode()
+def _safe_body(text):
+    return html.escape(text, quote=False).replace("[", "&#91;").replace("]", "&#93;")
+
+
+def _template_issue(kind, title, fields):
+    prefix, label = ISSUE_TYPES[kind]
+    title = re.sub(r"^(?:\[(?:bug|feature)\]\s*)+", "", clean(title), flags=re.IGNORECASE)
+    title = f"{prefix} {' '.join(title.split())}"[:120]
+    body = []
+    for key, heading, required in cm_ai.FEEDBACK_SECTIONS[kind]:
+        value = clean(fields.get(key, ""))[:2000]
+        if key in cm_ai.FEEDBACK_CHOICES and value not in cm_ai.FEEDBACK_CHOICES[key]:
+            value = "其他" if key == "module" else ""
+        if not value:
+            value = "不清楚" if required else "_No response_"
+        # 保证反馈里的标题和代码围栏不会干扰模板结构。
+        escaped = re.sub(r"(?m)^([ \t]{0,3})(#|`(?=``)|~(?=~~))",
+                         lambda match: f"{match[1]}&#{ord(match[2])};", _safe_body(value))
+        body.append(f"### {heading}\n\n{escaped}")
+    if kind == "bug":
+        body.append(BUG_CONFIRMATION)
+    body.append("### 来源\n\n由 CurrentMusicAI 整理")
+    return {"title": title, "body": "\n\n".join(body), "labels": [label]}
+
+
+def _create_issue(token, issue):
+    payload = json.dumps(issue, ensure_ascii=False).encode()
     with closing(http.client.HTTPSConnection("api.github.com", timeout=15)) as conn:
         conn.request("POST", f"/repos/{REPOSITORY}/issues", body=payload, headers={
             "Authorization": "Bearer " + token,
@@ -156,18 +186,17 @@ def _run(uid, request_id, text, token):
     number = None
     try:
         try:
-            title, body = cm_ai.format_feedback(text)
-            source = "由 CurrentMusicAI 整理"
+            formatted = cm_ai.format_feedback(text)
+            issue = _template_issue(*formatted) if formatted is not None else None
         except cm_ai.AiError:
-            title, body = text.splitlines()[0], text
-            source = "由 CurrentMusic 用户提交的原始反馈"
-        title = " ".join(clean(title).split())[:120]
-        body = clean(body)[:6000]
-        if title and body:
+            issue = {
+                "title": " ".join(text.splitlines()[0].split())[:120],
+                "body": _safe_body(text) + "\n\n---\n由 CurrentMusic 用户提交的原始反馈",
+            }
+        if issue:
             _set_status(uid, request_id, "publishing")
             state = "unconfirmed"
-            safe_body = html.escape(body, quote=False).replace("[", "&#91;").replace("]", "&#93;")
-            state, number = _create_issue(token, title, safe_body + "\n\n---\n" + source)
+            state, number = _create_issue(token, issue)
         else:
             state = "rejected"
     except Exception as exc:

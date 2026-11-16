@@ -2953,7 +2953,7 @@ def route(handler, method):
             ("GET", "/donation/qr", "公开", "官方捐赠二维码图片（backend/assets/donation-qr.jpg，可缓存）"),
             ("GET", "/donation/info", "Bearer", "捐赠引导信息：账号基本信息快照、二维码地址、本人捐赠历史与累计 {mine:{items,count,totalCents}}"),
             ("POST", "/donation", "Bearer", "提交捐赠记录 {amount 元, txnId 交易单号, note? 备注}；金额为用户自报，交易单号全站唯一（重复 409）"),
-            ("POST", "/feedback", "Bearer", "提交意见 {requestId, content, public:true}；异步整理后发布为 CurrentMusicX 公开 Issue"),
+            ("POST", "/feedback", "Bearer", "提交意见 {requestId, content, public:true}；按 CurrentMusicX 问题报告或功能建议模板整理并发布公开 Issue"),
             ("GET", "/feedback", "Bearer", "按 requestId 查询本人反馈进度和公开 Issue 链接"),
             ("GET", "/admin/donations", "管理员", "捐赠用户列表：搜索/分页/聚合（单笔与用户累计金额、次数）；sort=recent/recent_asc/amount/user_total/user_count/name"),
             ("DELETE", "/admin/donations/{id}", "管理员", "删除捐赠记录（清理误报）"),
