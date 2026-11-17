@@ -26,10 +26,28 @@ https://music.20110208.xyz/cm/lx/source.js?token=<音源专用令牌>
   上游按国内位置选择 CDN 边缘，灰色曲目也不会因境外 IP 被误判为地区不可用；所有落雪用户
   共享同一份解析缓存（缓存键用固定标识），重复播放无需再打上游。Web/App 等其它入口不受影响。
 - **取流音质**：`/cm/ncm/song/url` 默认携带**服务端 SVIP Cookie**（见 `cm_ncm.call`），因此**所有注册用户**（无需自行绑定网易云会员）都能取得该账号可用的最高档；实测母带档返回 192kHz/24bit、约 4.5Mbps。请求档位在歌曲没有对应资源时由 Engine 自动降档，不会直接失败；CurrentMusicX 的「自动最高」按声明档位从高到低尝试，并在单档解析失败时自动换下一档。
+- **匹配音源降级**：新版官方取址失败或只返回试听时，使用与 Web 相同的[完整音频匹配](playback-sources.md)。匹配也失败时尝试旧版官方取址，并拒绝试听链接。服务端分别返回 `level: "matched"` 或 `level: "legacy"` 表示降级结果。脚本按 LX 协议返回 URL 字符串，客户端的音质选择仍表示请求档位。
+- **search**（wy 扩展）：复用 Web 的[公开曲库补充](search-catalog.md)，把精确匹配放在单曲搜索首屏前部。
 - **lyric**（wy 源）：歌词走 Engine 归一化接口，主歌词、翻译与罗马音按毫秒时间轴转换成 LRC。官方客户端的 `wy` 动作白名单只开放 `musicUrl`，因此不在 `inited` 中声明；支持该协议的衍生客户端可直接调用；
 - 其余音源（kw/kg/tx/mg）与动作会明确返回不支持，不会误解析。
 
 脚本遵循官方自定义源运行时协议：`request` 事件的 handler **返回 Promise**（官方沙箱直接对返回值 `.then()`，不传 callback），同时兼容老式 callback 调用；沙箱已预解析的 JSON 响应（`resp.body` 为对象）与字符串响应都能处理；整体包在 IIFE 中，重复载入不会因顶层重复声明而失败。
+
+## 搜索扩展
+
+从同一直链重新导入 v1.1.0 后，支持扩展调用的宿主可向 `request` handler 传入以下数据。
+
+```json
+{
+  "source": "wy",
+  "action": "search",
+  "info": { "keywords": "周杰伦 七里香", "offset": 0, "limit": 30 }
+}
+```
+
+`keywords` 必填。`offset` 默认 `0`，`limit` 默认 `30`，范围为 `1` 至 `50`。脚本调用公开的 `/cm/ncm/search?type=song`，返回 `{ songs, upstreamCount, totals, hasMore }`。首屏的 `songs` 按 `ncm_id` 合并去重，公开专辑精确命中排在普通结果之前。翻页用当前 `offset + upstreamCount`，是否继续取页由 `hasMore.song` 判断。宿主把结果的 `ncm_id` 作为 `musicUrl` 的 `info.musicInfo.songmid` 取链。
+
+官方落雪客户端的搜索由客户端自身提供，脚本的 `inited` 只声明 `musicUrl`。CurrentMusicX 的网易云搜索界面直接消费服务端的曲库补充。
 
 ## 专用令牌
 
@@ -50,7 +68,7 @@ https://music.20110208.xyz/cm/lx/source.js?token=<音源专用令牌>
 | --- | --- |
 | `token` | 音源专用令牌（`clx_`）或登录会话令牌，必填 |
 
-- 成功返回 HTTP 200，`Content-Type: text/javascript`，头部携带 LX 客户端解析的 `@name/@description/@version/@author` 注释，主体监听 `globalThis.lx` 的 `request` 事件并回连 `/cm/ncm/song/url`（带 `Authorization: Bearer`）与公开的 `/cm/ncm/lyric`。
+- 成功返回 HTTP 200，`Content-Type: text/javascript`，头部携带 LX 客户端解析的 `@name/@description/@version/@author` 注释。`request` 事件的取链动作回连 `/cm/ncm/song/url` 并携带 Bearer，搜索和歌词扩展调用公开的 `/cm/ncm/search` 与 `/cm/ncm/lyric`。
 - 缺少 `token` 返回 HTTP 401。
 - **令牌无效或已失效**（轮换/撤销后的旧直链、已退出的登录会话）：客户端只显示 HTTP 状态码、不显示响应体，裸 401 会让用户看到「下载音源失败（HTTP 401）」而无从判断。因此这里返回 HTTP 200 的**失效提示脚本**：源列表中直接显示「直链已失效，请到 CurrentMusic 设置页重新复制」的说明，且不声明任何可用音源（不会产生错误播放）。提示脚本不含任何令牌。
 - 响应声明 `Cache-Control: no-store`：脚本内容因人而异且内嵌令牌，不允许任何中间缓存。

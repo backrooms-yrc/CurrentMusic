@@ -87,6 +87,9 @@ Web 显示“匹配音源”。拿到匹配地址后立即请求播放，由浏�
 `code: "playback_match_failed"` 和可展示的 `error`。收到此错误码后，网页跳过重复的
 `/cm/ncm/song/url/match` 请求，仍可尝试旧版官方取址接口。用户也可重新发起播放。
 
+[落雪 JS 音源](lx-music-source.md)使用同一匹配链。匹配也失败时，服务端在本次取链内尝试旧版官方
+`/song/url` 的 `320000` 码率请求，拒绝试听，成功时返回 `level: "legacy"`，否则返回同样的 `502`。
+
 上游 `/song/url/match` 保留 `data: URL` 与 `proxyUrl` 字段，并增加 `matchInfo`：
 `validated: true`、`validationVersion: 1`、实际格式与时长等。所有来源失败时返回 HTTP 502，
 `reason` 和 `attempts` 仅包含错误类别、音源名及必要时长，不包含 Cookie、用户 IP 或签名 URL。

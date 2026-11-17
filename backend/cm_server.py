@@ -889,16 +889,16 @@ def resolve_play_url(ncm_id, level="auto", immerse=None, real_ip=None,
     supports_dolby = supports_dolby and level == "auto" and not cm_stream.quantize_max_br(max_br)
     capability = ":dolby" if supports_dolby else ""
     key = f"smatch:v2:{ncm_id}:{ip_key}:{source}{capability}"
+    try:
+        return _resolve_official_play_url(ncm_id, level, immerse, real_ip, max_br, refresh, alts, want_host,
+                                          supports_dolby=supports_dolby, cn_ip=cn_ip)
+    except cm_ncm.NcmError:
+        pass
     cached = None if refresh else cm_db.cache_get(key)
     if cached:
         out = json.loads(cached)
         from_cache = True
     else:
-        try:
-            return _resolve_official_play_url(ncm_id, level, immerse, real_ip, max_br, refresh, alts, want_host,
-                                              supports_dolby=supports_dolby, cn_ip=cn_ip)
-        except cm_ncm.NcmError:
-            pass
         match_started = time.monotonic()
 
         def match():
@@ -2134,6 +2134,14 @@ def respond_play_url(handler, q, *, cn_ip=False):
             cn_ip=cn_ip,
         )
     except PlaybackMatchError as e:
+        if cn_ip:
+            # LX 令牌仅用于当前取链路由。在这里完成 Web 的旧版官方取址兜底。
+            try:
+                out = cm_ncm.legacy_song_url(ncm_id)
+            except cm_ncm.NcmError:
+                pass
+            else:
+                return jresp(handler, 200, dict(out, requestedLevel=level))
         return jresp(handler, 502, {"error": str(e), "code": "playback_match_failed"})
     return jresp(handler, 200, out)
 
@@ -2902,7 +2910,7 @@ def route(handler, method):
             ("GET", "/audio-sources", "Bearer", "自研音源 v1 导入目录，返回音源名称和适用平台。详见 /api-docs/reference/guide-audio-sources-api/"),
             ("GET", "/audio-sources/currentmusic-engine/resolve", "Bearer", "已导入的流声引擎音源取链，接受 id、level、refresh、supportsDolby；网易云曲库。详见 /api-docs/reference/guide-audio-sources-api/"),
             ("GET", "/badges/powered-by.svg", "公开", "流声引擎署名徽章，返回 SVG；lang 可选 zh-CN（默认）或 en。嵌入示例 /api-docs/reference/guide-engine-badge-api/"),
-            ("GET", "/lx/source.js", "token 查询参数", "落雪音乐（LX Music）自定义音源脚本：`?token=` 为落雪音源专用令牌（clx_ 前缀，见 /lx/token 管理）或 CurrentMusic 登录会话令牌，返回内嵌该令牌的音源 JS（wy 源 musicUrl/lyric，回连 /ncm/song/url 与公开 /ncm/lyric）。脚本因人而异且含令牌，no-store 不缓存；令牌失效返回 401；按认证入口限速。详见 /api-docs/reference/guide-lx-music-source/"),
+            ("GET", "/lx/source.js", "token 查询参数", "落雪音乐（LX Music）自定义音源脚本。token 为落雪音源专用令牌（clx_ 前缀）或 CurrentMusic 登录会话令牌。wy 源支持 musicUrl，兼容宿主可调用公开的 search 和 lyric 扩展。脚本含令牌，no-store 不缓存。缺少令牌返回 401，失效令牌返回提示脚本。详见 /api-docs/reference/guide-lx-music-source/"),
             ("GET", "/lx/token", "Bearer", "查看本人落雪音源专用令牌状态 `{enabled, createdAt, lastSeen}`（不返回明文；明文只在生成/轮换时返回一次）"),
             ("POST", "/lx/token", "Bearer", "生成本人专用令牌，一次性返回 `{token, sourceUrl}` 直链；已有令牌时幂等返回现状（`created:false`），找回直链须轮换"),
             ("POST", "/lx/token/rotate", "Bearer", "轮换专用令牌（`{confirm:1}` 二次确认）：旧直链立即失效，一次性返回新 `{token, sourceUrl}`"),
@@ -3051,7 +3059,7 @@ def route(handler, method):
             ("GET", "/ncmbind/likelist", "Bearer", "绑定账号红心列表 {ids}；refresh=1 强制同步，短期合并已成功写入但上游尚未收敛的红心意图"),
             ("GET", "/daily", "可选登录", "每日推荐"),
             ("GET", "/ncm/search", "公开", "网易云搜索代理，透传 NGINX 提供的用户 RealIP 并按用户 IP 隔离缓存；单曲首屏可含 catalogSongs（公开专辑精确匹配，不计入上游分页）。type=lyric 按歌词搜索（1006），songs 含命中行及前后文 lyric/lyricContext，分页使用 totals.song/hasMore.song；失败通过 lyricContextStatus 明示。详见 /api-docs/reference/guide-search-catalog/ 与 /api-docs/reference/guide-search-lyrics-api/"),
-            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；自动音质在 supportsDolby=1 且未限制码率时优先选可用的杜比全景声；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败或仅有试听时自动匹配，QQ 首选音质失败后立即尝试备用音质，成功结果 level=matched 并附完整音频校验信息；匹配失败返回 502 与 code=playback_match_failed；详见 /api-docs/reference/guide-playback-sources/）"),
+            ("GET", "/ncm/song/url", "Bearer", "播放地址解析（**仅限注册用户**；自动音质在 supportsDolby=1 且未限制码率时优先选可用的杜比全景声；level / maxBr 码率上限 / refresh 卡顿换线 / alts 候选边缘；透传用户 RealIP；官方取址失败或仅有试听时自动匹配，成功结果 level=matched 并附完整音频校验信息；落雪取链在匹配失败后还会尝试旧版官方取址（level=legacy）；无可用地址返回 502 与 code=playback_match_failed。详见 /api-docs/reference/guide-playback-sources/）"),
             ("GET", "/ncm/song/detail", "公开", "歌曲详情（ids=逗号分隔，最多 100；分享落地页与客户端使用）"),
             ("GET", "/song/qualities", "公开", "歌曲音质文件资料（含沉浸声变体；不保证可播放）；详见 /api-docs/reference/guide-song-insights-api/"),
             ("GET", "/song/chorus", "公开", "播放器高潮（副歌）区间。按网易云歌曲 id 返回 segments，startMs/endMs 均为毫秒。没有区间时返回空数组。详见 /api-docs/reference/guide-song-insights-api/"),
