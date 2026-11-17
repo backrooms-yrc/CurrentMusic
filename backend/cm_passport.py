@@ -31,6 +31,18 @@ SCOPES = {
     "phone":          {"label": "手机号（脱敏）", "desc": "如 138****8000，不会给出完整号码", "required": False},
     "offline_access": {"label": "长期授权", "desc": "允许应用在你不在线时刷新令牌（30 天）", "required": False},
 }
+MUSIC_SCOPES = {
+    "music.play": ("播放音乐", "取得服务允许的音频和视频地址"),
+    "music.library.read": ("读取音乐库", "查看收藏、个人歌单和推荐"),
+    "music.library.write": ("编辑音乐库", "按你的操作修改收藏和歌单"),
+    "music.history.read": ("读取播放历史", "查看最近播放的曲目"),
+    "music.history.write": ("记录播放历史", "保存播放记录和进度"),
+    "music.comment.write": ("发表音乐评论", "按你的操作提交评论"),
+    "music.download": ("下载音乐", "获取服务允许下载的项目"),
+    "music.cloud.read": ("读取云盘", "查看账号的云盘曲目"),
+}
+SCOPES.update({key: {"label": label, "desc": desc, "required": False}
+               for key, (label, desc) in MUSIC_SCOPES.items()})
 DEFAULT_SCOPE = "openid profile"
 GRANT_TYPES = ("authorization_code", "refresh_token", "client_credentials")
 PKCE_METHODS = ("S256", "plain")     # plain 仅为兼容，文档里不推荐
@@ -104,6 +116,10 @@ def parse_scope(raw, allowed=None, app_scopes=None):
 
 def has_scope(scope, name):
     return name in scope_names(scope)
+
+
+def has_music_scope(scope):
+    return not MUSIC_SCOPES.keys().isdisjoint(scope_names(scope))
 
 
 # ---------- PKCE / 客户端 ----------

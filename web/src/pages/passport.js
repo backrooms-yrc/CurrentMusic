@@ -29,6 +29,12 @@ function fail(el, title, detail) {
 
 export async function render(el, params = {}) {
   const q = params.query || {};
+  const musicAuthorization = String(q.scope || '').split(/[\s,]+/).some(scope => scope.startsWith('music.'));
+  const issuerBase = musicAuthorization && location.protocol === 'https:' ? location.origin + '/cm' : undefined;
+  if (musicAuthorization && !issuerBase) {
+    fail(el, '需要 HTTPS 线路', '请回到应用，从该外接服务重新发起授权。');
+    return;
+  }
   const needed = ['client_id', 'redirect_uri'];
   const missing = needed.filter(k => !q[k]);
   if (missing.length) {
@@ -54,7 +60,7 @@ export async function render(el, params = {}) {
   let info;
   el.innerHTML = card('<div style="opacity:.7">正在读取授权信息…</div>');
   try {
-    info = await api.passportAuthorizeInfo(q);
+    info = await api.passportAuthorizeInfo(q, issuerBase);
   } catch (e) {
     if (e.status === 401) {
       try { sessionStorage.setItem('cm.ppBack', location.hash); } catch { /* 忽略 */ }
@@ -95,8 +101,7 @@ export async function render(el, params = {}) {
           </div>`).join('')}
       </div>
       <div style="margin-top:12px;font-size:calc(12px * var(--cm-fs, 1));opacity:.62;line-height:1.7">
-        授权后 ${app.name || '该应用'} 拿到的是一个令牌，只能读取上面这些信息；它<strong>拿不到你的密码</strong>，
-        也访问不了未列出的内容。你可以在「设置 → 通行证授权管理」里随时撤回。
+        ${esc(app.name || '该应用')} 使用令牌执行上面列出的操作。你可以在「设置 → 通行证授权管理」里随时撤回。
       </div>
       <div style="display:flex;gap:10px;margin-top:14px">
         <mdui-button variant="filled" id="ppOk" style="flex:1">同意授权</mdui-button>
@@ -110,10 +115,19 @@ export async function render(el, params = {}) {
     if (ok) ok.disabled = true;
     if (no) no.disabled = true;
     try {
-      const r = await api.passportApprove(Object.assign({}, q, { approve }));
+      const r = await api.passportApprove(Object.assign({}, q, { approve }), issuerBase);
       // 只用服务端下发的地址跳转（前端不自己拼回调，避免被 query 里的值带偏）
-      if (r && r.redirect) location.replace(r.redirect);
-      else fail(el, '无法跳回应用', '服务端没有返回回调地址，请重试或联系应用方。');
+      if (r && r.redirect) {
+        if (musicAuthorization) {
+          el.innerHTML = card('<p>正在返回应用。如果没有自动打开，请点下方链接。</p>');
+          const link = document.createElement('a');
+          link.textContent = '返回应用';
+          link.href = r.redirect;
+          link.referrerPolicy = 'no-referrer';
+          el.firstElementChild.append(link);
+        }
+        location.replace(r.redirect);
+      } else fail(el, '无法跳回应用', '服务端没有返回回调地址，请重试或联系应用方。');
     } catch (e) {
       if (err) err.textContent = e.message || '授权失败';
       if (ok) ok.disabled = false;

@@ -31,6 +31,7 @@ import cm_lx
 import cm_lddc
 import cm_levels
 import cm_mail
+import cm_music_service
 import cm_ncm
 import cm_songinfo
 import cm_binding_import
@@ -1264,6 +1265,8 @@ def jresp(handler, code, obj, cache_control=None, extra_headers=None):
         cache_control = "no-store"
     if path == "/audio-sources" or path.startswith("/audio-sources/"):
         cache_control = "no-store"
+    if path.startswith("/music-service/") or path == "/passport/token":
+        cache_control = "no-store"
     body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
@@ -2175,6 +2178,22 @@ def route(handler, method):
     if path == "/health" and method == "GET":
         return jresp(handler, 200, {"ok": True, "now": int(time.time())})
 
+    if path == "/music-service/descriptor" and method == "GET":
+        return jresp(handler, 200, cm_music_service.descriptor(base_url(handler)))
+
+    if path == "/music-service/connect" and method == "GET":
+        return hresp(handler, 200, cm_music_service.connection_page(base_url(handler)))
+
+    operation = re.fullmatch(r"/music-service/v1/([a-z.]{3,64})", path)
+    if operation and method == "POST":
+        try:
+            result = cm_music_service.dispatch(
+                operation[1], body, handler.headers.get("Authorization", ""),
+                cm_ncm_gateway.client_ip(handler))
+        except cm_music_service.Error as exc:
+            return jresp(handler, exc.status, {"code": exc.code, "error": str(exc)})
+        return jresp(handler, 200, result)
+
     if path == "/audio-sources" and method == "GET":
         require_user(handler, allow_query=False)
         return jresp(handler, 200, AUDIO_SOURCE_CATALOG)
@@ -2907,6 +2926,9 @@ def route(handler, method):
         base = base_url(handler)
         own = [
             ("GET", "/health", "公开", "服务健康检查"),
+            ("GET", "/music-service/descriptor", "公开", "外接音乐服务协议 v1 描述与已启用能力"),
+            ("GET", "/music-service/connect", "公开", "由流声引擎侧发起外接音乐服务连接"),
+            ("POST", "/music-service/v1/{operation}", "按能力", "调用白名单中的音乐能力。详见 /api-docs/reference/guide-music-service-api/"),
             ("GET", "/audio-sources", "Bearer", "自研音源 v1 导入目录，返回音源名称和适用平台。详见 /api-docs/reference/guide-audio-sources-api/"),
             ("GET", "/audio-sources/currentmusic-engine/resolve", "Bearer", "已导入的流声引擎音源取链，接受 id、level、refresh、supportsDolby；网易云曲库。详见 /api-docs/reference/guide-audio-sources-api/"),
             ("GET", "/badges/powered-by.svg", "公开", "流声引擎署名徽章，返回 SVG；lang 可选 zh-CN（默认）或 en。嵌入示例 /api-docs/reference/guide-engine-badge-api/"),
@@ -3146,6 +3168,8 @@ def route(handler, method):
         if not redirects:
             raise ApiError(400, "请至少填写一个回调地址（redirect_uri）")
         scopes = cm_passport.parse_scope(b.get("scopes") or cm_passport.DEFAULT_SCOPE)
+        if cm_passport.has_music_scope(scopes) and not is_admin:
+            raise ApiError(403, "音乐权限由服务管理员登记")
         is_public = bool(b.get("public"))
         key = cm_passport.new_client_id()
         secret = "" if is_public else cm_passport.new_client_secret()
@@ -3192,6 +3216,8 @@ def route(handler, method):
         fields = {}
         new_secret = ""
         b = body or {}
+        if not is_admin and (cm_passport.has_music_scope(app["scopes"]) or cm_passport.has_music_scope(b.get("scopes"))):
+            raise ApiError(403, "音乐权限由服务管理员管理")
         if "name" in b:
             fields["name"] = str(b["name"])[:60]
         if "homepage" in b:
@@ -3273,6 +3299,8 @@ def route(handler, method):
             str(src.get("code_challenge") or ""), src.get("code_challenge_method") or "S256")
         if not app["secret_hash"] and not challenge:
             raise ApiError(400, "公开客户端必须提供 code_challenge（PKCE）")
+        if cm_passport.has_music_scope(scope) and (not challenge or method_c != "S256" or not state):
+            raise ApiError(400, "音乐授权需要 state 和 S256 PKCE")
         return app, redirect_uri, scope, state, challenge, method_c
 
     if path == "/passport/authorize" and method == "GET":
@@ -3304,11 +3332,13 @@ def route(handler, method):
         b = body or {}
         app, redirect_uri, scope, state, challenge, method_c = _authorize_params(b)
         sep = "&" if "?" in redirect_uri else "?"
+        response_params = f"&state={quote(state)}" if state else ""
+        if cm_passport.has_music_scope(scope):
+            response_params += "&iss=" + quote(cm_music_service.issuer(base_url(handler)), safe="")
         if not b.get("approve"):
             cm_db.passport_event("authorize.deny", app["key"], u["id"], ip,
                                  handler.headers.get("User-Agent", ""), scope)
-            return jresp(handler, 200, {"redirect": f"{redirect_uri}{sep}error=access_denied"
-                                        + (f"&state={quote(state)}" if state else "")})
+            return jresp(handler, 200, {"redirect": f"{redirect_uri}{sep}error=access_denied{response_params}"})
         code = cm_passport.new_token("code")
         cm_db.passport_code_put(cm_passport.hash_token(code), app["key"], u["id"], redirect_uri,
                                 scope, challenge, method_c,
@@ -3316,8 +3346,7 @@ def route(handler, method):
         cm_db.passport_event("authorize.approve", app["key"], u["id"], ip,
                              handler.headers.get("User-Agent", ""), scope)
         return jresp(handler, 200, {
-            "redirect": f"{redirect_uri}{sep}code={quote(code)}"
-                        + (f"&state={quote(state)}" if state else ""),
+            "redirect": f"{redirect_uri}{sep}code={quote(code)}{response_params}",
             "expiresIn": cm_passport.CODE_TTL,
         })
 
@@ -3417,6 +3446,8 @@ def route(handler, method):
                 if app["secret_hash"] and not csec:
                     raise cm_passport.PassportError("invalid_client", "机密客户端必须提供 client_secret", 401)
                 scope = cm_passport.parse_scope(b.get("scope") or "openid", app_scopes=app["scopes"])
+                if cm_passport.has_music_scope(scope):
+                    raise cm_passport.PassportError("invalid_scope", "音乐权限需要用户授权")
                 access = cm_passport.new_token("at")
                 now_t = cm_passport.now()
                 cm_db.passport_grant_create(

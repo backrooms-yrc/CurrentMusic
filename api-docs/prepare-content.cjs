@@ -26,6 +26,9 @@ for(const name of fs.readdirSync(raw).filter(x=>x.endsWith('.md')&&!x.startsWith
 }
 fs.writeFileSync(path.join(__dirname,'.generated/sidebars.json'),JSON.stringify({handbook:groups},null,2));
 fs.copyFileSync(path.join(raw,'manifest.json'),path.join(__dirname,'static/manifest.json'));
+for (const name of ['music-service-capabilities.json', 'music-service.openapi.json']) {
+  fs.copyFileSync(path.join(raw, name), path.join(__dirname, 'static', name));
+}
 const metadata=JSON.parse(fs.readFileSync(path.join(raw,'build-info.json'),'utf8'));
 metadata.siteEngine='Docusaurus';metadata.siteEngineVersion='3.10.2';
 fs.writeFileSync(path.join(__dirname,'static/build-info.json'),JSON.stringify(metadata,null,2));

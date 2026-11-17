@@ -29,7 +29,7 @@
 ## 常用场景
 
 - 搜索与播放：搜索 → 歌曲详情 → 登录后解析音源 → 获取歌词。
-- 流声音乐 X：[从当前服务器导入自研音源](guide-audio-sources-api.md)。
+- 外接播放器：[外接音乐服务协议及流声引擎连接](guide-music-service-api.md)。
 - 落雪音乐：[导入流声引擎 JS 音源，了解搜索扩展和匹配降级](guide-lx-music-source.md)。
 - 账号接入：注册/登录 → Bearer 会话 → 资料与设备管理。
 - 同步网易云：CurrentMusic 登录 → 手机/二维码绑定 → 同步歌单或调用 T1/T2 接口。

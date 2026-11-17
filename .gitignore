@@ -30,6 +30,8 @@ deploy/backend.env
 /api-docs/build/
 /api-docs/static/manifest.json
 /api-docs/static/build-info.json
+/api-docs/static/music-service-capabilities.json
+/api-docs/static/music-service.openapi.json
 /api-docs/static/licenses/
 
 # Windows 原生客户端的本机构建输出与 IDE 状态
