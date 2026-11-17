@@ -56,6 +56,9 @@ class DocumentationTests(unittest.TestCase):
                                   for route in docs.cm_qq_registry.ROUTES})
             self.assertEqual(metadata['qqMusicOperations'], len(qq))
             self.assertTrue((output/'guide-qq-music-api.md').is_file())
+            self.assertTrue((output/'guide-audio-sources-api.md').is_file())
+            self.assertTrue({'/cm/audio-sources', '/cm/audio-sources/currentmusic-engine/resolve'}
+                            <= {item['path'] for item in manifest if item['method'] == 'GET'})
             self.assertIn('GET | `/cm/qqmusic/song/url` | Bearer + QQ 会话', (output/'qqmusic.md').read_text())
             for f in output.glob('*.md'):
                 text=re.sub(r'```.*?```','',f.read_text(),flags=re.S)

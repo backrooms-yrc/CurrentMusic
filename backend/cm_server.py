@@ -66,6 +66,10 @@ MAX_BODY = 2 * 1024 * 1024
 # dolby/vivid：音效变体（API 文档 /song/url/v1）。实测本账号 dolby 会被上游
 # 降级为 jyeffect（需设备支持），vivid 偶发返回错误页——由 url_is_audio 拦截后走阶梯降档。
 VALID_LEVELS = ("standard", "exhigh", "lossless", "hires", "sky", "jyeffect", "jymaster", "dolby", "vivid")
+AUDIO_SOURCE_CATALOG = {
+    "version": 1,
+    "sources": [{"id": "currentmusic-engine", "name": "流声引擎", "platforms": ["netease"]}],
+}
 
 
 # 私人漫游模式/场景（与 CurrentMusicX v1.1.18 的目录保持一致）。
@@ -1258,6 +1262,8 @@ def jresp(handler, code, obj, cache_control=None, extra_headers=None):
     path = urlparse(handler.path).path
     if path.startswith(("/auth/passkeys", "/auth/2fa/", "/auth/security-question")) or (isinstance(obj, dict) and (obj.get("requires2FA") or obj.get("requiresSecurityQuestion"))):
         cache_control = "no-store"
+    if path == "/audio-sources" or path.startswith("/audio-sources/"):
+        cache_control = "no-store"
     body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
@@ -1381,10 +1387,10 @@ def optional_user(handler):
     return u if u and not u.get("disabled") else None
 
 
-def require_user(handler):
+def require_user(handler, *, allow_query=True):
     auth = handler.headers.get("Authorization", "")
     token = auth[7:].strip() if auth.startswith("Bearer ") else ""
-    if not token:
+    if not token and allow_query:
         # SSE(EventSource) / 长轮询无法携带自定义请求头 → 允许从查询参数取 token
         try:
             token = (parse_qs(urlparse(handler.path).query).get("token") or [""])[0].strip()
@@ -2105,6 +2111,33 @@ def _ncm_like_counts(ids, refresh=False):
     return out
 
 
+def respond_play_url(handler, q, *, cn_ip=False):
+    try:
+        ncm_id = int(q.get("id") or 0)
+    except ValueError:
+        raise ApiError(400, "id 参数错误") from None
+    if not ncm_id:
+        raise ApiError(400, "缺少 id")
+    level = q.get("level") or "auto"
+    if level != "auto" and level not in VALID_LEVELS:
+        level = "lossless"
+    try:
+        out = resolve_play_url(
+            ncm_id, level,
+            immerse=q.get("immerse") or None,
+            real_ip=cm_ncm_gateway.client_ip(handler),
+            max_br=q.get("maxBr") or q.get("maxbr") or 0,
+            refresh=_truthy(q.get("refresh")),
+            alts=_truthy(q.get("alts")),
+            want_host=(q.get("host") or "").strip(),
+            supports_dolby=_truthy(q.get("supportsDolby", "0")),
+            cn_ip=cn_ip,
+        )
+    except PlaybackMatchError as e:
+        return jresp(handler, 502, {"error": str(e), "code": "playback_match_failed"})
+    return jresp(handler, 200, out)
+
+
 def route(handler, method):
     parsed = urlparse(handler.path)
     path = parsed.path.rstrip("/") or "/"
@@ -2133,6 +2166,19 @@ def route(handler, method):
         return docs_redirect(handler, "guide-network-lines-api")
     if path == "/health" and method == "GET":
         return jresp(handler, 200, {"ok": True, "now": int(time.time())})
+
+    if path == "/audio-sources" and method == "GET":
+        require_user(handler, allow_query=False)
+        return jresp(handler, 200, AUDIO_SOURCE_CATALOG)
+
+    if path == "/audio-sources/currentmusic-engine/resolve" and method == "GET":
+        require_user(handler, allow_query=False)
+        return respond_play_url(handler, {
+            "id": q.get("id"),
+            "level": q.get("level"),
+            "refresh": q.get("refresh"),
+            "supportsDolby": q.get("supportsDolby"),
+        })
 
     if path == "/badges/powered-by.svg" and method == "GET":
         lang = q.get("lang", "zh-CN")
@@ -2853,6 +2899,8 @@ def route(handler, method):
         base = base_url(handler)
         own = [
             ("GET", "/health", "公开", "服务健康检查"),
+            ("GET", "/audio-sources", "Bearer", "自研音源 v1 导入目录，返回音源名称和适用平台。详见 /api-docs/reference/guide-audio-sources-api/"),
+            ("GET", "/audio-sources/currentmusic-engine/resolve", "Bearer", "已导入的流声引擎音源取链，接受 id、level、refresh、supportsDolby；网易云曲库。详见 /api-docs/reference/guide-audio-sources-api/"),
             ("GET", "/badges/powered-by.svg", "公开", "流声引擎署名徽章，返回 SVG；lang 可选 zh-CN（默认）或 en。嵌入示例 /api-docs/reference/guide-engine-badge-api/"),
             ("GET", "/lx/source.js", "token 查询参数", "落雪音乐（LX Music）自定义音源脚本：`?token=` 为落雪音源专用令牌（clx_ 前缀，见 /lx/token 管理）或 CurrentMusic 登录会话令牌，返回内嵌该令牌的音源 JS（wy 源 musicUrl/lyric，回连 /ncm/song/url 与公开 /ncm/lyric）。脚本因人而异且含令牌，no-store 不缓存；令牌失效返回 401；按认证入口限速。详见 /api-docs/reference/guide-lx-music-source/"),
             ("GET", "/lx/token", "Bearer", "查看本人落雪音源专用令牌状态 `{enabled, createdAt, lastSeen}`（不返回明文；明文只在生成/轮换时返回一次）"),
@@ -4623,15 +4671,6 @@ def route(handler, method):
         ``maxBr``（码率上限，仅 auto 生效）、``refresh=1``（卡顿自愈：换 CDN 线 / 换新签名）、
         ``alts=1``（附带已验证可互换的边缘列表）、``host``（指定边缘，须已验证）。
         """
-        try:
-            ncm_id = int(q.get("id") or 0)
-        except ValueError:
-            raise ApiError(400, "id 参数错误")
-        if not ncm_id:
-            raise ApiError(400, "缺少 id")
-        level = q.get("level") or "auto"
-        if level != "auto" and level not in VALID_LEVELS:
-            level = "lossless"
         # 落雪直链（clx_ 令牌，或脚本显式带 cn=1）固定用国内 RealIP 取址：
         # Cloudflare 之后的 nginx 对端常是境外边缘节点，透传会让上游按境外位置
         # 挑 CDN 线路并把灰色曲目判成地区不可用。Web/App 等其它入口不受影响。
@@ -4640,22 +4679,7 @@ def route(handler, method):
         if cn_ip:
             # 诊断：落雪直链走到取链阶段才会打这条（不含令牌），便于排查导入/播放失败。
             log.info("落雪取链 song=%s level=%s", q.get("id"), q.get("level") or "auto")
-        try:
-            out = resolve_play_url(
-                ncm_id, level,
-                immerse=q.get("immerse") or None,          # 仅 sky 生效：c51(5.1)/ste(环绕立体声)
-                # 把真实用户 IP 交给上游选择 CDN 边缘。
-                real_ip=cm_ncm_gateway.client_ip(handler),
-                max_br=q.get("maxBr") or q.get("maxbr") or 0,
-                refresh=_truthy(q.get("refresh")),
-                alts=_truthy(q.get("alts")),
-                want_host=(q.get("host") or "").strip(),
-                supports_dolby=_truthy(q.get("supportsDolby", "0")),
-                cn_ip=cn_ip,
-            )
-        except PlaybackMatchError as e:
-            return jresp(handler, 502, {"error": str(e), "code": "playback_match_failed"})
-        return jresp(handler, 200, out)
+        return respond_play_url(handler, q, cn_ip=cn_ip)
 
     # ---- 播放卡顿上报 / CDN 边缘健康度（v1.28.23） ----
     # 客户端在卡顿自愈与恢复正常时各报一次，服务端据此在**换线时避开问题边缘**。
