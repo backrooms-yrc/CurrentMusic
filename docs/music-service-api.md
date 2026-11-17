@@ -40,7 +40,7 @@ curl 'https://music.20110208.xyz/cm/music-service/v1/catalog.search' \
 | `catalog.track/album/artist/playlist` | 对应资源的 `id` |
 | `discover.hot/suggest/charts/recommendations` | 联想传 `query`。热搜与联想返回字符串列表；榜单与推荐返回资源 |
 | `track.lyrics` | 歌曲 `id`。返回 `lines`，复用[歌词时间轴](lyrics-api.md) |
-| `track.comments/comment.add` | 歌曲 `id`。读评论可传 `sort`、`page`、`limit`、`cursor`；写评论传 `text` |
+| `track.comments` / `track.comment.add` | 歌曲 `id`。读评论可传 `sort`、`page`、`limit`、`cursor`。写评论传 `text` |
 | `playback.qualities/resolve/mv/download` | 歌曲或 MV 的 `id`，可选 `quality`。音质接口返回 `levels`。媒体响应给出 HTTPS `url`、`quality`、`format`、`bitrate` 和有效期 `expiresIn`（秒） |
 | `library.favorites/favorite.set` | 收藏列表及修改。修改传歌曲 `id` 与 `selected` |
 | `library.playlists/playlist` | 个人歌单列表及详情，详情传歌单 `id` |
