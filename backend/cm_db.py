@@ -2146,6 +2146,19 @@ def toggle_fav(uid, ncm_id):
     return _toggle("favs", uid, ncm_id)
 
 
+def set_favorite(uid, ncm_id, selected):
+    conn = connect()
+    try:
+        if selected:
+            conn.execute("INSERT OR IGNORE INTO favs(user_id,ncm_id,created_at) VALUES(?,?,?)",
+                         (uid, ncm_id, int(time.time())))
+        else:
+            conn.execute("DELETE FROM favs WHERE user_id=? AND ncm_id=?", (uid, ncm_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def is_liked(uid, ncm_ids):
     conn = connect()
     try:

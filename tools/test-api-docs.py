@@ -57,6 +57,13 @@ class DocumentationTests(unittest.TestCase):
             self.assertEqual(metadata['qqMusicOperations'], len(qq))
             self.assertTrue((output/'guide-qq-music-api.md').is_file())
             self.assertTrue((output/'guide-audio-sources-api.md').is_file())
+            self.assertTrue((output/'guide-music-service-api.md').is_file())
+            services = json.loads((output/'music-service-capabilities.json').read_text())['operations']
+            schema = json.loads((output/'music-service.openapi.json').read_text())['paths']
+            published = {item['path'] for item in manifest if item['group'] == '外接音乐服务'}
+            self.assertEqual(published, set(schema))
+            self.assertEqual(set(services), set(schema['/cm/music-service/v1/{operation}']['post']
+                                                ['parameters'][0]['schema']['enum']))
             self.assertTrue({'/cm/audio-sources', '/cm/audio-sources/currentmusic-engine/resolve'}
                             <= {item['path'] for item in manifest if item['method'] == 'GET'})
             self.assertIn('GET | `/cm/qqmusic/song/url` | Bearer + QQ 会话', (output/'qqmusic.md').read_text())

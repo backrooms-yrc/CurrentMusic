@@ -131,7 +131,7 @@ async function rawRequest(method, url, headers, bodyStr, keepalive = false) {
 let onAuthExpired = null;
 export function setAuthExpiredHandler(fn) { onAuthExpired = fn; }
 
-export async function call(method, path, { body, auth: needAuth = false, keepalive = false } = {}) {
+export async function call(method, path, { body, auth: needAuth = false, keepalive = false, base = settings.base } = {}) {
   const headers = {};
   // 记录“请求发出时是否带过 token”：只有带过 token 的 401 才是会话失效；
   // 游客（本来就没登录）的 401 交给播放等入口自行引导登录，不能报“登录已失效”。
@@ -139,7 +139,7 @@ export async function call(method, path, { body, auth: needAuth = false, keepali
   if (hadToken) headers.Authorization = 'Bearer ' + auth.token;
   const bodyStr = body !== undefined ? JSON.stringify(body) : '';
   try {
-    return await rawRequest(method, settings.base + path, headers, bodyStr, keepalive);
+    return await rawRequest(method, base + path, headers, bodyStr, keepalive);
   } catch (e) {
     // 401 有两种来源：项目会话失效（该提示重新登录）与「尚未绑定网易云」（该引导去绑定）。
     // 后者按状态码一律当成会话失效会误报「登录已失效」，所以按文案区分。
@@ -256,8 +256,8 @@ export const api = {
   restoreAnnouncement: (id) => call('POST', `/announcements/${id}/restore`, { body: {}, auth: true }),
 
   // CurrentStation 通行证：授权确认页与我授权的应用（应用登记/开发者平台是**独立页面** /developer）
-  passportAuthorizeInfo: (params) => call('GET', '/passport/authorize?' + new URLSearchParams(params).toString(), { auth: true }),
-  passportApprove: (payload) => call('POST', '/passport/authorize', { body: payload, auth: true }),
+  passportAuthorizeInfo: (params, base) => call('GET', '/passport/authorize?' + new URLSearchParams(params).toString(), { auth: true, base }),
+  passportApprove: (payload, base) => call('POST', '/passport/authorize', { body: payload, auth: true, base }),
   passportGrants: () => call('GET', '/passport/grants', { auth: true }),
   passportRevokeGrant: (id) => call('DELETE', `/passport/grants/${id}`, { body: {}, auth: true }),
 

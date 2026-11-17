@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT / 'backend'))
 import cm_ncm_registry
 import cm_ncm_gateway
 import cm_qq_registry
+import cm_music_service
 
 GROUPS = {
     'auth': '账号与认证', 'profile': '个人资料', 'passport': '通行证与应用授权',
@@ -28,7 +29,7 @@ GROUPS = {
     'likes': '收藏与红心', 'favs': '收藏与红心', 'songs': '音乐与媒体', 'search': '搜索历史',
     'roaming': '私人漫游', 'share': '分享', 'plays': '播放历史', 'decorations': '头像挂件',
     'download': '客户端与资源', 'x': '客户端与资源', 'cast': '客户端与资源', 'badges': '客户端与资源',
-    'lx': '客户端与资源', 'audio-sources': '客户端与资源',
+    'lx': '客户端与资源', 'audio-sources': '客户端与资源', 'music-service': '外接音乐服务',
 }
 GUIDES = {
     'user-levels-api': '用户等级、试炼与发现排序',
@@ -49,6 +50,7 @@ GUIDES = {
     'engine-badge-api': '流声引擎署名徽章',
     'lx-music-source': '落雪音乐自定义音源',
     'audio-sources-api': '自研音源导入与取链',
+    'music-service-api': '外接音乐服务协议',
     'realip': 'RealIP 规则', 'third-party-ncm-sync': '第三方客户端绑定同步', 'donations-api': '官方捐赠与第三方接入',
     'rooms-design': '一起听房间 API 与同步协议', 'network-lines-api': '线路测速',
 }
@@ -102,6 +104,7 @@ def path_templates(pattern):
             name = 'filename' if pattern.startswith(('/avatar/','/chat/image/','/download/','/x/download/')) else 'id' if ident==1 else 'id'+str(ident)
             if pattern.startswith('/passport/apps/'): name='client_id'
             if pattern.startswith('/passport/grants/'): name='grant_id'
+            if pattern.startswith('/music-service/v1/'): name='operation'
             choices = ['{' + name + '}']
         pieces.append(([''] if optional else []) + choices)
         i = j + int(optional)
@@ -275,6 +278,44 @@ def endpoint_text(method, path, node, title, access=None):
     return '\n'.join(text)
 
 
+def write_music_service_specs(output):
+    operations = {
+        key: {"label": op.label, "providers": list(op.providers), "scope": op.scope or None,
+              "write": op.write, "media": op.media or None}
+        for key, op in cm_music_service.OPERATIONS.items()
+    }
+    (output/'music-service-capabilities.json').write_text(
+        json.dumps({"version": 1, "operations": operations}, ensure_ascii=False, indent=2))
+    object_type = {"type": "object"}
+    json_response = {"description": "JSON response", "content": {"application/json": {"schema": object_type}}}
+    error_type = {"type": "object", "required": ["code", "error"],
+                  "properties": {"code": {"type": "string"}, "error": {"type": "string"}}}
+    spec = {
+        "openapi": "3.1.0", "info": {"title": "CurrentMusic Music Service", "version": "1.0"},
+        "paths": {
+            "/cm/music-service/descriptor": {"get": {"summary": "Service descriptor", "responses": {"200": json_response}}},
+            "/cm/music-service/connect": {"get": {"summary": "Service-operated connection page", "responses": {
+                "200": {"description": "Connection page", "content": {"text/html": {"schema": {"type": "string"}}}},
+            }}},
+            "/cm/music-service/v1/{operation}": {"post": {
+                "summary": "Execute a registered music operation",
+                "description": "Use the provider, scope and confirmation rules in music-service-capabilities.json.",
+                "parameters": [{"name": "operation", "in": "path", "required": True,
+                                "schema": {"type": "string", "enum": list(operations)}}],
+                "security": [{}, {"passport": []}],
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                    "type": "object", "required": ["provider"],
+                    "properties": {"provider": {"type": "string"}, "input": object_type, "confirm": {"type": "boolean"}},
+                }}}},
+                "responses": {"200": json_response, "default": {"description": "Unavailable or rejected operation",
+                    "content": {"application/json": {"schema": error_type}}}},
+            }},
+        },
+        "components": {"securitySchemes": {"passport": {"type": "http", "scheme": "bearer"}}},
+    }
+    (output/'music-service.openapi.json').write_text(json.dumps(spec, ensure_ascii=False, indent=2))
+
+
 def build(output, upstream):
     output.mkdir(parents=True, exist_ok=True)
     for name in ('index.html', 'site.css'):
@@ -328,6 +369,7 @@ def build(output, upstream):
     (output/'_sidebar.md').write_text('\n'.join(sidebar)+'\n')
     (output/'endpoints.md').write_text('\n'.join(endpoint_index)+'\n')
     (output/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
+    write_music_service_specs(output)
     (output/'build-info.json').write_text(json.dumps({
         'contentFormat': 'markdown', 'backendOperations': len(extracted),
         'upstreamPaths': len(cm_ncm_registry.REGISTRY),
