@@ -163,6 +163,36 @@ class PlaybackSourceTests(unittest.TestCase):
             official.assert_called_once()
             match.assert_not_called()
 
+    def test_official_audio_takes_priority_over_cached_match(self):
+        with mock.patch.object(cm_server, '_resolve_official_play_url', side_effect=[
+            cm_ncm.NcmError('no URL'), {'url': 'https://audio.example.test/official.flac'},
+        ]), mock.patch.object(cm_ncm, 'song_url_match', return_value=MATCHED) as match:
+            self.assertEqual(cm_server.resolve_play_url(1, 'jymaster', real_ip=IP_A, cn_ip=True)['level'], 'matched')
+            self.assertEqual(cm_server.resolve_play_url(1, 'lossless', real_ip=IP_A, cn_ip=True)['url'],
+                             'https://audio.example.test/official.flac')
+            match.assert_called_once()
+
+    def test_lx_uses_same_match_then_legacy_fallback(self):
+        token = cm_db.lx_token_issue(cm_db.create_user('lx-audio-fixture', 'fixture-password', 'Fixture'))
+        route = '/ncm/song/url?id=1&level=jymaster&cn=1'
+        official = {'url': 'https://audio.example.test/legacy.mp3', 'br': 192000, 'type': 'mp3'}
+        trial = {'url': 'https://audio.example.test/trial.mp3', 'freeTrialInfo': {'start': 0, 'end': 30}}
+        with mock.patch.object(cm_server, '_resolve_official_play_url', side_effect=cm_ncm.NcmError('no URL')), \
+             mock.patch.object(cm_ncm, 'song_url_match', side_effect=[MATCHED, cm_ncm.NcmError('no match'),
+                                                                     cm_ncm.NcmError('no match')]), \
+             mock.patch.object(cm_ncm, '_bounded_call', side_effect=[{'data': [official]}, {'data': [trial]}]) as legacy, \
+             mock.patch.object(cm_ncm, 'probe_audio', return_value=(True, {})) as probe:
+            status, out = self.call('GET', route, token=token)
+            self.assertEqual((status, out['level'], out['url']), (200, 'matched', MATCHED['url']))
+            legacy.assert_not_called()
+            status, out = self.call('GET', route + '&refresh=1', token=token)
+            self.assertEqual((status, out['level'], out['url'], out['requestedLevel']),
+                             (200, 'legacy', official['url'], 'jymaster'))
+            legacy.assert_called_once_with('/song/url', {'id': 1, 'br': 320000, 'randomCNIP': 'true'}, 4.0, retries=0)
+            status, out = self.call('GET', route + '&refresh=1', token=token)
+            self.assertEqual((status, out['code']), (502, 'playback_match_failed'))
+            probe.assert_called_once_with(official['url'])
+
     def test_match_failure_is_retryable_and_not_cached(self):
         token = self.token()
         with mock.patch.object(cm_server, '_resolve_official_play_url', side_effect=cm_ncm.NcmError('no URL')), \

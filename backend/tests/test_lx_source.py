@@ -371,11 +371,16 @@ class LxSourceTests(unittest.TestCase):
                  replyPrefix="https://engine.example/cm/ncm/song/url",
                  replyBody={"url": "https://m804.music.126.net/g.mp3", "level": "exhigh"},
                  replyStatus=200),
-            # 老式 callback 运行时（body 为字符串）也要能解析
+            # 降级结果仍按 LX 契约返回 URL。callback 运行时的 body 为字符串。
+            dict(name="matched", rawBody=True, source="wy", action="musicUrl",
+                 info={"musicInfo": {"songmid": "186001"}, "type": "master"},
+                 replyPrefix="https://engine.example/cm/ncm/song/url",
+                 replyBody={"url": "https://audio.example/matched.m4a", "level": "matched"},
+                 replyStatus=200),
             dict(name="legacy_callback", mode="callback", source="wy", action="musicUrl",
                  info={"musicInfo": {"songmid": "186001"}, "type": "320k"},
                  replyPrefix="https://engine.example/cm/ncm/song/url",
-                 replyBody={"url": "https://m804.music.126.net/d.mp3", "level": "exhigh"},
+                 replyBody={"url": "https://m804.music.126.net/d.mp3", "level": "legacy"},
                  replyStatus=200),
             # 401 → 引导用户重新生成直链
             dict(name="expired", mode="v2", rawBody=True, source="wy", action="musicUrl",
@@ -397,6 +402,18 @@ class LxSourceTests(unittest.TestCase):
                      {"t": 61500, "txt": "第二行", "trans": "", "roma": ""},
                  ]},
                  replyStatus=200),
+            dict(name="search", source="wy", action="search", rawBody=True,
+                 info={"keywords": " 周杰伦 & 七里香 ", "limit": 2},
+                 replyPrefix="https://engine.example/cm/ncm/search",
+                 replyBody={"catalogSongs": [{"ncm_id": 186001}, {"ncm_id": 123}],
+                            "songs": [{"ncm_id": "123"}, {"ncm_id": 999}],
+                            "totals": {"song": 3}, "hasMore": {"song": True}}, replyStatus=200),
+            dict(name="search_next", source="wy", action="search", rawBody=True,
+                 info={"keywords": "七里香", "offset": 2, "limit": 2},
+                 replyPrefix="https://engine.example/cm/ncm/search",
+                 replyBody={"songs": [{"ncm_id": 456}], "totals": {"song": 3}, "hasMore": {"song": False}},
+                 replyStatus=200),
+            dict(name="search_blank", source="wy", action="search", info={"keywords": "  "}),
             # 非 wy 源 / 未知动作 / 未知音质 → 明确报错
             dict(name="tx_rejected", mode="v2", source="tx", action="musicUrl",
                  info={"musicInfo": {"songmid": "x"}, "type": "320k"}),
@@ -439,18 +456,33 @@ class LxSourceTests(unittest.TestCase):
                 self.assertEqual(c["protocol"], "promise", c["name"])
         # 请求 URL / 鉴权头断言（各 musicUrl 用例各发一次取链请求）
         song_calls = [r for r in out["requests"] if "/ncm/song/url" in r["url"]]
-        self.assertEqual(len(song_calls), 10)
+        self.assertEqual(len(song_calls), 11)
         by_level = {r["url"].split("level=")[1].split("&")[0] for r in song_calls if "level=" in r["url"]}
         self.assertEqual(by_level, {"standard", "exhigh", "lossless", "hires", "jymaster", "jyeffect"})
         for r in song_calls:
             self.assertEqual(r["options"]["headers"]["Authorization"], "Bearer tok-lx-123")
+            self.assertEqual(r["options"]["timeout"], cm_lx.PLAYBACK_TIMEOUT_MS)
             self.assertIn("cn=1", r["url"])          # 落雪直链固定用国内 RealIP 取址
-        self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 9)   # 含 401 用例
+        self.assertEqual(sum("id=186001" in r["url"] for r in song_calls), 10)   # 含 401 用例
         self.assertEqual(sum("id=999" in r["url"] for r in song_calls), 1)
         self.assertEqual(sum("id=x" in r["url"] for r in song_calls), 0)   # tx 源在发请求前即拒绝
         lyric_calls = [r for r in out["requests"] if "/ncm/lyric" in r["url"]]
         self.assertEqual(len(lyric_calls), 1)
         self.assertNotIn("Authorization", lyric_calls[0]["options"]["headers"])   # 公开接口不带令牌
+        search_calls = [r for r in out["requests"] if "/ncm/search" in r["url"]]
+        self.assertEqual(len(search_calls), 2)
+        self.assertIn("type=song&keywords=%E5%91%A8%E6%9D%B0%E4%BC%A6%20%26%20%E4%B8%83%E9%87%8C%E9%A6%99&offset=0&limit=2",
+                      search_calls[0]["url"])
+        self.assertIn("offset=2&limit=2", search_calls[1]["url"])
+        for r in search_calls:
+            self.assertNotIn("Authorization", r["options"]["headers"])
+        self.assertEqual(by_name["search"]["data"], {
+            "songs": [{"ncm_id": 186001}, {"ncm_id": 123}, {"ncm_id": 999}],
+            "upstreamCount": 2, "totals": {"song": 3}, "hasMore": {"song": True},
+        })
+        self.assertEqual(by_name["search_next"]["data"]["songs"], [{"ncm_id": 456}])
+        self.assertEqual(by_name["search_next"]["data"]["hasMore"], {"song": False})
+        self.assertIn("缺少搜索关键词", by_name["search_blank"]["err"])
 
         # musicUrl 成功路径（v2：body 已是对象；callback：body 是字符串）
         self.assertEqual(by_name["128k"]["err"], None)
@@ -461,6 +493,7 @@ class LxSourceTests(unittest.TestCase):
         self.assertEqual(by_name["master"]["data"], "https://m8.music.126.net/m.flac")
         self.assertEqual(by_name["atmos"]["data"], "https://m8.music.126.net/a.flac")
         self.assertEqual(by_name["hires"]["data"], "https://m8.music.126.net/h.flac")
+        self.assertEqual(by_name["matched"]["data"], "https://audio.example/matched.m4a")
         self.assertEqual(by_name["legacy_callback"]["err"], None)
         self.assertEqual(by_name["legacy_callback"]["data"], "https://m804.music.126.net/d.mp3")
         # 失败路径

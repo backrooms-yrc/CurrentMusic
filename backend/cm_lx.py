@@ -6,8 +6,9 @@
 - 返回的脚本头部携带 LX 客户端解析的 ``@name``/``@description``/``@version`` 等注释，
   主体监听 ``globalThis.lx`` 的 ``request`` 事件，用 ``wy`` 源的 ``songmid`` 回连
   Engine 的 ``/ncm/song/url``（musicUrl）与公开的 ``/ncm/lyric``（lyric）；
-- 直链与脚本内容都内嵌个人令牌，等同于登录会话，绝不落缓存、不写日志；
-  令牌失效（退出登录 / 下线设备 / 改密）后拉取即 401，用户重新生成即可。
+  支持搜索扩展的宿主可调用 ``search``，复用 Web 的 ``/ncm/search``；
+- 直链与脚本内容都内嵌令牌，响应禁止缓存，日志不记录令牌；
+  令牌失效时返回提示脚本，用户可重新生成直链。
 
 脚本语法刻意保持 ES2015 级别：LX 各端内置的 JS 运行时（QuickJS / WebView）
 对更激进的语法支持不一，兼容面优先。
@@ -21,26 +22,26 @@
   已经是对象，也可能是字符串（parse 失败或衍生环境），两种都要处理；
 - 官方 ``wy`` 源的动作白名单只有 ``musicUrl``（``lyric``/``pic`` 仅 local 源
   开放，多余的声明会被过滤；个别衍生版甚至严格校验直接判失败），
-  因此 ``inited`` 只声明 ``musicUrl`` —— handler 仍响应 ``lyric``，
-  支持 wy 歌词的衍生客户端可以照常调用。
+  因此 ``inited`` 只声明 ``musicUrl``。支持扩展的宿主可以直接调用 ``lyric`` 和 ``search``。
 """
 from __future__ import annotations
 
 import json
 
 # 音源脚本自身的版本。LX 客户端靠它判断「检查更新」是否需要拉新脚本。
-SOURCE_VERSION = "1.0.6"
+SOURCE_VERSION = "1.1.0"
 
 # 兜底基址：仅在请求头完全推不出对外域名时使用（正常线上永远走 Host 头）。
 DEFAULT_API_BASE = "https://music.20110208.xyz/cm"
 
-# 请求超时（毫秒）。取链的灰色匹配慢路径上限约 20s，客户端侧再留一点余量。
+# 请求超时（毫秒）。取链需要覆盖官方、匹配验证和旧版官方取址串行执行的情况。
 REQUEST_TIMEOUT_MS = 20000
+PLAYBACK_TIMEOUT_MS = 36000
 
 _SCRIPT_TEMPLATE = r"""
 /*!
  * @name CurrentMusic 流声引擎
- * @description CurrentMusic Engine 官方落雪音乐音源：服务端 SVIP 取流（所有注册用户享最高档）、自动音质、灰色曲目匹配与逐字歌词。
+ * @description 流声引擎网易云音源，支持曲库搜索扩展和灰色曲目匹配。
  * @version __SOURCE_VERSION__
  * @author Rcst20
  * @homepage https://music.20110208.xyz/home/engine/
@@ -60,6 +61,7 @@ var request = lx.request
 const API_BASE = __API_BASE__
 const TOKEN = __TOKEN__
 const REQUEST_TIMEOUT = __REQUEST_TIMEOUT_MS__
+const PLAYBACK_TIMEOUT = __PLAYBACK_TIMEOUT_MS__
 const UA = 'CurrentMusic-LX/__SOURCE_VERSION__ (lx-music custom source)'
 
 // 部分精简 JS 运行时（QuickJS 等）没有 setTimeout；没有超时计时也要能跑，
@@ -86,18 +88,16 @@ const QUALITY_LEVELS = {
 }
 const qualitys = ['128k', '320k', 'flac', 'flac24bit', 'hires', 'atmos', 'master']
 
-function httpGet(url, needAuth) {
+function httpGet(url, needAuth, timeout = REQUEST_TIMEOUT) {
   return new Promise((resolve, reject) => {
     let done = false
     const finish = (fn, arg) => { if (!done) { done = true; fn(arg) } }
-    const timer = setTimer(() => finish(reject, new Error('请求 CurrentMusic 超时')), REQUEST_TIMEOUT)
+    const timer = setTimer(() => finish(reject, new Error('请求 CurrentMusic 超时')), timeout)
     const headers = { Accept: 'application/json', 'User-Agent': UA }
     if (needAuth) headers.Authorization = 'Bearer ' + TOKEN
-    let settled = false
     try {
-      request(url, { method: 'GET', headers: headers, timeout: REQUEST_TIMEOUT }, (err, resp) => {
-        if (settled) return
-        settled = true
+      request(url, { method: 'GET', headers: headers, timeout: timeout }, (err, resp) => {
+        if (done) return
         clearTimer(timer)
         if (err) return finish(reject, err)
         // 官方沙箱已对 JSON 响应自动解析，resp.body 可能是对象；衍生环境可能是字符串。
@@ -117,7 +117,7 @@ function httpGet(url, needAuth) {
         finish(resolve, data)
       })
     } catch (err) {
-      clearTimeout(timer)
+      clearTimer(timer)
       finish(reject, err)
     }
   })
@@ -131,10 +131,31 @@ function musicUrl(musicInfo, quality) {
   // 灰色曲目也不会因为 Cloudflare 边缘 IP 被判成地区不可用）。
   const url = API_BASE + '/ncm/song/url?id=' + encodeURIComponent(id)
     + '&level=' + level + '&cn=1'
-  return httpGet(url, true).then((d) => {
-    const playUrl = d && d.url
-    if (!playUrl) throw new Error((d && d.error) || '该音质档位无可用地址')
-    return playUrl
+  // matched 和 legacy 也是可播放的结果。官方 LX 宿主要求只返回 URL 字符串。
+  return httpGet(url, true, PLAYBACK_TIMEOUT).then((d) => {
+    if (typeof d.url !== 'string' || !/^https?:\/\//i.test(d.url)) {
+      throw new Error(d.error || '该音质档位无可用地址')
+    }
+    return d.url
+  })
+}
+
+function search(info) {
+  const keywords = info && typeof info.keywords === 'string' ? info.keywords.trim() : ''
+  if (!keywords) return Promise.reject(new Error('缺少搜索关键词'))
+  const url = API_BASE + '/ncm/search?type=song&keywords=' + encodeURIComponent(keywords)
+    + '&offset=' + encodeURIComponent(info.offset || 0) + '&limit=' + encodeURIComponent(info.limit || 30)
+  return httpGet(url, false).then((d) => {
+    const upstream = d.songs || []
+    const catalog = d.catalogSongs || []
+    const seen = new Set()
+    const songs = catalog.concat(upstream).filter((song) => {
+      const id = String(song.ncm_id)
+      if (!/^[1-9]\d*$/.test(id) || seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
+    return { songs, upstreamCount: upstream.length, totals: d.totals, hasMore: d.hasMore }
   })
 }
 
@@ -173,12 +194,6 @@ function lyric(musicInfo) {
 
 // 官方 v2 运行时对 request handler 的返回值直接 .then()（不传 callback），
 // 所以必须返回 Promise；老式 callback 客户端同时兼容。
-const fail = (cb, message) => {
-  const err = new Error(message)
-  if (cb) cb(err)
-  return Promise.reject(err)
-}
-
 var handler = function (payload) {
   var source = payload.source, action = payload.action, info = payload.info, callback = payload.callback
   var cb = typeof callback === 'function' ? callback : null
@@ -186,24 +201,24 @@ var handler = function (payload) {
   switch (action) {
     case 'musicUrl':
       if (source !== 'wy') {
-        work = fail(cb, 'CurrentMusic 音源目前仅支持网易云（wy）音源')
+        work = Promise.reject(new Error('CurrentMusic 音源目前仅支持网易云（wy）音源'))
       } else if (!info || !Object.prototype.hasOwnProperty.call(QUALITY_LEVELS, info.type)) {
-        work = fail(cb, '不支持的音质：' + (info && info.type))
+        work = Promise.reject(new Error('不支持的音质：' + (info && info.type)))
       } else {
         work = musicUrl(info.musicInfo, info.type)
       }
       break
     case 'lyric':
-      // inited 不声明 lyric（官方 wy 白名单只有 musicUrl），但支持该协议的
-      // 衍生客户端仍可直接调用。
+    case 'search':
+      // 官方 wy 白名单只有 musicUrl，扩展动作由支持它们的宿主直接调用。
       if (source !== 'wy') {
-        work = fail(cb, 'CurrentMusic 音源目前仅支持网易云（wy）音源')
+        work = Promise.reject(new Error('CurrentMusic 音源目前仅支持网易云（wy）音源'))
       } else {
-        work = lyric(info.musicInfo)
+        work = action === 'search' ? search(info) : lyric(info && info.musicInfo)
       }
       break
     default:
-      work = fail(cb, '不支持的操作：' + action)
+      work = Promise.reject(new Error('不支持的操作：' + action))
   }
   if (cb) {
     work.then(function (data) { cb(null, data) }, function (err) { cb(err || new Error('请求失败')) })
@@ -239,7 +254,8 @@ def build_source_script(api_base: str, token: str) -> str:
             .replace("__SOURCE_VERSION__", SOURCE_VERSION)
             .replace("__API_BASE__", json.dumps(api_base))
             .replace("__TOKEN__", json.dumps(token))
-            .replace("__REQUEST_TIMEOUT_MS__", str(int(REQUEST_TIMEOUT_MS))))
+            .replace("__REQUEST_TIMEOUT_MS__", str(REQUEST_TIMEOUT_MS))
+            .replace("__PLAYBACK_TIMEOUT_MS__", str(PLAYBACK_TIMEOUT_MS)))
 
 
 def api_base_for(handler) -> str:

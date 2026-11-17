@@ -722,6 +722,17 @@ def song_url(ncm_id, level="lossless", immerse=None, real_ip=None, probe=True, t
     d = _bounded_call("/song/url/v1", q, 4.0, retries=0)
     if timing is not None:
         timing["upstreamMs"] = int((time.time() - t_up) * 1000)
+    return _official_audio(d, level, probe, timing, require_exact)
+
+
+def legacy_song_url(ncm_id):
+    """落雪取链最后尝试与 Web 相同的旧版官方 320kbps 接口。"""
+    d = _bounded_call("/song/url", {"id": int(ncm_id), "br": 320000, "randomCNIP": "true"},
+                      4.0, retries=0)
+    return dict(_official_audio(d, "legacy", probe=True, timing=None, require_exact=False), level="legacy")
+
+
+def _official_audio(d, level, probe, timing, require_exact):
     items = (d or {}).get("data") or []
     if not items:
         raise NcmError("未取得播放地址")
