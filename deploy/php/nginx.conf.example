@@ -19,6 +19,8 @@ location ^~ /cm/ {
     fastcgi_param CM_PHP_PREFIX /cm;
     fastcgi_param REMOTE_ADDR $remote_addr;
     fastcgi_param HTTPS $https if_not_empty;
+    # Let the proxy forward the raw multipart stream via php://input.
+    fastcgi_param PHP_ADMIN_VALUE "enable_post_data_reading=Off";
 
     # Debian/Ubuntu 常见路径；宝塔通常是 /tmp/php-cgi-85.sock。
     fastcgi_pass unix:/run/php/php8.5-fpm.sock;

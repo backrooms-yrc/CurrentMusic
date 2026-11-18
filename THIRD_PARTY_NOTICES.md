@@ -81,6 +81,8 @@ be imported without installing the Qt GUI stack.
 
 - py_webauthn (BSD-3-Clause), https://github.com/duo-labs/py_webauthn,
   pinned in `deploy/requirements-auth.txt`; transitive dependencies retain their own licenses.
+- multipart 2.0.1 (MIT), https://github.com/defnull/multipart, provides the streaming
+  parser for diagnostic uploads and is pinned in `deploy/requirements-auth.txt`.
 - Pillow (HPND) and segno (BSD-3-Clause) are optional sharing-image dependencies.
 - NetEaseCloudMusicApiEnhanced / api-enhanced (MIT) is deployed separately;
   its backend source and account cookies are not bundled here. The license for
