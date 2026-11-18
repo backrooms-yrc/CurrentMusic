@@ -14,8 +14,13 @@ const newRequestId = () => Array.from(crypto.getRandomValues(new Uint8Array(16))
   byte => byte.toString(16).padStart(2, '0')).join('');
 
 async function previewMedia(file, isVideo, limits) {
-  const url = URL.createObjectURL(file);
   const preview = document.createElement(isVideo ? 'video' : 'img');
+  if (isVideo && !preview.canPlayType('video/mp4; codecs="avc1.42E01E"')) {
+    const hint = document.createElement('p');
+    hint.textContent = '请用本地播放器预览 H.264 录屏，检查画面和声音后再上传。';
+    return { preview: hint, url: null };
+  }
+  const url = URL.createObjectURL(file);
   try {
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('无法预览该文件')), 10000);
@@ -113,7 +118,7 @@ export function render(el) {
   const forget = () => { sessionStorage.removeItem(storageKey); requestId = null; };
   const toggleMedia = () => { mediaBox.hidden = type.value !== 'Bug' || !mediaLimits; };
   const releaseFiles = () => {
-    for (const entry of files.values()) URL.revokeObjectURL(entry.url);
+    for (const entry of files.values()) if (entry.url) URL.revokeObjectURL(entry.url);
     files.clear();
     previews.textContent = '';
     picker.value = '';
@@ -159,7 +164,7 @@ export function render(el) {
         }
         try {
           const { preview, url } = await previewMedia(file, isVideo, limits);
-          if (!current()) { URL.revokeObjectURL(url); return; }
+          if (!current()) { if (url) URL.revokeObjectURL(url); return; }
           const row = document.createElement('div');
           const name = document.createElement('span');
           name.textContent = file.name;
@@ -180,7 +185,7 @@ export function render(el) {
             try {
               if (entry.started) await api.deleteFeedbackMedia(draftId, slot);
               if (!current()) return;
-              URL.revokeObjectURL(url);
+              if (url) URL.revokeObjectURL(url);
               files.delete(slot);
               row.remove();
               if (!files.size) mediaConsent.checked = false;

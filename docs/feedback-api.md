@@ -82,7 +82,7 @@ HTTP `202 Accepted` 表示已接收，响应为回执。相同账号以相同 `r
 
 报告问题时，客户端预览附件并取得单独授权后，逐个暂存文件。请求使用 HTTPS 和 `Authorization: Bearer <CurrentMusic 会话令牌>`。`requestId` 须为 32 位小写十六进制字符串，`slot` 取 `screenshot-1`、`screenshot-2`、`screenshot-3` 或 `video-1`。
 
-发送原始文件字节，并提供实际 `Content-Type`、`Content-Length` 和 `X-Feedback-Media-Consent: true`。支持最多三张 JPEG/PNG 截图和一段 H.264 MP4，录屏可包含一条 AAC 音轨。截图重新编码并应用 EXIF 方向，录屏保留支持的画面及音轨并移除源容器元数据。通知、声音和画面中的私人内容需在客户端预览时检查和遮挡。
+发送原始文件字节，并提供实际 `Content-Type`、`Content-Length` 和 `X-Feedback-Media-Consent: true`。支持最多三张 JPEG/PNG 截图和一段 H.264 MP4，录屏可包含一条 AAC 音轨。截图重新编码并应用 EXIF 方向，录屏保留支持的画面及音轨并移除源容器元数据。通知、声音和画面中的私人内容需在预览时检查和遮挡。缺少 H.264 解码的浏览器会提示先用本地播放器检查录屏。
 
 首次暂存返回 `201`。同账号、请求 ID、槽位和文件重试返回 `200` 及原回执。请保存 `sha256` 用于最终提交，`expiresAt` 是 UTC ISO 8601 时间。
 
