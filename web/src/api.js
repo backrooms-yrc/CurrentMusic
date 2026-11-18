@@ -263,6 +263,22 @@ export const api = {
 
   // 管理员
   adminOverview: () => call('GET', '/admin/overview', { auth: true }),
+  async adminFeedbackDiagnostics(id) {
+    // ZIP 响应走浏览器 fetch，现有原生桥只传输 JSON。
+    const token = auth.token;
+    const response = await fetch(`${settings.base}/admin/feedback/diagnostics/${encodeURIComponent(id)}`, {
+      headers: { Authorization: 'Bearer ' + token }, cache: 'no-store', redirect: 'error',
+    });
+    if (!response.ok) {
+      if (response.status === 401 && token && auth.token === token && onAuthExpired) {
+        onAuthExpired('#/admin?diagnostics=' + id);
+      }
+      const error = await response.json().catch(() => null);
+      throw Object.assign(new Error(error?.error || `下载失败（HTTP ${response.status}）`), { status: response.status });
+    }
+    if (response.headers.get('Content-Type') !== 'application/zip') throw new Error('诊断附件响应格式异常');
+    return response.blob();
+  },
   adminAi: () => call('GET', '/admin/ai', { auth: true }),
   adminSaveAi: (enabled, effort) => call('POST', '/admin/ai', { body: { enabled, effort }, auth: true }),
   adminTestAi: provider => call('POST', '/admin/ai/test', { body: { provider }, auth: true }),

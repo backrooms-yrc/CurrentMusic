@@ -61,7 +61,7 @@ import * as user from './pages/user.js';
 import * as twoFactorPage from './twofactor.js';
 import * as securityQuestionPage from './pages/security-question.js';
 import * as welcomePage from './pages/welcome.js';
-import { needsWelcome } from './auth-flow.js';
+import { needsWelcome, rememberFeedbackDiagnostics } from './auth-flow.js';
 import * as passkeysPage from './passkeys.js';
 import * as networkPage from './pages/network.js';
 import * as donatePage from './pages/donate.js';
@@ -304,11 +304,11 @@ function boot() {
   // 还是登录状态，只能手动退出。现在：清 token/user（保留其他已登录账号）→
   // 若正停在账号相关页面则重渲染 → 弹一次带「重新登录」的对话框；并发 401
   // 因 token 已清空不会重复触发。
-  setAuthExpiredHandler(() => {
+  setAuthExpiredHandler(back => {
     if (!auth.token) return;                 // 已处理过（并发请求）
     auth.clear();                            // 主动退出，清掉失效会话
     const h = location.hash || '#/home';
-    if (h.startsWith('#/user') || h.startsWith('#/settings') || h.startsWith('#/two-factor') || h.startsWith('#/security-question') || h.startsWith('#/welcome') || h === '#/feedback') {
+    if (h.startsWith('#/user') || h.startsWith('#/settings') || h.startsWith('#/two-factor') || h.startsWith('#/security-question') || h.startsWith('#/welcome') || h === '#/feedback' || /^#\/admin(?:\?|$)/.test(h)) {
       try { router(); } catch { /* 忽略：重渲染失败不影响退出与提示 */ }
     }
     mdui.dialog({
@@ -319,7 +319,10 @@ function boot() {
         </div>`,
       actions: [
         { text: '稍后' },
-        { text: '重新登录', onClick: () => { location.hash = '#/user'; } },
+        { text: '重新登录', onClick: () => {
+          rememberFeedbackDiagnostics(back || h);
+          location.hash = '#/user';
+        } },
       ],
     });
   });

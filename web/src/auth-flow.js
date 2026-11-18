@@ -1,6 +1,14 @@
 import { auth } from './api.js';
 
 const WELCOME_KEY = 'cm.welcome.pending';
+const DIAGNOSTICS_BACK = 'cm.feedbackDiagnosticsBack';
+const DIAGNOSTICS_HASH = /^#\/admin\?diagnostics=[0-9a-f]{32}$/;
+
+export function rememberFeedbackDiagnostics(hash) {
+  if (!DIAGNOSTICS_HASH.test(hash)) return;
+  try { sessionStorage.setItem(DIAGNOSTICS_BACK, hash); } catch { /* 隐私模式 */ }
+}
+
 export function needsWelcome() {
   try { return !!auth.token && localStorage.getItem(WELCOME_KEY) === String((auth.user || {}).id); } catch { return false; }
 }
@@ -15,9 +23,15 @@ export function startWelcome({ replay = false } = {}) {
 }
 export function afterLogin() {
   if (needsWelcome()) { location.hash = '#/welcome'; return; }
-  let back = '';
-  try { back = sessionStorage.getItem('cm.ppBack') || ''; sessionStorage.removeItem('cm.ppBack'); } catch { /* 隐私模式 */ }
-  location.hash = back.startsWith('#/passport/authorize?') ? back : '#/home';
+  let back = '', diagnostics = '';
+  try {
+    back = sessionStorage.getItem('cm.ppBack') || '';
+    diagnostics = sessionStorage.getItem(DIAGNOSTICS_BACK) || '';
+    sessionStorage.removeItem('cm.ppBack');
+    sessionStorage.removeItem(DIAGNOSTICS_BACK);
+  } catch { /* 隐私模式 */ }
+  if (back.startsWith('#/passport/authorize?')) location.hash = back;
+  else location.hash = DIAGNOSTICS_HASH.test(diagnostics) ? diagnostics : '#/home';
 }
 export function isWelcomeReplay() {
   try { return sessionStorage.getItem('cm.welcome.return') === 'settings'; } catch { return false; }

@@ -524,14 +524,6 @@
     <div class="card pad"><div class="list" id="grants"></div></div>
   </section>
 
-  <section class="page" data-page="feedback-diagnostics">
-    <div class="page-head"><h2>反馈诊断附件</h2></div>
-    <div class="card pad">
-      <button class="btn primary" type="button" id="downloadFeedbackDiagnostics">下载 ZIP</button>
-      <p id="feedbackDiagnosticsStatus" role="status"></p>
-    </div>
-  </section>
-
   <!-- ==================== 公告 ==================== -->
   <section class="page" data-page="announcements">
     <div class="page-head"><h2>站内公告</h2><p>与 CurrentMusic 客户端同一份公告，置顶优先，所有人可见。</p></div>
@@ -798,57 +790,21 @@
   }
 
   /* ---------------- 路由（每个栏目独立成页，不再挤在一屏里） ---------------- */
-  var PAGES = ['overview', 'music', 'security', 'announcements', 'docs', 'feedback-diagnostics'];
+  var PAGES = ['overview', 'music', 'security', 'announcements', 'docs'];
   var loaded = {};
   function currentTab() {
     var t = (location.hash || '').replace(/^#\/?/, '').split('?')[0] || 'overview';
     return PAGES.indexOf(t) >= 0 ? t : 'overview';
   }
-  function feedbackDiagnosticsId() {
-    return new URLSearchParams(location.hash.split('?')[1]).get('id') || '';
-  }
-  var feedbackDownload = $('downloadFeedbackDiagnostics');
-  var feedbackNotice = $('feedbackDiagnosticsStatus');
-  feedbackDownload.onclick = async function () {
-    var id = feedbackDiagnosticsId(), token = tok();
-    if (!/^[0-9a-f]{32}$/.test(id) || !token) return;
-    feedbackDownload.disabled = true;
-    feedbackNotice.textContent = '正在获取诊断附件…';
-    try {
-      var response = await fetch('/cm/admin/feedback/diagnostics/' + id, {
-        headers: { Authorization: 'Bearer ' + token }, cache: 'no-store', redirect: 'error'
-      });
-      if (response.status === 401) {
-        sess('', null); route(); toast('请重新登录后下载诊断附件'); return;
-      }
-      if (!response.ok) {
-        var errors = { 403: '只有管理员可以下载诊断附件。', 404: '未找到诊断附件。', 410: '诊断附件已过期。' };
-        throw new Error(errors[response.status] || '诊断附件暂不可用，请稍后重试。');
-      }
-      if (response.headers.get('Content-Type') !== 'application/zip') throw new Error('诊断附件响应格式异常。');
-      var blob = await response.blob();
-      if (currentTab() !== 'feedback-diagnostics' || feedbackDiagnosticsId() !== id || tok() !== token) return;
-      var url = URL.createObjectURL(blob), link = document.createElement('a');
-      link.href = url;
-      link.download = 'currentmusic-diagnostics.zip';
-      link.click();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-      feedbackNotice.textContent = '';
-    } catch (error) {
-      feedbackNotice.textContent = error instanceof TypeError ? '暂时无法连接服务，请稍后重试。' : error.message;
-    } finally {
-      feedbackDownload.disabled = !/^[0-9a-f]{32}$/.test(feedbackDiagnosticsId());
-    }
-  };
   function route() {
+    var legacyDiagnostics = /^#\/feedback-diagnostics\?id=([0-9a-f]{32})$/.exec(location.hash);
+    if (legacyDiagnostics) {
+      location.replace('/app/#/admin?diagnostics=' + legacyDiagnostics[1]);
+      return;
+    }
     var logged = !!tok();
     var tab = currentTab();
     if (tab === 'docs') { location.replace(BASE + '/api-docs/'); return; }
-    if (tab === 'feedback-diagnostics') {
-      feedbackDownload.disabled = !/^[0-9a-f]{32}$/.test(feedbackDiagnosticsId());
-      feedbackNotice.textContent = feedbackDownload.disabled ? '诊断附件链接无效。' : '';
-      if (!logged) toast('请登录管理员账号后下载诊断附件');
-    }
     if (!logged && AUTHLESS.indexOf(tab) < 0) tab = 'overview';   // 未登录时受保护页回落
     document.querySelectorAll('.page').forEach(function (p) {
       p.classList.toggle('on', p.dataset.page === tab);

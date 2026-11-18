@@ -154,7 +154,7 @@ def submit(uid, body, archive=None):
                 raise FeedbackError(503, "反馈通道繁忙，请稍后再试")
             if archive is not None:
                 diagnostics_id = uuid.uuid4().hex
-                link = f"{origin}/cm/station#/feedback-diagnostics?id={diagnostics_id}"
+                link = f"{origin}/app/#/admin?diagnostics={diagnostics_id}"
                 object_path = directory / (uuid.uuid4().hex + ".zip")
                 diagnostics.store(object_path, saved_zip)
                 conn.execute(
@@ -268,7 +268,7 @@ def _template_issue(kind, title, fields, diagnostics_link=None):
         escaped = re.sub(r"(?m)^([ \t]{0,3})(#|`(?=``)|~(?=~~))",
                          lambda match: f"{match[1]}&#{ord(match[2])};", _safe_body(value))
         if key == "diagnostics" and diagnostics_link:
-            link = f"[在 CurrentStation 下载诊断附件]({diagnostics_link})"
+            link = f"[在 CurrentMusic 管理员面板下载诊断附件]({diagnostics_link})"
             escaped = link if not fields.get(key, "").strip() else f"{escaped}\n\n{link}"
         body.append(f"### {heading}\n\n{escaped}")
     if kind == "bug":
