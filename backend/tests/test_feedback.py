@@ -1,6 +1,10 @@
 import http.client
+import hashlib
+import importlib.util
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -21,6 +25,7 @@ import cm_ai
 import cm_db
 import cm_feedback as feedback
 import cm_feedback_diagnostics as diagnostics
+import cm_feedback_media as media
 import cm_server
 
 
@@ -156,6 +161,9 @@ class TestFeedbackDiagnostics(unittest.TestCase):
         with cm_db.connect() as conn:
             conn.execute("DELETE FROM feedback_receipts")
             conn.execute("DELETE FROM feedback_diagnostics")
+            conn.execute("DELETE FROM feedback_media")
+            conn.execute("DELETE FROM feedback_media_groups")
+            conn.execute("DELETE FROM feedback_media_quota")
         self.storage = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.enterContext(mock.patch.dict(os.environ, {
             "CM_FEEDBACK_GITHUB_TOKEN": "test-only",
@@ -183,11 +191,11 @@ class TestFeedbackDiagnostics(unittest.TestCase):
                 archive.writestr(name, value)
         return buffer.getvalue()
 
-    def upload(self, archive, content=None, consent="true", token=None, public="true"):
+    def upload(self, archive, content=None, consent="true", token=None, public="true", media_fields=None):
         boundary = "TestFeedbackBoundary"
         body = []
         for name, value in {"requestId": self.REQUEST, "content": content or self.CONTENT,
-                            "public": public, "diagnosticsConsent": consent}.items():
+                            "public": public, "diagnosticsConsent": consent, **(media_fields or {})}.items():
             body.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
         body.extend([f'--{boundary}\r\nContent-Disposition: form-data; name="diagnostics"; filename="d.zip"\r\n'
                      'Content-Type: application/zip\r\n\r\n'.encode(), archive, f'\r\n--{boundary}--\r\n'.encode()])
@@ -270,6 +278,164 @@ class TestFeedbackDiagnostics(unittest.TestCase):
                 conn.execute("DROP TRIGGER fail_feedback_receipt")
                 self.assertEqual(conn.execute("SELECT COUNT(*) FROM feedback_diagnostics").fetchone()[0], 0)
         self.assertFalse(list(self.storage.iterdir()))
+        self.assertEqual(self.call("GET", f"/feedback?requestId={self.REQUEST}", self.token)[0], 404)
+
+    def enable_media(self):
+        if not (importlib.util.find_spec("PIL") and shutil.which("ffmpeg") and shutil.which("ffprobe")):
+            self.skipTest("feedback media needs Pillow, FFmpeg, and ffprobe")
+        folder = self.storage / "media"
+        folder.mkdir(mode=0o700)
+        address, port = self.server.server_address
+        self.enterContext(mock.patch.dict(os.environ, {"CM_FEEDBACK_MEDIA_HOSTS": f"{address}:{port}"}))
+        return folder
+
+    @staticmethod
+    def png(width=40, color="red"):
+        from PIL import Image, PngImagePlugin
+        buffer = BytesIO()
+        metadata = PngImagePlugin.PngInfo()
+        metadata.add_text("Title", "private-source-text")
+        Image.new("RGB", (width, 20), color).save(buffer, "PNG", pnginfo=metadata)
+        return buffer.getvalue()
+
+    def put_media(self, data, slot="screenshot-1", content_type="image/png", *, token=None, consent="true"):
+        return self.call("PUT", f"/feedback/{self.REQUEST}/media/{slot}", token or self.token, data,
+                         {"Content-Type": content_type, "X-Feedback-Media-Consent": consent})
+
+    def post_media(self, manifest, token=None, **fields):
+        body = {"requestId": self.REQUEST, "content": self.CONTENT, "public": True,
+                "mediaConsent": True, "media": manifest, **fields}
+        return self.call("POST", "/feedback", token or self.token, json.dumps(body), {"Content-Type": "application/json"})
+
+    @staticmethod
+    def recording(seconds):
+        with tempfile.TemporaryDirectory() as temporary:
+            dest = Path(temporary) / "fixture.mp4"
+            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+                            "color=size=176x144:rate=4", "-f", "lavfi", "-i", "anullsrc=sample_rate=44100",
+                            "-t", str(seconds), "-c:v", "libx264", "-c:a", "aac", "-metadata",
+                            "title=private-source-title", str(dest)], check=True, timeout=15)
+            return dest.read_bytes()
+
+    def test_media_replay_claim_and_admin_download(self):
+        folder = self.enable_media()
+        self.assertTrue(self.call("GET", "/feedback/capabilities")[1]["media"]["enabled"])
+        self.assertFalse(self.call("GET", "/feedback/capabilities", headers={"Host": "elsewhere.invalid"})[1]["media"]["enabled"])
+        png = self.png()
+        route = f"/feedback/{self.REQUEST}/media/screenshot-1"
+        self.assertEqual(self.call("PUT", route, body=png)[0], 401)
+        self.assertEqual(self.put_media(png, consent="false")[0], 400)
+        result, staged, _ = self.put_media(png)
+        self.assertEqual(result, 201)
+        self.assertEqual(staged["sha256"], hashlib.sha256(png).hexdigest())
+        self.assertEqual(self.put_media(png)[:2], (200, staged))
+        self.assertEqual(self.put_media(self.png(color="blue"))[0], 409)
+        self.assertEqual(self.put_media(png, slot="screenshot-2")[0], 201)
+        self.assertEqual(self.call("DELETE", route + "2", self.token)[0], 404)
+        self.assertEqual(self.call("DELETE", route[:-1] + "2", self.token)[0], 204)
+        manifest = [{"slot": "screenshot-1", "sha256": staged["sha256"]}]
+        self.assertEqual(self.post_media(manifest, self.admin_token)[1]["code"], "media_not_ready")
+        self.assertEqual(self.post_media(manifest, content="[Feature] 增加歌词字号选项")[0], 400)
+        self.assertEqual(self.post_media(manifest * 2)[0], 400)
+        with mock.patch.object(cm_ai, "format_feedback", return_value=("bug", "错误", {"steps": "复现步骤"})) as ai, \
+                mock.patch.object(feedback, "_create_issue", return_value=("published", 42)) as github:
+            self.assertEqual(self.post_media(manifest)[0], 202)
+            receipt = self.wait_for_receipt("published")
+            self.assertEqual(receipt["mediaCount"], 1)
+            self.assertEqual(self.post_media(manifest)[:2], (202, receipt))
+            self.assertEqual(self.post_media(manifest, content=self.CONTENT + " 更改")[1]["code"], "request_conflict")
+            github.assert_called_once()
+            ai.assert_called_once_with(self.CONTENT)
+            issue = github.call_args.args[1]
+        self.assertNotIn("private-source-text", issue["body"])
+        self.assertEqual(len(list(folder.iterdir())), 1)
+        self.assertEqual(self.call("DELETE", route, self.token)[0], 409)
+        with cm_db.connect() as conn:
+            object_id, group = conn.execute("SELECT id,group_id FROM feedback_media").fetchone()
+        self.assertIn("/app/#/admin?diagnostics=" + group, issue["body"])
+        self.assertNotIn(object_id, issue["body"])
+        download = f"/admin/feedback/media/{object_id}"
+        listing = f"/admin/feedback/attachments/{group}"
+        self.assertEqual(self.call("GET", listing)[0], 401)
+        self.assertEqual(self.call("GET", download, self.token)[0], 403)
+        self.assertEqual(self.call("GET", listing, self.admin_token)[1]["attachments"][0]["id"], object_id)
+        status, saved, headers = self.call("GET", download, self.admin_token)
+        self.assertEqual((status, headers["Cache-Control"]), (200, "private, no-store"))
+        self.assertNotIn(b"private-source-text", saved)
+        with cm_db.connect() as conn:
+            now = int(time.time()) - 1
+            conn.execute("UPDATE feedback_media_groups SET expires_at=?", (now,))
+            conn.execute("UPDATE feedback_media SET expires_at=?", (now,))
+        media.purge(feedback.EXPIRY_NOTICE)
+        self.assertEqual(self.call("GET", download, self.admin_token)[0], 410)
+        self.assertEqual(self.call("GET", listing, self.admin_token)[0], 410)
+        self.assertFalse(list(folder.iterdir()))
+
+    def test_media_recording_and_screenshot_with_zip(self):
+        folder = self.enable_media()
+        self.assertEqual(self.put_media(self.png(), slot="video-1", content_type="video/mp4")[0], 415)
+        status, recorded, _ = self.put_media(self.recording(1), slot="video-1", content_type="video/mp4")
+        self.assertEqual(status, 201, recorded)
+        self.assertEqual(self.put_media(self.png(width=4097))[0], 422)
+        self.assertEqual(self.put_media(b"\x89PNG\r\n\x1a\n")[0], 422)
+        self.assertEqual(self.put_media(self.png(), content_type="image/jpeg")[0], 415)
+        status, screenshot, _ = self.put_media(self.png())
+        self.assertEqual(status, 201, screenshot)
+        manifest = [{"slot": item["slot"], "sha256": item["sha256"]} for item in (recorded, screenshot)]
+        zip_archive = self.archive()
+        with mock.patch.object(cm_ai, "format_feedback", side_effect=cm_ai.AiError("offline")), \
+                mock.patch.object(feedback, "_create_issue", return_value=("unconfirmed", None)) as github:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                replies = pool.map(lambda index: self.upload(zip_archive, token=self.token, media_fields={
+                    "mediaConsent": "true", "media": json.dumps(manifest[::(-1 if index else 1)]),
+                }), range(2))
+                self.assertTrue(all(reply[0] == 202 for reply in replies))
+            self.assertEqual(self.wait_for_receipt("unconfirmed")["mediaCount"], 2)
+            issue = github.call_args.args[1]
+            github.assert_called_once()
+        with cm_db.connect() as conn:
+            receipt = conn.execute("SELECT diagnostics_id,media_group FROM feedback_receipts WHERE request_id=?",
+                                   (self.REQUEST,)).fetchone()
+        self.assertEqual(receipt["diagnostics_id"], receipt["media_group"])
+        self.assertEqual(issue["body"].count("/app/#/admin?diagnostics="), 1)
+        items = self.call("GET", f"/admin/feedback/attachments/{receipt['media_group']}", self.admin_token)[1]["attachments"]
+        self.assertEqual({item["contentType"] for item in items}, {"image/png", "video/mp4", "application/zip"})
+        media.purge(feedback.EXPIRY_NOTICE)
+        self.assertEqual(len(list(folder.iterdir())), 2)
+        saved_video = next(folder.glob("*.mp4")).read_bytes()
+        self.assertNotIn(b"private-source-title", saved_video)
+
+    def test_media_video_only_checks_duration(self):
+        self.enable_media()
+        self.assertEqual(self.put_media(self.recording(31), slot="video-1", content_type="video/mp4")[0], 422)
+        status, recorded, _ = self.put_media(self.recording(1), slot="video-1", content_type="video/mp4")
+        self.assertEqual(status, 201)
+        with mock.patch.object(cm_ai, "format_feedback", return_value=("bug", "问题", {"steps": "复现"})), \
+                mock.patch.object(feedback, "_create_issue", return_value=("failed", None)) as github:
+            self.assertEqual(self.post_media([{"slot": "video-1", "sha256": recorded["sha256"]}])[0], 202)
+            receipt = self.wait_for_receipt("failed")
+            github.assert_called_once()
+        self.assertEqual(receipt["mediaCount"], 1)
+        self.assertNotIn("hasDiagnostics", receipt)
+
+    def test_media_interrupted_and_staged_expiry(self):
+        folder = self.enable_media()
+        png = self.png()
+        connection = SimpleNamespace(headers={"Content-Length": str(len(png)), "Content-Type": "image/png",
+                                               "X-Feedback-Media-Consent": "true",
+                                               "Host": ":".join(map(str, self.server.server_address))}, rfile=BytesIO(png[:10]))
+        with self.assertRaises(media.MediaError) as error:
+            media.upload(connection, 97, self.REQUEST, "screenshot-1", feedback.RETENTION)
+        self.assertEqual(error.exception.status, 400)
+        self.assertFalse(list(folder.iterdir()))
+        self.assertEqual(self.put_media(b"x" * (media.IMAGE_BYTES + 1))[0], 413)
+        code, row, _ = self.put_media(png)
+        self.assertEqual(code, 201)
+        with cm_db.connect() as conn:
+            conn.execute("UPDATE feedback_media SET expires_at=0")
+        self.assertEqual(self.post_media([{"slot": row["slot"], "sha256": row["sha256"]}])[1]["code"], "media_not_ready")
+        media.purge(feedback.EXPIRY_NOTICE)
+        self.assertFalse(list(folder.iterdir()))
         self.assertEqual(self.call("GET", f"/feedback?requestId={self.REQUEST}", self.token)[0], 404)
 
     def test_unconfirmed_diagnostics_survive_until_expiry(self):

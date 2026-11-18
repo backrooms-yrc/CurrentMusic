@@ -28,6 +28,7 @@ import cm_db
 import cm_decor
 import cm_feedback
 import cm_feedback_diagnostics
+import cm_feedback_media
 import cm_lx
 import cm_lddc
 import cm_levels
@@ -1268,7 +1269,7 @@ def jresp(handler, code, obj, cache_control=None, extra_headers=None):
         cache_control = "no-store"
     if path.startswith("/music-service/") or path == "/passport/token":
         cache_control = "no-store"
-    if path.rstrip("/") in ("/feedback", "/feedback/capabilities") or path.startswith("/admin/feedback/diagnostics/"):
+    if path.rstrip("/") == "/feedback" or path.startswith(("/feedback/", "/admin/feedback/")):
         cache_control = "no-store"
     body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     handler.send_response(code)
@@ -2157,7 +2158,8 @@ def route(handler, method):
     path = parsed.path.rstrip("/") or "/"
     q = {k: v[0] for k, v in parse_qs(parsed.query, keep_blank_values=True).items()}
     feedback_post = path == "/feedback" and method == "POST"
-    body = read_json(handler) if method in ("POST", "PUT", "DELETE") and not feedback_post else None
+    feedback_media = re.fullmatch(r"/feedback/([0-9a-f]{32})/media/(screenshot-[123]|video-1)", path)
+    body = read_json(handler) if method in ("POST", "PUT", "DELETE") and not (feedback_post or feedback_media) else None
     # 限速按**真实客户端**分桶。此前用 handler.client_address（= nginx 的 127.0.0.1），
     # 全站共用一个 300/min 的桶：几个用户同时切歌就会把播放地址解析打成 429。
     ip = cm_ncm_gateway.rate_key(handler)
@@ -3035,9 +3037,13 @@ def route(handler, method):
             ("GET", "/donation/qr", "公开", "官方捐赠二维码图片（backend/assets/donation-qr.jpg，可缓存）"),
             ("GET", "/donation/info", "Bearer", "捐赠引导信息：账号基本信息快照、二维码地址、本人捐赠历史与累计 {mine:{items,count,totalCents}}"),
             ("POST", "/donation", "Bearer", "提交捐赠记录 {amount 元, txnId 交易单号, note? 备注}；金额为用户自报，交易单号全站唯一（重复 409）"),
-            ("POST", "/feedback", "Bearer", "提交 JSON 意见反馈；Bug 可用 multipart/form-data 上传私有诊断 ZIP。详见 /api-docs/reference/guide-feedback-api/"),
-            ("GET", "/feedback", "Bearer", "按 requestId 查询本人反馈进度、附件状态和公开 Issue 链接"),
-            ("GET", "/feedback/capabilities", "公开", "诊断附件开关及压缩、解压和请求体大小上限"),
+            ("POST", "/feedback", "Bearer", "提交意见反馈；Bug 可引用暂存的截图和录屏，也可用 multipart/form-data 上传私有诊断 ZIP。详见 /api-docs/reference/guide-feedback-api/"),
+            ("GET", "/feedback", "Bearer", "按 requestId 查询本人反馈进度、附件数量和公开 Issue 链接"),
+            ("GET", "/feedback/capabilities", "公开", "诊断 ZIP 和媒体附件的当前线路能力与大小上限"),
+            ("PUT", "/feedback/{requestId}/media/{slot}", "Bearer", "暂存 Bug 截图或录屏，返回槽位、摘要和到期时间"),
+            ("DELETE", "/feedback/{requestId}/media/{slot}", "Bearer", "移除本人未提交的媒体槽位"),
+            ("GET", "/admin/feedback/attachments/{id}", "管理员 Bearer", "列出同一反馈的媒体和诊断 ZIP"),
+            ("GET", "/admin/feedback/media/{id}", "管理员 Bearer", "下载反馈的截图或录屏，七天后过期"),
             ("GET", "/admin/feedback/diagnostics/{id}", "管理员 Bearer", "下载经过脱敏的诊断 ZIP，七天后过期"),
             ("GET", "/admin/donations", "管理员", "捐赠用户列表：搜索/分页/聚合（单笔与用户累计金额、次数）；sort=recent/recent_asc/amount/user_total/user_count/name"),
             ("DELETE", "/admin/donations/{id}", "管理员", "删除捐赠记录（清理误报）"),
@@ -5077,10 +5083,16 @@ def route(handler, method):
             if upload:
                 with cm_feedback_diagnostics.upload_slot():
                     fields, archive = cm_feedback_diagnostics.read_upload(handler)
-                    result = cm_feedback.submit(u["id"], fields, archive)
+                    result = cm_feedback.submit(u["id"], fields, archive, host=handler.headers.get("Host"))
             else:
-                result = cm_feedback.submit(u["id"], read_json(handler))
-        except (cm_feedback.FeedbackError, cm_feedback_diagnostics.DiagnosticsError) as e:
+                result = cm_feedback.submit(u["id"], read_json(handler), host=handler.headers.get("Host"))
+        except cm_feedback_media.MediaError as e:
+            return jresp(handler, e.status, dict(error=str(e), **({"code": e.code} if e.code else {})))
+        except cm_feedback.FeedbackError as e:
+            if e.error_code:
+                return jresp(handler, e.code, {"error": str(e), "code": e.error_code})
+            raise ApiError(e.code, str(e)) from e
+        except cm_feedback_diagnostics.DiagnosticsError as e:
             raise ApiError(e.code, str(e))
         return jresp(handler, 202, result, cache_control="no-store")
 
@@ -5093,7 +5105,61 @@ def route(handler, method):
         return jresp(handler, 200, result, cache_control="no-store")
 
     if path == "/feedback/capabilities" and method == "GET":
-        return jresp(handler, 200, cm_feedback.capabilities())
+        return jresp(handler, 200, cm_feedback.capabilities(handler.headers.get("Host")))
+
+    if feedback_media and method in ("PUT", "DELETE"):
+        u = require_user(handler, allow_query=False)
+        try:
+            if method == "PUT":
+                code, result = cm_feedback_media.upload(handler, u["id"], *feedback_media.groups(), cm_feedback.RETENTION)
+                return jresp(handler, code, result)
+            cm_feedback_media.delete(u["id"], *feedback_media.groups(), cm_feedback.RETENTION)
+        except cm_feedback_media.MediaError as e:
+            return jresp(handler, e.status, dict(error=str(e), **({"code": e.code} if e.code else {})))
+        except (OSError, sqlite3.Error) as e:
+            log.warning("反馈媒体暂存不可用（%s）", type(e).__name__)
+            raise ApiError(503, "媒体处理或存储暂不可用") from e
+        handler.send_response(204)
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("Access-Control-Allow-Origin", "*")
+        handler.end_headers()
+        return
+
+    media_admin = re.fullmatch(r"/admin/feedback/(attachments|media)/([0-9a-f]{32})", path)
+    if media_admin and method == "GET":
+        u = require_user(handler, allow_query=False)
+        if not u.get("is_admin"):
+            raise ApiError(403, "需要管理员权限")
+        try:
+            if media_admin[1] == "attachments":
+                return jresp(handler, 200, cm_feedback_media.attachments(media_admin[2]))
+            with cm_feedback_media.download(media_admin[2]) as (attachment, file):
+                kind = attachment["content_type"]
+                filename = f"{attachment['slot']}.{cm_feedback_media.EXTENSIONS[kind]}"
+                handler.send_response(200)
+                handler.send_header("Content-Type", kind)
+                handler.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                handler.send_header("Content-Length", str(attachment["size"]))
+                handler.send_header("Cache-Control", "private, no-store")
+                handler.send_header("Access-Control-Allow-Origin", "*")
+                handler.send_header("Cross-Origin-Resource-Policy", "same-origin")
+                handler.end_headers()
+                if not getattr(handler, "head_only", False):
+                    sent = 0
+                    try:
+                        while chunk := file.read(65536):
+                            sent += handler.wfile.write(chunk)
+                    except OSError:
+                        pass
+                    finally:
+                        log.info("反馈附件审计 admin=%d attachment=%s type=%s operation=download bytes=%d",
+                                 u["id"], media_admin[2], kind, sent)
+                return
+        except cm_feedback_media.MediaError as e:
+            raise ApiError(e.status, str(e)) from e
+        except (OSError, sqlite3.Error) as e:
+            log.warning("反馈媒体下载不可用（%s）", type(e).__name__)
+            raise ApiError(503, "媒体附件暂不可用") from e
 
     attachment = re.fullmatch(r"/admin/feedback/diagnostics/([0-9a-f]{32})", path)
     if attachment and method == "GET":
@@ -6132,12 +6198,17 @@ class Handler(BaseHTTPRequestHandler):
             w._body = True      # 响应头已发出，后面写的一定是正文
 
     def do_OPTIONS(self):
-        qq = cm_qq.is_path(urlparse(self.path).path)
+        path = urlparse(self.path).path.rstrip("/")
+        qq = cm_qq.is_path(path)
+        headers = "Authorization,Content-Type"
+        if qq:
+            headers += ",X-QQ-Session"
+        elif path.startswith("/feedback/") and "/media/" in path:
+            headers += ",X-Feedback-Media-Consent"
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS" if qq else "GET,POST,PUT,DELETE,OPTIONS")
-        self.send_header("Access-Control-Allow-Headers",
-                         "Authorization,Content-Type,X-QQ-Session" if qq else "Authorization,Content-Type")
+        self.send_header("Access-Control-Allow-Headers", headers)
         self.send_header("Access-Control-Max-Age", "600")
         self.send_header("Content-Length", "0")
         self.end_headers()

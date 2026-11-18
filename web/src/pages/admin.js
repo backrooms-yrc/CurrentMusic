@@ -54,7 +54,7 @@ const TAB_DESC = {
   devices: '全部在线设备与强制下线',
   clients: 'CurrentMusic 与 CurrentMusicX 版本与更新说明',
   ai: 'CurrentMusicAI 模型设置、连通性测试与对话历史',
-  diagnostics: '下载 Bug 反馈随附的诊断 ZIP',
+  diagnostics: '查看和下载 Bug 反馈随附的截图、录屏与诊断 ZIP',
   system: '数据量、角色与缓存维护',
 };
 const DIAGNOSTICS_ID = /^[0-9a-f]{32}$/;
@@ -275,9 +275,10 @@ export async function render(el, params) {
       <section class="cm-apane" data-pane="diagnostics" id="pane-diagnostics" ${S.tab !== 'diagnostics' ? 'hidden' : ''}>
         <form class="cm-adminbar cm-ausearch" id="feedbackDiagnosticsForm">
           <mdui-text-field id="feedbackDiagnosticsId" label="附件标识" maxlength="32" autocomplete="off" spellcheck="false"></mdui-text-field>
-          <mdui-button type="submit" variant="filled" id="feedbackDiagnosticsDownload">下载 ZIP</mdui-button>
+          <mdui-button type="submit" variant="filled" id="feedbackDiagnosticsLookup">查看附件</mdui-button>
         </form>
         <div class="cm-usub" id="feedbackDiagnosticsStatus" role="status"></div>
+        <div class="cm-ulist" id="feedbackDiagnosticsFiles"></div>
       </section>
 
       <section class="cm-apane" data-pane="system" id="pane-system" hidden>
@@ -374,12 +375,39 @@ export async function render(el, params) {
   el.querySelectorAll('.cm-atab').forEach(b => { b.onclick = () => setTab(b.dataset.tab); });
 
   const diagnosticsField = el.querySelector('#feedbackDiagnosticsId');
-  const diagnosticsButton = el.querySelector('#feedbackDiagnosticsDownload');
+  const diagnosticsButton = el.querySelector('#feedbackDiagnosticsLookup');
   const diagnosticsStatus = el.querySelector('#feedbackDiagnosticsStatus');
+  const diagnosticsFiles = el.querySelector('#feedbackDiagnosticsFiles');
+  const extensions = { 'image/jpeg': 'jpg', 'image/png': 'png', 'video/mp4': 'mp4', 'application/zip': 'zip' };
+  const snapshot = () => {
+    const token = auth.token, base = settings.base, hash = location.hash;
+    return () => el.isConnected && S.tab === 'diagnostics' && location.hash === hash
+      && auth.token === token && settings.base === base;
+  };
+  async function downloadAttachment(group, file, name, button) {
+    const current = snapshot();
+    button.loading = true;
+    diagnosticsStatus.textContent = '正在下载附件…';
+    try {
+      const blob = await api.adminFeedbackAttachment(group, file);
+      if (!current()) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      diagnosticsStatus.textContent = '';
+    } catch (error) {
+      if (current()) diagnosticsStatus.textContent = error instanceof TypeError ? '暂时无法连接服务，请稍后重试。' : error.message;
+    } finally {
+      if (diagnosticsStatus.textContent === '正在下载附件…') diagnosticsStatus.textContent = '';
+      button.loading = false;
+    }
+  }
   if (diagnosticsLink) diagnosticsField.value = diagnosticsId;
   else if (diagnosticsId !== undefined) diagnosticsStatus.textContent = '诊断附件链接无效。';
-  el.querySelector('#feedbackDiagnosticsForm').onsubmit = async event => {
-    event.preventDefault();
+  async function loadAttachments() {
     if (diagnosticsButton.loading || !auth.token) return;
     const id = diagnosticsField.value.trim();
     if (!DIAGNOSTICS_ID.test(id)) {
@@ -387,20 +415,33 @@ export async function render(el, params) {
       diagnosticsField.focus();
       return;
     }
-    const token = auth.token, base = settings.base, hash = location.hash;
-    const current = () => el.isConnected && S.tab === 'diagnostics' && location.hash === hash
-      && auth.token === token && settings.base === base;
+    const current = snapshot();
     diagnosticsButton.loading = true;
+    diagnosticsFiles.textContent = '';
     diagnosticsStatus.textContent = '正在获取诊断附件…';
     try {
-      const blob = await api.adminFeedbackDiagnostics(id);
+      const result = await api.adminFeedbackAttachments(id).catch(error => {
+        // During a rolling Web/backend update, the ZIP endpoint is still live.
+        if (error.status === 404 && error.message.startsWith('未知接口')) {
+          return { attachments: [{ id, slot: 'diagnostics', contentType: 'application/zip' }] };
+        }
+        throw error;
+      });
       if (!current()) return;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'currentmusic-diagnostics.zip';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      for (const file of result.attachments) {
+        const ext = extensions[file.contentType];
+        if (!ext || !DIAGNOSTICS_ID.test(file.id) || !/^(diagnostics|screenshot-[123]|video-1)$/.test(file.slot)) continue;
+        const name = file.slot === 'diagnostics' ? 'currentmusic-diagnostics.zip' : `${file.slot}.${ext}`;
+        const label = file.slot === 'diagnostics' ? '诊断 ZIP' : file.slot === 'video-1' ? '录屏' : '截图 ' + file.slot.slice(-1);
+        const row = document.createElement('div');
+        row.className = 'cm-urow';
+        row.innerHTML = `<div class="cm-umain"><div class="cm-uname">${esc(label)}</div>
+          <div class="cm-usub">${Number.isFinite(file.size) ? fmtBytes(file.size) : ''}</div></div>
+          <mdui-button variant="tonal">下载 ${ext.toUpperCase()}</mdui-button>`;
+        const button = row.querySelector('mdui-button');
+        button.onclick = () => downloadAttachment(id, file, name, button);
+        diagnosticsFiles.append(row);
+      }
       diagnosticsStatus.textContent = '';
     } catch (error) {
       if (current()) diagnosticsStatus.textContent = error instanceof TypeError ? '暂时无法连接服务，请稍后重试。' : error.message;
@@ -408,7 +449,12 @@ export async function render(el, params) {
       if (diagnosticsStatus.textContent === '正在获取诊断附件…') diagnosticsStatus.textContent = '';
       diagnosticsButton.loading = false;
     }
+  }
+  el.querySelector('#feedbackDiagnosticsForm').onsubmit = event => {
+    event.preventDefault();
+    loadAttachments();
   };
+  if (diagnosticsLink) loadAttachments();
 
   // ---------- 概览 ----------
   async function loadOverview() {

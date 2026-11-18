@@ -83,7 +83,7 @@ be imported without installing the Qt GUI stack.
   pinned in `deploy/requirements-auth.txt`; transitive dependencies retain their own licenses.
 - multipart 2.0.1 (MIT), https://github.com/defnull/multipart, provides the streaming
   parser for diagnostic uploads and is pinned in `deploy/requirements-auth.txt`.
-- Pillow (HPND) and segno (BSD-3-Clause) are optional sharing-image dependencies.
+- Pillow (HPND) and segno (BSD-3-Clause) are optional sharing-image dependencies. Feedback screenshots also use Pillow for re-encoding.
 - NetEaseCloudMusicApiEnhanced / api-enhanced (MIT) is deployed separately;
   its backend source and account cookies are not bundled here. The license for
   documentation excerpts is retained in `api-docs/licenses/ncm-api-MIT.txt`.
@@ -96,8 +96,8 @@ be imported without installing the Qt GUI stack.
   https://github.com/UnblockNeteaseMusic/server, remain dependencies of that separate
   upstream deployment. The CurrentMusic matcher hooks contain independently written
   validation/adapter code; upstream dependency source and binaries are not distributed here.
-- FFmpeg / ffprobe, https://ffmpeg.org/legal.html, is invoked as a separate system
-  process to inspect matched audio. Its license depends on the system build: the
+- FFmpeg / ffprobe, https://ffmpeg.org/legal.html, runs as separate system
+  processes to inspect matched audio and validate feedback recordings. Its license depends on the system build: the
   validated Debian 5.1.9 build enables GPL components and reports GPL-2.0-or-later.
   No FFmpeg binary or source is bundled by this repository; redistribution of a
   system image must preserve the applicable FFmpeg and dependency licenses.

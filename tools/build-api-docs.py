@@ -105,6 +105,7 @@ def path_templates(pattern):
             if pattern.startswith('/passport/apps/'): name='client_id'
             if pattern.startswith('/passport/grants/'): name='grant_id'
             if pattern.startswith('/music-service/v1/'): name='operation'
+            if pattern.startswith('/feedback/') and '/media/' in pattern: name='requestId' if ident==1 else 'slot'
             choices = ['{' + name + '}']
         pieces.append(([''] if optional else []) + choices)
         i = j + int(optional)

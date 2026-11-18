@@ -6270,3 +6270,10 @@ html[data-ui-preset="soaringbird"] .cm-empty { color: var(--sb-text-2); }
 .cm-feedback input { accent-color: rgb(var(--mdui-color-primary)); }
 .cm-feedback mdui-button { justify-self: start; }
 .cm-feedback [role="status"]:empty { display: none; }
+.cm-feedback select, .cm-feedback fieldset { min-width: 0; padding: 10px 12px; border: 1px solid rgb(var(--mdui-color-outline-variant)); border-radius: 12px; }
+.cm-feedback select { background: rgb(var(--mdui-color-surface)); color: inherit; font: inherit; }
+.cm-feedback-files { display: grid; gap: 10px; margin: 10px 0; }
+.cm-feedback-files > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.cm-feedback-files img, .cm-feedback-files video { grid-column: 1 / -1; width: 100%; max-height: 200px; object-fit: contain; }
+.cm-feedback-files span { overflow-wrap: anywhere; }
+.cm-feedback-files progress { width: 100%; grid-column: 1 / -1; }
