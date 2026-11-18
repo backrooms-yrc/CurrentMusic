@@ -15,6 +15,7 @@ from contextlib import closing
 import cm_ai
 import cm_db
 import cm_feedback_diagnostics as diagnostics
+import cm_feedback_media as media
 
 log = logging.getLogger("cm")
 REPOSITORY = "bileizhen/CurrentMusicX"
@@ -39,9 +40,10 @@ PRIVATE = re.compile(
 
 
 class FeedbackError(Exception):
-    def __init__(self, code, message):
+    def __init__(self, code, message, error_code=None):
         super().__init__(message)
         self.code = code
+        self.error_code = error_code
 
 
 def validate_id(request_id):
@@ -59,6 +61,8 @@ def _receipt(row):
     result = {"requestId": row["request_id"], "status": row["status"]}
     if row["diagnostics_id"]:
         result["hasDiagnostics"] = True
+    if row["media_manifest"]:
+        result["mediaCount"] = len(json.loads(row["media_manifest"]))
     number = row["issue_number"]
     if number:
         result.update(issueNumber=number, issueUrl=f"https://github.com/{REPOSITORY}/issues/{number}")
@@ -77,32 +81,32 @@ def status(uid, request_id):
     return _receipt(row)
 
 
-def capabilities():
+def capabilities(host=None):
     return {"diagnostics": {
         "enabled": bool(diagnostics.multipart and diagnostics.directory() and diagnostics.public_origin()
                         and os.environ.get("CM_FEEDBACK_GITHUB_TOKEN", "").strip()),
         "maxZipBytes": diagnostics.MAX_ZIP,
         "maxUncompressedBytes": diagnostics.MAX_EXPANDED,
         "maxRequestBytes": diagnostics.MAX_BODY,
-    }}
+    }, "media": media.capabilities(host)}
 
 
 def _existing(conn, uid, request_id, now, signature):
     row = conn.execute(
-        "SELECT r.*, d.content_sha256, d.upload_sha256 FROM feedback_receipts r"
+        "SELECT r.*, COALESCE(r.content_sha256,d.content_sha256) AS submission_sha256, d.upload_sha256 FROM feedback_receipts r"
         " LEFT JOIN feedback_diagnostics d ON d.id=r.diagnostics_id"
         " WHERE r.user_id=? AND r.request_id=? AND r.created_at>?",
         (uid, request_id, now - RETENTION),
     ).fetchone()
     if row is None:
         return None
-    if (signature is not None or row["diagnostics_id"] is not None) and (
-            signature != (row["content_sha256"], row["upload_sha256"])):
-        raise FeedbackError(409, "requestId 已用于不同的反馈内容或诊断附件")
+    if signature is not None or row["diagnostics_id"] or row["media_group"]:
+        if signature != (row["submission_sha256"], row["upload_sha256"], row["media_manifest"]):
+            raise FeedbackError(409, "requestId 已用于不同的反馈内容或附件", "request_conflict")
     return _receipt(row)
 
 
-def submit(uid, body, archive=None):
+def submit(uid, body, archive=None, *, host=None):
     if not isinstance(body, dict):
         raise FeedbackError(400, "请求体须为 JSON 对象")
     request_id = body.get("requestId")
@@ -117,23 +121,31 @@ def submit(uid, body, archive=None):
         raise FeedbackError(400, "请填写具体的问题或建议")
     token = os.environ.get("CM_FEEDBACK_GITHUB_TOKEN", "").strip()
     now = int(time.time())
-    signature = object_path = diagnostics_id = link = None
+    entries = media.manifest(body)
+    manifest_json = json.dumps(entries, separators=(",", ":")) if entries else None
+    signature = object_path = diagnostics_id = group = link = None
     try:
-        if archive is not None:
-            signature = (hashlib.sha256(original.encode()).hexdigest(), hashlib.sha256(archive).hexdigest())
+        if archive is not None or entries:
+            signature = (hashlib.sha256(original.encode("utf-8", "surrogatepass")).hexdigest(),
+                         hashlib.sha256(archive).hexdigest() if archive is not None else None, manifest_json)
             with closing(cm_db.connect()) as conn:
                 existing = _existing(conn, uid, request_id, now, signature)
                 if existing:
                     return existing
             if not re.fullmatch(r"\[Bug\][ \t]+\S.*", text.splitlines()[0]):
-                raise FeedbackError(400, "诊断附件仅用于首行为 [Bug] 具体标题的问题反馈")
-            origin, directory = diagnostics.public_origin(), diagnostics.directory()
-            if not origin or directory is None:
+                raise FeedbackError(400, "附件仅用于首行为 [Bug] 具体标题的问题反馈")
+            origin = diagnostics.public_origin()
+            if not origin or (entries and not media.enabled(host)):
+                raise FeedbackError(503, "诊断附件存储暂不可用")
+        if archive is not None:
+            directory = diagnostics.directory()
+            if directory is None:
                 raise FeedbackError(503, "诊断附件存储暂不可用")
             saved_zip = diagnostics.sanitize_zip(archive)
 
         with closing(cm_db.connect()) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
+            now = int(time.time())
             conn.execute("DELETE FROM feedback_receipts WHERE created_at<=?", (now - RETENTION,))
             existing = _existing(conn, uid, request_id, now, signature)
             if existing:
@@ -152,25 +164,33 @@ def submit(uid, body, archive=None):
                 raise FeedbackError(429, "反馈提交过于频繁，请稍后再试")
             if active >= CONCURRENCY:
                 raise FeedbackError(503, "反馈通道繁忙，请稍后再试")
+            if signature is not None:
+                group = uuid.uuid4().hex
+                link = f"{origin}/app/#/admin?diagnostics={group}"
+            if entries:
+                media.claim(conn, uid, request_id, entries, group, now, now + RETENTION)
             if archive is not None:
-                diagnostics_id = uuid.uuid4().hex
-                link = f"{origin}/app/#/admin?diagnostics={diagnostics_id}"
+                diagnostics_id = group
                 object_path = directory / (uuid.uuid4().hex + ".zip")
                 diagnostics.store(object_path, saved_zip)
                 conn.execute(
                     "INSERT INTO feedback_diagnostics(id,object_key,sha256,size,expires_at,content_sha256,upload_sha256)"
                     " VALUES(?,?,?,?,?,?,?)",
                     (diagnostics_id, object_path.name, hashlib.sha256(saved_zip).hexdigest(), len(saved_zip),
-                     now + RETENTION, *signature),
+                     now + RETENTION, *signature[:2]),
                 )
             conn.execute(
-                "INSERT INTO feedback_receipts(user_id,request_id,created_at,status,diagnostics_id)"
-                " VALUES(?,?,?,'processing',?)", (uid, request_id, now, diagnostics_id),
+                "INSERT INTO feedback_receipts(user_id,request_id,created_at,status,diagnostics_id,media_group,content_sha256,media_manifest)"
+                " VALUES(?,?,?,'processing',?,?,?,?)", (uid, request_id, now, diagnostics_id,
+                                                       group if entries else None,
+                                                       signature[0] if signature else None, manifest_json),
             )
+            conn.execute("UPDATE feedback_media SET expires_at=? WHERE user_id=? AND request_id=? AND group_id IS NULL",
+                         (now, uid, request_id))
     except (sqlite3.Error, diagnostics.DiagnosticsError) as exc:
         if object_path is not None:
             diagnostics.remove(object_path)
-        if archive is None or isinstance(exc, diagnostics.DiagnosticsError):
+        if signature is None or isinstance(exc, diagnostics.DiagnosticsError):
             raise
         log.warning("保存诊断附件回执失败（%s）", type(exc).__name__)
         raise FeedbackError(503, "诊断附件存储暂不可用") from exc
@@ -183,7 +203,7 @@ def submit(uid, body, archive=None):
         _set_status(uid, request_id, "failed")
         state = "failed"
     return _receipt({"request_id": request_id, "status": state, "issue_number": None,
-                     "diagnostics_id": diagnostics_id})
+                     "diagnostics_id": diagnostics_id, "media_manifest": manifest_json})
 
 
 def download(diagnostics_id):
@@ -231,6 +251,10 @@ def diagnostics_housekeeping():
             purge_diagnostics()
         except (OSError, sqlite3.Error) as exc:
             log.warning("诊断附件到期清理暂不可用（%s）", type(exc).__name__)
+        try:
+            media.purge(EXPIRY_NOTICE)
+        except (OSError, sqlite3.Error) as exc:
+            log.warning("媒体附件到期清理暂不可用（%s）", type(exc).__name__)
         time.sleep(60)
 
 

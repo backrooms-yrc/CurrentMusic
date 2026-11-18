@@ -1,6 +1,7 @@
 """Bounded multipart uploads, ZIP validation and private diagnostic objects."""
 import hashlib
 import io
+import json
 import logging
 import os
 import re
@@ -27,7 +28,8 @@ OBJECT_NAME = re.compile(r"[0-9a-f]{32}\.zip|\.upload-[a-z0-9_]{8}")
 _UPLOADS = threading.BoundedSemaphore(4)
 log = logging.getLogger("cm")
 _FIELDS = {"requestId": 32, "content": 8000, "public": 4, "diagnosticsConsent": 4,
-           "diagnostics": MAX_ZIP}
+           "diagnostics": MAX_ZIP, "mediaConsent": 4, "media": 2048}
+_REQUIRED_FIELDS = _FIELDS.keys() - {"mediaConsent", "media"}
 _ENTRIES = {"diagnostics.txt", "logs.txt"}
 _PRIVATE = re.compile(
     r"(?:https?://|www\.)[^\s<>\"，。！？；）]+"
@@ -124,7 +126,7 @@ def read_upload(handler):
                     code = 413 if name == "diagnostics" else 400
                     raise DiagnosticsError(code, "诊断附件 multipart 字段过长")
                 part.extend(event)
-        if parts.keys() != _FIELDS.keys() or remaining:
+        if not _REQUIRED_FIELDS <= parts.keys() or remaining:
             raise DiagnosticsError(400, "诊断附件 multipart 字段缺失或请求体不完整")
         archive = parts.pop("diagnostics")
         fields = {name: value.decode("utf-8") for name, value in parts.items()}
@@ -141,6 +143,13 @@ def read_upload(handler):
     if fields["diagnosticsConsent"] != "true":
         raise DiagnosticsError(400, "请确认诊断附件可供项目维护者查看")
     fields["public"] = fields["public"] == "true"
+    if "mediaConsent" in fields:
+        fields["mediaConsent"] = fields["mediaConsent"] == "true"
+    if "media" in fields:
+        try:
+            fields["media"] = json.loads(fields["media"])
+        except (ValueError, RecursionError) as exc:
+            raise DiagnosticsError(400, "媒体清单须为 UTF-8 JSON 数组") from exc
     return fields, archive
 
 

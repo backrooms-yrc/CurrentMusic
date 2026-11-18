@@ -201,6 +201,9 @@ CREATE TABLE IF NOT EXISTS feedback_receipts (
   status TEXT NOT NULL,
   issue_number INTEGER,
   diagnostics_id TEXT,
+  media_group TEXT,
+  content_sha256 TEXT,
+  media_manifest TEXT,
   PRIMARY KEY (user_id, request_id)
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback_receipts(created_at);
@@ -214,6 +217,33 @@ CREATE TABLE IF NOT EXISTS feedback_diagnostics (
   upload_sha256 TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_diagnostics_expiry ON feedback_diagnostics(expires_at);
+CREATE TABLE IF NOT EXISTS feedback_media_groups (
+  id TEXT PRIMARY KEY,
+  expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS feedback_media (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  request_id TEXT NOT NULL,
+  slot TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  upload_sha256 TEXT NOT NULL,
+  source_size INTEGER NOT NULL,
+  object_key TEXT UNIQUE,
+  sha256 TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  group_id TEXT REFERENCES feedback_media_groups(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_feedback_media_staged
+  ON feedback_media(user_id,request_id,slot) WHERE group_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_feedback_media_group ON feedback_media(group_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_media_expiry ON feedback_media(expires_at);
+CREATE TABLE IF NOT EXISTS feedback_media_quota (
+  user_id INTEGER PRIMARY KEY,
+  window_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_likes_song ON likes(ncm_id);
 CREATE INDEX IF NOT EXISTS idx_favs_user ON favs(user_id);
 CREATE INDEX IF NOT EXISTS idx_pl_owner ON playlists(user_id);
@@ -563,8 +593,9 @@ def init():
     import cm_2fa
     conn.executescript(SCHEMA + cm_2fa.SCHEMA)
     receipt_columns = {r[1] for r in conn.execute("PRAGMA table_info(feedback_receipts)")}
-    if "diagnostics_id" not in receipt_columns:
-        conn.execute("ALTER TABLE feedback_receipts ADD COLUMN diagnostics_id TEXT")
+    for column in ("diagnostics_id", "media_group", "content_sha256", "media_manifest"):
+        if column not in receipt_columns:
+            conn.execute(f"ALTER TABLE feedback_receipts ADD COLUMN {column} TEXT")
     # 旧库迁移：playlists / ncm_bindings 补列（新库由 SCHEMA 直接建全）
     cols = {r[1] for r in conn.execute("PRAGMA table_info(playlists)")}
     for col, ddl in (

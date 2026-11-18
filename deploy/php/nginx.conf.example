@@ -30,5 +30,6 @@ location ^~ /cm/ {
     fastcgi_read_timeout 3600s;
     fastcgi_send_timeout 3600s;
 
+    # Use 25m on deployments that enable staged feedback media.
     client_max_body_size 4m;
 }

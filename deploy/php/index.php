@@ -100,14 +100,20 @@ $headers[] = 'X-Forwarded-Proto: ' . $proto;
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $mediaType = strtolower(trim(explode(';', (string)($_SERVER['CONTENT_TYPE'] ?? ''), 2)[0]));
-if ($method === 'POST' && rtrim(explode('?', $uri, 2)[0], '/') === '/feedback' && $mediaType === 'multipart/form-data') {
+$feedbackPath = rtrim(explode('?', $uri, 2)[0], '/');
+$maxFeedbackBody = 0;
+if ($method === 'POST' && $feedbackPath === '/feedback' && $mediaType === 'multipart/form-data') {
     $maxFeedbackBody = (2 * 1024 + 64) * 1024;
+} elseif ($method === 'PUT' && preg_match('#^/feedback/[a-f0-9]{32}/media/(screenshot-[123]|video-1)$#D', $feedbackPath, $match)) {
+    $maxFeedbackBody = ($match[1] === 'video-1' ? 25 : 2) * 1024 * 1024;
+}
+if ($maxFeedbackBody) {
     $body = file_get_contents('php://input', false, null, $maxFeedbackBody + 1);
     if (is_string($body) && strlen($body) > $maxFeedbackBody) {
         http_response_code(413);
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store');
-        echo '{"error":"诊断附件请求体过大"}';
+        echo '{"error":"反馈附件请求体过大"}';
         exit;
     }
 } else {

@@ -15,7 +15,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
   最后才回退到自研按行时长估算
 - 播放与社区：最近播放/时长、点赞/收藏、歌单、发现页帖子、公共聊天室（SSE）
 - 播放页问 AI：z.ai 主模型、DeepSeek 自动回退、联网搜索/抓取、站内搜歌与卡片
-- 意见反馈：CurrentMusicAI 整理后发布到 CurrentMusicX Issues，Bug 可附带由管理员下载的私有诊断 ZIP
+- 意见反馈：CurrentMusicAI 整理后发布到 CurrentMusicX Issues，Bug 可附带由 Web 管理员下载的截图、录屏和诊断 ZIP
 - 分享：歌曲分享元数据与服务端分享图（Pillow + segno，可选）
 - CurrentStation 通行证：OAuth 2.0 Authorization Code + PKCE
 - IP 属地、CDN 边缘健康度、限速与审计
@@ -86,6 +86,7 @@ python3 backend/cm_server.py
 | `CM_FEEDBACK_GITHUB_TOKEN` | 空 | 意见反馈专用 GitHub 凭据，需可在 `bileizhen/CurrentMusicX` 创建 Issue |
 | `CM_FEEDBACK_DIAGNOSTICS_DIR` | 空 | 私有诊断对象目录，绝对路径且权限为 `0700`，位于静态目录与常规备份目录之外 |
 | `CM_FEEDBACK_DIAGNOSTICS_ORIGIN` | 空 | 诊断入口的固定 HTTPS origin，提供 `/app/` 和管理员下载 API |
+| `CM_FEEDBACK_MEDIA_HOSTS` | 空 | 开启反馈媒体的代理 Host 列表，逗号分隔。需 Pillow、FFmpeg、ffprobe 和私有的 `media` 子目录 |
 | `CM_SMTP_HOST/PORT/USER/PASS/FROM` | 空 | 邮箱验证码 |
 | `CM_SMS_WEBHOOK/TOKEN/SIGN` | 空 | 短信验证码 |
 | `CM_CAST_CACHE` | `<CM_DATA_DIR>/cast` | 投屏音频缓存 |

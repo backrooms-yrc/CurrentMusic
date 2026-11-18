@@ -150,6 +150,31 @@ export async function call(method, path, { body, auth: needAuth = false, keepali
   }
 }
 
+function uploadFeedbackMedia(requestId, slot, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const token = auth.token;
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', `${settings.base}/feedback/${requestId}/media/${slot}`);
+    xhr.timeout = 180000;
+    xhr.responseType = 'json';
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.setRequestHeader('X-Feedback-Media-Consent', 'true');
+    xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress(event.loaded, event.total); };
+    xhr.onload = () => {
+      if ((xhr.status === 200 || xhr.status === 201) && xhr.response?.slot === slot && /^[0-9a-f]{64}$/.test(xhr.response.sha256)) {
+        resolve(xhr.response);
+        return;
+      }
+      if (xhr.status === 401 && token && auth.token === token && onAuthExpired) onAuthExpired();
+      reject(Object.assign(new Error(xhr.response?.error || `上传失败（HTTP ${xhr.status}）`), { status: xhr.status }));
+    };
+    xhr.onerror = () => reject(new Error('媒体上传中断，可重试原文件'));
+    xhr.ontimeout = () => reject(new Error('媒体上传超时，可重试原文件'));
+    xhr.send(file);
+  });
+}
+
 // ---------- 端点封装 ----------
 
 /** 设备标识（App 取真实机型，浏览器按 UA 归纳） */
@@ -211,8 +236,13 @@ export function shrinkImage(file, maxSide = 1024, quality = 0.86) {
 }
 
 export const api = {
-  submitFeedback: (requestId, content) => call('POST', '/feedback', { body: { requestId, content, public: true }, auth: true }),
+  submitFeedback: (requestId, content, media) => call('POST', '/feedback', {
+    body: { requestId, content, public: true, ...(media?.length ? { mediaConsent: true, media } : {}) }, auth: true,
+  }),
   feedbackStatus: requestId => call('GET', '/feedback?requestId=' + encodeURIComponent(requestId), { auth: true }),
+  feedbackCapabilities: () => call('GET', '/feedback/capabilities'),
+  uploadFeedbackMedia,
+  deleteFeedbackMedia: (requestId, slot) => call('DELETE', `/feedback/${requestId}/media/${slot}`, { auth: true }),
   securityQuestionStatus: () => call('GET', '/auth/security-question', { auth: true }),
   enableSecurityQuestion: (password, question, answer) => call('POST', '/auth/security-question', { body: { password, question, answer }, auth: true }),
   disableSecurityQuestion: (password, answer) => call('DELETE', '/auth/security-question', { body: { password, answer }, auth: true }),
@@ -263,20 +293,22 @@ export const api = {
 
   // 管理员
   adminOverview: () => call('GET', '/admin/overview', { auth: true }),
-  async adminFeedbackDiagnostics(id) {
-    // ZIP 响应走浏览器 fetch，现有原生桥只传输 JSON。
+  adminFeedbackAttachments: id => call('GET', '/admin/feedback/attachments/' + encodeURIComponent(id), { auth: true }),
+  async adminFeedbackAttachment(group, file) {
+    // 媒体文件走浏览器 fetch，现有原生桥只传输 JSON。
     const token = auth.token;
-    const response = await fetch(`${settings.base}/admin/feedback/diagnostics/${encodeURIComponent(id)}`, {
+    const kind = file.slot === 'diagnostics' ? 'diagnostics' : 'media';
+    const response = await fetch(`${settings.base}/admin/feedback/${kind}/${encodeURIComponent(file.id)}`, {
       headers: { Authorization: 'Bearer ' + token }, cache: 'no-store', redirect: 'error',
     });
     if (!response.ok) {
       if (response.status === 401 && token && auth.token === token && onAuthExpired) {
-        onAuthExpired('#/admin?diagnostics=' + id);
+        onAuthExpired('#/admin?diagnostics=' + group);
       }
       const error = await response.json().catch(() => null);
       throw Object.assign(new Error(error?.error || `下载失败（HTTP ${response.status}）`), { status: response.status });
     }
-    if (response.headers.get('Content-Type') !== 'application/zip') throw new Error('诊断附件响应格式异常');
+    if (response.headers.get('Content-Type') !== file.contentType) throw new Error('附件响应格式异常');
     return response.blob();
   },
   adminAi: () => call('GET', '/admin/ai', { auth: true }),
