@@ -99,7 +99,20 @@ $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 
 $headers[] = 'X-Forwarded-Proto: ' . $proto;
 
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
-$body = ($method === 'GET' || $method === 'HEAD') ? null : file_get_contents('php://input');
+$mediaType = strtolower(trim(explode(';', (string)($_SERVER['CONTENT_TYPE'] ?? ''), 2)[0]));
+if ($method === 'POST' && rtrim(explode('?', $uri, 2)[0], '/') === '/feedback' && $mediaType === 'multipart/form-data') {
+    $maxFeedbackBody = (2 * 1024 + 64) * 1024;
+    $body = file_get_contents('php://input', false, null, $maxFeedbackBody + 1);
+    if (is_string($body) && strlen($body) > $maxFeedbackBody) {
+        http_response_code(413);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo '{"error":"诊断附件请求体过大"}';
+        exit;
+    }
+} else {
+    $body = ($method === 'GET' || $method === 'HEAD') ? null : file_get_contents('php://input');
+}
 if ($body === false) $body = '';
 
 // ── 4. 响应输出（流式；SSE 必须逐条 flush）────────────────────────────────

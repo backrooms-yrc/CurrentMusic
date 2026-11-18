@@ -200,9 +200,20 @@ CREATE TABLE IF NOT EXISTS feedback_receipts (
   created_at INTEGER NOT NULL,
   status TEXT NOT NULL,
   issue_number INTEGER,
+  diagnostics_id TEXT,
   PRIMARY KEY (user_id, request_id)
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback_receipts(created_at);
+CREATE TABLE IF NOT EXISTS feedback_diagnostics (
+  id TEXT PRIMARY KEY,
+  object_key TEXT UNIQUE,
+  sha256 TEXT,
+  size INTEGER,
+  expires_at INTEGER NOT NULL,
+  content_sha256 TEXT,
+  upload_sha256 TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_diagnostics_expiry ON feedback_diagnostics(expires_at);
 CREATE INDEX IF NOT EXISTS idx_likes_song ON likes(ncm_id);
 CREATE INDEX IF NOT EXISTS idx_favs_user ON favs(user_id);
 CREATE INDEX IF NOT EXISTS idx_pl_owner ON playlists(user_id);
@@ -551,6 +562,9 @@ def init():
     conn.execute("PRAGMA journal_mode=WAL")
     import cm_2fa
     conn.executescript(SCHEMA + cm_2fa.SCHEMA)
+    receipt_columns = {r[1] for r in conn.execute("PRAGMA table_info(feedback_receipts)")}
+    if "diagnostics_id" not in receipt_columns:
+        conn.execute("ALTER TABLE feedback_receipts ADD COLUMN diagnostics_id TEXT")
     # 旧库迁移：playlists / ncm_bindings 补列（新库由 SCHEMA 直接建全）
     cols = {r[1] for r in conn.execute("PRAGMA table_info(playlists)")}
     for col, ddl in (

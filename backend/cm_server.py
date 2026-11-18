@@ -27,6 +27,7 @@ import cm_passkeys
 import cm_db
 import cm_decor
 import cm_feedback
+import cm_feedback_diagnostics
 import cm_lx
 import cm_lddc
 import cm_levels
@@ -1267,6 +1268,8 @@ def jresp(handler, code, obj, cache_control=None, extra_headers=None):
         cache_control = "no-store"
     if path.startswith("/music-service/") or path == "/passport/token":
         cache_control = "no-store"
+    if path.rstrip("/") in ("/feedback", "/feedback/capabilities") or path.startswith("/admin/feedback/diagnostics/"):
+        cache_control = "no-store"
     body = json.dumps(obj, ensure_ascii=False).encode("utf-8")
     handler.send_response(code)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
@@ -2153,7 +2156,8 @@ def route(handler, method):
     parsed = urlparse(handler.path)
     path = parsed.path.rstrip("/") or "/"
     q = {k: v[0] for k, v in parse_qs(parsed.query, keep_blank_values=True).items()}
-    body = read_json(handler) if method in ("POST", "PUT", "DELETE") else None
+    feedback_post = path == "/feedback" and method == "POST"
+    body = read_json(handler) if method in ("POST", "PUT", "DELETE") and not feedback_post else None
     # 限速按**真实客户端**分桶。此前用 handler.client_address（= nginx 的 127.0.0.1），
     # 全站共用一个 300/min 的桶：几个用户同时切歌就会把播放地址解析打成 429。
     ip = cm_ncm_gateway.rate_key(handler)
@@ -3031,8 +3035,10 @@ def route(handler, method):
             ("GET", "/donation/qr", "公开", "官方捐赠二维码图片（backend/assets/donation-qr.jpg，可缓存）"),
             ("GET", "/donation/info", "Bearer", "捐赠引导信息：账号基本信息快照、二维码地址、本人捐赠历史与累计 {mine:{items,count,totalCents}}"),
             ("POST", "/donation", "Bearer", "提交捐赠记录 {amount 元, txnId 交易单号, note? 备注}；金额为用户自报，交易单号全站唯一（重复 409）"),
-            ("POST", "/feedback", "Bearer", "提交意见 {requestId, content, public:true}；按 CurrentMusicX 问题报告或功能建议模板整理并发布公开 Issue"),
-            ("GET", "/feedback", "Bearer", "按 requestId 查询本人反馈进度和公开 Issue 链接"),
+            ("POST", "/feedback", "Bearer", "提交 JSON 意见反馈；Bug 可用 multipart/form-data 上传私有诊断 ZIP。详见 /api-docs/reference/guide-feedback-api/"),
+            ("GET", "/feedback", "Bearer", "按 requestId 查询本人反馈进度、附件状态和公开 Issue 链接"),
+            ("GET", "/feedback/capabilities", "公开", "诊断附件开关及压缩、解压和请求体大小上限"),
+            ("GET", "/admin/feedback/diagnostics/{id}", "管理员 Bearer", "下载经过脱敏的诊断 ZIP，七天后过期"),
             ("GET", "/admin/donations", "管理员", "捐赠用户列表：搜索/分页/聚合（单笔与用户累计金额、次数）；sort=recent/recent_asc/amount/user_total/user_count/name"),
             ("DELETE", "/admin/donations/{id}", "管理员", "删除捐赠记录（清理误报）"),
             ("POST", "/admin/donations", "超管/站长", "为任一用户代录捐赠 {userId 或 username, amount 元, txnId?, note?}；单号可留空自动生成 ADMIN- 前缀占位"),
@@ -5063,11 +5069,18 @@ def route(handler, method):
         return serve_file(handler, fp, "application/vnd.android.package-archive",
                           download_name=name, cache="public, max-age=86400")
 
-    if path == "/feedback" and method == "POST":
-        u = require_user(handler)
+    if feedback_post:
+        media_type = handler.headers.get("Content-Type", "").partition(";")[0].strip().lower()
+        upload = media_type == "multipart/form-data"
+        u = require_user(handler, allow_query=not upload)
         try:
-            result = cm_feedback.submit(u["id"], body)
-        except cm_feedback.FeedbackError as e:
+            if upload:
+                with cm_feedback_diagnostics.upload_slot():
+                    fields, archive = cm_feedback_diagnostics.read_upload(handler)
+                    result = cm_feedback.submit(u["id"], fields, archive)
+            else:
+                result = cm_feedback.submit(u["id"], read_json(handler))
+        except (cm_feedback.FeedbackError, cm_feedback_diagnostics.DiagnosticsError) as e:
             raise ApiError(e.code, str(e))
         return jresp(handler, 202, result, cache_control="no-store")
 
@@ -5078,6 +5091,35 @@ def route(handler, method):
         except cm_feedback.FeedbackError as e:
             raise ApiError(e.code, str(e))
         return jresp(handler, 200, result, cache_control="no-store")
+
+    if path == "/feedback/capabilities" and method == "GET":
+        return jresp(handler, 200, cm_feedback.capabilities())
+
+    attachment = re.fullmatch(r"/admin/feedback/diagnostics/([0-9a-f]{32})", path)
+    if attachment and method == "GET":
+        u = require_user(handler, allow_query=False)
+        if not u.get("is_admin"):
+            raise ApiError(403, "需要管理员权限")
+        try:
+            data = cm_feedback.download(attachment[1])
+        except (cm_feedback.FeedbackError, cm_feedback_diagnostics.DiagnosticsError) as e:
+            raise ApiError(e.code, str(e))
+        except sqlite3.Error as e:
+            log.warning("诊断附件下载暂不可用（%s）", type(e).__name__)
+            raise ApiError(503, "诊断附件存储暂不可用") from e
+        downloading = not getattr(handler, "head_only", False)
+        if downloading:
+            log.info("反馈诊断下载审计 admin=%d diagnostics=%s bytes=%d", u["id"], attachment[1], len(data))
+        handler.send_response(200)
+        handler.send_header("Content-Type", "application/zip")
+        handler.send_header("Content-Disposition", 'attachment; filename="currentmusic-diagnostics.zip"')
+        handler.send_header("Content-Length", str(len(data)))
+        handler.send_header("Cache-Control", "private, no-store")
+        handler.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        handler.end_headers()
+        if downloading:
+            handler.wfile.write(data)
+        return
 
     # ---- 播放页「问AI」：私有 SSE，复用 CurrentMusicAI 工具/卡片/上下文 ----
     if path == "/ai/live" and method == "POST":
@@ -6150,6 +6192,7 @@ def main():
     threading.Thread(target=_cache_housekeeping, name="cm-cache-housekeeping",
                      daemon=True).start()
     threading.Thread(target=_room_housekeeping, name="cm-room-housekeeping", daemon=True).start()
+    threading.Thread(target=cm_feedback.diagnostics_housekeeping, name="cm-feedback-housekeeping", daemon=True).start()
     srv = ThreadingHTTPServer((HOST, PORT), Handler)
     srv.daemon_threads = True
     log.info("CurrentMusic 后端启动 %s:%s db=%s", HOST, PORT, cm_db.DB_PATH)

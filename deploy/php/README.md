@@ -30,6 +30,8 @@ PHP-FPM 池建议：
 ; 入口是长连接/SSE，不要用太小的 pm.max_children
 pm.max_children = 32
 request_terminate_timeout = 3600
+; 将 multipart 原样从 php://input 转发给 CurrentMusic 后端。
+php_admin_flag[enable_post_data_reading] = off
 ```
 
 Web 服务器需要允许 4MB 请求体（头像/聊天图片走 base64，后端上限 2MB）：
