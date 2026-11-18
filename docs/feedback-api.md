@@ -53,7 +53,7 @@ HTTP `202 Accepted` 表示已接收，响应为回执。相同账号以相同 `r
 
 成功仍返回 `202`，回执增加 `hasDiagnostics: true`。相同账号重试相同附件请求会返回原回执。七天内使用已有 ID 更换正文、ZIP 或在有附件和纯文字之间切换会返回 `409`。收到 `413` 时应缩小上传包；`400` 表示 ZIP、反馈类型或同意字段无效；`408` 表示上传超时；`503` 表示附件存储、上传或反馈通道暂不可用。
 
-客户端先按现有导出流程脱敏。服务端校验、再次遮盖常见凭据和个人信息，再保存重新打包的 ZIP。日志不会进入 CurrentMusicAI 输入或公开 Issue。Issue 在「截图与诊断信息」中包含 CurrentStation 入口，使用随机的公开附件标识。
+客户端先按现有导出流程脱敏。服务端校验、再次遮盖常见凭据和个人信息，再保存重新打包的 ZIP。日志不会进入 CurrentMusicAI 输入或公开 Issue。Issue 在「截图与诊断信息」中包含 CurrentMusic 网页管理员面板的链接，使用随机的公开附件标识。
 
 ## GET /cm/feedback/capabilities
 
@@ -95,7 +95,7 @@ HTTP `202 Accepted` 表示已接收，响应为回执。相同账号以相同 `r
 
 ## GET /cm/admin/feedback/diagnostics/{id}
 
-管理员打开 Issue 中的 CurrentStation 链接并登录后，可下载脱敏 ZIP。接口要求通过 `Authorization` 请求头携带管理员的 CurrentMusic 会话。匿名、普通账号和已过期附件分别返回 `401`、`403` 和 `410`。成功返回 `application/zip`，并记录下载管理员、附件标识和字节数。诊断响应禁止缓存。
+Issue 中的链接会打开 CurrentMusic 网页的「管理员面板 → 反馈诊断」并填入附件标识。管理员可使用网页现有会话下载脱敏 ZIP。旧版 Issue 链接会转到同一入口。下载 API 通过 `Authorization` 请求头验证管理员的 CurrentMusic 会话。匿名、普通账号和已过期附件分别返回 `401`、`403` 和 `410`。成功返回 `application/zip`，并记录下载管理员、附件标识和字节数。诊断响应禁止缓存。
 
 附件自接收起保留七天，包括 `unconfirmed` 和 `failed` 的反馈。到期立即停止下载，服务端定时删除对象，并额外保留 30 天的到期提示，之后返回 `404`。
 
@@ -108,6 +108,6 @@ HTTP `202 Accepted` 表示已接收，响应为回执。相同账号以相同 `r
 | 变量 | 说明 |
 | --- | --- |
 | `CM_FEEDBACK_DIAGNOSTICS_DIR` | 存储诊断对象的绝对路径，例如 `/var/lib/currentmusic-feedback/objects`。 |
-| `CM_FEEDBACK_DIAGNOSTICS_ORIGIN` | Issue 使用的固定 HTTPS 站点 origin，例如 `https://music.example.com`。该站点必须能访问 `/cm/station` 与管理员 API。 |
+| `CM_FEEDBACK_DIAGNOSTICS_ORIGIN` | Issue 使用的固定 HTTPS 站点 origin，例如 `https://music.example.com`。该站点必须提供 `/app/` 与管理员 API。 |
 
 先部署后端，再确认各代理线路将 multipart 请求体与 Bearer 请求头原样转发、允许至少 2 MiB + 64 KiB 的请求体，并遵循 `Cache-Control: no-store`。参考仓库的 `deploy/nginx.conf.example`。PHP-FPM 入口需要关闭 PHP 的自动表单解析，可使用 `deploy/php/nginx.conf.example` 中的设置。

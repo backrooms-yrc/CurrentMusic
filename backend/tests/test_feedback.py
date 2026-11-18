@@ -220,12 +220,12 @@ class TestFeedbackDiagnostics(unittest.TestCase):
         self.assertEqual(receipt["issueUrl"], "https://github.com/bileizhen/CurrentMusicX/issues/12")
         self.assertEqual(issue["labels"], ["bug"])
         self.assertIn("### 复现步骤\n\n从横屏切回竖屏。", issue["body"])
-        self.assertIn("### 截图与诊断信息\n\n[在 CurrentStation 下载诊断附件]", issue["body"])
+        self.assertIn("### 截图与诊断信息\n\n[在 CurrentMusic 管理员面板下载诊断附件]", issue["body"])
         self.assertNotIn("harmless marker", issue["body"])
         with cm_db.connect() as conn:
             attachment = conn.execute("SELECT id,object_key FROM feedback_diagnostics").fetchone()
         self.assertNotIn(attachment["object_key"], issue["body"])
-        self.assertIn("https://music.example.invalid/cm/station#/feedback-diagnostics?id=" + attachment["id"], issue["body"])
+        self.assertIn("https://music.example.invalid/app/#/admin?diagnostics=" + attachment["id"], issue["body"])
         self.assertEqual(len(list(self.storage.iterdir())), 1)
         url = "/admin/feedback/diagnostics/" + attachment["id"]
         self.assertEqual(self.call("GET", url)[0], 401)
@@ -277,7 +277,8 @@ class TestFeedbackDiagnostics(unittest.TestCase):
                 mock.patch.object(feedback, "_create_issue", return_value=("unconfirmed", None)) as github:
             self.assertEqual(self.upload(self.archive(), token=self.token)[0], 202)
             self.wait_for_receipt("unconfirmed")
-            self.assertIn("### 截图与诊断信息\n\n[在 CurrentStation 下载诊断附件]", github.call_args.args[1]["body"])
+            self.assertIn("### 截图与诊断信息\n\n[在 CurrentMusic 管理员面板下载诊断附件]",
+                          github.call_args.args[1]["body"])
         with cm_db.connect() as conn:
             identifier = conn.execute("SELECT id FROM feedback_diagnostics").fetchone()[0]
         url = f"/admin/feedback/diagnostics/{identifier}"

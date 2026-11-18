@@ -5,6 +5,7 @@
 // 各 TAB 各自懒加载、各自局部刷新；用户搜索回车触发，只更新列表与分页。
 import { mdui } from '../md.js';
 import { api, auth, settings } from '../api.js';
+import { rememberFeedbackDiagnostics } from '../auth-flow.js';
 import { renderMarkdown } from '../markdown.js';
 import { esc, toast, confirmDialog, promptDialog, userTags, fmtCount, avatarHTML } from '../ui.js';
 import { levelBadge, levelLabel } from '../level-badges.js';
@@ -42,6 +43,7 @@ const TABS = [
   { k: 'devices', label: '设备', icon: 'devices' },
   { k: 'clients', label: '客户端', icon: 'phone_android' },
   { k: 'ai', label: 'AI 管理', icon: 'auto_awesome' },
+  { k: 'diagnostics', label: '反馈诊断', icon: 'feedback' },
   { k: 'system', label: '系统', icon: 'settings' },
 ];
 const TAB_DESC = {
@@ -52,8 +54,10 @@ const TAB_DESC = {
   devices: '全部在线设备与强制下线',
   clients: 'CurrentMusic 与 CurrentMusicX 版本与更新说明',
   ai: 'CurrentMusicAI 模型设置、连通性测试与对话历史',
+  diagnostics: '下载 Bug 反馈随附的诊断 ZIP',
   system: '数据量、角色与缓存维护',
 };
+const DIAGNOSTICS_ID = /^[0-9a-f]{32}$/;
 const ROLE_COLORS = ['#6750a4', '#0088cc', '#ff8d28', '#8e8e93'];
 const sourceChartItems = (counts) => [
   { label: 'Web 端', value: counts.web, color: '#6750a4' },
@@ -159,14 +163,21 @@ const hBars = (items, { value, label, format } = {}) => {
   }).join('')}</div>`;
 };
 
-export async function render(el) {
+export async function render(el, params) {
+  const diagnosticsId = params?.query?.diagnostics;
+  const diagnosticsLink = DIAGNOSTICS_ID.test(diagnosticsId || '');
   if (!auth.token) {
-    el.innerHTML = `<div class="cm-empty">请先登录</div>`;
+    el.innerHTML = diagnosticsLink
+      ? '<div class="cm-empty">请使用管理员账号<a href="#/user">登录</a>后下载诊断附件</div>'
+      : '<div class="cm-empty">请先登录</div>';
+    if (diagnosticsLink) {
+      el.querySelector('a').onclick = () => rememberFeedbackDiagnostics('#/admin?diagnostics=' + diagnosticsId);
+    }
     return;
   }
 
   const S = {
-    tab: 'overview',
+    tab: diagnosticsId !== undefined ? 'diagnostics' : 'overview',
     ov: null, users: null, sessions: null, ann: null, traffic: null, clients: null, don: null,
     trafficRange: 'day', trafficAt: 0, trafficLoading: false,
     usersSeq: 0, annSeq: 0, devSeq: 0, clientsSeq: 0, ovLoading: false, donSeq: 0,
@@ -177,19 +188,19 @@ export async function render(el) {
       <div class="cm-admin-head">
         <div>
           <div class="cm-admin-title">管理员面板</div>
-          <div class="cm-admin-sub" id="adminSub">${TAB_DESC.overview}</div>
+          <div class="cm-admin-sub" id="adminSub">${TAB_DESC[S.tab]}</div>
         </div>
-        <mdui-button variant="tonal" id="adminRefresh"><span class="material-icons-outlined">refresh</span>刷新</mdui-button>
+        <mdui-button variant="tonal" id="adminRefresh" ${S.tab === 'diagnostics' ? 'hidden' : ''}><span class="material-icons-outlined">refresh</span>刷新</mdui-button>
       </div>
       <div class="cm-atabs" id="adminTabs" role="tablist">
-        ${TABS.map(t => `<button class="cm-atab${t.k === 'overview' ? ' on' : ''}" data-tab="${t.k}" role="tab"
-          aria-selected="${t.k === 'overview' ? 'true' : 'false'}">
+        ${TABS.map(t => `<button class="cm-atab${t.k === S.tab ? ' on' : ''}" data-tab="${t.k}" role="tab"
+          aria-selected="${t.k === S.tab}">
           <span class="material-icons-outlined">${t.icon}</span><span>${t.label}</span>
           <span class="cm-atab-b" id="badge-${t.k}" hidden></span>
         </button>`).join('')}
       </div>
 
-      <section class="cm-apane" data-pane="overview" id="pane-overview">
+      <section class="cm-apane" data-pane="overview" id="pane-overview" ${S.tab !== 'overview' ? 'hidden' : ''}>
         <div id="ovBody">${overviewSkeleton()}</div>
       </section>
 
@@ -261,6 +272,14 @@ export async function render(el) {
         </div>
       </section>
 
+      <section class="cm-apane" data-pane="diagnostics" id="pane-diagnostics" ${S.tab !== 'diagnostics' ? 'hidden' : ''}>
+        <form class="cm-adminbar cm-ausearch" id="feedbackDiagnosticsForm">
+          <mdui-text-field id="feedbackDiagnosticsId" label="附件标识" maxlength="32" autocomplete="off" spellcheck="false"></mdui-text-field>
+          <mdui-button type="submit" variant="filled" id="feedbackDiagnosticsDownload">下载 ZIP</mdui-button>
+        </form>
+        <div class="cm-usub" id="feedbackDiagnosticsStatus" role="status"></div>
+      </section>
+
       <section class="cm-apane" data-pane="system" id="pane-system" hidden>
         <div id="systemBody"></div>
       </section>
@@ -295,6 +314,7 @@ export async function render(el) {
       requestAnimationFrame(() => tabsEl.classList.add('ready'));
     }
   };
+  if (S.tab === 'diagnostics') tabsEl.scrollLeft = tabsEl.querySelector('.cm-atab.on').offsetLeft;
   moveTabIndicator(false);
 
   const setTab = k => {
@@ -309,6 +329,7 @@ export async function render(el) {
       b.setAttribute('aria-selected', on ? 'true' : 'false');
     });
     el.querySelectorAll('.cm-apane').forEach(p => { p.hidden = p.dataset.pane !== k; });
+    el.querySelector('#adminRefresh').hidden = k === 'diagnostics';
     const sub = el.querySelector('#adminSub');
     if (sub) sub.textContent = TAB_DESC[k] || '';
     moveTabIndicator();
@@ -351,6 +372,43 @@ export async function render(el) {
     } else if (k === 'system') renderSystem();
   };
   el.querySelectorAll('.cm-atab').forEach(b => { b.onclick = () => setTab(b.dataset.tab); });
+
+  const diagnosticsField = el.querySelector('#feedbackDiagnosticsId');
+  const diagnosticsButton = el.querySelector('#feedbackDiagnosticsDownload');
+  const diagnosticsStatus = el.querySelector('#feedbackDiagnosticsStatus');
+  if (diagnosticsLink) diagnosticsField.value = diagnosticsId;
+  else if (diagnosticsId !== undefined) diagnosticsStatus.textContent = '诊断附件链接无效。';
+  el.querySelector('#feedbackDiagnosticsForm').onsubmit = async event => {
+    event.preventDefault();
+    if (diagnosticsButton.loading || !auth.token) return;
+    const id = diagnosticsField.value.trim();
+    if (!DIAGNOSTICS_ID.test(id)) {
+      diagnosticsStatus.textContent = '请输入 32 位小写十六进制附件标识。';
+      diagnosticsField.focus();
+      return;
+    }
+    const token = auth.token, base = settings.base, hash = location.hash;
+    const current = () => el.isConnected && S.tab === 'diagnostics' && location.hash === hash
+      && auth.token === token && settings.base === base;
+    diagnosticsButton.loading = true;
+    diagnosticsStatus.textContent = '正在获取诊断附件…';
+    try {
+      const blob = await api.adminFeedbackDiagnostics(id);
+      if (!current()) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'currentmusic-diagnostics.zip';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      diagnosticsStatus.textContent = '';
+    } catch (error) {
+      if (current()) diagnosticsStatus.textContent = error instanceof TypeError ? '暂时无法连接服务，请稍后重试。' : error.message;
+    } finally {
+      if (diagnosticsStatus.textContent === '正在获取诊断附件…') diagnosticsStatus.textContent = '';
+      diagnosticsButton.loading = false;
+    }
+  };
 
   // ---------- 概览 ----------
   async function loadOverview() {
@@ -1448,10 +1506,10 @@ export async function render(el) {
   window.addEventListener('resize', onResize);
 
   // 角色可能刚被更高角色改过：进面板时顺手刷新本地缓存的当前用户（决定菜单里的角色操作）
-  api.me().then(me => { if (me && me.username) auth.saveLogin(auth.token, me); }).catch(() => {});
+  api.me().catch(() => {});
 
   const ok = await loadOverview();
   if (!ok || !el.isConnected) return;
-  loadTraffic();
+  if (S.tab === 'overview') loadTraffic();
   startTrafficPolling();
 }

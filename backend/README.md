@@ -85,7 +85,7 @@ python3 backend/cm_server.py
 | `CM_AI_EFFORT` | `none` | DeepSeek 思考强度，默认关闭思考以节省 Token，仍支持联网搜索与函数工具。可用 `none/low/high/max` |
 | `CM_FEEDBACK_GITHUB_TOKEN` | 空 | 意见反馈专用 GitHub 凭据，需可在 `bileizhen/CurrentMusicX` 创建 Issue |
 | `CM_FEEDBACK_DIAGNOSTICS_DIR` | 空 | 私有诊断对象目录，绝对路径且权限为 `0700`，位于静态目录与常规备份目录之外 |
-| `CM_FEEDBACK_DIAGNOSTICS_ORIGIN` | 空 | 诊断入口的固定 HTTPS origin，提供 `/cm/station` 和管理员下载 API |
+| `CM_FEEDBACK_DIAGNOSTICS_ORIGIN` | 空 | 诊断入口的固定 HTTPS origin，提供 `/app/` 和管理员下载 API |
 | `CM_SMTP_HOST/PORT/USER/PASS/FROM` | 空 | 邮箱验证码 |
 | `CM_SMS_WEBHOOK/TOKEN/SIGN` | 空 | 短信验证码 |
 | `CM_CAST_CACHE` | `<CM_DATA_DIR>/cast` | 投屏音频缓存 |

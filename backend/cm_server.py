@@ -5115,6 +5115,7 @@ def route(handler, method):
         handler.send_header("Content-Disposition", 'attachment; filename="currentmusic-diagnostics.zip"')
         handler.send_header("Content-Length", str(len(data)))
         handler.send_header("Cache-Control", "private, no-store")
+        handler.send_header("Access-Control-Allow-Origin", "*")
         handler.send_header("Cross-Origin-Resource-Policy", "same-origin")
         handler.end_headers()
         if downloading:
