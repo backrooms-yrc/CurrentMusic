@@ -98,7 +98,10 @@ export function initTopAccount(bootDismissed) {
   const refresh = () => { if (auth.token) api.me().catch(() => {}); };
   window.addEventListener('cm-authchange', sync);
   window.addEventListener('storage', event => {
-    if (!event.key || ['cm.token', 'cm.user'].includes(event.key)) { sync(); if (event.key !== 'cm.user') refresh(); }
+    if (!event.key || ['cm.token', 'cm.user', 'cm.authRealm', 'cm.base', 'cm.secure'].includes(event.key)) {
+      sync();
+      if (event.key !== 'cm.user') refresh();
+    }
   });
   window.addEventListener('resize', () => {
     const arriving = account.classList.contains('cm-account-arriving') || account.classList.contains('cm-account-flying');

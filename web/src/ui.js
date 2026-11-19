@@ -643,7 +643,7 @@ export function openLikeMenu(song, onChange) {
  * @param offset data-i 的起始下标——追加渲染时传已有条数，保证 data-i 始终是
  *               在**完整数组**里的绝对下标（点击行为依赖它）
  */
-export async function songListHTML(songs, { removable = false, offset = 0, likeSource: sourceOverride, cached = false, showLyric = false } = {}) {
+export async function songListHTML(songs, { removable = false, enqueue = false, offset = 0, likeSource: sourceOverride, cached = false, showLyric = false } = {}) {
   const st = cached ? songs.map(s => getStatus(s.ncm_id)) : await fetchStatus(songs.map(s => s.ncm_id));
   const bound = auth.token ? (cached ? _ncmBoundToken === auth.token && _ncmBound === true : await ensureNcmBound()) : false;
   const source = sourceOverride || (settings.likeMode === 'local' || !bound ? 'local' : 'ncm');
@@ -670,6 +670,7 @@ export async function songListHTML(songs, { removable = false, offset = 0, likeS
       </div>
       ${s.mv ? `<button type="button" class="cm-song-mv" data-act="mv" data-i="${offset + i}" title="播放 MV" aria-label="播放 MV"><span class="material-icons-outlined" aria-hidden="true">smart_display</span></button>` : ''}
       <span class="cm-song-dur">${fmtDur(s.duration)}</span>
+      ${enqueue ? `<button type="button" class="cm-song-mv" data-act="queue" title="加入播放队列" aria-label="加入播放队列"><span class="material-icons-outlined" aria-hidden="true">queue</span></button>` : ''}
       <span class="cm-song-like ${liked ? 'on' : ''}" data-act="like" data-i="${offset + i}" title="${source === 'ncm' ? '红心到网易云' : '加入 CurrentMusic 我喜欢'}">
         <span class="material-icons-outlined">${liked ? 'favorite' : 'favorite_border'}</span>
         ${dot ? '<i class="cm-ncmdot" title="已在网易云红心"></i>' : ''}
@@ -698,7 +699,7 @@ export async function renderSongList(el, songs, opts = {}) {
   }
   const slice = songs.slice(from);
   if (!slice.length) return [];
-  const htmlOptions = { removable: !!opts.onRemove, offset: from, likeSource: opts.likeSource, showLyric: !!opts.showLyric };
+  const htmlOptions = { removable: !!opts.onRemove, enqueue: !!opts.onQueue, offset: from, likeSource: opts.likeSource, showLyric: !!opts.showLyric };
   const token = auth.token, mode = settings.likeMode;
   const html = await songListHTML(slice, { ...htmlOptions, cached: !!opts.deferStatus });
 
@@ -721,6 +722,11 @@ export async function renderSongList(el, songs, opts = {}) {
     const i = +row.dataset.i;
     row.addEventListener('click', async e => {
       const act = e.target.closest('[data-act]');
+      if (act?.dataset.act === 'queue') {
+        e.stopPropagation();
+        opts.onQueue(i);
+        return;
+      }
       if (act && act.dataset.act === 'like') {
         e.stopPropagation();
         toggleLikeDefault(songs[i], () => renderSongList(el, songs, opts), opts.likeSource);

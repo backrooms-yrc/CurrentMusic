@@ -82,6 +82,7 @@ export async function render(el) {
     <div class="cm-sec-head"><h2>播放与下载</h2></div>
     <div class="cm-setting-list">
       <div class="cm-setting" id="quality"><span class="material-icons-outlined">high_quality</span>默认音质<i>${tierLabel(settings.quality)}</i></div>
+      <div class="cm-setting" id="restoreQueue"><span class="material-icons-outlined" aria-hidden="true">restore</span>恢复播放队列<mdui-switch id="restoreQueueSw" aria-label="恢复播放队列" ${localStorage.getItem('cm.restoreQueue') === '0' ? '' : 'checked'}></mdui-switch></div>
       <div class="cm-setting" id="dlDir"><span class="material-icons-outlined">download</span>下载目录<i>Music/<wbr>${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}</i></div>
       ${hasDesktopLyrics ? `<div class="cm-setting" id="desktopLyrics"><span class="material-icons-outlined">subtitles</span>桌面歌词<i id="desktopLyricsV">${desktopState.enabled ? '已开启' : desktopState.permission ? '已关闭' : '未授权'}</i><mdui-switch id="desktopLyricsSw" ${desktopState.enabled ? 'checked' : ''} style="margin-left:8px"></mdui-switch></div>` : ''}
     </div>
@@ -156,6 +157,12 @@ export async function render(el) {
     twoFactor.onclick = () => manage2FA();
   }
   // 公开到发现页广场：关闭后不出现在广场列表（主页仍可被链接访问）
+  el.querySelector('#restoreQueueSw').onchange = event => {
+    const enabled = event.target.checked;
+    localStorage.setItem('cm.restoreQueue', enabled ? '1' : '0');
+    if (enabled) player.persist();
+    else player.clearCheckpoint();
+  };
   const sqSw = el.querySelector('#sqPublicSw');
   if (sqSw) {
     // 本地缓存的用户对象可能没有该字段（老会话）：进页面时用服务端值纠正显示
