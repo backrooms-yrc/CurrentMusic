@@ -12,6 +12,8 @@ import { createMiniProgress, createPlayerProgress } from './playback-progress.js
 import { applyPlayerBackground, backgroundLabel, openPlayerBackground, updateBackgroundMotion } from './player-background.js';
 import { layoutRect, layoutScale } from './tablet-scale.js';
 import { AIMO_ICONS, injectSlot, isAimo } from './aimo-icons.js';
+import { lyricOwner, lyricPreference, openLyricManager } from './lyric-manager.js';
+import { lyricOffset, shiftLyricRows } from './local-lyrics.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
 // 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
@@ -272,22 +274,35 @@ function paintLyricSource() {
   const sources = { 'lddc:qm': 'QQ 音乐', 'lddc:kg': '酷狗音乐', 'lddc:ne': '网易云音乐',
     'lddc:lrclib': 'LRCLIB', 'ncm:yrc': '网易云音乐', 'ncm:lrc': '网易云音乐' };
   const timing = data?.wordLevel ? '逐字' : lyricLines.some(line => line.wSynth) ? '估算逐字' : '逐行';
+  const source = data?.source?.startsWith('local:') ? '手动歌词' : sources[data?.source];
   status.textContent = lyricRequest?.failed ? '歌词加载失败' : !data ? '正在查找歌词…'
     : data.instrumental ? '纯音乐' : !lyricLines.length ? '暂无歌词'
-      : [sources[data.source], timing].filter(Boolean).join(' · ');
+      : [source, timing].filter(Boolean).join(' · ');
+}
+
+function updateLyricRows() {
+  const rows = (lyricRequest?.data?.lines || []).filter(row => row.txt);
+  lyricLines = shiftLyricRows(rows, lyricOffset(lyricPreference(player.meta?.ncm_id).offsetMs));
+  curLyricIdx = -1;
+  karaokeSpans = null;
+  renderLyric();
+  paintLyricSource();
+  syncLyric(true);
+  fireKaraoke();
 }
 
 async function loadLyric() {
   const id = player.meta?.ncm_id;
   if (!id) return;
-  const key = JSON.stringify([settings.base, id, autoLyrics]);
+  const owner = lyricOwner();
+  const key = JSON.stringify([settings.base, owner, id, autoLyrics]);
   if (lyricRequest?.key === key && !lyricRequest.failed) {
     if (!document.getElementById('plLyric')?.hasChildNodes()) renderLyric();
     syncLyric(true);
     return;
   }
-  const request = { id, key, base: settings.base };
-  if (lyricRequest?.id !== id || lyricRequest?.base !== request.base) {
+  const request = { id, key, owner, base: settings.base };
+  if (lyricRequest?.id !== id || lyricRequest?.owner !== owner || lyricRequest?.base !== request.base) {
     lyricLines = [];
     curLyricIdx = -1;
     karaokeSpans = null;
@@ -298,21 +313,15 @@ async function loadLyric() {
   pushDesktopLyric(-1, true);
   let data;
   try {
-    data = await api.lyric(id, autoLyrics);
+    data = lyricPreference(id).data || await api.lyric(id, autoLyrics);
     if (!Array.isArray(data?.lines)) throw new Error('歌词格式无效');
   } catch {
     request.failed = true;
     data = undefined;
   }
-  if (request !== lyricRequest || request.base !== settings.base || player.meta?.ncm_id !== id) return;
+  if (request !== lyricRequest || request.base !== settings.base || lyricOwner() !== owner || player.meta?.ncm_id !== id) return;
   request.data = data;
-  lyricLines = (data?.lines || []).filter(l => l.txt);
-  curLyricIdx = -1;
-  karaokeSpans = null;
-  renderLyric();
-  paintLyricSource();
-  syncLyric();
-  fireKaraoke();
+  updateLyricRows();
 }
 
 const PLAY_MODES = [
@@ -1455,14 +1464,14 @@ document.addEventListener('cm-colorscheme', () => {
 
 // ---------- 均衡器 ----------
 function openEqDialog() {
-  import('./eq.js').then(({ EQ_PRESETS, EQ_BANDS, EQ_LABELS, EQ_GAIN_MAX, eqConfig, setEqConfig, eqActive }) => {
+  import('./eq.js').then(({ EQ_PRESETS, EQ_BANDS, EQ_GAIN_MAX, eqConfig, setEqConfig, eqActive }) => {
     let cfg = eqConfig();
     const presetChips = () => Object.keys(EQ_PRESETS).map(k =>
       `<mdui-chip data-p="${k}" ${cfg.preset === k ? 'selected' : ''}>${EQ_PRESETS[k].label}</mdui-chip>`).join('');
     const sliders = () => cfg.gains.map((g, i) => `
       <div class="cm-eq-row">
-        <span class="cm-eq-label">${EQ_LABELS[i]}<i>${EQ_BANDS[i] >= 1000 ? (EQ_BANDS[i]/1000) + 'k' : EQ_BANDS[i]}</i></span>
-        <input type="range" class="cm-eq-slider" data-i="${i}" min="${-EQ_GAIN_MAX}" max="${EQ_GAIN_MAX}" step="1" value="${g}">
+        <span class="cm-eq-label">${EQ_BANDS[i] >= 1000 ? (EQ_BANDS[i] / 1000) + ' kHz' : EQ_BANDS[i] + ' Hz'}</span>
+        <input type="range" class="cm-eq-slider" data-i="${i}" aria-label="${EQ_BANDS[i]} Hz 增益" min="${-EQ_GAIN_MAX}" max="${EQ_GAIN_MAX}" step="1" value="${g}">
         <span class="cm-eq-val">${g > 0 ? '+' : ''}${g}dB</span>
       </div>`).join('');
     const diag = mdui.dialog({
@@ -1470,32 +1479,35 @@ function openEqDialog() {
       body: `<div class="cm-eq">
         <div class="cm-more-chips" id="eqPresets">${presetChips()}</div>
         <div id="eqSliders">${sliders()}</div>
-        <div class="cm-more-s" id="eqHint" style="margin-top:8px">${eqActive() ? '' : '提示：均衡器在音频可视化可用时生效（若当前歌曲走了兼容回退，EQ 可能不生效）'}</div>
+        <div class="cm-more-s" id="eqHint" style="margin-top:8px">${cfg.legacyGains ? '当前保留原有五段设置，调节后应用十段。'
+          : eqActive() ? '' : '均衡器在浏览器音频处理可用时生效。'}</div>
       </div>`,
       actions: [{ text: '关闭' }],
     });
-    setTimeout(() => {
-      diag.querySelectorAll('#eqPresets mdui-chip').forEach(ch => {
-        ch.onclick = () => {
-          cfg = { preset: ch.dataset.p, gains: EQ_PRESETS[ch.dataset.p].gains.slice() };
-          setEqConfig(cfg);
-          diag.querySelector('#eqPresets').innerHTML = presetChips();
-          diag.querySelector('#eqSliders').innerHTML = sliders();
-          bindSliders();
-        };
-      });
-      const bindSliders = () => {
-        diag.querySelectorAll('.cm-eq-slider').forEach(sl => {
-          sl.oninput = () => {
-            const i = +sl.dataset.i, v = +sl.value;
-            cfg.gains[i] = v;
-            sl.closest('.cm-eq-row').querySelector('.cm-eq-val').textContent = (v > 0 ? '+' : '') + v + 'dB';
-            setEqConfig({ preset: 'custom', gains: cfg.gains });
-          };
-        });
-      };
-      bindSliders();
-    }, 0);
+    const presets = diag.querySelector('#eqPresets');
+    const slidersBox = diag.querySelector('#eqSliders');
+    const paint = () => {
+      presets.innerHTML = presetChips();
+      diag.querySelector('#eqHint').textContent = eqActive() ? '' : '均衡器在浏览器音频处理可用时生效。';
+    };
+    presets.onclick = event => {
+      const key = event.target.closest('[data-p]')?.dataset.p;
+      if (!key) return;
+      cfg = { preset: key, gains: EQ_PRESETS[key].gains.slice() };
+      setEqConfig(cfg);
+      slidersBox.innerHTML = sliders();
+      paint();
+      presets.querySelector(`[data-p="${key}"]`)?.focus();
+    };
+    slidersBox.oninput = event => {
+      const slider = event.target;
+      const i = Number(slider.dataset.i), value = Number(slider.value);
+      cfg.gains[i] = value;
+      cfg.preset = 'custom';
+      slider.closest('.cm-eq-row').querySelector('.cm-eq-val').textContent = (value > 0 ? '+' : '') + value + 'dB';
+      setEqConfig(cfg);
+      paint();
+    };
   }).catch(() => toast('均衡器加载失败'));
 }
 
@@ -1526,6 +1538,11 @@ function openMoreDrawer() {
         <div class="cm-more-col">
           <section class="cm-more-card">
             <div class="cm-more-h"><span class="material-icons-outlined">subtitles</span>歌词显示</div>
+            <button type="button" class="cm-more-nav" id="mLyricManager">
+              <span class="cm-more-nav-ic material-icons-outlined">edit_note</span>
+              <span class="cm-more-t">歌词管理</span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>
             <div class="cm-more-row">
               <div><div class="cm-more-t">歌词自动择优</div><div class="cm-more-s">QQ 逐字优先，逐行兜底</div><div class="cm-more-s" id="mLyricSource" aria-live="polite"></div></div>
               <mdui-switch id="mAutoLyrics" aria-label="歌词自动择优" ${autoLyrics ? 'checked' : ''}></mdui-switch>
@@ -1575,7 +1592,7 @@ function openMoreDrawer() {
             </button>` : ''}
             <button type="button" class="cm-more-nav" id="mEq">
               <span class="cm-more-nav-ic material-icons-outlined">graphic_eq</span>
-              <span><span class="cm-more-t">均衡器</span><span class="cm-more-s">五段 EQ · 预设与自定义</span></span>
+              <span><span class="cm-more-t">均衡器</span><span class="cm-more-s">十段 EQ · 预设与自定义</span></span>
               <span class="cm-more-chev material-icons-outlined">chevron_right</span>
             </button>
             <button type="button" class="cm-more-nav" id="mShare">
@@ -1652,6 +1669,20 @@ function openMoreDrawer() {
       stopKaraoke(); startKaraoke(); fireKaraoke();
     });
     paintLyricSource();
+    diag.querySelector('#mLyricManager').onclick = () => {
+      const song = player.meta;
+      if (!song) return;
+      const current = () => player.meta?.ncm_id === song.ncm_id;
+      diag.open = false;
+      openLyricManager(song, {
+        current,
+        data: () => lyricRequest?.id === song.ncm_id ? lyricRequest.data : null,
+        changed: reload => {
+          if (reload) { lyricRequest = null; loadLyric(); }
+          else updateLyricRows();
+        },
+      });
+    };
     diag.querySelector('#mEstimatedKara').onchange = e => {
       estimatedKaraoke = e.target.checked;
       localStorage.setItem('cm.karaoke.estimated', estimatedKaraoke ? '1' : '0');

@@ -8,7 +8,7 @@
 //
 // 上游已知降级：/summary/annual 实测 404（该年度总结接口已下线）→ 页面给明确说明，
 // 年度维度改用 /listen/data/year/report（它返回逐年播放次数与时长）。
-import { api, auth } from '../api.js';
+import { api, auth, ncmSongs } from '../api.js';
 import { esc, toast, fmtCount, fmtDur, skelList } from '../ui.js';
 
 const KEY = 'cm.footKey';
@@ -52,6 +52,7 @@ export async function render(el, params = {}) {
     needBind(el, '登录后可查看你在网易云的听歌足迹与播放记录');
     return;
   }
+  const owner = auth.scope;
   // 绑定信息：uid 是 /user/* 与 /user/record 的必需参数
   let bind = { bound: false };
   try { bind = await api.bindStatus(); } catch { /* 未绑定 */ }
@@ -124,7 +125,7 @@ export async function render(el, params = {}) {
       ${cards.length ? `<div class="cm-hscroll cm-stat-row">${cards.join('')}</div>` : ''}
       <section class="cm-sec">
         <div class="cm-sec-head"><h2>本周听得最多</h2>
-          <span class="cm-sec-sub">/listen/data/song/play/rank</span></div>
+          ${rankItems.length ? '<button type="button" class="cm-sec-more" id="ftListeningWall">生成唱片墙</button>' : ''}</div>
         ${rankItems.length ? `<div class="cm-stat-list">${rankItems.map(x => `
           <div class="cm-lm-item"><div class="cm-lm-lyric">${esc(x.songName || x.name || '')}</div>
           <div class="cm-lm-meta"><span>${esc(x.artistName || '')}</span><span>${fmtCount(x.playCount || x.listenCount || 0)} 次</span></div></div>`).join('')}</div>`
@@ -152,6 +153,26 @@ export async function render(el, params = {}) {
     });
     const hb = body.querySelector('#ftHist');
     if (hb) hb.onclick = () => { if (histDates[0]) loadHist(histDates[0]); };
+    const wall = body.querySelector('#ftListeningWall');
+    if (wall) wall.onclick = async () => {
+      const active = () => wall.isConnected && auth.scope === owner;
+      try {
+        const { openListeningWall } = await import('../listening-wall.js');
+        if (!active()) return;
+        openListeningWall(async () => {
+          const tracks = rankItems.map(item => ({
+            id: String(item.songId || item.id || item.song?.id || ''),
+            name: item.songName || item.name || item.song?.name,
+            artists: item.artistName || '',
+            pic: item.albumPicUrl || item.picUrl || item.song?.al?.picUrl || '',
+          }));
+          const ids = tracks.filter(track => !track.pic && /^\d{1,20}$/.test(track.id)).map(track => track.id);
+          const details = ids.length ? ncmSongs((await api.songDetail(ids).catch(() => null))?.songs || []) : [];
+          const byId = new Map(details.map(track => [String(track.ncm_id), track]));
+          return tracks.map(track => ({ ...track, ...byId.get(track.id) }));
+        }, '本周网易云听歌足迹', active);
+      } catch (error) { if (active()) toast(error.message || '生成唱片墙失败'); }
+    };
     body.querySelectorAll('[data-pid]').forEach(c => {
       c.onclick = () => { location.hash = `#/ncmpl/${c.dataset.pid}`; };
     });
