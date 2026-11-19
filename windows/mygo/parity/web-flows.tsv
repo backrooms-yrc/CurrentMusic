@@ -1,0 +1,229 @@
+id	stage	area	required	web_entry	prerequisite	acceptance
+account-register-email	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	邮箱注册并同意条款后建立独立账号
+account-register-phone	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	部署启用短信时使用验证码注册
+account-password-login	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	用密码登录并在重启后恢复会话
+account-email-login	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	接收并使用一次性邮箱验证码登录
+account-password-reset	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	通过邮箱找回密码且旧密码失效
+account-password-change	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	验证原密码后修改密码
+account-password-change-email	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	使用邮箱验证码修改密码
+account-switch	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	在同一服务器切换两个已保存的账号
+account-logout	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	退出后撤销会话并清空该账号的客户端数据
+account-profile-read	2	account	no	#/user;pages/user.js;auth-flow.js	访客／账号	读取当前账号资料和会员身份
+account-profile-edit	2	account	no	#/user;pages/user.js;auth-flow.js	访客／账号	修改昵称与签名且 Web 能读回
+account-avatar	2	account	no	#/user;pages/user.js;auth-flow.js	访客／账号	选择图片并上传头像
+account-decoration	2	account	no	#/user;pages/user.js;auth-flow.js	访客／账号	预览并设置已解锁的头像挂件
+account-bind-email	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	验证并绑定新的邮箱
+account-device-list	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	识别当前设备和其他登录会话
+account-device-revoke	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	撤销指定的其他会话
+account-devices-revoke-others	2	account	yes	#/user;pages/user.js;auth-flow.js	访客／账号	一次撤销其他设备并保留当前会话
+account-totp-enroll	2	account	yes	#/two-factor;twofactor.js	CurrentMusic 账号	确认验证器代码后启用两步验证
+account-totp-login	2	account	yes	#/two-factor;twofactor.js	CurrentMusic 账号	在登录挑战中输入有效 TOTP
+account-recovery-login	2	account	yes	#/two-factor;twofactor.js	CurrentMusic 账号	用恢复码登录且同一码不能重放
+account-totp-disable	2	account	yes	#/two-factor;twofactor.js	CurrentMusic 账号	验证必要因素后关闭两步验证
+account-question-enable	2	account	yes	#/security-question;pages/settings.js	CurrentMusic 账号	设置并启用密保问题
+account-question-login	2	account	yes	#/security-question;pages/settings.js	CurrentMusic 账号	使用正确密保答案完成登录挑战
+account-question-disable	2	account	yes	#/security-question;pages/settings.js	CurrentMusic 账号	验证密码及必要因素后关闭密保
+account-passkey-login	2	account	yes	#/passkeys;passkeys.js	支持 WebAuthn 的 HTTPS 部署和 Windows Hello	用已有通行密钥完成浏览器授权并在 Windows 建立会话
+account-passkey-enroll	2	account	yes	#/passkeys;passkeys.js	支持 WebAuthn 的 HTTPS 部署和 Windows Hello	用系统认证器创建密钥且能用于再次登录
+account-passkey-list	2	account	yes	#/passkeys;passkeys.js	支持 WebAuthn 的 HTTPS 部署和 Windows Hello	查看已绑定的通行密钥
+account-passkey-revoke	2	account	yes	#/passkeys;passkeys.js	支持 WebAuthn 的 HTTPS 部署和 Windows Hello	通过再认证撤销指定通行密钥
+account-passport-authorize	2	account	yes	#/passport/authorize;pages/passport.js;pages/settings.js	已登记的第三方应用和账号	选择批准或拒绝第三方授权且回调反映决定
+account-passport-id	2	account	no	#/passport/authorize;pages/passport.js;pages/settings.js	已登记的第三方应用和账号	查询账号的通行证 ID
+account-passport-grants	2	account	yes	#/passport/authorize;pages/passport.js;pages/settings.js	已登记的第三方应用和账号	查看已授予的应用和权限
+account-passport-revoke	2	account	yes	#/passport/authorize;pages/passport.js;pages/settings.js	已登记的第三方应用和账号	撤销应用授权且旧授权停止生效
+account-welcome	2	account	no	#/welcome;#/legal/:document;pages/settings.js	访客／账号	完成或重新观看入门引导
+account-privacy	2	account	no	#/welcome;#/legal/:document;pages/settings.js	访客／账号	阅读部署提供的隐私政策
+account-terms	2	account	no	#/welcome;#/legal/:document;pages/settings.js	访客／账号	阅读服务条款
+ncm-binding-status	2	binding	yes	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	判断现有绑定有效、失效、未绑定或查询暂不可用
+ncm-binding-qr	2	binding	yes	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	生成扫码凭据并处理等待、确认、完成及过期
+ncm-binding-phone	2	binding	yes	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	请求并使用手机验证码绑定
+ncm-binding-refresh	2	binding	yes	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	刷新已有会话或重新绑定失效会话
+ncm-binding-unlink	2	binding	yes	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	解除绑定并刷新可访问的功能
+ncm-playlist-sync	2	binding	yes	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	同步网易云歌单和曲目且再次同步保留顺序
+ncm-account-detail	2	binding	no	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	查看网易云资料和账号相关详情
+ncm-online-devices	2	binding	no	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	读取网易云登录设备
+ncm-device-kick	2	binding	no	#/account;ncmbind.js;pages/user.js	CurrentMusic 账号和网易云绑定测试账号	在适用的安全验证码校验后移除设备
+search-songs	2	search	yes	#/search;pages/search.js;search-history.js	访客／账号	搜索单曲、加载下一页并从结果打开正确歌曲
+search-lyrics	2	search	yes	#/search;pages/search.js;search-history.js	访客／账号	输入歌词片段并从结果找到正确歌曲
+search-artists	2	search	no	#/search;pages/search.js;search-history.js	访客／账号	查找并打开分页歌手结果
+search-albums	2	search	no	#/search;pages/search.js;search-history.js	访客／账号	查找并打开分页专辑结果
+search-playlists	2	search	no	#/search;pages/search.js;search-history.js	访客／账号	查找并打开分页歌单结果
+search-multimatch	2	search	no	#/search;pages/search.js;search-history.js	访客／账号	查看跨类型的匹配结果
+search-suggestions	2	search	no	#/search;pages/search.js;search-history.js	访客／账号	查看默认词与建议并使用建议提交
+search-trending	2	search	no	#/search;pages/search.js;search-history.js	访客／账号	查看热搜并选择关键词
+search-history-sync	2	search	no	#/search;pages/search.js;search-history.js	访客／账号	登录后搜索记录在 Web 与 Windows 间同步
+search-history-remove	2	search	no	#/search;pages/search.js;search-history.js	访客／账号	删除单项或清空历史并同步结果
+discover-home	2	discovery	no	#/home;#/daily;#/ncmpl/:id;pages/home.js	访客／已绑定账号	浏览首页推荐和可用入口
+discover-quick-play	2	discovery	yes	#/home;#/daily;#/ncmpl/:id;pages/home.js	访客／已绑定账号	一键开听并开始可听播放
+discover-daily	2	discovery	yes	#/home;#/daily;#/ncmpl/:id;pages/home.js	访客／已绑定账号	查看并播放每日推荐
+discover-daily-dislike	2	discovery	no	#/home;#/daily;#/ncmpl/:id;pages/home.js	访客／已绑定账号	将一首推荐曲目标记为不感兴趣
+discover-charts	2	discovery	no	#/home;#/daily;#/ncmpl/:id;pages/home.js	访客／已绑定账号	查看榜单及榜单歌曲
+discover-personalized	2	discovery	no	#/home;#/daily;#/ncmpl/:id;pages/home.js	访客／已绑定账号	浏览推荐歌单与新歌
+discover-private-content	2	discovery	no	#/home;#/daily;#/ncmpl/:id;pages/home.js	访客／已绑定账号	浏览独家推荐内容及对应条目
+discover-artists	2	discovery	no	#/artists;#/artist/:id;#/followed;#/albums;#/album/:id;#/style/:id;#/song/:id	访客／账号	按条件浏览歌手分类
+discover-artist-detail	2	discovery	no	#/artists;#/artist/:id;#/followed;#/albums;#/album/:id;#/style/:id;#/song/:id	访客／账号	查看歌手资料、代表作和分页专辑
+discover-artist-follow	2	discovery	no	#/artists;#/artist/:id;#/followed;#/albums;#/album/:id;#/style/:id;#/song/:id	访客／账号	关注或取消关注歌手
+discover-followed-artists	2	discovery	no	#/artists;#/artist/:id;#/followed;#/albums;#/album/:id;#/style/:id;#/song/:id	访客／账号	查看已关注歌手与可用新作
+discover-new-albums	2	discovery	no	#/artists;#/artist/:id;#/followed;#/albums;#/album/:id;#/style/:id;#/song/:id	访客／账号	浏览和筛选新碟
+discover-album-detail	2	discovery	no	#/artists;#/artist/:id;#/followed;#/albums;#/album/:id;#/style/:id;#/song/:id	访客／账号	打开专辑详情并播放其中曲目
+discover-styles	2	discovery	no	#/artists;#/artist/:id;#/followed;#/albums;#/album/:id;#/style/:id;#/song/:id	访客／账号	浏览曲风下的歌曲、歌单、歌手和专辑
+discover-song-detail	2	discovery	yes	#/artists;#/artist/:id;#/followed;#/albums;#/album/:id;#/style/:id;#/song/:id	访客／账号	查看歌曲、歌手、专辑与可用关联入口
+library-read	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	浏览自己的歌单与条目
+library-create	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	创建云端歌单且另一客户端能看到
+library-edit	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	修改歌单名称和简介并读回
+library-delete	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	确认删除自建歌单且另一客户端读回不存在
+library-add-track	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	将歌曲加入有写权限的歌单
+library-remove-track	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	从自建歌单移除曲目
+library-play	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	从歌单内选择曲目并保留歌单的播放顺序
+library-like	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	添加或取消站内红心并同步
+library-like-ncm	2	library	yes	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	将红心写入网易云并刷新红心状态
+library-like-target	2	library	no	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	选择站内或网易云红心策略并实际写入对应位置
+library-collections	2	library	no	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	收藏或取消收藏网易云歌单并验证回读
+library-public-playlists	2	library	no	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	浏览公开歌单、分类及可用歌单详情
+library-ncm-playlist	2	library	no	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	打开已同步的网易云歌单和可播放的曲目
+library-recent	2	library	no	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	在账号下查看最近的 CurrentMusic 播放
+library-footprint	2	library	no	#/library;#/pl/:id;#/plaza;pages/playlist.js;playlist-edit.js	访客／CurrentMusic 账号／有效网易云绑定	打开听歌足迹和统计并正确区分来源
+play-from-search	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	从搜索中选歌并听到媒体实际播放
+play-transport	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	实际暂停、恢复和上下一首
+play-seek	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	从进度条定位且恢复实际媒体位置
+play-volume	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	调节音量与静音并验证实际音量
+play-queue-jump	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	从队列中选中另一首并实际切换
+play-queue-modes	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	验证顺序、列表循环、单曲循环和随机
+play-queue-resume	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	重启后恢复当前播放队列和曲目
+play-expand	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	展开或收起播放页并保留控制
+play-mini	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	进入迷你播放模式并操作基本播放控制
+play-quality-auto	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	选择自动音质并按可用音源选择规格
+play-quality-switch	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	切换音质并恢复位置与播放状态
+play-quality-inspect	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	查看歌曲档位与当前音源实际规格
+play-audio-effects	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	切换服务端提供的音效并处理不支持的设备
+play-source-fallback	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	失效或不可用音源能回退到有效源并保留意图
+play-source-feedback	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	提交对应曲目的音源反馈并显示回执
+play-equalizer	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	应用五段均衡器预设及手动设置并测得实际信号变化
+play-recent-sync	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	同一播放跨换档和重试只有一个播放标识
+play-listen-sync	3	playback	yes	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	实际播放增量和尾段可在 Web 及网易云验证
+play-download	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	下载有权限的曲目到选择的 Windows 路径
+play-chorus	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	从播放页定位到可用的副歌起点
+play-versions	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	查看并切换到关联版本
+play-wiki	3	playback	no	player.js;player-ui.js;media-session.js	CurrentMusic 账号及可播放音源	浏览歌曲百科信息
+lyrics-synced	3	lyrics	yes	player-ui.js;#/lyricmarks;pages/lyricmarks.js	带逐字歌词或可回退时间轴的曲目	按实际播放位置显示逐字高亮及逐行回退
+lyrics-seek	3	lyrics	yes	player-ui.js;#/lyricmarks;pages/lyricmarks.js	带逐字歌词或可回退时间轴的曲目	点击歌词跳转并能重新跟随当前行
+lyrics-translation	3	lyrics	no	player-ui.js;#/lyricmarks;pages/lyricmarks.js	带逐字歌词或可回退时间轴的曲目	切换可用译文或其他网页提供的歌词显示
+lyrics-style	3	lyrics	no	player-ui.js;#/lyricmarks;pages/lyricmarks.js	带逐字歌词或可回退时间轴的曲目	设置歌词显示字号和播放页样式并保存
+lyrics-mark-create	3	lyrics	no	player-ui.js;#/lyricmarks;pages/lyricmarks.js	带逐字歌词或可回退时间轴的曲目	保存指定歌曲的歌词句到歌词本
+lyrics-mark-list	3	lyrics	no	player-ui.js;#/lyricmarks;pages/lyricmarks.js	带逐字歌词或可回退时间轴的曲目	查看已收藏歌词并回到曲目
+lyrics-mark-remove	3	lyrics	no	player-ui.js;#/lyricmarks;pages/lyricmarks.js	带逐字歌词或可回退时间轴的曲目	移除指定歌词收藏并验证消失
+media-roaming	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	浏览私人漫游流并持续播放
+media-roaming-feedback	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	标记漫游歌曲不感兴趣并更新流
+media-heartbeat	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	进入心动模式并生成可播放列表
+media-fm	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	进入私人 FM 并切换后续歌曲
+media-fm-feedback	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	从私人 FM 移除不喜欢的歌曲
+media-podcast	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	发现播客与节目并播放节目
+media-radio	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	浏览电台及分类并打开电台详情
+media-radio-play	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	播放电台节目并切换节目
+media-radio-subscribe	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	订阅或取消订阅电台并刷新状态
+media-mv-discover	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	从榜单或分类浏览 MV
+media-mv-watch	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	打开 MV 并实际播放、暂停与拖动
+media-mv-save	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	收藏或取消收藏 MV 并刷新状态
+media-video-discover	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	浏览视频广场分类并打开视频
+media-video-watch	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	播放视频并支持进度和全屏
+media-video-save	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	收藏或取消收藏视频
+media-video-like	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	为视频资源点赞或取消
+media-video-related	3	media	no	#/podcast;#/radio;#/radio/:id;#/mvlist;#/mv/:id;#/videohome;#/video/:id	账号／适用的网易云绑定	从当前视频切换至相关视频
+cloud-drive-list	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定及测试音频	分页浏览云盘和占用信息
+cloud-drive-detail	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定及测试音频	查看云盘曲目详情
+cloud-drive-lyrics	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定及测试音频	查看云盘曲目的可用歌词
+cloud-drive-download	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定及测试音频	取得授权下载地址并下载对应文件
+cloud-drive-import	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定及测试音频	导入已经上传且尚未入库的测试文件
+cloud-drive-upload	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定及测试音频	选文件上传并在 Web 刷新后可见
+cloud-drive-match	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定及测试音频	纠正云盘曲目匹配并读回
+cloud-drive-delete	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定及测试音频	删除测试文件并读回列表变化
+cloud-personal-media	3	cloud	no	#/cloud;pages/cloud.js	有效网易云绑定	查看我的电台与我的音频
+share-link	3	sharing	no	share.js;player-ui.js;pages/song.js	具有可分享 URL 的对象	复制适用实体的公开链接并验证能打开正确实体
+share-square	3	sharing	no	share.js;player-ui.js;pages/song.js	具有可分享 URL 的对象	生成并保存包含正确信息的方块分享图
+share-immersive	3	sharing	no	share.js;player-ui.js;pages/song.js	具有可分享 URL 的对象	生成并保存包含正确信息的沉浸式分享图
+room-find	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	浏览公开房间、我的房间并用房号查找
+room-create	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	创建房间并在第二个客户端正确显示
+room-join	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	通过公开入口或带密码邀请进入并处理拒绝
+room-leave	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	主动退出且恢复原来的个人播放环境
+room-settings	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	修改房名和公开、密码、审批、锁定等设置
+room-members	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	查看在线成员和当前角色
+room-submit	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	点歌并观察审批或直接入队
+room-approve	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	审批通过或驳回点歌并实时更新两个客户端
+room-reorder	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	重排或移除待播条目并同步另一客户端
+room-playback	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	两端同步播放、暂停、跳转与自然切歌
+room-reconnect	4	rooms	yes	#/rooms;#/room/:id;room.js	两个独立账号	断线回房后重放事件或重取快照并校正进度
+room-admins	4	rooms	no	#/rooms;#/room/:id;room.js	两个独立账号	添加和移除房间管理员并生效
+room-owner-transfer	4	rooms	no	#/rooms;#/room/:id;room.js	两个独立账号	转让房主并验证两个账号的权限变化
+room-kick-ban	4	rooms	no	#/rooms;#/room/:id;room.js	两个独立账号	移出或封禁成员并阻止再次加入
+room-unban	4	rooms	no	#/rooms;#/room/:id;room.js	两个独立账号	查看封禁并解除指定成员封禁
+room-archive	4	rooms	no	#/rooms;#/room/:id;room.js	两个独立账号	归档或恢复房间并保留队列
+room-delete	4	rooms	no	#/rooms;#/room/:id;room.js	两个独立账号	确认删除房间且第二个客户端无法继续进入
+community-square	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	浏览社区广场、排序或用户列表
+community-profile	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	查看其他用户的公开资料
+community-visibility	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	开关广场可见性并在另一账号核对
+community-post-feed	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	浏览及分页读取站内动态
+community-post-create	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	发表动态并由第二个客户端读回
+community-post-attach	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	发表带支持附件的动态
+community-post-delete	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	删除自己的动态并读回
+community-post-like	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	对动态点赞或取消
+community-post-reply	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	发表或删除动态回复并读回
+community-follow	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	关注或取消关注网易云用户
+community-follow-lists	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	查看关注、粉丝及关联状态
+community-events	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	浏览网易云动态与话题
+community-event-share	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	分享适用内容到网易云动态
+community-event-interact	4	community	no	#/square;#/u/:id;#/events;#/follow;#/post/new;posts.js	访客／账号／有效网易云绑定	打开动态评论或进行该页面支持的互动
+comment-browse	4	comments	no	comments.js;pages/song.js;pages/album.js;pages/mv.js;pages/video.js;pages/radio.js;pages/playlist.js	公开资源／适用的登录或网易云绑定	按资源查看热门及分页评论
+comment-replies	4	comments	no	comments.js;pages/song.js;pages/album.js;pages/mv.js;pages/video.js;pages/radio.js;pages/playlist.js	公开资源／适用的登录或网易云绑定	加载楼层回复并定位目标评论
+comment-write	4	comments	no	comments.js;pages/song.js;pages/album.js;pages/mv.js;pages/video.js;pages/radio.js;pages/playlist.js	公开资源／适用的登录或网易云绑定	发表或回复一条评论并在另一客户端读回
+comment-delete	4	comments	no	comments.js;pages/song.js;pages/album.js;pages/mv.js;pages/video.js;pages/radio.js;pages/playlist.js	公开资源／适用的登录或网易云绑定	删除自己发布的评论
+comment-like	4	comments	no	comments.js;pages/song.js;pages/album.js;pages/mv.js;pages/video.js;pages/radio.js;pages/playlist.js	公开资源／适用的登录或网易云绑定	点赞或取消评论点赞
+comment-hug	4	comments	no	comments.js;pages/song.js;pages/album.js;pages/mv.js;pages/video.js;pages/radio.js;pages/playlist.js	公开资源／适用的登录或网易云绑定	在支持的资源上发送拥抱或查看已有列表
+message-notices	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	查看私信、通知或评论提醒
+message-private-send	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	发送网页支持的私信类型并验证接收
+message-chat-read	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	加入聊天室并接收历史及实时消息
+message-chat-send	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	发送文字并由第二账号读回
+message-chat-attach	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	上传并查看支持的聊天附件
+message-chat-delete	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	删除自己消息且其他客户端收到变更
+message-chat-members	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	查看聊天室成员
+message-ai-chat	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	启用 AI 时在聊天室提问并显示回执
+message-ai-song	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	从播放页提问且回复关联当前歌曲
+message-announcements	4	messaging	no	#/messages;chat.js;attach.js;ask-ai.js	独立账号、测试接收者和对应部署开关	阅读普通用户可见公告
+extras-assets	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	读取已购音乐和下载记录
+extras-wiki	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	查看贡献任务及历史
+extras-wiki-submit	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	提交可用的百科贡献并确认状态
+extras-levels	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	查看积分规则和当前进度
+extras-trial	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	参与试炼并看到提交结果
+extras-vip	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	查看会员、成长记录及可用任务
+extras-vip-task	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	执行网页支持的会员任务并核对回执
+extras-yunbei	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	查看云贝余额和明细
+extras-yunbei-task	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	执行网页支持的云贝任务并核对回执
+extras-musician	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	查看音乐人服务及可用入口
+extras-fans-ads	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	查看粉丝与广告权益并执行已开放的确认流程
+extras-sleep	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	浏览助眠内容并播放可用条目
+extras-topics	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	浏览话题热榜
+extras-service-info	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	查看网易云服务信息和账号可用入口
+extras-service-verify	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	完成网页提供的安全验证入口
+extras-service-batch	4	extras	no	#/services;pages/services.js	部署开放批量网关并通过对应授权	提交网关允许的批量查询并查看回执
+extras-editor	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	查看云小编权益、活动、考核及审核列表
+extras-editor-sign	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	完成云小编签到并确认积分
+extras-editor-task	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	领取或提交适用云小编任务并刷新进度
+extras-editor-reward	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	领取可用云小编奖励并确认回执
+extras-editor-lottery	4	extras	no	#/assets;#/ugc;#/levels;#/levels/trial;#/member;#/services;#/rep	部署启用对应功能、网易云绑定或满足任务条件	明确确认后抽奖并刷新剩余次数
+settings-server	4	settings	yes	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	选择预设或自定义 HTTPS API 并验证会话隔离
+settings-latency	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	测试多条镜像的延迟和 API 可用性
+settings-source	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	测试并选择可用音源策略
+settings-transport	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	显示连接状态并管理用户可用的安全传输设置
+settings-theme	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	在浅色、深色和系统主题之间切换并持久化
+settings-palette	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	设置界面色或启用封面取色
+settings-ui-style	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	选择可用界面风格且可恢复默认
+settings-cover-shape	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	切换播放页封面形状
+settings-background	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	选择及移除自定义背景图片
+settings-glass	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	调整玻璃效果并验证实际显示
+settings-font	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	调整字体大小且所有主要入口可达
+settings-wave-style	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	设置实际播放时的波形样式
+settings-wave-tilt	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	调节频谱倾斜并在播放时验证
+settings-quality-default	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	保存默认音质并用于下次播放
+settings-download-folder	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	保存本地下载位置并在下载时使用
+settings-update	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	检查可用更新并提供可验证的官方安装包入口
+settings-android-download	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	找到并获取网页提供的官方 Android 下载
+settings-engine-info	4	settings	no	#/settings;#/network;pages/settings.js;pages/network.js;update.js	适用服务器或相应的播放内容	查看当前客户端与渲染环境信息

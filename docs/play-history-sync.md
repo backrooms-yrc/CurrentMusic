@@ -6,21 +6,21 @@ CurrentMusic 累计每次播放实际收听的时长。绑定网易云后，服�
 
 客户端用 Bearer 令牌调用 `POST /cm/plays/{ncmId}`。
 
-1. 开始播放时提交歌曲元数据（`name`、`artists`、`duration` 等，其中 `duration` 以毫秒为单位），从响应中读取 `playId`。服务端同时尽力提交 `startplay` 供网易云最近播放使用。
-2. Web 在实际收听达到首次同步门槛时提交累计时长，之后每新增约 30 秒提交一次。例如 `{"playId":42,"totalMs":60000,"finished":false}`。暂停和页面进入后台时也会尝试提交当前进度。
+1. 开始播放时提交歌曲元数据（`name`、`artists`、`duration` 等，其中 `duration` 以毫秒为单位），从响应中读取 `playId`。支持重试的客户端可先请求 `GET /cm/plays/capabilities`，确认响应包含 `clientPlayId: true`。开始请求附带 `clientPlayId` 后，同一账号重发同一歌曲和平台会收到原 `playId`。允许 1–80 个 ASCII 字母、数字、下划线或连字符。同一账号把该值用于其他歌曲或平台会收到 HTTP 409。服务端在首次写入播放记录时尝试提交 `startplay`。
+2. Web 和 Windows 在实际收听达到首次同步门槛时提交累计时长，之后每新增约 30 秒提交一次。例如 `{"playId":42,"totalMs":60000,"finished":false}`。暂停时也会尝试提交当前进度，Web 在页面进入后台时同样会提交。
 3. 播完、切歌、停止或页面退出时提交 `{"playId":42,"totalMs":127000,"finished":true}`。相同 `playId` 的累计值按最大值保存，重试和乱序抵达的进度不会把时长重复累加。每次重播有独立的 `playId`。
 
-开始播放时可附带 `platform`。支持 `web`、`x`、`app`，对应的网易云上报名称为 `CurrentMusic Web`、`CurrentMusicX`、`CurrentMusic`。省略或传入其他值时，服务端按 User-Agent 识别，浏览器归为 `web`，旧版 CurrentMusicX 的 OkHttp 请求归为 `x`，其他请求归为 `app`。使用 `playId` 上报进度时沿用该次播放开始时的类型。
+开始播放时可附带 `platform`。支持 `web`、`x`、`app`、`windows`，对应的网易云上报名称为 `CurrentMusic Web`、`CurrentMusicX`、`CurrentMusic`、`CurrentMusic Windows`。省略或传入其他值时，服务端按 User-Agent 识别，浏览器归为 `web`，旧版 CurrentMusicX 的 OkHttp 请求归为 `x`，其他请求归为 `app`。使用 `playId` 上报进度时沿用该次播放开始时的类型。
 
 服务端继续兼容旧客户端的 `{"ms":30000}` 增量格式。旧客户端没有结束标记，累计满 60 秒时触发一次同步。若开始请求显式指定了 `platform`，增量请求也应带上相同的值。
 
 ## 网易云上报
 
-- Web 播放中累计实际收听达到 30 秒或歌曲一半（取较短者，至少 1 秒）后，即可向网易云同步。之后每新增 30 秒同步新增时长，播放结束时补报剩余的整秒。暂停和拖动进度产生的跳变量不计入收听。
-- Web 使用 api-enhanced 的 NCBL 日志格式。同一次播放只确认一次 PLV（播放计数），PLD（播放时长）仅发送尚未确认的新增秒数。例如累计进度为 30、60、73 秒时，分别发送 30、30、13 秒的 PLD。重复或乱序的累计进度不会重复累加。
+- Web 和 Windows 播放中累计实际收听达到 30 秒或歌曲一半（取较短者，至少 1 秒）后，即可向网易云同步。之后每新增 30 秒同步新增时长，播放结束时补报剩余的整秒。暂停和拖动进度产生的跳变量不计入收听。
+- 增量同步使用 api-enhanced 的 NCBL 日志格式。同一次播放只确认一次 PLV（播放计数），PLD（播放时长）仅发送尚未确认的新增秒数。例如累计进度为 30、60、73 秒时，分别发送 30、30、13 秒的 PLD。重复或乱序的累计进度不会重复累加。
 - 服务端为同一绑定凭据下的不同客户端类型分别生成播放设备标识。在上报开始播放和听歌打卡时使用同一设备标识，并通过 NCBL 的 `mode` 和 EAPI 的 `mobilename` 传递名称。服务端另尝试调用 `/deviceinfo/center/upload` 登记设备名。若登记失败，仍会发送听歌记录，稍后可重试登记。
-- 同一 Web 播放的日志串行发送。后续进度或重发可以重试未获回执的日志，已确认的 PLV 和 PLD 保留在服务端。绑定失效、网络错误或上游限流时，本地时长照常保存。
-- Web 增量同步需要 Node.js 和带 `util/ncbl.js` 的 api-enhanced 安装目录。可用 `CM_NCM_NCBL_DIR` 指定，默认查找 CurrentMusic 旁的 `ncm-api`。缺少增量支持时，新播放继续在结束时使用 `/scrobble/v1`。旧版增量客户端沿用原有打卡方式。
+- 同一次播放的增量日志串行发送。后续进度或重发可以重试未获回执的日志，已确认的 PLV 和 PLD 保留在服务端。绑定失效、网络错误或上游限流时，本地时长照常保存。
+- 增量同步需要 Node.js 和带 `util/ncbl.js` 的 api-enhanced 安装目录。可用 `CM_NCM_NCBL_DIR` 指定，默认查找 CurrentMusic 旁的 `ncm-api`。缺少增量支持时，新播放继续在结束时使用 `/scrobble/v1`。旧版增量客户端沿用原有打卡方式。
 - 上报回执表示网易云收到了对应的日志。网易云「听歌足迹」的统计口径与显示更新时间由网易云决定。
 
 ## 验证

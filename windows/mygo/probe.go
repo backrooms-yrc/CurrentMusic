@@ -18,6 +18,19 @@ const officialAPI = "https://music.20110208.xyz/cm"
 
 type probeSource struct {
 	url, title, details string
+	catalog             bool
+	spec                string
+}
+
+func sourceSpec(kind string, rate, bits int) string {
+	text := strings.ToUpper(kind)
+	if rate > 0 {
+		text += fmt.Sprintf(" · %.1f kHz", float64(rate)/1000)
+	}
+	if bits > 0 {
+		text += fmt.Sprintf(" · %d bit", bits)
+	}
+	return strings.TrimPrefix(text, " · ")
 }
 
 func validateSource(raw string) (string, error) {
@@ -97,12 +110,12 @@ func resolveProbeSource(ctx context.Context, songID, username, password, quality
 		details = "匹配音源 · " + details
 	}
 	if result.Rate > 0 {
-		details += fmt.Sprintf(" · 音源 %.1f kHz", float64(result.Rate)/1000)
+		details += fmt.Sprintf(" · 音源规格 %.1f kHz", float64(result.Rate)/1000)
 	}
 	if result.Bits > 0 {
 		details += fmt.Sprintf(" · %d bit", result.Bits)
 	}
-	return probeSource{address, fmt.Sprintf("测试歌曲 %d", id), details}, nil
+	return probeSource{url: address, title: fmt.Sprintf("测试歌曲 %d", id), details: details}, nil
 }
 
 func probeJSON(ctx context.Context, method, endpoint, token string, body []byte, result any) error {

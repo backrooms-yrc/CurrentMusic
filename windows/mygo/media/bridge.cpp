@@ -6,6 +6,7 @@
 
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.Core.h>
+#include <winrt/Windows.Media.Devices.h>
 #include <winrt/Windows.Media.Playback.h>
 
 #include <algorithm>
@@ -15,6 +16,8 @@
 
 using winrt::Windows::Foundation::Uri;
 using winrt::Windows::Media::Core::MediaSource;
+using winrt::Windows::Media::Devices::AudioDeviceRole;
+using winrt::Windows::Media::Devices::MediaDevice;
 using namespace winrt::Windows::Media::Playback;
 using std::chrono::milliseconds;
 
@@ -36,6 +39,7 @@ struct Track {
     MediaPlayer::MediaEnded_revoker ended_handler;
     MediaPlayer::MediaFailed_revoker failed_handler;
     MediaPlaybackSession::SeekCompleted_revoker seek_handler;
+    MediaDevice::DefaultAudioRenderDeviceChanged_revoker output_handler;
 
     Track(const wchar_t *url, uint64_t id, double volume) : generation(id) {
         player.CommandManager().IsEnabled(false);
@@ -54,10 +58,21 @@ struct Track {
         seek_handler = player.PlaybackSession().SeekCompleted(winrt::auto_revoke, [events = notifications](auto const&, auto const&) {
             events->events.fetch_or(CM_SEEKED);
         });
+        try {
+            output_handler = MediaDevice::DefaultAudioRenderDeviceChanged(winrt::auto_revoke,
+                [events = notifications](auto const&, auto const& args) {
+                    if (args.Role() == AudioDeviceRole::Default) {
+                        events->events.fetch_or(CM_OUTPUT_CHANGED);
+                    }
+                });
+        } catch (...) {
+            // An unavailable device watcher must not block playback.
+        }
         player.Source(MediaSource::CreateFromUri(Uri{url}));
     }
 
     ~Track() {
+        output_handler.revoke();
         seek_handler.revoke();
         failed_handler.revoke();
         ended_handler.revoke();

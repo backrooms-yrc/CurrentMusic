@@ -33,7 +33,7 @@ class OpenSourceTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('fixture')
             (root / '.env.example').write_text('CM_AI_KEY=')
-            found = {str(path) for path, _, _ in scanner.scan(root, True)}
+            found = {path.as_posix() for path, _, _ in scanner.scan(root, True)}
             self.assertEqual(found, set(names))
 
     def test_extensionless_secret_is_reported_without_printing_it(self):

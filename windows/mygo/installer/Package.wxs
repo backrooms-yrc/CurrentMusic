@@ -1,0 +1,48 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="CurrentMusic for Windows" Manufacturer="CurrentMusic"
+           Version="$(var.ProductVersion)" ProductCode="$(var.ProductCode)"
+           UpgradeCode="A967FC74-EA94-4561-B552-89C2A50FF194"
+           Scope="perMachine" InstallerVersion="500" Language="2052" Codepage="936">
+    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="已安装更新版本的 CurrentMusic。" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <Property Id="ARPURLINFOABOUT" Value="https://music.20110208.xyz" />
+    <Icon Id="AppIcon" SourceFile="$(var.ProjectIcon)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="WINDOWSBUILD">
+      <RegistrySearch Id="CurrentBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber" Type="raw" Bitness="always64" />
+    </Property>
+    <Launch Condition="Installed OR (VersionNT64 AND WINDOWSBUILD &gt;= 26100)"
+            Message="CurrentMusic 需要 Windows 11 24H2 或更高版本。" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="CurrentMusic">
+        <Component Id="Application" Guid="*" Bitness="always64">
+          <File Id="CurrentMusicExe" Source="$(var.PayloadDir)\CurrentMusic.exe" KeyPath="yes">
+            <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="CurrentMusic"
+                      WorkingDirectory="INSTALLFOLDER" Advertise="yes" Icon="AppIcon" />
+          </File>
+        </Component>
+        <Component Id="MediaBridge" Guid="*" Bitness="always64">
+          <File Source="$(var.PayloadDir)\CurrentMusic.Media.dll" KeyPath="yes" />
+        </Component>
+        <Component Id="ProjectLicense" Guid="*" Bitness="always64">
+          <File Source="$(var.PayloadDir)\LICENSE.txt" KeyPath="yes" />
+        </Component>
+        <Component Id="ThirdPartyNotices" Guid="*" Bitness="always64">
+          <File Source="$(var.PayloadDir)\THIRD-PARTY-NOTICES.txt" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="MainFeature" Title="CurrentMusic" Level="1">
+      <ComponentRef Id="Application" />
+      <ComponentRef Id="MediaBridge" />
+      <ComponentRef Id="ProjectLicense" />
+      <ComponentRef Id="ThirdPartyNotices" />
+    </Feature>
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.SetupNotice)" />
+  </Package>
+</Wix>

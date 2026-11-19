@@ -1,11 +1,16 @@
 param(
-    [string]$Output = (Join-Path $PSScriptRoot '../artifacts/mygo-preview')
+    [string]$Output,
+    [switch]$UIOnly
 )
 $ErrorActionPreference = 'Stop'
 
 if ((go env GOVERSION) -ne 'go1.27.3') { throw 'Go 1.27.3 is required.' }
-if ($env:VSCMD_ARG_TGT_ARCH -ne 'x64' -or ([string]$env:WindowsSDKVersion).TrimEnd('\') -ne '10.0.26100.0') {
+if (!$UIOnly -and ($env:VSCMD_ARG_TGT_ARCH -ne 'x64' -or ([string]$env:WindowsSDKVersion).TrimEnd('\') -ne '10.0.26100.0')) {
     throw 'Run from an x64 Visual Studio developer shell with Windows SDK 10.0.26100.0 selected.'
+}
+if (!$Output) {
+    $Output = if ($UIOnly) { Join-Path $PSScriptRoot '../artifacts/mygo-ui' }
+              else { Join-Path $PSScriptRoot '../artifacts/mygo-preview' }
 }
 New-Item -ItemType Directory -Force -Path $Output | Out-Null
 $Output = (Resolve-Path $Output).Path
@@ -20,6 +25,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Go tests failed.' }
     go build -mod=readonly -trimpath -ldflags '-H windowsgui' -o (Join-Path $Output 'CurrentMusic.exe') .
     if ($LASTEXITCODE -ne 0) { throw 'Go application build failed.' }
+    if ($UIOnly) { return }
     $sdk = Join-Path $env:WindowsSdkDir 'Include/10.0.26100.0/cppwinrt'
     $bridge = Join-Path $PSScriptRoot 'media/bridge.cpp'
     Push-Location $Output

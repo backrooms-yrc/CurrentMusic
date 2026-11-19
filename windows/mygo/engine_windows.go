@@ -25,6 +25,7 @@ const (
 	eventOpened = 1 << iota
 	eventSeeked
 	eventEnded
+	eventOutputChanged
 )
 
 // Keep in sync with cm_media_snapshot in media/bridge.h.
@@ -36,6 +37,12 @@ type mediaSnapshot struct {
 	CanSeek    uint32
 	Events     uint32
 	Error      int32
+}
+
+type mediaUpdate struct {
+	mediaSnapshot
+	SeekID uint64
+	At     time.Time
 }
 
 type mediaAction uint8
@@ -54,6 +61,7 @@ type mediaCommand struct {
 	generation uint64
 	source     string
 	value      int64
+	seekID     uint64
 }
 
 type mediaEngine struct {
@@ -84,7 +92,7 @@ func loadMediaDLL() (*syscall.DLL, error) {
 	return &syscall.DLL{Name: path, Handle: syscall.Handle(handle)}, nil
 }
 
-func startMediaEngine(publish func(mediaSnapshot), report func(error)) *mediaEngine {
+func startMediaEngine(publish func(mediaUpdate), report func(error)) *mediaEngine {
 	e := &mediaEngine{
 		commands: make(chan mediaCommand, 32),
 		stop:     make(chan struct{}),
@@ -108,7 +116,7 @@ func (e *mediaEngine) send(command mediaCommand) bool {
 	}
 }
 
-func (e *mediaEngine) run(publish func(mediaSnapshot), report func(error)) {
+func (e *mediaEngine) run(publish func(mediaUpdate), report func(error)) {
 	defer close(e.done)
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -139,6 +147,27 @@ func (e *mediaEngine) run(publish func(mediaSnapshot), report func(error)) {
 	defer tick.Stop()
 	var last mediaSnapshot
 	var generation uint64
+	var pending mediaCommand
+	var inFlight uint64
+	var seekDeadline, nextSeek time.Time
+	const seekSettle = 750 * time.Millisecond
+	execute := func(cmd mediaCommand) error {
+		if err := runMediaCommand(procs[cmd.action], handle, cmd); err != nil {
+			report(fmt.Errorf("媒体命令 %s：%w", names[cmd.action], err))
+			return err
+		}
+		return nil
+	}
+	sendPending := func(now time.Time) {
+		if pending.seekID == 0 || inFlight != 0 || now.Before(nextSeek) {
+			return
+		}
+		cmd := pending
+		pending = mediaCommand{}
+		if execute(cmd) == nil {
+			inFlight, seekDeadline = cmd.seekID, now.Add(8*time.Second)
+		}
+	}
 	for {
 		select {
 		case <-e.stop:
@@ -146,23 +175,62 @@ func (e *mediaEngine) run(publish func(mediaSnapshot), report func(error)) {
 		case cmd := <-e.commands:
 			if cmd.action == openMedia || cmd.action == closeMedia {
 				generation = cmd.generation
+				pending, inFlight = mediaCommand{}, 0
+				seekDeadline, nextSeek = time.Time{}, time.Time{}
 			}
 			if cmd.generation != generation && cmd.action != setVolume {
 				continue
 			}
-			if err := runMediaCommand(procs[cmd.action], handle, cmd); err != nil {
-				report(err)
+			if cmd.action == seekMedia {
+				if inFlight != 0 && seekDeadline.IsZero() {
+					report(fmt.Errorf("上一请求未完成，请重新打开音源后定位"))
+					continue
+				}
+				pending = cmd
+				sendPending(time.Now())
+			} else if err := execute(cmd); err != nil && cmd.action == openMedia {
+				code, ok := err.(mediaError)
+				if !ok {
+					code = -2147467259 // E_FAIL
+				}
+				publish(mediaUpdate{mediaSnapshot: mediaSnapshot{Generation: generation, State: mediaFailed, Error: int32(code)}, At: time.Now()})
 			}
 		case <-tick.C:
+			now := time.Now()
 			var current mediaSnapshot
-			if err := callMedia(procs[poll], handle, uintptr(unsafe.Pointer(&current))); err != nil {
-				current = mediaSnapshot{Generation: generation, State: mediaFailed, Error: int32(err.(mediaError))}
+			pollErr := callMedia(procs[poll], handle, uintptr(unsafe.Pointer(&current)))
+			if pollErr != nil {
+				current = mediaSnapshot{Generation: generation, State: mediaFailed, Error: int32(pollErr.(mediaError))}
+			}
+			if current.Generation == generation && current.Events&eventOpened != 0 {
+				// MediaOpened can arrive while the FLAC stream is still settling.
+				nextSeek = now.Add(seekSettle)
+			}
+			var acknowledged uint64
+			if current.Events&eventSeeked != 0 && inFlight != 0 {
+				acknowledged, inFlight = inFlight, 0
+				seekDeadline = time.Time{}
+				// MediaPlayer can abort a second FLAC seek while its first
+				// stream transition is settling after SeekCompleted.
+				nextSeek = now.Add(seekSettle)
+			}
+			if current.State == mediaFailed {
+				pending, inFlight = mediaCommand{}, 0
+				seekDeadline = time.Time{}
+			}
+			if !seekDeadline.IsZero() && !now.Before(seekDeadline) {
+				pending, seekDeadline = mediaCommand{}, time.Time{}
+				report(fmt.Errorf("定位超时，请重新打开音源后定位"))
 			}
 			if current != last {
-				publish(current)
+				if pollErr != nil {
+					report(fmt.Errorf("读取播放状态：%w", pollErr))
+				}
+				publish(mediaUpdate{mediaSnapshot: current, SeekID: acknowledged, At: now})
 				current.Events = 0
 				last = current
 			}
+			sendPending(now)
 		}
 	}
 }
@@ -186,7 +254,22 @@ func runMediaCommand(proc *syscall.Proc, handle uintptr, cmd mediaCommand) error
 
 type mediaError int32
 
-func (e mediaError) Error() string { return fmt.Sprintf("Windows 媒体错误 0x%08X", uint32(e)) }
+func (e mediaError) Error() string {
+	code := uint32(e)
+	if e.outputUnavailable() {
+		return fmt.Sprintf("Windows 音频输出不可用（0x%08X）", code)
+	}
+	return fmt.Sprintf("Windows 媒体错误 0x%08X", code)
+}
+
+func (e mediaError) outputUnavailable() bool {
+	switch uint32(e) {
+	case 0xC00D36FA, 0xC00D4E84, 0xC00D4E86, 0x88890004: // MF and WASAPI endpoint errors.
+		return true
+	default:
+		return false
+	}
+}
 
 //go:uintptrescapes
 func callMedia(proc *syscall.Proc, args ...uintptr) error {
