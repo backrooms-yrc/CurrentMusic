@@ -17,6 +17,8 @@ const assets = buildSync({ stdin: { resolveDir: root, contents: `
   export { setUiPreset } from './web/src/uipreset.js';
   export { ensureNcmLiked, isNcmLiked, setNcmLiked, resetNcmLiked, resetNcmBound } from './web/src/ui.js';
   export { render as renderSearch } from './web/src/pages/search.js';
+  export { render as renderFootprint } from './web/src/pages/footprint.js';
+  export { render as renderQqMusic } from './web/src/pages/qqmusic.js';
   initPlayerUI();
 ` }, bundle: true, format: 'iife', globalName: 'MiniTest', write: false,
   outfile: 'fixture.js', loader: { '.png': 'dataurl', '.svg': 'text', '.woff2': 'file' }, logLevel: 'silent' }).outputFiles;

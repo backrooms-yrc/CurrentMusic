@@ -8,10 +8,35 @@ import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile, fmtLi
 import { bindProfileBanner, profileBannerHTML } from '../profile-banner.js';
 
 export async function render(el, params) {
+  if (params?.query?.add === '1') return renderAuth(el);
   if (!auth.token) return renderAuth(el);
   // 首页横幅深链 #/user?decor=1：进页面后自动打开挂件选择器
   const autoDecor = !!(params && params.query && params.query.decor);
   return renderProfile(el, autoDecor);
+}
+
+function savedAccountRows(accounts) {
+  return accounts.map(a => `<div class="cm-account-choice">
+    <button type="button" class="cm-setting" data-sw="${esc(a.username)}"><span class="material-icons-outlined" aria-hidden="true">person</span>${esc(a.nickname || a.username)}<i>${esc(a.username)}</i></button>
+    <mdui-button variant="text" data-forget="${esc(a.username)}" aria-label="移除账号 ${esc(a.username)}">移除</mdui-button>
+  </div>`).join('');
+}
+
+function bindSavedAccounts(el, renderAgain) {
+  el.querySelectorAll('[data-sw]').forEach(button => {
+    button.onclick = () => {
+      if (!auth.switchTo(button.dataset.sw)) return;
+      location.hash = '#/home';
+      location.reload();
+    };
+  });
+  el.querySelectorAll('[data-forget]').forEach(button => {
+    button.onclick = () => confirmDialog({
+      title: '移除已保存账号？',
+      body: '此操作仅清除当前浏览器中保存的登录状态。',
+      onOk: () => { auth.forget(button.dataset.forget); renderAgain(); },
+    });
+  });
 }
 
 // ---------- 头像挂件 ----------
@@ -177,6 +202,7 @@ function passwordResetDialog(onDone) {
 }
 
 function renderAuth(el) {
+  const otherAccounts = auth.accounts().filter(a => a.username !== auth.user?.username);
   el.innerHTML = `
     <section class="cm-auth-layout cm-login-layout">
       <aside class="cm-auth-story">${authArt('music')}<span class="cm-auth-eyebrow">YOUR MUSIC, YOUR MOMENT</span><h1>让喜欢的旋律，<br>回到你的生活里。</h1><p>收藏每一次心动，发现下一首喜欢。<br>用一个账号，连接你的音乐世界。</p><span class="cm-auth-brand">${esc(document.title)} <span>·</span> CurrentStation 通行证</span></aside>
@@ -184,6 +210,8 @@ function renderAuth(el) {
       <div class="cm-auth-logo"><img src="brand-icon.png?v=sage1" alt="${esc(document.title)}" width="64" height="64"></div>
       <div class="cm-auth-kicker">CURRENTSTATION 通行证</div><h2 class="cm-auth-title" id="authTitle">欢迎回来</h2>
       <p class="cm-auth-description" id="authDescription">登录账号，继续你的音乐时光。</p>
+      ${auth.token ? '<a class="cm-auth-back" href="#/user">返回我的账号</a>' : ''}
+      ${otherAccounts.length ? `<div class="cm-setting-list cm-saved-accounts">${savedAccountRows(otherAccounts)}</div>` : ''}
       <div class="cm-auth-form">
         <mdui-text-field id="fUser" label="用户名" variant="outlined" autocomplete="username"></mdui-text-field>
         <mdui-text-field id="fNick" label="昵称（可留空）" variant="outlined" hidden></mdui-text-field>
@@ -228,6 +256,7 @@ function renderAuth(el) {
         </a>` : ''}
       <div class="cm-auth-note" id="authNote">注册前请阅读 <a href="#/legal/terms" target="_blank" rel="noopener">《用户协议》</a> 与 <a href="#/legal/privacy" target="_blank" rel="noopener">《隐私政策》</a>，了解服务规则与个人信息处理方式。</div>
     </div></section>`;
+  bindSavedAccounts(el, () => renderAuth(el));
 
   // 模式不再用顶部等分 tab：登录为主视图，「验证码登录」与「忘记密码」是行内链接，
   // 注册通过底部「还没有账号？」切换线进入（主流登录页惯例）。
@@ -487,8 +516,8 @@ async function renderProfile(el, autoDecor) {
   await Promise.allSettled(jobs);
   if (profileToken !== auth.token || !el.isConnected) return;
 
-  const accounts = auth.accounts().filter(a => a.username !== (me || {}).username);
   const u = me || auth.user || {};
+  const accounts = auth.accounts().filter(a => a.username !== u.username);
 
   el.innerHTML = `
     <div class="cm-profile">
@@ -575,11 +604,11 @@ async function renderProfile(el, autoDecor) {
           <div class="cm-setting" id="goRep"><span class="material-icons-outlined">badge</span>云小编与审核<i>权益 / 活动 / 考核 / 审核</i></div>
         </div>
 
-      ${accounts.length ? `
       <div class="cm-sec-head"><h2>切换账号</h2></div>
       <div class="cm-setting-list">
-        ${accounts.map(a => `<div class="cm-setting" data-sw="${esc(a.username)}"><span class="material-icons-outlined">person</span>${esc(a.nickname || a.username)}<i>${esc(a.username)}</i></div>`).join('')}
-      </div>` : ''}
+        ${savedAccountRows(accounts)}
+        <a class="cm-setting" href="#/user?add=1"><span class="material-icons-outlined" aria-hidden="true">person_add</span>添加账号</a>
+      </div>
 
       <div class="cm-logout"><mdui-button variant="outlined" error id="logout">退出登录</mdui-button></div>
     </div>
@@ -770,18 +799,13 @@ async function renderProfile(el, autoDecor) {
     };
     setTimeout(() => diag.querySelector('#pOld')?.focus?.(), 200);
   };
-  el.querySelectorAll('[data-sw]').forEach(x => {
-    x.onclick = () => {
-      auth.switchTo(x.dataset.sw);
-      toast('已切换账号');
-      location.hash = '#/home';
-      setTimeout(() => location.reload(), 300);
-    };
-  });
+  bindSavedAccounts(el, () => renderProfile(el));
   el.querySelector('#logout').onclick = () => confirmDialog({
     title: '退出登录？',
     onOk: async () => {
+      const token = auth.token;
       try { await api.logout(); } catch { /* 忽略 */ }
+      if (auth.token !== token) return;
       auth.clear();
       location.hash = '#/home';
       renderAuth(el);

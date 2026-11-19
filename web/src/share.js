@@ -96,7 +96,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function loadCover(url, timeout = 5000) {
+export function loadCover(url, timeout = 5000) {
   return new Promise(resolve => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -136,7 +136,7 @@ function wrapLines(ctx, text, maxWidth, maxLines) {
   return out.length ? out : [''];
 }
 
-function drawCover(ctx, cover, x, y, width, height) {
+export function drawCover(ctx, cover, x, y, width, height) {
   const scale = Math.max(width / cover.naturalWidth, height / cover.naturalHeight);
   const w = cover.naturalWidth * scale, h = cover.naturalHeight * scale;
   ctx.drawImage(cover, x + (width - w) / 2, y + (height - h) / 2, w, h);

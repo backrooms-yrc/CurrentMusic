@@ -4,7 +4,7 @@ import { createWaveform, WAVE_STYLE } from './waveform.js';
 import { waveStyle, waveTilt } from './customize.js';
 import { api, auth, settings } from './api.js';
 import { esc, toast, fmtDur, fmtCount, tierLabel, QUALITY_TIERS, getStatus, ensureStatus, isNcmLiked, ensureLikeState, toggleLikeDefault, dismissToasts, avatarHTML, skelComments, coverColors, defaultLyricSizeKey, getColorSchemeKey, applyColorScheme, setSongLoading } from './ui.js';
-import { player, wave, on } from './player.js';
+import { player, wave, on, sleepTimer } from './player.js';
 import { openShare } from './share.js';
 import { castIconHTML, openCastDialog } from './cast.js';
 import { openAskAI, ensureAiBot } from './ask-ai.js';
@@ -12,6 +12,10 @@ import { createMiniProgress, createPlayerProgress } from './playback-progress.js
 import { applyPlayerBackground, backgroundLabel, openPlayerBackground, updateBackgroundMotion } from './player-background.js';
 import { layoutRect, layoutScale } from './tablet-scale.js';
 import { AIMO_ICONS, injectSlot, isAimo } from './aimo-icons.js';
+import { lyricOwner, lyricPreference, openLyricManager } from './lyric-manager.js';
+import { lyricOffset, shiftLyricRows } from './local-lyrics.js';
+import { isQqSong, qqQuality, QQ_QUALITIES, qqRequest } from './qqmusic.js';
+import { openQqComments } from './qq-comments.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
 // 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
@@ -270,24 +274,38 @@ function paintLyricSource() {
   if (!status) return;
   const data = lyricRequest?.data;
   const sources = { 'lddc:qm': 'QQ 音乐', 'lddc:kg': '酷狗音乐', 'lddc:ne': '网易云音乐',
-    'lddc:lrclib': 'LRCLIB', 'ncm:yrc': '网易云音乐', 'ncm:lrc': '网易云音乐' };
+    'lddc:lrclib': 'LRCLIB', 'ncm:yrc': '网易云音乐', 'ncm:lrc': '网易云音乐', 'qqmusic:lrc': 'QQ 音乐' };
   const timing = data?.wordLevel ? '逐字' : lyricLines.some(line => line.wSynth) ? '估算逐字' : '逐行';
+  const source = data?.source?.startsWith('local:') ? '手动歌词' : sources[data?.source];
   status.textContent = lyricRequest?.failed ? '歌词加载失败' : !data ? '正在查找歌词…'
     : data.instrumental ? '纯音乐' : !lyricLines.length ? '暂无歌词'
-      : [sources[data.source], timing].filter(Boolean).join(' · ');
+      : [source, timing].filter(Boolean).join(' · ');
+}
+
+function updateLyricRows() {
+  const rows = (lyricRequest?.data?.lines || []).filter(row => row.txt);
+  lyricLines = shiftLyricRows(rows, lyricOffset(lyricPreference(player.meta?.ncm_id).offsetMs));
+  curLyricIdx = -1;
+  karaokeSpans = null;
+  renderLyric();
+  paintLyricSource();
+  syncLyric(true);
+  fireKaraoke();
 }
 
 async function loadLyric() {
-  const id = player.meta?.ncm_id;
+  const song = player.meta;
+  const id = song?.ncm_id;
   if (!id) return;
-  const key = JSON.stringify([settings.base, id, autoLyrics]);
+  const owner = lyricOwner();
+  const key = JSON.stringify([settings.base, owner, id, autoLyrics]);
   if (lyricRequest?.key === key && !lyricRequest.failed) {
     if (!document.getElementById('plLyric')?.hasChildNodes()) renderLyric();
     syncLyric(true);
     return;
   }
-  const request = { id, key, base: settings.base };
-  if (lyricRequest?.id !== id || lyricRequest?.base !== request.base) {
+  const request = { id, key, owner, base: settings.base };
+  if (lyricRequest?.id !== id || lyricRequest?.owner !== owner || lyricRequest?.base !== request.base) {
     lyricLines = [];
     curLyricIdx = -1;
     karaokeSpans = null;
@@ -298,21 +316,16 @@ async function loadLyric() {
   pushDesktopLyric(-1, true);
   let data;
   try {
-    data = await api.lyric(id, autoLyrics);
+    data = lyricPreference(id).data || await (isQqSong(song)
+      ? qqRequest('/lyric', { query: { id: song.qq_mid } }) : api.lyric(id, autoLyrics));
     if (!Array.isArray(data?.lines)) throw new Error('歌词格式无效');
   } catch {
     request.failed = true;
     data = undefined;
   }
-  if (request !== lyricRequest || request.base !== settings.base || player.meta?.ncm_id !== id) return;
+  if (request !== lyricRequest || request.base !== settings.base || lyricOwner() !== owner || player.meta?.ncm_id !== id) return;
   request.data = data;
-  lyricLines = (data?.lines || []).filter(l => l.txt);
-  curLyricIdx = -1;
-  karaokeSpans = null;
-  renderLyric();
-  paintLyricSource();
-  syncLyric();
-  fireKaraoke();
+  updateLyricRows();
 }
 
 const PLAY_MODES = [
@@ -401,6 +414,30 @@ const LYRIC_SIZES = [
 ];
 let lyricSizeKey = localStorage.getItem('cm.lyricSize') || defaultLyricSizeKey();
 let lyricKaraoke = localStorage.getItem('cm.karaoke') !== '0';   // 逐字歌词（卡拉OK），默认开启
+let estimatedKaraoke = localStorage.getItem('cm.karaoke.estimated') !== '0';
+let lyricAutoHide = localStorage.getItem('cm.lyric.autoHide') === '1';
+let lyricIdleTimeout = 0;
+
+function showLyricControls() {
+  clearTimeout(lyricIdleTimeout);
+  const ov = overlay();
+  if (!ov) return;
+  ov.classList.remove('cm-lyric-idle');
+  const reveal = ov.querySelector('#plShowControls');
+  if (!reveal || ov.hidden) return;
+  const lyricsView = ov.querySelector('.pl-body.view-lyric, .lp.lp-mobile-lyrics');
+  reveal.hidden = true;
+  if (!lyricAutoHide || !lyricsView || !matchMedia('(max-width: 599px)').matches) return;
+  lyricIdleTimeout = setTimeout(() => {
+    if (ov.contains(document.activeElement) && document.activeElement !== reveal) return;
+    ov.classList.add('cm-lyric-idle');
+    reveal.hidden = false;
+  }, 3000);
+}
+
+function timedWords(line) {
+  return (estimatedKaraoke || !line.wSynth) ? line.w : null;
+}
 
 // 窄屏播放页视图：cover（封面+控制） ↔ lyric（整屏歌词），点击主区域切换
 let playerView = sessionStorage.getItem('cm.playerView') || 'cover';
@@ -423,6 +460,7 @@ function setPlayerView(v) {
       syncLyric();
     });
   }
+  showLyricControls();
 }
 
 const boundLyricBoxes = new WeakSet();
@@ -471,10 +509,11 @@ function renderLyric() {
       lyricLines.map((l, i) => {
         const { main, sub } = lineParts(l);
         // 逐字：仅当该行有逐字/逐词轴、且当前显示的是原文时启用（翻译/罗马音无逐字轴）
-        const karaokeOK = lyricKaraoke && l.w && l.w.length
+        const words = timedWords(l);
+        const karaokeOK = lyricKaraoke && words?.length
           && (lyricMode === 'bi' || lyricMode === 'orig' || lyricMode === 'orig-roma');
         const body = karaokeOK
-          ? `<div class="lyr">${l.w.map(([wt, tx]) => `<span class="ch" data-t="${wt}">${esc(tx)}</span>`).join('')}</div>`
+          ? `<div class="lyr">${words.map(([wt, tx]) => `<span class="ch" data-t="${wt}">${esc(tx)}</span>`).join('')}</div>`
           : `<div>${esc(main)}</div>`;
         return `<div class="pl-lyric-line" data-i="${i}" style="--i:${i}">${body}${sub ? `<div class="pl-lyric-trans">${esc(sub)}</div>` : ''}</div>`;
       }).join('') +
@@ -562,10 +601,10 @@ function soarTokenizeLine(box, idx) {
   const txt = el && el.querySelector('.lp-lyric__text');
   if (!txt || txt.querySelector('.lp-tk')) return;
   const main = lineParts(line).main || '';
-  const words = line.w?.map(([, text]) => text);
+  const words = timedWords(line)?.map(([, text]) => text);
   const timed = words?.length && words.join('') === main;
   const tokens = timed ? words
-    : autoLyrics ? [] : (main.match(SOAR_TOKEN_RE) || []);
+    : autoLyrics || !estimatedKaraoke ? [] : (main.match(SOAR_TOKEN_RE) || []);
   if (!tokens.length) return;
   txt.classList.toggle('is-word-timed', !!timed);
   txt.innerHTML = tokens.map(tx => `<span class="lp-tk">${esc(tx)}</span>`).join('');
@@ -991,7 +1030,7 @@ async function openFull() {
   const sb = isSoaringBirdTheme();
   const backdrop = `<div class="pl-background" id="plBg" aria-hidden="true"><div class="pl-ambient"></div></div>`;
   ov.classList.toggle('pl-background-paused', !playerVisualsVisible());
-  const qualityNow = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
+  const qualityNow = visibleQuality();
   const modeNow = PLAY_MODES.find(x => x.key === player.playMode);
   const plAi = `<span class="pl-ai-btn" id="plAskAi" title="问 CurrentMusicAI"><span class="pl-ai-ava material-icons-outlined">auto_awesome</span><b>问AI</b></span>`;
   const plActions = `${plAi}${castIconHTML()}<span class="pl-btn" id="plMore" title="更多（歌词/背景/下载）"><span class="material-icons-outlined">more_vert</span></span>`;
@@ -1130,6 +1169,21 @@ async function openFull() {
     </div>`;
 
   ov.querySelector('#plClose').onclick = closeFull;
+  syncProviderControls(ov);
+  const reveal = document.createElement('button');
+  reveal.type = 'button';
+  reveal.id = 'plShowControls';
+  reveal.className = 'cm-show-lyric-controls';
+  reveal.textContent = '显示播放控制';
+  reveal.hidden = true;
+  reveal.onclick = () => {
+    showLyricControls();
+    ov.querySelector('#plClose')?.focus();
+  };
+  ov.appendChild(reveal);
+  ov.onpointerdown = event => { if (event.target !== reveal) showLyricControls(); };
+  ov.onkeydown = event => { if (event.target !== reveal) showLyricControls(); };
+  showLyricControls();
   const askAi = ov.querySelector('#plAskAi');
   if (askAi) {
     askAi.onclick = () => openAskAI(player.meta);
@@ -1328,6 +1382,7 @@ async function openFull() {
     const lp = ov.querySelector('.lp');
     if (!lp) return;
     lp.classList.toggle('lp-mobile-lyrics');
+    showLyricControls();
     if (lp.classList.contains('lp-mobile-lyrics')) {
       requestAnimationFrame(() => {
         const box = ov.querySelector('#plLyric');
@@ -1348,6 +1403,7 @@ async function loadStats() {
   const m = player.meta;
   if (!m) return;
   const el = document.getElementById('plStats');
+  if (isQqSong(m)) { if (el) el.innerHTML = ''; return; }
   if (!el) return;
   let pop = m.pop || 0, comments = null, count = getStatus(m.ncm_id).count;
   try {
@@ -1371,6 +1427,8 @@ async function loadStats() {
 function closeFull() {
   const ov = overlay();
   if (ov.hidden) return;
+  clearTimeout(lyricIdleTimeout);
+  ov.classList.remove('cm-lyric-idle');
   if (fullProgress) { fullProgress.destroy(); fullProgress = null; }
   stopKaraoke();
   // 关键：销毁波形控制器。否则关闭播放页后 rAF 仍会每帧读频谱并往**已脱离 DOM**
@@ -1412,14 +1470,14 @@ document.addEventListener('cm-colorscheme', () => {
 
 // ---------- 均衡器 ----------
 function openEqDialog() {
-  import('./eq.js').then(({ EQ_PRESETS, EQ_BANDS, EQ_LABELS, EQ_GAIN_MAX, eqConfig, setEqConfig, eqActive }) => {
+  import('./eq.js').then(({ EQ_PRESETS, EQ_BANDS, EQ_GAIN_MAX, eqConfig, setEqConfig, eqActive }) => {
     let cfg = eqConfig();
     const presetChips = () => Object.keys(EQ_PRESETS).map(k =>
       `<mdui-chip data-p="${k}" ${cfg.preset === k ? 'selected' : ''}>${EQ_PRESETS[k].label}</mdui-chip>`).join('');
     const sliders = () => cfg.gains.map((g, i) => `
       <div class="cm-eq-row">
-        <span class="cm-eq-label">${EQ_LABELS[i]}<i>${EQ_BANDS[i] >= 1000 ? (EQ_BANDS[i]/1000) + 'k' : EQ_BANDS[i]}</i></span>
-        <input type="range" class="cm-eq-slider" data-i="${i}" min="${-EQ_GAIN_MAX}" max="${EQ_GAIN_MAX}" step="1" value="${g}">
+        <span class="cm-eq-label">${EQ_BANDS[i] >= 1000 ? (EQ_BANDS[i] / 1000) + ' kHz' : EQ_BANDS[i] + ' Hz'}</span>
+        <input type="range" class="cm-eq-slider" data-i="${i}" aria-label="${EQ_BANDS[i]} Hz 增益" min="${-EQ_GAIN_MAX}" max="${EQ_GAIN_MAX}" step="1" value="${g}">
         <span class="cm-eq-val">${g > 0 ? '+' : ''}${g}dB</span>
       </div>`).join('');
     const diag = mdui.dialog({
@@ -1427,32 +1485,35 @@ function openEqDialog() {
       body: `<div class="cm-eq">
         <div class="cm-more-chips" id="eqPresets">${presetChips()}</div>
         <div id="eqSliders">${sliders()}</div>
-        <div class="cm-more-s" id="eqHint" style="margin-top:8px">${eqActive() ? '' : '提示：均衡器在音频可视化可用时生效（若当前歌曲走了兼容回退，EQ 可能不生效）'}</div>
+        <div class="cm-more-s" id="eqHint" style="margin-top:8px">${cfg.legacyGains ? '当前保留原有五段设置，调节后应用十段。'
+          : eqActive() ? '' : '均衡器在浏览器音频处理可用时生效。'}</div>
       </div>`,
       actions: [{ text: '关闭' }],
     });
-    setTimeout(() => {
-      diag.querySelectorAll('#eqPresets mdui-chip').forEach(ch => {
-        ch.onclick = () => {
-          cfg = { preset: ch.dataset.p, gains: EQ_PRESETS[ch.dataset.p].gains.slice() };
-          setEqConfig(cfg);
-          diag.querySelector('#eqPresets').innerHTML = presetChips();
-          diag.querySelector('#eqSliders').innerHTML = sliders();
-          bindSliders();
-        };
-      });
-      const bindSliders = () => {
-        diag.querySelectorAll('.cm-eq-slider').forEach(sl => {
-          sl.oninput = () => {
-            const i = +sl.dataset.i, v = +sl.value;
-            cfg.gains[i] = v;
-            sl.closest('.cm-eq-row').querySelector('.cm-eq-val').textContent = (v > 0 ? '+' : '') + v + 'dB';
-            setEqConfig({ preset: 'custom', gains: cfg.gains });
-          };
-        });
-      };
-      bindSliders();
-    }, 0);
+    const presets = diag.querySelector('#eqPresets');
+    const slidersBox = diag.querySelector('#eqSliders');
+    const paint = () => {
+      presets.innerHTML = presetChips();
+      diag.querySelector('#eqHint').textContent = eqActive() ? '' : '均衡器在浏览器音频处理可用时生效。';
+    };
+    presets.onclick = event => {
+      const key = event.target.closest('[data-p]')?.dataset.p;
+      if (!key) return;
+      cfg = { preset: key, gains: EQ_PRESETS[key].gains.slice() };
+      setEqConfig(cfg);
+      slidersBox.innerHTML = sliders();
+      paint();
+      presets.querySelector(`[data-p="${key}"]`)?.focus();
+    };
+    slidersBox.oninput = event => {
+      const slider = event.target;
+      const i = Number(slider.dataset.i), value = Number(slider.value);
+      cfg.gains[i] = value;
+      cfg.preset = 'custom';
+      slider.closest('.cm-eq-row').querySelector('.cm-eq-val').textContent = (value > 0 ? '+' : '') + value + 'dB';
+      setEqConfig(cfg);
+      paint();
+    };
   }).catch(() => toast('均衡器加载失败'));
 }
 
@@ -1483,6 +1544,11 @@ function openMoreDrawer() {
         <div class="cm-more-col">
           <section class="cm-more-card">
             <div class="cm-more-h"><span class="material-icons-outlined">subtitles</span>歌词显示</div>
+            <button type="button" class="cm-more-nav" id="mLyricManager">
+              <span class="cm-more-nav-ic material-icons-outlined">edit_note</span>
+              <span class="cm-more-t">歌词管理</span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>
             <div class="cm-more-row">
               <div><div class="cm-more-t">歌词自动择优</div><div class="cm-more-s">QQ 逐字优先，逐行兜底</div><div class="cm-more-s" id="mLyricSource" aria-live="polite"></div></div>
               <mdui-switch id="mAutoLyrics" aria-label="歌词自动择优" ${autoLyrics ? 'checked' : ''}></mdui-switch>
@@ -1502,6 +1568,14 @@ function openMoreDrawer() {
               <div><div class="cm-more-t">逐字歌词</div><div class="cm-more-s">随逐字时间轴点亮歌词</div></div>
               <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
             </div>
+            <div class="cm-more-row">
+              <div class="cm-more-t">逐行歌词估算逐字</div>
+              <mdui-switch id="mEstimatedKara" aria-label="逐行歌词估算逐字" ${estimatedKaraoke ? 'checked' : ''}></mdui-switch>
+            </div>
+            <div class="cm-more-row">
+              <div><div class="cm-more-t">歌词页自动隐藏播放控制</div><div class="cm-more-s">手机歌词视图 3 秒无操作后隐藏</div></div>
+              <mdui-switch id="mLyricAutoHide" aria-label="歌词页自动隐藏播放控制" ${lyricAutoHide ? 'checked' : ''}></mdui-switch>
+            </div>
             <button type="button" class="cm-more-nav" id="mBackground">
               <span class="cm-more-nav-ic material-icons-outlined">wallpaper</span>
               <span><span class="cm-more-t">播放背景</span><span class="cm-more-s">${backgroundLabel()}</span></span>
@@ -1512,9 +1586,19 @@ function openMoreDrawer() {
         <div class="cm-more-col">
           <section class="cm-more-card">
             <div class="cm-more-h"><span class="material-icons-outlined">tune</span>工具</div>
+            <button type="button" class="cm-more-nav" id="mSleep">
+              <span class="cm-more-nav-ic material-icons-outlined">bedtime</span>
+              <span class="cm-more-t">定时关闭</span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>
+            ${player.playlist ? `<button type="button" class="cm-more-nav" id="mLocateSong">
+              <span class="cm-more-nav-ic material-icons-outlined">my_location</span>
+              <span class="cm-more-t">在歌单中定位歌曲</span>
+              <span class="cm-more-chev material-icons-outlined">chevron_right</span>
+            </button>` : ''}
             <button type="button" class="cm-more-nav" id="mEq">
               <span class="cm-more-nav-ic material-icons-outlined">graphic_eq</span>
-              <span><span class="cm-more-t">均衡器</span><span class="cm-more-s">五段 EQ · 预设与自定义</span></span>
+              <span><span class="cm-more-t">均衡器</span><span class="cm-more-s">十段 EQ · 预设与自定义</span></span>
               <span class="cm-more-chev material-icons-outlined">chevron_right</span>
             </button>
             <button type="button" class="cm-more-nav" id="mShare">
@@ -1548,6 +1632,11 @@ function openMoreDrawer() {
     actions: [{ text: '关闭' }],
   });
   diag.classList.add('cm-more-dialog');
+  if (isQqSong(m)) {
+    diag.querySelector('#mShare')?.remove();
+    diag.querySelector('#mSongInfo')?.closest('section')?.remove();
+    diag.querySelector('.cm-more-dl')?.remove();
+  }
   setTimeout(() => {
     const msh = diag.querySelector('#mShare');
     if (msh) msh.onclick = () => {
@@ -1591,6 +1680,43 @@ function openMoreDrawer() {
       stopKaraoke(); startKaraoke(); fireKaraoke();
     });
     paintLyricSource();
+    diag.querySelector('#mLyricManager').onclick = () => {
+      const song = player.meta;
+      if (!song) return;
+      const current = () => player.meta?.ncm_id === song.ncm_id;
+      diag.open = false;
+      openLyricManager(song, {
+        current,
+        data: () => lyricRequest?.id === song.ncm_id ? lyricRequest.data : null,
+        changed: reload => {
+          if (reload) { lyricRequest = null; loadLyric(); }
+          else updateLyricRows();
+        },
+      });
+    };
+    diag.querySelector('#mEstimatedKara').onchange = e => {
+      estimatedKaraoke = e.target.checked;
+      localStorage.setItem('cm.karaoke.estimated', estimatedKaraoke ? '1' : '0');
+      renderLyric();
+      syncLyric(true);
+    };
+    diag.querySelector('#mLyricAutoHide').onchange = e => {
+      lyricAutoHide = e.target.checked;
+      localStorage.setItem('cm.lyric.autoHide', lyricAutoHide ? '1' : '0');
+      showLyricControls();
+    };
+    diag.querySelector('#mSleep').onclick = () => {
+      diag.open = false;
+      openSleepTimer();
+    };
+    const locate = diag.querySelector('#mLocateSong');
+    if (locate) locate.onclick = () => {
+      const track = player.meta?.ncm_id;
+      if (!player.playlist || !track) return;
+      diag.open = false;
+      closeFull();
+      location.hash = player.playlist + '?track=' + encodeURIComponent(track);
+    };
     diag.querySelector('#mAutoLyrics').addEventListener('change', e => {
       autoLyrics = e.target.checked;
       localStorage.setItem('cm.autoLyrics', autoLyrics ? '1' : '0');
@@ -1697,6 +1823,7 @@ function bindArtistLinks(scope) {
 /** 按「默认红心目标」同步播放页红心、网易云小圆点与红心数。 */
 let playerLikeRevision = 0;
 async function syncPlayerLike(m, refresh = true) {
+  if (isQqSong(m)) return;
   if (!m) return;
   const revision = ++playerLikeRevision;
   try {
@@ -1742,6 +1869,7 @@ function updateSongInfo() {
   const ov = overlay();
   const m = player.meta;
   if (!ov || ov.hidden || !m) return;
+  syncProviderControls(ov);
   const cover = document.getElementById('plCover');
   if (cover) cover.src = m.pic || '';
   const glow = ov.querySelector('.lp-artwork__glow img, .sb-artwork-glow img');
@@ -1759,16 +1887,37 @@ function updateSongInfo() {
   applyPlayerBackground(m.pic || '');
 }
 
+function syncProviderControls(ov) {
+  const visible = isQqSong(player.meta) ? 'none' : '';
+  ['plAdd', 'plLike', 'plStar', 'plAskAi', 'plHeart', 'plCast', 'plCastSlot'].forEach(id => {
+    const node = ov.querySelector('#' + id);
+    if (node) node.style.display = visible;
+  });
+  const comments = ov.querySelector('#plComments');
+  if (comments) comments.style.display = isQqSong(player.meta) && !player.meta.qq_id ? 'none' : '';
+}
+
+function visibleQuality() {
+  try { return tierLabel(player.urlInfo?.level || (isQqSong(player.meta) ? qqQuality() : settings.quality)); }
+  catch { return tierLabel('auto'); }
+}
+
 /** 音质胶囊：翱翔鸟Music 的 chip 里还有图标，不能直接写 textContent（会清空结构）。 */
 function paintQuality() {
   const q = document.getElementById('plQuality');
   if (!q) return;
-  const txt = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
+  const txt = visibleQuality();
   const label = q.querySelector('.lp-quality__label');
   if (label) label.textContent = txt; else q.textContent = txt;
 }
 
 on('song', () => {
+  if (!player.meta) {
+    lyricRequest = null;
+    lyricLines = [];
+    if (!overlay().hidden) closeFull();
+    return;
+  }
   if (!overlay().hidden) {
     updateSongInfo();           // 只更新歌曲字段，不重建整个 overlay（重建会清空歌词区 → 闪烁）
   }
@@ -1789,8 +1938,9 @@ on('state', () => {
 });
 
 function qualityMenu() {
-  const cur = settings.quality;
-  const items = QUALITY_TIERS.map(t =>
+  const qq = isQqSong(player.meta);
+  const cur = qq ? qqQuality() : settings.quality;
+  const items = (qq ? QQ_QUALITIES : QUALITY_TIERS).map(t =>
     `<div class="cm-qm-item" data-v="${t.key}">${t.label}${t.spec ? `<em class="cm-qm-spec">${t.spec}</em>` : ''}${t.key === cur ? '<span class="material-icons-outlined">check</span>' : ''}</div>`).join('');
   const diag = mdui.dialog({
     headline: '选择音质',
@@ -1813,31 +1963,99 @@ function qualityMenu() {
 // ---------- 当前播放列表 ----------
 
 export function openQueue() {
-  const q = player.queue;
-  if (!q.length) return toast('播放列表为空');
+  if (!player.queue.length) return toast('播放列表为空');
   const diag = mdui.dialog({
-    headline: `当前播放（${q.length} 首）`,
-    body: `<div class="cm-queue">${q.map((s, i) => `
-      <div class="cm-queue-item ${i === player.index ? 'cur' : ''}" data-i="${i}">
-        <span class="q-idx">${i === player.index ? '<span class="material-icons-outlined">graphic_eq</span>' : i + 1}</span>
-        <div class="q-main">
-          <div class="q-name">${esc(s.name)}</div>
-          <div class="q-sub">${esc(s.artists)}</div>
-        </div>
-        <span class="q-dur">${fmtDur(s.duration)}</span>
-      </div>`).join('')}</div>`,
+    headline: '当前播放',
+    body: '<div class="cm-queue"></div>',
     actions: [{ text: '关闭' }],
   });
-  setTimeout(() => {
-    diag.querySelectorAll('.cm-queue-item').forEach(it => {
-      it.onclick = () => {
-        player.playAt(+it.dataset.i);
-        diag.open = false;
-      };
-    });
-    const cur = diag.querySelector('.cm-queue-item.cur');
-    if (cur) cur.scrollIntoView({ block: 'center' });
-  }, 0);
+  const list = diag.querySelector('.cm-queue');
+  const action = (key, icon, label, disabled = false) =>
+    `<button type="button" class="cm-queue-action" data-queue-action="${key}" aria-label="${label}" title="${label}" ${disabled ? 'disabled' : ''}><span class="material-icons-outlined" aria-hidden="true">${icon}</span></button>`;
+  function paint() {
+    const queue = player.queue;
+    list.innerHTML = queue.length ? `<div class="cm-queue-head"><span>${queue.length} 首</span>
+      <mdui-button variant="text" data-queue-action="clear">清空队列</mdui-button></div>` + queue.map((song, i) => {
+      const current = player.index === i;
+      return `<div class="cm-queue-item ${current ? 'cur' : ''}" data-i="${i}">
+        <button type="button" class="cm-queue-play" data-queue-action="play" ${current ? 'aria-current="true"' : ''}>
+          <span class="q-idx" aria-hidden="true">${i + 1}</span>
+          <span class="q-main"><span class="q-name">${esc(song.name)}</span><span class="q-sub">${esc(song.artists || '')}</span></span>
+        </button>
+        ${action('up', 'keyboard_arrow_up', '上移', i === 0)}
+        ${action('down', 'keyboard_arrow_down', '下移', i === queue.length - 1)}
+        ${action('remove', 'close', '移除')}
+      </div>`;
+    }).join('') : '<div class="cm-empty">播放列表为空</div>';
+  }
+  list.onclick = event => {
+    const button = event.target.closest('[data-queue-action]');
+    if (!button) return;
+    const key = button.dataset.queueAction;
+    const index = Number(button.closest('[data-i]')?.dataset.i);
+    if (key === 'play') {
+      if (index === player.index) player.play();
+      else player.playAt(index);
+      diag.open = false;
+      return;
+    }
+    if (key === 'clear') {
+      mdui.dialog({
+        headline: '清空播放队列？',
+        actions: [{ text: '取消' }, { text: '清空', onClick: () => { player.clearQueue(); paint(); } }],
+      });
+      return;
+    }
+    const target = key === 'up' ? index - 1 : index + 1;
+    if (key === 'remove') player.removeQueueItem(index);
+    else player.moveQueueItem(index, target);
+    paint();
+    const next = key === 'remove' ? Math.min(index, player.queue.length - 1) : target;
+    const row = list.querySelector(`[data-i="${next}"]`);
+    const equivalent = row?.querySelector(`[data-queue-action="${key}"]:not(:disabled)`);
+    (equivalent || row?.querySelector('.cm-queue-play'))?.focus();
+  };
+  paint();
+  setTimeout(() => list.querySelector('.cur')?.scrollIntoView({ block: 'center' }), 0);
+}
+
+function openSleepTimer() {
+  let interval = 0;
+  const diag = mdui.dialog({
+    headline: '定时关闭',
+    body: `<form id="cmSleepForm" class="cm-form">
+      <p id="cmSleepStatus"></p>
+      <div class="cm-sleep-presets">${[10, 20, 30, 45, 60, 90].map(m =>
+        `<mdui-button type="button" variant="tonal" data-minutes="${m}">${m} 分钟</mdui-button>`).join('')}</div>
+      <label>自定义分钟数 <input id="cmSleepMinutes" type="number" min="1" max="1439" value="30" required></label>
+      <label><input type="checkbox" id="cmSleepFinish"> 到时播完当前歌曲</label>
+      <mdui-button type="button" variant="filled" id="cmSleepStart">开始计时</mdui-button>
+      <mdui-button type="button" variant="text" id="cmSleepCancel">取消定时</mdui-button>
+    </form>`,
+    actions: [{ text: '关闭' }],
+  });
+  const form = diag.querySelector('#cmSleepForm');
+  const minutes = form.querySelector('#cmSleepMinutes');
+  function paint() {
+    const { end, waiting } = sleepTimer.state;
+    const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+    form.querySelector('#cmSleepStatus').textContent = !end ? '尚未开启定时'
+      : waiting ? '当前歌曲播完后暂停' : `剩余 ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
+    form.querySelector('#cmSleepCancel').disabled = !end;
+  }
+  function start() {
+    if (minutes.reportValidity()) sleepTimer.start(Number(minutes.value), form.querySelector('#cmSleepFinish').checked);
+    paint();
+  }
+  form.onsubmit = event => { event.preventDefault(); start(); };
+  form.querySelectorAll('[data-minutes]').forEach(button => {
+    button.onclick = () => { minutes.value = button.dataset.minutes; start(); };
+  });
+  form.querySelector('#cmSleepStart').onclick = start;
+  form.querySelector('#cmSleepCancel').onclick = () => { sleepTimer.cancel(); paint(); };
+  diag.addEventListener('closed', () => clearInterval(interval), { once: true });
+  paint();
+  interval = setInterval(paint, 1000);
 }
 
 // ---------- 评论区（内容同步网易云，发评走绑定账号） ----------
@@ -1848,6 +2066,7 @@ export function openQueue() {
 // 以免同一套热门/最新/楼层/点赞/回复逻辑在多处分叉。
 export async function openComments(meta) {
   if (!meta) return;
+  if (isQqSong(meta)) return openQqComments(meta);
   const { openComments: openEntityComments } = await import('./comments.js');
   return openEntityComments({ type: 0, id: meta.ncm_id, title: meta.name || '歌曲' });
 }

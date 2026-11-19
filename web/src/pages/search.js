@@ -46,7 +46,7 @@ const suggestionSkeleton = `<div class="cm-sug cm-skeleton" role="status" aria-l
 </div>`;
 
 const panelLoading = () => '<div class="cmt-more-loading"><mdui-circular-progress></mdui-circular-progress> 加载中…</div>';
-const playSong = (songs, index) => player.playList(songs, index, { shuffleStart: false });
+const playSong = (songs, index) => player.playSong(songs[index]);
 
 /** 是否应减少动效。实时查询，用户改系统设置后无需重载页面。 */
 const reduceMotion = () => typeof matchMedia === 'function'
@@ -377,7 +377,8 @@ export async function render(el, params = []) {
     }
     const list = p.querySelector('#songList');
     const rows = await renderSongList(list, songs,
-      { from, deferStatus: true, showLyric: type === 'lyric', onPlay: i => playSong(S.items[type], i) });
+      { from, deferStatus: true, showLyric: type === 'lyric',
+        onPlay: i => playSong(S.items[type], i), onQueue: i => player.enqueue(S.items[type][i]) });
     if (!list.isConnected || S?.cur !== type) return;
     // 追加时动画新增行；首次出结果时也渐入（那时没有面板整体动画）
     if (from) { animateIn(rows); refreshMore(type); }

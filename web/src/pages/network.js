@@ -2,6 +2,8 @@ import { settings, auth } from '../api.js';
 import { player } from '../player.js';
 import { resolveSongUrl } from '../songurl.js';
 import { MIRRORS, PROVIDERS, network, probeMirror, probeLines, swapLine, testAudio } from '../network.js';
+import { mdui } from '../md.js';
+import { listServerAudio, importServerAudio, importedServerAudio, removeServerAudio } from '../server-audio-source.js';
 import { esc, toast } from '../ui.js';
 import './network.css';
 
@@ -13,7 +15,8 @@ export function render(el) {
     <section><h2>网站与 API 镜像</h2><p>进入本页自动测速，每条线路请求两次。切换后沿用当前页面，仅更改 API 入口。仅官方镜像共享本站登录凭据。</p>
     <button id="mirrorTest">重新测速</button><button id="mirrorBest" disabled>使用本次最快线路</button>
     <div id="mirrorResults" class="cm-network-grid"></div><p>当前 API：<span id="apiBase">${esc(settings.base)}</span></p></section>
-    <section><h2>音乐音源</h2><label>默认音源 <select id="audioProvider">${Object.entries(PROVIDERS).map(([id, name]) => `<option value="${id}" ${network.provider === id ? 'selected' : ''}>${name}</option>`).join('')}</select></label>
+    <section><h2>音乐音源</h2><label>默认音源 <select id="audioProvider"></select></label>
+    ${!window.NativeApi ? '<button type="button" id="sourceImport">从服务器导入</button><button type="button" id="sourceRemove" hidden>移除已导入音源</button>' : ''}
     <p>CurrentMusic 沿用本站网易云解析和回退链路；LeiZ 使用独立接口。X 侧的网易云原生直连依赖 Android 客户端，网页暂不提供该选项。选定音源失败时会提示，不跨音源回退。音源和 CDN 设置在下一次播放时生效。</p>
     <div id="leizFields" ${network.provider !== 'leiz' ? 'hidden' : ''}><label>LeiZ API Key <input id="leizKey" type="password" autocomplete="off" maxlength="512" placeholder="${network.key ? '当前标签页已配置；留空保留' : '填写 API Key'}"></label>
     <button id="saveKey">保存 Key</button><button id="clearKey">移除 Key</button><p>Key 仅保留在当前标签页会话，直接发送给 LeiZ，不发送给本站或 CDN。第三方服务需允许浏览器跨域请求。</p></div>
@@ -25,6 +28,49 @@ export function render(el) {
   const $ = id => el.querySelector('#' + id);
   $('audioCdn').value = network.cdn;
   const invalidate = () => { player._discardPrefetch(); player._prefetch = null; detected = null; };
+  function paintSources() {
+    const source = importedServerAudio();
+    const providers = Object.entries(PROVIDERS);
+    if (source) providers.push(['server', source.name + '（服务器音源）']);
+    $('audioProvider').innerHTML = providers.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join('');
+    $('audioProvider').value = network.provider;
+    $('leizFields').hidden = network.provider !== 'leiz';
+    if ($('sourceRemove')) $('sourceRemove').hidden = !source;
+  }
+  paintSources();
+  if ($('sourceImport')) $('sourceImport').onclick = async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const { server, sources } = await listServerAudio();
+      if (!button.isConnected) return;
+      if (!sources.length) { $('sourceStatus').textContent = '当前服务器没有可导入的网易云音源'; return; }
+      const dialog = mdui.dialog({
+        headline: '从服务器导入音源',
+        body: `<label>网易云曲库音源 <select id="audioSourceChoice">${sources.map((source, index) =>
+          `<option value="${index}">${esc(source.name)}</option>`).join('')}</select></label>`,
+        actions: [{ text: '取消' }, { text: '导入并使用', onClick: () => {
+          if (!button.isConnected) return;
+          try {
+            importServerAudio(server, sources[Number(dialog.querySelector('#audioSourceChoice').value)]);
+            invalidate();
+            paintSources();
+            $('sourceStatus').textContent = '服务器音源已导入，下次播放时生效。';
+          } catch (error) { $('sourceStatus').textContent = error.message; }
+        } }],
+      });
+    } catch (error) {
+      if (button.isConnected) $('sourceStatus').textContent = error.message;
+    } finally { button.disabled = false; }
+  };
+  if ($('sourceRemove')) $('sourceRemove').onclick = () => {
+    try {
+      removeServerAudio();
+      invalidate();
+      paintSources();
+      $('sourceStatus').textContent = '已移除服务器音源。';
+    } catch (error) { $('sourceStatus').textContent = error.message; }
+  };
   $('audioProvider').onchange = () => {
     network.provider = $('audioProvider').value; invalidate();
     $('leizFields').hidden = network.provider !== 'leiz';
@@ -42,6 +88,7 @@ export function render(el) {
   function applyMirror(origin) {
     if (!MIRRORS.some(x => x[1] === origin)) return;
     settings.base = origin + '/cm'; invalidate(); $('apiBase').textContent = settings.base;
+    paintSources();
     toast('API 线路已切换');
   }
   $('mirrorBest').onclick = () => { if (best) applyMirror(best.origin); };

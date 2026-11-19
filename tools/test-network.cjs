@@ -70,5 +70,33 @@ function setup(entry = 'network') {
   sc.Audio.prototype.canPlayType = () => '';
   assert.equal((await s.resolveSongUrl({ncm_id:1},'auto')).level, 'jymaster');
   assert(!request.has('supportsDolby'));
-  console.log('PASS: mirror identity, partial reads and cancellation, HTTP/MIME failures, verified CDN switching, stale source rejection, LeiZ credentials isolated and errors preserved');
+  const { api: source, context: sourceCtx, local: sourceLocal } = setup('server-audio-source');
+  sourceLocal.set('cm.token', 'fixture-session');
+  sourceLocal.set('cm.user', JSON.stringify({ username: 'fixture' }));
+  sourceCtx.fetch = async (url, opts) => {
+    assert.equal(opts.redirect, 'error');
+    assert.equal(opts.headers.Authorization, 'Bearer fixture-session');
+    assert.equal(new URL(url).origin, sourceCtx.location.origin);
+    return { ok: true, json: async () => url.includes('/resolve')
+      ? { url: 'https://audio.test/track', level: 'lossless' }
+      : { version: 1, sources: [
+        { id: 'currentmusic-engine', name: '流声引擎', platforms: ['netease'] },
+        { id: 'bad/route', name: 'Invalid', platforms: ['netease'] },
+        { id: 'qq-source', name: 'Other', platforms: ['qqmusic'] },
+      ] } };
+  };
+  const catalog = await source.listServerAudio();
+  assert.equal(catalog.sources.length, 1);
+  source.importServerAudio(catalog.server, catalog.sources[0]);
+  assert.equal((await source.resolveServerAudio(1, 'lossless')).url, 'https://audio.test/track');
+  source.selectServerAudio(false);
+  await assert.rejects(source.resolveServerAudio(1, 'lossless'), /导入并选择/);
+  source.selectServerAudio(true);
+  sourceLocal.set('cm.user', JSON.stringify({ username: 'another' }));
+  assert.equal(source.importedServerAudio(), null);
+  assert.throws(() => source.importServerAudio(catalog.server, catalog.sources[0]), /登录或服务器已改变/);
+  sourceLocal.set('cm.user', JSON.stringify({ username: 'fixture' }));
+  source.removeServerAudio();
+  assert.equal(source.importedServerAudio(), null);
+  console.log('PASS: mirror and media probes, CDN switching, LeiZ credential isolation, server-source catalog, redirect policy and account isolation');
 })().catch(e=>{console.error(e);process.exitCode=1;});

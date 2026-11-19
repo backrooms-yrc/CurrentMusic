@@ -42,3 +42,14 @@ body.cm-onboarding-active #bottomNav,body.cm-onboarding-active #mini,body.cm-onb
 body.cm-onboarding-active #out{bottom:0!important;padding-bottom:32px}
 
 html.mdui-theme-dark .cm-auth-layout{--auth-error:#ffb4ab}
+.cm-account-choice { display: flex; align-items: center; gap: 6px; }
+.cm-account-choice > .cm-setting {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+.cm-saved-accounts { width: 100%; }

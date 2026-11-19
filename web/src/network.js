@@ -1,19 +1,35 @@
 // Device-side probes never send account headers or cookies to mirrors/CDNs.
+import { importedServerAudio, selectServerAudio } from './server-audio-source.js';
+
 export const MIRRORS = [
   ['主站', 'https://music.20110208.xyz'], ['CTCEHS 镜像', 'https://music.ctcehs.com'],
   ['Geekertao 镜像', 'https://currentmusic.geekertao.com'], ['Bileizhen 镜像', 'https://cm.bileizhen.top'],
 ];
 export const PROVIDERS = { currentmusic: 'CurrentMusic', leiz: 'LeiZ API' };
 export const network = {
-  get provider() { const v = localStorage.getItem('cm.audioProvider'); return PROVIDERS[v] ? v : 'currentmusic'; },
-  set provider(v) { if (PROVIDERS[v]) localStorage.setItem('cm.audioProvider', v); },
+  get provider() {
+    if (importedServerAudio()?.selected) return 'server';
+    const value = localStorage.getItem('cm.audioProvider');
+    return Object.prototype.hasOwnProperty.call(PROVIDERS, value) ? value : 'currentmusic';
+  },
+  set provider(value) {
+    if (value === 'server') selectServerAudio(true);
+    else if (Object.prototype.hasOwnProperty.call(PROVIDERS, value)) {
+      selectServerAudio(false);
+      localStorage.setItem('cm.audioProvider', value);
+    }
+  },
   // Browser storage has no native keystore: keep the key for this tab only.
   get key() { return sessionStorage.getItem('cm.leizKey') || ''; },
   set key(v) { if (v) sessionStorage.setItem('cm.leizKey', v); else sessionStorage.removeItem('cm.leizKey'); },
   get cdn() { return localStorage.getItem('cm.audioCdn') || 'auto'; },
   set cdn(v) { localStorage.setItem('cm.audioCdn', v); },
 };
-export function sourceIdentity() { return [network.provider, network.key, network.cdn, localStorage.getItem('cm.base'), localStorage.getItem('cm.token')].join('\n'); }
+export function sourceIdentity() {
+  const provider = network.provider;
+  const detail = provider === 'server' ? importedServerAudio()?.id : provider === 'leiz' ? network.key : '';
+  return [provider, detail, network.cdn, localStorage.getItem('cm.base'), localStorage.getItem('cm.secure'), localStorage.getItem('cm.token')].join('\n');
+}
 export function withHost(url, host) { const u = new URL(url); u.hostname = host; return u.href; }
 export function famOf(h) { return /^m\d\./.test(h) ? 'f2' : /^m\d{3}\./.test(h) ? 'f3' : ''; }
 export const lineBest = { byFam: {}, probing: {} };

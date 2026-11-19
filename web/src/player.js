@@ -7,6 +7,9 @@ import { resolveSongUrl } from './songurl.js';   // 三级音源回退（P2）
 import { buildEqChain, removeEqChain } from './eq.js';   // 均衡器链（挂进音频图）
 import { updateBrowserMediaSession, updateBrowserMediaState } from './media-session.js';
 import { createSongTraffic } from './song-traffic.js';
+import { readCheckpoint, saveCheckpoint } from './playback-checkpoint.js';
+import { createSleepTimer } from './sleep-timer.js';
+import { isQqSong, qqQuality } from './qqmusic.js';
 
 const songTraffic = createSongTraffic(api.reportSongTraffic);
 window.addEventListener('pagehide', () => {
@@ -383,10 +386,20 @@ export function on(evt, fn) { (listeners[evt] = listeners[evt] || []).push(fn); 
 function emit(evt, data) { (listeners[evt] || []).forEach(fn => fn(data)); }
 /** 供外部触发一次时间刷新（投屏时本机没有 timeupdate，由投屏侧按帧驱动）。 */
 // 页面被隐藏/切走（切后台、锁屏、关闭标签）时立即结账：不依赖 timeupdate 继续触发
-document.addEventListener('visibilitychange', () => { if (document.hidden) flushListen(); });
-window.addEventListener('pagehide', event => flushListen(!event.persisted));
+document.addEventListener('visibilitychange', () => {
+  sleepTimer.check();
+  if (document.hidden) {
+    flushListen();
+    player.persist();
+  }
+});
+window.addEventListener('pagehide', event => {
+  flushListen(!event.persisted);
+  player.persist();
+});
 
 export function tick() {
+  sleepTimer.check();
   accumulateCast();              // 投屏：本机 audio 不前进，按设备播放态用墙钟累计
   maybeFlushListen();
   emit('time');
@@ -399,6 +412,13 @@ export function notifyState() { emit('state'); }
 let clockSource = null;
 export function setClockSource(fn) { clockSource = fn; }
 const clock = () => (typeof clockSource === 'function' ? clockSource() : null);
+
+export const sleepTimer = createSleepTimer({
+  isPlaying: () => player.isPlaying(),
+  pause: () => player.pause(),
+});
+let checkpointScope = auth.scope;
+let checkpointAt = 0;
 
 // 高解析度档位提示：192kHz/24bit 母带、96kHz、多声道全景声对**设备解码与重采样**
 // 要求高，部分机型会出现杂音（用户反馈的"爆音"多为此类）。每个会话提示一次，
@@ -425,6 +445,8 @@ export const player = {
   index: -1,
   meta: null,
   urlInfo: null,
+  get playlist() { return this.meta?.queuePlaylist || ''; },
+  pendingPosition: 0,
   // 播放模式四合一：list 列表循环 | one 单曲循环 | order 顺序播放 | shuffle 随机
   playMode: (() => {
     const m = localStorage.getItem('cm.playMode');
@@ -464,7 +486,7 @@ export const player = {
   async _prefetchNext() {
     if (!this.queue.length || this._prefetchBusy) return;
     const nx = this.queue[this.index + 1] || this.queue[0];
-    if (!nx || !nx.ncm_id) return;
+    if (!nx || !nx.ncm_id || isQqSong(nx)) return;
     if (this._prefetch && String(this._prefetch.id) === String(nx.ncm_id)) return;
     try {
       const c = navigator.connection || navigator.mozConnection || {};
@@ -546,10 +568,13 @@ export const player = {
    */
   async _heartPid() {
     if (this._heartPidCache) return this._heartPidCache;
+    const token = auth.token;
     const st = await api.bindStatus();                 // 项目专用入口（T3 那条不泛化转发）
+    if (token !== auth.token) throw new Error('账号已切换');
     const uid = ((st || {}).profile || {}).uid;
     if (!uid) throw new Error('需要先绑定网易云账号');
     const d = await api.ncm('/user/playlist', { uid, limit: 200 });
+    if (token !== auth.token) throw new Error('账号已切换');
     const liked = (d.playlist || []).find(x => x && !x.subscribed && Number(x.specialType) === 5);
     if (!liked) throw new Error('没找到「我喜欢的音乐」（心动模式只支持这个歌单类型）');
     this._heartPidCache = liked.id;
@@ -561,8 +586,11 @@ export const player = {
    * 复用这里才能避免「pid 解析」与「songInfo 解包」两处各错一遍。
    */
   async heartList(seedId, count = 10) {
+    const token = auth.token;
     const pid = await this._heartPid();
+    if (token !== auth.token) return [];
     const d = await api.ncm('/playmode/intelligence/list', { id: seedId, sid: seedId, pid, count });
+    if (token !== auth.token) return [];
     // 上游返回的是 { alg, id, recommended, songInfo } 包装：歌曲本体在 songInfo 里，
     // 直接对 data 调 ncmSongs 会全部映射成空（原实现取不到数据的第二个原因）。
     const raw = (d.data || []).map(x => (x && x.songInfo) ? x.songInfo : x);
@@ -573,11 +601,14 @@ export const player = {
   /** 心动模式：以 seed（默认当前曲目）为种子续一批到队尾，返回新增条数。 */
   async heartExtend(seed) {
     if (this._heartBusy) return 0;
+    if (isQqSong(seed || this.meta)) return 0;
     const id = ((seed || this.meta) || {}).ncm_id;
     if (!id) return 0;
+    const queue = this.queue, token = auth.token;
     this._heartBusy = true;
     try {
       const fresh = await this.heartList(id);
+      if (queue !== this.queue || token !== auth.token) return 0;
       if (!fresh.length) { this._heartMiss++; this._heartErr = '上游没有返回新的续播推荐'; return 0; }
       this.queue.push(...fresh);
       this._heartMiss = 0; this._heartErr = '';
@@ -586,6 +617,7 @@ export const player = {
       toast(`心动模式：续上 ${fresh.length} 首`);
       return fresh.length;
     } catch (e) {
+      if (queue !== this.queue || token !== auth.token) return 0;
       this._heartMiss++;
       this._heartErr = (e && e.message) || '取续播推荐失败';
       return 0;
@@ -594,7 +626,7 @@ export const player = {
 
   /** 队列快见底就提前续（异步补齐，不阻塞切歌）。 */
   _heartEnsure() {
-    if (!this.heartMode || this._heartBusy) return;
+    if (!this.heartMode || this._heartBusy || isQqSong(this.meta)) return;
     if (this._heartMiss >= 3) return;                 // 连续失败：停手，不给上游刷请求
     if (this.queue.length - this.index > 3) return;   // 还够听
     this.heartExtend(this.meta);
@@ -605,28 +637,112 @@ export const player = {
     if (!seed || !seed.ncm_id) { toast('这首没有可用的网易云曲目 ID'); return false; }
     this.setHeartMode(true);
     this._heartMiss = 0; this._heartErr = '';
+    const token = auth.token;
     let fresh = [];
     try {
       fresh = await this.heartList(seed.ncm_id, 12);
     } catch (e) {
+      if (token !== auth.token) return false;
       toast((e && e.message) || '心动模式取歌失败');
       this.playList([seed], 0);
       return false;
     }
+    if (token !== auth.token) return false;
     const rest = fresh.filter(x => String(x.ncm_id) !== String(seed.ncm_id));
     this.playList([seed, ...rest], 0);
     toast(rest.length ? `心动模式：已开播 ${rest.length + 1} 首，播完自动续` : '心动模式：暂时没取到续播，先播这首');
     return true;
   },
 
-  playList(songs, startIndex = 0, { shuffleStart = true } = {}) {
+  playList(songs, startIndex = 0, { shuffleStart = true, playlist = '' } = {}) {
     const queue = songs.filter(Boolean);
     if (this.playPending && queue[startIndex] && String(queue[startIndex].ncm_id) === String(this.meta?.ncm_id)) return;
     if (shuffleStart && this.playMode === 'shuffle' && startIndex === 0) startIndex = Math.floor(Math.random() * queue.length);
     if (!queue[startIndex] || (this.playPending && queue[startIndex] === this.meta)) return;
-    this.queue = queue;
+    this.queue = playlist ? queue.map(song => ({ ...song, queuePlaylist: playlist })) : queue;
     this.playAt(startIndex);
     this.persist();
+  },
+
+  playSong(song) {
+    if (!song) return;
+    if (!auth.token) { promptLogin(); return; }
+    if (String(song.ncm_id) === String(this.meta?.ncm_id)) {
+      if (!this.playPending) this.playAt(this.index);
+      return;
+    }
+    const at = this.index + 1;
+    this.queue.splice(at, 0, song);
+    this.playAt(at);
+  },
+
+  enqueue(song, playlist = '') {
+    if (!song) return;
+    if (!auth.token) { promptLogin(); return; }
+    const entry = playlist ? { ...song, queuePlaylist: playlist } : song;
+    this.queue.push(entry);
+    if (this.index === -1) {
+      this.index = 0;
+      this.meta = entry;
+      emit('song');
+    }
+    this.queueChanged();
+    toast('已加入播放队列');
+  },
+
+  moveQueueItem(from, to) {
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from === to ||
+        !this.queue[from] || !this.queue[to]) return;
+    this.queue.splice(to, 0, this.queue.splice(from, 1)[0]);
+    if (from === this.index) this.index = to;
+    else if (from < this.index && to >= this.index) this.index--;
+    else if (from > this.index && to <= this.index) this.index++;
+    this.queueChanged();
+  },
+
+  removeQueueItem(i) {
+    if (!Number.isInteger(i) || !this.queue[i]) return;
+    if (i !== this.index) {
+      this.queue.splice(i, 1);
+      if (i < this.index) this.index--;
+      this.queueChanged();
+      return;
+    }
+    const active = this.isPlaying() || this.playPending;
+    this.resetCurrent();
+    this.queue.splice(i, 1);
+    this.index = Math.min(i, this.queue.length - 1);
+    this.meta = this.queue[this.index] || null;
+    if (active && this.meta) this.playAt(this.index);
+    else emit('song');
+    this.queueChanged();
+  },
+
+  clearQueue() {
+    this.resetCurrent();
+    this.queue = [];
+    this.index = -1;
+    this.meta = null;
+    emit('song');
+    this.queueChanged();
+  },
+
+  resetCurrent() {
+    this.pause();
+    stopPlayback();
+    this.urlInfo = null;
+    this.pendingPosition = 0;
+    corsPending = null;
+    if (audio.hasAttribute('src')) {
+      audio.removeAttribute('src');
+      audio.load();
+    }
+  },
+
+  queueChanged() {
+    this._discardPrefetch();
+    this.persist();
+    emit('state');
   },
 
   async playAt(i, { skipDolby = false, pos = 0 } = {}) {
@@ -643,6 +759,7 @@ export const player = {
     this.index = i;
     const meta = this.meta = this.queue[i];
     this.urlInfo = null;
+    this.pendingPosition = pos * 1000;
     this.starting = false;
     // 切到别的歌：预取元素的下载立即停（若预取目标恰好是本首，留着给消费处复用）
     if (this._prefetch && String(this._prefetch.id) !== String(this.meta.ncm_id)) this._discardPrefetch();
@@ -670,11 +787,11 @@ export const player = {
         this._discardPrefetch();
         this._prefetch = null;
       } else {
-        const _pl2 = effectiveLevel();
+        const _pl2 = isQqSong(meta) ? { level: qqQuality() } : effectiveLevel();
         try {
           info = await resolveSongUrl(meta, _pl2.level, _pl2.immerse, skipDolby ? { supportsDolby: false } : undefined);
         } catch (e) {
-          if (_pl2.level !== settings.quality) {
+          if (!isQqSong(meta) && _pl2.level !== settings.quality) {
             toast('该音效当前不可用，已回退普通音质');
             info = await resolveSongUrl(meta, settings.quality);
           } else throw e;
@@ -683,7 +800,7 @@ export const player = {
     } catch (e) {
       if (this._playRequest !== request) return;
       this.loading = false;
-      if (e && e.status === 401) {         // 登录失效/未登录：提示登录，不当作播放失败跳歌
+      if (e && e.status === 401 && !isQqSong(meta)) { // 站内会话失效
         this.wantPlaying = false;
         emit('song');
         emit('state');
@@ -761,7 +878,7 @@ export const player = {
   },
 
   report() {
-    if (!auth.token || !this.meta) return;
+    if (!auth.token || !this.meta || isQqSong(this.meta)) return;
     lastTickT = -1;
     lastCastAt = 0;
     lastFlushAt = 0;
@@ -803,7 +920,7 @@ export const player = {
       // 此时按播放应当对**当前曲目**重新解析——原先只在 index === -1 时
       // 才 playAt(0)，index 有效时直接 return，表现为
       // 「退出软件重进后点迷你条/播放键没有任何反应」。
-      if (this.index >= 0 && this.meta) this.playAt(this.index);
+      if (this.index >= 0 && this.meta) this.playAt(this.index, { pos: this.pendingPosition / 1000 });
       else if (this.index === -1 && this.queue.length) this.playAt(0);
       return;
     }
@@ -829,6 +946,7 @@ export const player = {
   },
 
   next(auto = false) {
+    if (auto && sleepTimer.check(true)) return;
     if (!this.queue.length) return;
     if (this.playMode === 'one' && auto) {
       if (clock()) { this.playAt(this.index); return; }   // 投屏中：重投同一首（不本地播放）
@@ -859,14 +977,15 @@ export const player = {
   /** 当前播放位置（毫秒）：投屏时取设备上报值，否则取本机音频。 */
   posMs() {
     const c = clock();
-    return c ? c.posMs : (this.audio.currentTime || 0) * 1000;
+    if (c) return c.posMs;
+    return this.urlInfo ? (this.audio.currentTime || 0) * 1000 : this.pendingPosition;
   },
 
   /** 当前曲目总长（毫秒）。 */
   durMs() {
     const c = clock();
     if (c && c.durMs > 0) return c.durMs;
-    return (isFinite(this.audio.duration) && this.audio.duration > 0)
+    return (this.urlInfo && isFinite(this.audio.duration) && this.audio.duration > 0)
       ? this.audio.duration * 1000 : (this.meta && this.meta.duration) || 0;
   },
 
@@ -884,7 +1003,8 @@ export const player = {
 
   async changeQuality(level) {
     if (this.playPending) { toast('歌曲正在准备，请稍后切换音质'); return; }
-    settings.quality = level;
+    if (isQqSong(this.meta)) qqQuality(level);
+    else settings.quality = level;
     if (!this.meta) return;
     const request = this._playRequest;
     const at = audio.currentTime;
@@ -911,15 +1031,22 @@ export const player = {
   },
 
   persist() {
-    try {
-      localStorage.setItem('cm.lastq', JSON.stringify({ queue: this.queue.slice(0, 100), index: this.index }));
-    } catch { /* 忽略超限 */ }
+    if (queueRestoreEnabled()) {
+      saveCheckpoint(checkpointScope, this.queue, this.index, this.posMs());
+    }
+    checkpointAt = Date.now();
   },
   restore() {
-    try {
-      const d = JSON.parse(localStorage.getItem('cm.lastq'));
-      if (d && d.queue && d.queue.length) { this.queue = d.queue; this.index = d.index; this.meta = this.queue[this.index] || null; }
-    } catch { /* 忽略 */ }
+    if (!queueRestoreEnabled()) return;
+    const saved = readCheckpoint(checkpointScope, auth.accounts().length === 1);
+    if (!saved) return;
+    this.queue = saved.queue;
+    this.index = saved.index;
+    this.meta = saved.queue[saved.index];
+    this.pendingPosition = saved.posMs;
+  },
+  clearCheckpoint() {
+    saveCheckpoint(checkpointScope, [], -1, 0);
   },
 
   updateMediaSession() {
@@ -954,6 +1081,30 @@ export const player = {
 
   get audio() { return audio; },
 };
+
+function queueRestoreEnabled() {
+  try { return localStorage.getItem('cm.restoreQueue') !== '0'; } catch { return false; }
+}
+
+function switchPlaybackAccount() {
+  const next = auth.scope;
+  if (next === checkpointScope) return;
+  player.persist();
+  checkpointScope = '';
+  sleepTimer.cancel();
+  player.clearQueue();
+  player._heartPidCache = null;
+  player._relaySession = '';
+  checkpointScope = next;
+  player.restore();
+  emit('song');
+  emit('state');
+}
+window.addEventListener('cm-authchange', switchPlaybackAccount);
+window.addEventListener('pageshow', switchPlaybackAccount);
+window.addEventListener('storage', event => {
+  if (!event.key || ['cm.token', 'cm.user', 'cm.authRealm', 'cm.base', 'cm.secure'].includes(event.key)) switchPlaybackAccount();
+});
 
 // ---------- 实际收听时长（给「听歌时长」统计用）----------
 // 旧口径是"开始播放就把整首时长记进去"：跳歌按整首计（虚高），同一首重播只留最后一条
@@ -1130,6 +1281,8 @@ function bindAudio(el) {
 });
   el.addEventListener('timeupdate', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    sleepTimer.check();
+    if (player.urlInfo && Date.now() - checkpointAt >= 10000) player.persist();
     updateBufPct();
     emit('time');
     accumulateLocal(el);
@@ -1189,6 +1342,7 @@ function bindAudio(el) {
   el.addEventListener('pause', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
     flushListen();                     // 暂停即结账：暂停期间的时间本来就不该计入
+    if (player.urlInfo) player.persist();
     emit('state'); player.pushMediaState();
     // 注意：暂停不改保活状态——锁屏/系统音频焦点抖动会触发 pause，
     // 此时若释放唤醒锁+停前台服务，进程可能在息屏下被冻结，出现「突然暂停且不再恢复」。
@@ -1197,6 +1351,7 @@ function bindAudio(el) {
   el.addEventListener('seeked', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
   player.pushMediaState();
+  if (player.urlInfo) player.persist();
 });
   el.addEventListener('ratechange', () => { if (el === audio) player.pushMediaState(); });
   el.addEventListener('loadedmetadata', () => {

@@ -9,6 +9,7 @@ import { getAimoChartCover } from '../aimo-charts.js';
 export async function render(el, params) {
   const kind = params[0]; // pl | ncmpl | special
   const id = params[1];
+  const playlist = kind === 'daily' ? '#/daily' : '#/' + kind + '/' + id;
 
   el.innerHTML = skelDetail();
   let title = '', desc = '', songs = [], removable = false, owner = false, cover = '', badge = '';
@@ -102,7 +103,8 @@ export async function render(el, params) {
     renderSongList(list, tracks, {
       deferStatus: true,
       likeSource: id === 'likes' ? 'local' : undefined,
-      onPlay: i => player.playList(tracks, i),
+      onPlay: i => player.playList(tracks, i, { shuffleStart: false, playlist }),
+      onQueue: i => player.enqueue(tracks[i], playlist),
       onRemove: removable ? async i => {
         const s = tracks[i];
         try {
@@ -161,9 +163,19 @@ export async function render(el, params) {
       .catch(e => toast('编辑器加载失败：' + e.message));
   };
 
-  await attachSongList(songs);
+  const rows = await attachSongList(songs);
+  const located = params.query?.track && rows.find(row => row.dataset.songId === params.query.track);
+  if (located) {
+    located.classList.add('cm-song-located');
+    located.tabIndex = -1;
+    requestAnimationFrame(() => {
+      if (!located.isConnected) return;
+      located.focus({ preventScroll: true });
+      located.scrollIntoView({ block: 'center' });
+    });
+  }
 
-  el.querySelector('#playAll').onclick = () => songs.length ? player.playList(songs, 0) : toast('列表为空');
+  el.querySelector('#playAll').onclick = () => songs.length ? player.playList(songs, 0, { playlist }) : toast('列表为空');
   const sharePl = el.querySelector('#sharePl');
   if (sharePl) sharePl.onclick = () => openShare({
     type: shareKind, id, name: title, pic: cover, sub: shareSub,

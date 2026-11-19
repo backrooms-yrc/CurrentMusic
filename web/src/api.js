@@ -5,6 +5,7 @@ const LS = {
   token: 'cm.token',
   user: 'cm.user',
   accounts: 'cm.accounts',
+  realm: 'cm.authRealm',
   quality: 'cm.quality',
   theme: 'cm.theme',
   likeMode: 'cm.likeMode',
@@ -19,6 +20,37 @@ function defaultBase() {
   return DEFAULT_BASE;
 }
 
+function accountRealm(base) {
+  try {
+    const url = new URL(base);
+    if (url.protocol === 'https:' && !url.port && !url.username && !url.password
+        && !url.search && !url.hash && url.pathname === '/cm' && SAME_ORIGIN_HOSTS.includes(url.hostname)) return DEFAULT_BASE;
+  } catch { /* Invalid custom addresses get their own realm. */ }
+  return base;
+}
+
+function savedAccounts() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS.accounts));
+    return Array.isArray(saved) ? saved.filter(a => a && a.username && a.token) : [];
+  } catch { return []; }
+}
+
+function bindLegacyAccounts(realm) {
+  if (localStorage.getItem(LS.token) && !localStorage.getItem(LS.realm)) localStorage.setItem(LS.realm, realm);
+  const accounts = savedAccounts();
+  if (accounts.some(a => !a.realm)) {
+    localStorage.setItem(LS.accounts, JSON.stringify(accounts.map(a => a.realm ? a : { ...a, realm })));
+  }
+}
+
+function setConnection(key, value) {
+  const previous = accountRealm(settings.base);
+  bindLegacyAccounts(previous);
+  localStorage.setItem(key, value);
+  if (accountRealm(settings.base) !== previous) notifyAuthChange();
+}
+
 export const settings = {
   get base() {
     const raw = localStorage.getItem(LS.base) || defaultBase();
@@ -29,14 +61,14 @@ export const settings = {
     }
     return raw;
   },
-  set base(v) { localStorage.setItem(LS.base, v); },
+  set base(v) { setConnection(LS.base, v); },
   get effect() {
     const v = localStorage.getItem('cm.effect') || 'off';
     return ['off','jyeffect','dolby','vivid','sky','sky-ste'].indexOf(v) >= 0 ? v : 'off';
   },
   set effect(v) { localStorage.setItem('cm.effect', v); },
   get secureMode() { return localStorage.getItem(LS.secure) !== '0'; },   // 默认 true
-  set secureMode(v) { localStorage.setItem(LS.secure, v ? '1' : '0'); },
+  set secureMode(v) { setConnection(LS.secure, v ? '1' : '0'); },
   get quality() { return localStorage.getItem(LS.quality) || 'auto'; },
   set quality(v) { localStorage.setItem(LS.quality, v); },
   // auto: 已绑定网易云走网易云，未绑定走 CurrentMusic；ncm/local 为强制选择。
@@ -57,16 +89,30 @@ function notifyAuthChange(login = false) {
 }
 
 export const auth = {
-  get token() { return localStorage.getItem(LS.token) || ''; },
-  get user() { try { return JSON.parse(localStorage.getItem(LS.user)) || null; } catch { return null; } },
+  get token() {
+    const realm = localStorage.getItem(LS.realm);
+    return !realm || realm === accountRealm(settings.base) ? localStorage.getItem(LS.token) || '' : '';
+  },
+  get user() {
+    if (!this.token) return null;
+    try { return JSON.parse(localStorage.getItem(LS.user)) || null; } catch { return null; }
+  },
+  get scope() {
+    const username = this.user?.username;
+    return username ? JSON.stringify([accountRealm(settings.base), username]) : '';
+  },
 
   saveLogin(token, user) {
+    const realm = accountRealm(settings.base);
+    bindLegacyAccounts(realm);
     const login = token !== this.token || !this.user || this.user.username !== user.username;
+    localStorage.setItem(LS.realm, realm);
     localStorage.setItem(LS.token, token);
     localStorage.setItem(LS.user, JSON.stringify(user));
-    const accounts = this.accounts().filter(a => a.username !== user.username);
-    accounts.unshift({ username: user.username, nickname: user.nickname, avatar: user.avatar, token });
-    localStorage.setItem(LS.accounts, JSON.stringify(accounts.slice(0, 5)));
+    const otherServers = savedAccounts().filter(a => a.realm !== realm);
+    const accounts = this.accounts().filter(a => a.username !== user.username).slice(0, 4);
+    accounts.unshift({ username: user.username, nickname: user.nickname, avatar: user.avatar, token, realm });
+    localStorage.setItem(LS.accounts, JSON.stringify(accounts.concat(otherServers)));
     notifyAuthChange(login);
   },
   updateUser(user, token) {
@@ -75,23 +121,32 @@ export const auth = {
     localStorage.setItem(LS.user, JSON.stringify(user));
     notifyAuthChange();
   },
-  accounts() { try { return JSON.parse(localStorage.getItem(LS.accounts)) || []; } catch { return []; } },
+  accounts() {
+    const realm = accountRealm(settings.base);
+    return savedAccounts().filter(a => (a.realm || realm) === realm);
+  },
   switchTo(username) {
     const a = this.accounts().find(x => x.username === username);
     if (!a) return false;
+    localStorage.setItem(LS.realm, accountRealm(settings.base));
     localStorage.setItem(LS.token, a.token);
     localStorage.setItem(LS.user, JSON.stringify({ id: 0, username: a.username, nickname: a.nickname, avatar: a.avatar, bio: '' }));
     notifyAuthChange();
     return true;
   },
+  forget(username) {
+    if (username === this.user?.username) return false;
+    const realm = accountRealm(settings.base);
+    bindLegacyAccounts(realm);
+    localStorage.setItem(LS.accounts, JSON.stringify(savedAccounts().filter(a => a.realm !== realm || a.username !== username)));
+    return true;
+  },
   clear() {
     const cur = this.user;
-    if (cur) {
-      const accounts = this.accounts().filter(a => a.username !== cur.username);
-      localStorage.setItem(LS.accounts, JSON.stringify(accounts));
-    }
+    if (!this.token) return;
     localStorage.removeItem(LS.token);
     localStorage.removeItem(LS.user);
+    if (cur) this.forget(cur.username);
     notifyAuthChange();
   },
 };
@@ -112,8 +167,8 @@ window.__cmHttpDone = function (id, status, body) {
   else p.reject(Object.assign(new Error((data && data.error) || `HTTP ${status}`), { status, code: data?.code }));
 };
 
-async function rawRequest(method, url, headers, bodyStr, keepalive = false) {
-  if (bridged) {
+async function rawRequest(method, url, headers, bodyStr, keepalive = false, redirect) {
+  if (bridged && redirect !== 'error') {
     return new Promise((resolve, reject) => {
       const id = 'r' + (++seq);
       pending.set(id, { resolve, reject });
@@ -121,7 +176,7 @@ async function rawRequest(method, url, headers, bodyStr, keepalive = false) {
     });
   }
   const requestHeaders = { ...(bodyStr ? { 'Content-Type': 'application/json' } : {}), ...(headers || {}) };
-  const r = await fetch(url, { method, headers: requestHeaders, body: bodyStr || undefined, keepalive });
+  const r = await fetch(url, { method, headers: requestHeaders, body: bodyStr || undefined, keepalive, redirect });
   let data = null;
   try { data = await r.json(); } catch { /* 空体 */ }
   if (r.ok) return data;
@@ -131,20 +186,23 @@ async function rawRequest(method, url, headers, bodyStr, keepalive = false) {
 let onAuthExpired = null;
 export function setAuthExpiredHandler(fn) { onAuthExpired = fn; }
 
-export async function call(method, path, { body, auth: needAuth = false, keepalive = false, base = settings.base } = {}) {
+export async function call(method, path, { body, auth: needAuth = false, keepalive = false, base = settings.base, redirect } = {}) {
   const headers = {};
   // 记录“请求发出时是否带过 token”：只有带过 token 的 401 才是会话失效；
   // 游客（本来就没登录）的 401 交给播放等入口自行引导登录，不能报“登录已失效”。
-  const hadToken = !!(needAuth && auth.token);
-  if (hadToken) headers.Authorization = 'Bearer ' + auth.token;
+  const requestToken = needAuth ? auth.token : '';
+  const loginRealm = path.startsWith('/auth/') ? accountRealm(base) : null;
+  if (requestToken) headers.Authorization = 'Bearer ' + requestToken;
   const bodyStr = body !== undefined ? JSON.stringify(body) : '';
   try {
-    return await rawRequest(method, base + path, headers, bodyStr, keepalive);
+    const result = await rawRequest(method, base + path, headers, bodyStr, keepalive, redirect);
+    if (loginRealm && loginRealm !== accountRealm(settings.base)) throw new Error('登录服务器已改变，请重试');
+    return result;
   } catch (e) {
     // 401 有两种来源：项目会话失效（该提示重新登录）与「尚未绑定网易云」（该引导去绑定）。
     // 后者按状态码一律当成会话失效会误报「登录已失效」，所以按文案区分。
     // auth.token 为空说明「失效」已被处理（并发 401），不再重复弹窗。
-    if (e.status === 401 && hadToken && auth.token && onAuthExpired
+    if (e.status === 401 && requestToken && requestToken === auth.token && onAuthExpired
         && !/绑定/.test(e.message || '')) onAuthExpired();
     throw e;
   }
