@@ -598,7 +598,9 @@ def init():
     conn = connect()
     conn.execute("PRAGMA journal_mode=WAL")
     import cm_2fa
-    conn.executescript(SCHEMA + cm_2fa.SCHEMA)
+    import cm_usage
+    conn.executescript(SCHEMA + cm_2fa.SCHEMA + cm_usage.SCHEMA)
+    conn.execute("INSERT OR IGNORE INTO usage_started VALUES (1, ?)", (int(time.time()),))
     receipt_columns = {r[1] for r in conn.execute("PRAGMA table_info(feedback_receipts)")}
     for column in ("diagnostics_id", "media_group", "content_sha256", "media_manifest"):
         if column not in receipt_columns:

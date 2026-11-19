@@ -108,7 +108,8 @@ async function resolveCurrentMusicUrl(meta, level, immerse, opts) {
     const d = await api.ncm('/song/url', { id, br: 320000 });
     const url = pickUrl(d);
     const song = Array.isArray(d?.data) ? d.data[0] : d?.data || d;
-    if (url && !song?.freeTrialInfo) return { url, type: song?.type || 'mp3', level: 'legacy' };
+    if (url && !song?.freeTrialInfo) return { url, type: song?.type || 'mp3', level: 'legacy',
+      size: song?.size, br: song?.br };
   } catch { /* 继续 */ }
 
   // 4) 明确失败原因：能区分「版权不可播」与「网络/上游异常」

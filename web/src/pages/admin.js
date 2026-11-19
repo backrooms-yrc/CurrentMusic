@@ -117,6 +117,12 @@ const card = (label, value, sub = '') => `
 const sk = (style = '') => `<div class="sk" style="${style}"></div>`;
 const cardSkeleton = () => Array.from({ length: 8 }, () => `
   <div class="cm-acard cm-askel-card">${sk('height:26px;width:52%')}${sk('height:11px;width:70%;margin-top:10px')}${sk('height:10px;width:45%;margin-top:7px')}</div>`).join('');
+const USAGE_PERIODS = { year: '年', month: '月', week: '周', day: '日' };
+const usageCount = new Intl.NumberFormat('zh-CN');
+const usageDate = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric' });
+const usageHour = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour: 'numeric', hourCycle: 'h23' });
+const usageMonth = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'short' });
+
 const trafficCardsSkeleton = () => Array.from({ length: 4 }, () => `
   <div class="cm-acard cm-askel-card">${sk('height:24px;width:58%')}${sk('height:11px;width:66%;margin-top:10px')}</div>`).join('');
 const userSkeleton = (n = 6) => `<div class="cm-ulist">${Array.from({ length: n }, () => `
@@ -180,6 +186,7 @@ export async function render(el, params) {
     tab: diagnosticsId !== undefined ? 'diagnostics' : 'overview',
     ov: null, users: null, sessions: null, ann: null, traffic: null, clients: null, don: null,
     trafficRange: 'day', trafficAt: 0, trafficLoading: false,
+    usage: null, usagePeriod: 'day', usagePending: null,
     usersSeq: 0, annSeq: 0, devSeq: 0, clientsSeq: 0, ovLoading: false, donSeq: 0,
   };
 
@@ -357,6 +364,8 @@ export async function render(el, params) {
         requestAnimationFrame(drawOverviewCharts);
         if (S.traffic) requestAnimationFrame(drawTrafficChart);
         else loadTraffic();
+        if (S.usage) requestAnimationFrame(drawUsageChart);
+        else loadUsage();
       };
       if (!S.ov) loadOverview().then(ok => { if (ok) draw(); });
       else draw();
@@ -519,6 +528,23 @@ export async function render(el, params) {
       </div>
 
       <div class="cm-achart-grid">
+        <section class="cm-acard cm-achart cm-awide" id="usagePanel">
+          <div class="cm-achart-head">
+            <div><div class="cm-achart-title">API 调用与歌曲流量</div>
+              <div class="cm-achart-sub" id="usageCoverage" role="status">正在读取统计…</div></div>
+            <div class="cm-aseg" role="group" aria-label="统计周期">
+              ${Object.entries(USAGE_PERIODS).map(([key, label]) => `<button type="button" data-period="${key}" aria-pressed="false">${label}</button>`).join('')}
+            </div>
+          </div>
+          <div class="cm-agrid" id="usageTotals"></div>
+          <div class="cm-achart-head cm-achart-head-sub">
+            <div class="cm-legend">
+              <span class="cm-legend-item"><i class="cm-legend-dot" style="background:var(--cm-primary)"></i>API 调用</span>
+              <span class="cm-legend-item"><i class="cm-legend-dot" style="background:var(--cm-warn,#ff8d28)"></i>歌曲流量</span>
+            </div>
+          </div>
+          <div class="cm-chart-wrap"><canvas id="usageChart" class="cm-chart-canvas" aria-label="API 调用与歌曲流量趋势图"></canvas></div>
+        </section>
         <div class="cm-acard cm-achart cm-awide" id="trafficPanel">
           <div class="cm-achart-head">
             <div>
@@ -587,6 +613,10 @@ export async function render(el, params) {
         </div>
       </div>`;
 
+    el.querySelectorAll('#usagePanel [data-period]').forEach(button => {
+      button.onclick = () => { S.usagePeriod = button.dataset.period; renderUsage(); };
+    });
+    renderUsage();
     bindTrafficControls();
     if (S.traffic) renderTrafficPanel();
     if (S.tab === 'overview') requestAnimationFrame(drawOverviewCharts);
@@ -628,6 +658,56 @@ export async function render(el, params) {
     if (source && source.clientWidth) {
       drawDonutChart(source, sourceChartItems(S.ov.sourceCounts), { pie: true });
     }
+  }
+
+  function drawUsageChart() {
+    const canvas = el.querySelector('#usageChart');
+    const period = S.usage?.periods[S.usagePeriod];
+    if (!canvas?.clientWidth || !period) return;
+    const label = S.usagePeriod === 'year' ? usageMonth : S.usagePeriod === 'day' ? usageHour : usageDate;
+    // 保留统计开始所在的部分时段，跳过采集开始之前的时段。
+    const series = period.series.filter((point, i, all) => all[i + 1]?.t > S.usage.since || i === all.length - 1);
+    drawComboChart(canvas, series, {
+      barValue: point => point.apiCalls, lineValue: point => point.servedBytes + point.directEstimatedBytes,
+      label: point => label.format(point.t * 1000), barFormat: value => usageCount.format(value) + ' 次',
+      lineFormat: fmtBytes, axisFormat: fmtCount,
+    });
+  }
+
+  function renderUsage() {
+    const panel = el.querySelector('#usagePanel');
+    if (!panel) return;
+    const period = S.usage?.periods[S.usagePeriod];
+    panel.querySelectorAll('[data-period]').forEach(button => {
+      const active = button.dataset.period === S.usagePeriod;
+      button.classList.toggle('on', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    if (!period) return;
+    panel.querySelector('#usageCoverage').textContent =
+      `北京时间 · 自 ${new Date(S.usage.since * 1000).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' })} 起采集`;
+    const { apiCalls, servedBytes, directEstimatedBytes } = period.total;
+    const metrics = [
+      ['API 调用', usageCount.format(apiCalls) + ' 次', '到达 CurrentMusic 后端的请求'],
+      ['歌曲流量', fmtBytes(servedBytes + directEstimatedBytes), '实测与估算合计'],
+      ['服务端歌曲流量', fmtBytes(servedBytes), '音频中转实测'],
+      ['直连歌曲流量', fmtBytes(directEstimatedBytes), '客户端缓冲估算'],
+    ];
+    panel.querySelector('#usageTotals').innerHTML = metrics.map(([label, value, hint]) => card(label, value, hint)).join('');
+    if (S.tab === 'overview') requestAnimationFrame(drawUsageChart);
+  }
+
+  function loadUsage() {
+    if (S.usagePending) return S.usagePending;
+    S.usagePending = api.usage().then(data => {
+      if (!data?.periods) throw new Error('统计暂不可用');
+      S.usage = data;
+      renderUsage();
+    }).catch(() => {
+      const label = el.querySelector('#usageCoverage');
+      if (label) label.textContent = S.usage ? '更新失败 · 显示上次统计' : '暂时无法读取统计';
+    }).then(() => { S.usagePending = null; });
+    return S.usagePending;
   }
 
   // ---------- 流量 ----------
@@ -1505,7 +1585,7 @@ export async function render(el, params) {
     try {
       if (S.tab === 'overview') {
         await loadOverview();
-        await loadTraffic();
+        await Promise.all([loadTraffic(), loadUsage()]);
       } else if (S.tab === 'users') {
         await loadUsers();
       } else if (S.tab === 'donations') {
@@ -1536,6 +1616,7 @@ export async function render(el, params) {
       if (S.tab !== 'overview' || document.visibilityState !== 'visible') return;
       if (Date.now() - S.trafficAt < 25000) return;
       loadTraffic({ silent: true });
+      loadUsage();
     }, 30000);
   };
 
@@ -1545,7 +1626,7 @@ export async function render(el, params) {
     resizeTimer = setTimeout(() => {
       if (!el.isConnected) { window.removeEventListener('resize', onResize); return; }
       moveTabIndicator(false);
-      if (S.tab === 'overview') { drawOverviewCharts(); drawTrafficChart(); }
+      if (S.tab === 'overview') { drawOverviewCharts(); drawTrafficChart(); drawUsageChart(); }
       else if (S.tab === 'clients') drawClientsChart();
     }, 160);
   };
@@ -1556,6 +1637,6 @@ export async function render(el, params) {
 
   const ok = await loadOverview();
   if (!ok || !el.isConnected) return;
-  if (S.tab === 'overview') loadTraffic();
+  if (S.tab === 'overview') { loadTraffic(); loadUsage(); }
   startTrafficPolling();
 }

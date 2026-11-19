@@ -20,22 +20,22 @@ function loadChorus(id) {
 function createProgress(root, player, full, current, remaining) {
   const ids = full ? ['plSeek', 'plBuf', 'plFill'] : ['miniSeek', 'miniBuf', 'miniProg'];
   root.innerHTML = `
-    ${full ? '<div class="pl-seek-halo" aria-hidden="true"></div>' : ''}
-    <div class="${full ? 'pl-seek-track' : 'cm-mini-track'}" aria-hidden="true">
+    <div class="pl-seek-halo" aria-hidden="true"></div>
+    <div class="cm-progress-track ${full ? 'pl-seek-track' : 'cm-mini-track'}" aria-hidden="true">
       <i id="${ids[1]}"></i><i id="${ids[2]}"></i><div class="cm-chorus-track"></div>
-      ${full ? '<div class="pl-chorus-played"></div><div class="pl-seek-shine"></div>' : ''}
+      <div class="cm-progress-chorus-played${full ? ' pl-chorus-played' : ''}"></div><div class="pl-seek-shine"></div>
     </div>
-    ${full ? '' : '<span class="cm-mini-thumb" aria-hidden="true"></span>'}
     <output class="${full ? 'pl-seek-time' : 'cm-mini-time'}" aria-hidden="true"></output>
     <input id="${ids[0]}" type="range" min="0" max="100" step="0.1" value="0" aria-label="播放进度" disabled>
     <span id="${ids[0]}Chorus" hidden></span>`;
   const input = root.querySelector('input'), fill = root.querySelector('#' + ids[2]);
   const buffer = root.querySelector('#' + ids[1]), time = root.querySelector('output');
   const chorusTrack = root.querySelector('.cm-chorus-track');
-  const playedChorus = root.querySelector('.pl-chorus-played');
+  const playedChorus = root.querySelector('.cm-progress-chorus-played');
   const chorusDescription = root.querySelector('#' + ids[0] + 'Chorus');
   let dragging = false, active = true, blocked = false, meta = player.meta;
-  let chorusId, chorusRequest, segments = [], paintedSegments, paintedDuration, cover;
+  let chorusId, chorusBase, chorusRequest, segments = [], paintedSegments, paintedDuration, cover;
+  let paintedPct, clockKey, paintedBuffer;
 
   const duration = () => {
     const value = player.durMs();
@@ -85,17 +85,31 @@ function createProgress(root, player, full, current, remaining) {
   function paint(pos, dur) {
     const position = Math.max(0, Math.min(dur, Number(pos) || 0));
     const pct = dur ? position / dur * 100 : 0;
-    const value = `${fmtDur(position)} / ${fmtDur(dur)}`;
-    root.style.setProperty('--playback-progress', pct + '%');
-    fill.style.transform = `scaleX(${pct / 100})`;
-    input.value = pct;
-    if (input.getAttribute('aria-valuetext') !== value) {
-      input.setAttribute('aria-valuetext', value);
-      time.textContent = value;
+    if (pct !== paintedPct) {
+      paintedPct = pct;
+      root.style.setProperty('--playback-progress', pct + '%');
+      fill.style.transform = `scaleX(${pct / 100})`;
     }
-    if (current) current.textContent = fmtDur(position);
-    if (remaining) remaining.textContent = '−' + fmtDur(dur - position);
+    const sliderPct = Math.round(pct * 10) / 10;
+    if (input.valueAsNumber !== sliderPct) input.value = sliderPct;
+    const positionText = fmtDur(position), durationText = fmtDur(dur);
+    const left = remaining ? '−' + fmtDur(dur - position) : '';
+    const key = `${positionText} / ${durationText}`;
+    if (clockKey !== key) {
+      clockKey = key;
+      input.setAttribute('aria-valuetext', key);
+      time.textContent = key;
+    }
+    if (current && current.textContent !== positionText) current.textContent = positionText;
+    if (remaining && remaining.textContent !== left) remaining.textContent = left;
   }
+  function updateBuffer() {
+    const pct = player.loading ? 0 : clamp(player.bufferPct());
+    if (pct === paintedBuffer) return;
+    paintedBuffer = pct;
+    buffer.style.transform = `scaleX(${pct / 100})`;
+  }
+
   function update() {
     if (!active) return;
     if (meta !== player.meta) {
@@ -106,14 +120,15 @@ function createProgress(root, player, full, current, remaining) {
     }
     const id = String(meta?.ncm_id || '');
     const pic = meta?.pic || '';
-    if (full && cover !== pic) {
+    if (cover !== pic) {
       cover = pic;
       coverColors(pic, { fallback: false }).then(colors => {
         if (active && cover === pic) root.style.setProperty('--pl-seek-color', colors?.primary || '');
       });
     }
-    if (chorusId !== id) {
+    if (chorusId !== id || chorusBase !== settings.base) {
       chorusId = id;
+      chorusBase = settings.base;
       segments = [];
       chorusRequest = /^[1-9]\d*$/.test(id) ? loadChorus(id) : null;
       const request = chorusRequest;
@@ -125,11 +140,14 @@ function createProgress(root, player, full, current, remaining) {
     }
     const dur = duration();
     paintChorus(player.loading ? 0 : dur);
-    input.disabled = !dur || !player.urlInfo || player.loading;
-    root.classList.toggle('is-disabled', input.disabled);
-    if (input.disabled) { dragging = false; root.classList.remove('is-dragging'); }
+    const disabled = !dur || !player.urlInfo || player.loading;
+    if (input.disabled !== disabled || paintedPct === undefined) {
+      input.disabled = disabled;
+      root.classList.toggle('is-disabled', disabled);
+      if (disabled) { dragging = false; root.classList.remove('is-dragging'); }
+    }
     if (!dragging) paint(player.posMs(), dur);
-    buffer.style.transform = `scaleX(${clamp(player.bufferPct()) / 100})`;
+    updateBuffer();
   }
   function begin(event) {
     if (!active || input.disabled || (event.type === 'pointerdown' && event.button !== 0)) return;
@@ -173,7 +191,7 @@ function createProgress(root, player, full, current, remaining) {
   input.addEventListener('blur', cancel);
   input.addEventListener('click', event => event.stopPropagation());
   update();
-  return { update, destroy() { active = false; dragging = false; input.disabled = true; root.classList.remove('is-dragging'); } };
+  return { update, updateBuffer, destroy() { active = false; dragging = false; input.disabled = true; root.classList.remove('is-dragging'); } };
 }
 
 export function createMiniProgress(root, player) {

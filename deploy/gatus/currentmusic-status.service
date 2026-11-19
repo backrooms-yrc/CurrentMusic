@@ -1,0 +1,11 @@
+[Unit]
+Description=Publish public CurrentMusic service status from Gatus
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /srv/currentmusic/deploy/gatus/export-status.py --output /srv/currentmusic/data/status/status.json
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/currentmusic/data/status
