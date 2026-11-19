@@ -52,6 +52,11 @@ export function entityUrl(meta) {
 // 兼容旧的歌曲分享调用。
 export function songUrl(meta) { return `${appBase()}#/song/${meta.ncm_id}`; }
 
+export function postUrl(id) {
+  const base = window.NativeApi || location.hostname === 'cm.local' ? `${siteOrigin()}/app/` : appBase();
+  return `${base}#/post/${id}`;
+}
+
 function shareText(meta) {
   const kind = kindOf(meta), ui = uiOf(meta), url = entityUrl(meta);
   const name = meta.name || '';
@@ -379,7 +384,7 @@ function safeName(meta, style) {
   return `CurrentMusic-${n}-${kindOf(meta)}-${entityId(meta)}-${style}.jpg`;
 }
 
-async function copyText(text) {
+export async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
     return true;

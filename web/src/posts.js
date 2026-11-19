@@ -1,300 +1,182 @@
-// 发现页「帖子」：列表 + 发帖（markdown 可视化编辑）+ 评论 + 点赞 + 附带内容。
-//
-// 设计要点：
-//   · 帖子正文以 **markdown 原文**存服务端，渲染在本模块用 markdown.js 完成
-//     （先转义再解析 → 不可能被注入标签；链接只放行 http/https/站内）
-//   · 附带内容最多 5 项，支持单曲/专辑/歌手/歌单；点击按类型跳转或直接播放
-//   · 头像复用 ui.js 的 avatarHTML（自带挂件叠加），昵称点击进用户主页
-//   · 评论用底部弹层（mdui dialog）呈现，与「当前播放列表」等既有交互一致
 import { mdui } from './md.js';
 import { api, auth } from './api.js';
 import { esc, avatarHTML, toast, confirmDialog, userTags, skelPosts } from './ui.js';
-import { renderMarkdown, applyToolbar } from './markdown.js';
+import { renderMarkdown } from './markdown.js';
 import { attachHTML, bindAttach } from './attach.js';
+import { copyText, postUrl } from './share.js';
 
-const PAGE = 10;                     // 每批条数
+const PAGE = 10;
+const ICON = name => `<span class="material-icons-outlined" aria-hidden="true">${name}</span>`;
+const nickname = user => user.nickname || `用户${user.id}`;
 
-const fmtAgo = ts => {
-  const d = Math.max(0, Math.floor(Date.now() / 1000) - (ts || 0));
-  if (d < 60) return '刚刚';
-  if (d < 3600) return Math.floor(d / 60) + ' 分钟前';
-  if (d < 86400) return Math.floor(d / 3600) + ' 小时前';
-  if (d < 86400 * 30) return Math.floor(d / 86400) + ' 天前';
-  const t = new Date((ts || 0) * 1000);
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
-};
+function fmtAgo(ts) {
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000) - ts);
+  if (seconds < 60) return '刚刚';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
+  if (seconds < 86400 * 30) return `${Math.floor(seconds / 86400)} 天前`;
+  return new Date(ts * 1000).toLocaleDateString('zh-CN');
+}
 
+function excerpt(content) {
+  const template = document.createElement('template');
+  template.innerHTML = renderMarkdown(content).replace(/<br>|<\/(?:p|h[1-6]|li|pre|blockquote)>/g, '$& ');
+  const text = template.content.textContent.replace(/\s+/g, ' ').trim();
+  const chars = Array.from(text);
+  return chars.length > 180 ? chars.slice(0, 180).join('') + '…' : text;
+}
 
-/** 一片帖子（含作者、正文、附带、互动按钮）。 */
-function postHTML(p) {
-  const a = p.author || {};
-  const name = a.nickname || `用户${a.id}`;
-  const tag = userTags(a);
-  return `
-  <article class="cm-post" data-id="${p.id}">
+export function postHTML(post, { detail = false, author = null } = {}) {
+  const user = post.author;
+  const href = `#/post/${post.id}${author ? `?from=${author}` : ''}`;
+  const title = esc(post.title || '');
+  const summary = detail ? '' : esc(excerpt(post.content));
+  return `<article class="cm-post" data-id="${post.id}">
     <header class="cm-post-head">
-      <span class="cm-post-ava" data-uid="${a.id}">${avatarHTML({ ...a, avatarDecoration: a.avatarDecoration }, 40)}</span>
+      <a class="cm-post-ava" href="#/u/${user.id}" aria-label="${esc(nickname(user))}的主页">${avatarHTML(user, 40)}</a>
       <div class="cm-post-who">
-        <div class="cm-post-name" data-uid="${a.id}">${esc(name)}${tag}</div>
-        <div class="cm-post-time">${fmtAgo(p.createdAt)}</div>
+        <a class="cm-post-name" href="#/u/${user.id}">${esc(nickname(user))}</a>${userTags(user)}
+        <div class="cm-post-time">${fmtAgo(post.createdAt)}</div>
       </div>
-      <span class="cm-post-more material-icons-outlined" data-act="more" title="更多">more_horiz</span>
+      <button type="button" class="cm-post-more material-icons-outlined" data-act="more" aria-label="帖子操作">more_horiz</button>
     </header>
-    <div class="cm-post-body">${renderMarkdown(p.content)}</div>
-    ${attachHTML(p.attachments)}
+    ${detail ? `<h1 class="cm-post-title">${title || '帖子'}</h1>
+         <div class="cm-post-body">${renderMarkdown(post.content)}</div>`
+      : `<a class="cm-post-summary" href="${href}">
+           ${title ? `<h2 class="cm-post-title">${title}</h2>` : ''}
+           <span class="cm-post-excerpt">${summary || '查看正文'}</span>
+         </a>`}
+    ${attachHTML(post.attachments, { compact: !detail })}
     <footer class="cm-post-foot">
-      <span class="cm-post-act ${p.likedByMe ? 'on' : ''}" data-act="like" title="点赞">
-        <span class="material-icons-outlined">${p.likedByMe ? 'favorite' : 'favorite_border'}</span>
-        <i>${p.likeCount || ''}</i>
-      </span>
-      <span class="cm-post-act" data-act="comment" title="评论">
-        <span class="material-icons-outlined">chat_bubble_outline</span>
-        <i>${p.commentCount || ''}</i>
-      </span>
-      <span class="cm-post-act" data-act="copy" title="复制正文">
-        <span class="material-icons-outlined">content_copy</span>
-      </span>
+      <button type="button" class="cm-post-act${post.likedByMe ? ' on' : ''}" aria-label="点赞" aria-pressed="${!!post.likedByMe}" data-act="like">
+        ${ICON(post.likedByMe ? 'favorite' : 'favorite_border')}<span data-count>${post.likeCount || 0}</span>
+      </button>
+      ${detail ? '<button type="button" class="cm-post-act" data-act="comments" aria-label="查看评论">'
+        : `<a class="cm-post-act" href="${href}${author ? '&' : '?'}comments=1" aria-label="查看评论">`}
+        ${ICON('chat_bubble_outline')}<span data-comment-count>${post.commentCount || 0}</span>
+      ${detail ? '</button>' : '</a>'}
+      ${detail ? `<button type="button" class="cm-post-act" data-act="share" aria-label="复制帖子链接">${ICON('share')}</button>` : ''}
     </footer>
   </article>`;
 }
 
-/** 渲染帖子 TAB 到给定容器；返回一个「重载」函数供外部刷新。 */
-export function mountPosts(box) {
-  let state = { offset: 0, posts: [], total: 0, loading: false, done: false, loaded: false };
+async function copyPostLink(id) {
+  const url = postUrl(id);
+  if (await copyText(url)) return toast('帖子链接已复制');
+  const dialog = mdui.dialog({
+    headline: '复制帖子链接',
+    body: '<input class="cm-community-input" aria-label="帖子链接" readonly>',
+    actions: [{ text: '关闭' }],
+  });
+  const input = dialog.querySelector('input');
+  input.value = url;
+  input.onfocus = () => input.select();
+}
 
+export function bindPostCard(card, post, onDelete) {
+  bindAttach(card, post.attachments);
+  let liking = false;
+  const like = card.querySelector('[data-act="like"]');
+  function paintLike() {
+    like.classList.toggle('on', post.likedByMe);
+    like.setAttribute('aria-pressed', String(post.likedByMe));
+    like.querySelector('.material-icons-outlined').textContent = post.likedByMe ? 'favorite' : 'favorite_border';
+    like.querySelector('[data-count]').textContent = post.likeCount;
+  }
+  like.onclick = async () => {
+    if (liking) return;
+    if (!auth.token) return toast('登录后可点赞');
+    const previous = { likedByMe: post.likedByMe, likeCount: post.likeCount };
+    const on = !post.likedByMe;
+    liking = true;
+    post.likedByMe = on;
+    post.likeCount = Math.max(0, (post.likeCount || 0) + (on ? 1 : -1));
+    paintLike();
+    try { post.likeCount = (await api.postLike(post.id, on)).likeCount; }
+    catch (e) { Object.assign(post, previous); toast('点赞失败：' + e.message); }
+    finally { liking = false; paintLike(); }
+  };
+
+  const share = card.querySelector('[data-act="share"]');
+  if (share) share.onclick = () => copyPostLink(post.id);
+  card.querySelector('[data-act="more"]').onclick = () => {
+    const actions = [
+      { text: '复制链接', onClick: () => copyPostLink(post.id) },
+      { text: '复制正文', onClick: async () => toast(await copyText(post.content) ? '正文已复制' : '复制失败，请长按选择') },
+    ];
+    if (post.canDelete) actions.push({ text: '删除', onClick: () => confirmDialog({
+      title: '删除帖子', body: '删除后不可恢复，确定吗？', onOk: async () => {
+        try { await api.postDelete(post.id); onDelete(); toast('帖子已删除'); }
+        catch (e) { toast('删除失败：' + e.message); }
+      },
+    }) });
+    mdui.dialog({ headline: '帖子操作', actions });
+  };
+}
+
+export function mountPosts(box, { author = null } = {}) {
+  let offset = 0, total = 0, loading = false;
+  const seen = new Set();
   box.innerHTML = `
-    <div class="cm-post-bar">
-      <mdui-button variant="filled" id="postNew">
-        <span class="material-icons-outlined" slot="icon">edit</span>发帖
-      </mdui-button>
-      <span class="cm-post-hint" id="postHint"></span>
-    </div>
-    <div id="postList"></div>
-    <div id="postMore"></div>`;
+    ${author ? '' : `<div class="cm-post-bar">
+      <mdui-button variant="filled" href="#/post/new"><span class="material-icons-outlined" slot="icon">edit</span>发帖</mdui-button>
+      <span class="cm-post-hint" data-total></span>
+    </div>`}
+    <div data-post-list>${skelPosts(3)}</div>
+    <div class="cm-sq-more" data-more hidden><mdui-button variant="tonal">加载更多</mdui-button></div>`;
+  const list = box.querySelector('[data-post-list]');
+  const more = box.querySelector('[data-more]');
+  const button = more.querySelector('mdui-button');
+  const hint = box.querySelector('[data-total]');
+  const empty = author ? '还没有发布帖子' : '还没有帖子，来发第一条吧';
 
-  const listEl = box.querySelector('#postList');
-  const moreEl = box.querySelector('#postMore');
-  const hintEl = box.querySelector('#postHint');
-
-  const canPost = () => !!auth.token;
-
-  function paint() {
-    const loading = !state.loaded && !state.posts.length;
-    listEl.innerHTML = state.posts.map(postHTML).join('') || (loading
-      ? skelPosts(3)
-      : `<div class="cm-empty"><span class="material-icons-outlined">forum</span>还没有帖子，来发第一条吧</div>`);
-    hintEl.textContent = state.total ? `共 ${state.total} 条` : (canPost() ? '' : '登录后可发帖与互动');
-    listEl.querySelectorAll('.cm-post').forEach(card => bindCard(card));
-    moreEl.innerHTML = state.done || !state.posts.length ? ''
-      : `<div class="cm-sq-more"><mdui-button variant="tonal" id="postMoreBtn">加载更多（${state.posts.length}/${state.total}）</mdui-button></div>`;
-    const btn = moreEl.querySelector('#postMoreBtn');
-    if (btn) btn.onclick = () => loadMore();
+  function showCount() {
+    if (hint) hint.textContent = total ? `共 ${total} 条` : '';
+    more.hidden = offset >= total;
+    button.textContent = '加载更多';
   }
 
-  async function loadMore() {
-    if (state.loading || state.done) return;
-    state.loading = true;
-    const btn = moreEl.querySelector('#postMoreBtn');
-    if (btn) { btn.disabled = true; btn.textContent = '加载中…'; }
+  function append(post) {
+    list.insertAdjacentHTML('beforeend', postHTML(post, { author }));
+    const card = list.lastElementChild;
+    seen.add(post.id);
+    bindPostCard(card, post, () => {
+      card.remove();
+      seen.delete(post.id);
+      offset--;
+      total = Math.max(0, total - 1);
+      if (!seen.size) list.innerHTML = `<div class="cm-empty">${empty}</div>`;
+      showCount();
+    });
+  }
+
+  async function load() {
+    if (loading) return;
+    loading = true;
+    button.loading = true;
     try {
-      const d = await api.posts(state.offset, PAGE);
-      const got = d.posts || [];
-      state.total = d.total || state.posts.length + got.length;
-      state.posts = state.posts.concat(got);
-      state.offset += got.length;
-      if (!got.length || state.posts.length >= state.total) state.done = true;
-      state.loaded = true;
-      paint();
+      const data = await api.posts(offset, PAGE, author);
+      if (!box.isConnected) return;
+      const posts = data.posts || [];
+      if (!seen.size) list.replaceChildren();
+      posts.filter(post => !seen.has(post.id)).forEach(append);
+      offset += posts.length;
+      total = data.total;
+      showCount();
+      if (!posts.length) more.hidden = true;
+      if (!seen.size) list.innerHTML = `<div class="cm-empty">${empty}</div>`;
     } catch (e) {
-      state.loaded = true;
-      toast('加载失败：' + e.message);
-      if (btn) { btn.disabled = false; btn.textContent = '重试'; }
+      if (!box.isConnected) return;
+      if (!seen.size) list.innerHTML = `<div class="cm-empty">加载失败：${esc(e.message)}</div>`;
+      else toast('加载失败：' + e.message);
+      more.hidden = false;
+      button.textContent = '重试';
     } finally {
-      state.loading = false;
+      loading = false;
+      button.loading = false;
     }
   }
 
-  function reload() {
-    state = { offset: 0, posts: [], total: 0, loading: false, done: false, loaded: false };
-    paint();
-    return loadMore();
-  }
-
-  /** 单条卡片上的交互：点赞 / 评论 / 复制 / 更多 / 点头像与昵称进主页。 */
-  function bindCard(card) {
-    const id = +card.dataset.id;
-    const find = () => state.posts.find(x => x.id === id);
-
-    bindAttach(card, (find() || {}).attachments || []);
-
-    card.querySelectorAll('[data-uid]').forEach(el => {
-      el.onclick = () => { location.hash = `#/u/${el.dataset.uid}`; };
-    });
-
-    card.querySelector('[data-act="copy"]').onclick = async () => {
-      const p = find();
-      if (!p) return;
-      try {
-        await navigator.clipboard.writeText(p.content);
-        toast('正文已复制');
-      } catch { toast('复制失败，请长按选择'); }
-    };
-
-    card.querySelector('[data-act="more"]').onclick = () => {
-      const p = find();
-      if (!p) return;
-      const diag = mdui.dialog({
-        headline: '帖子操作',
-        body: `<div class="cm-more">
-          <div class="cm-more-row" data-k="copy"><div><div class="cm-more-t">复制正文</div>
-            <div class="cm-more-s">markdown 原文</div></div><span class="material-icons-outlined">content_copy</span></div>
-          ${p.canDelete ? '<div class="cm-more-row" data-k="del"><div><div class="cm-more-t">删除帖子</div>'
-            + '<div class="cm-more-s">不可恢复</div></div><span class="material-icons-outlined">delete</span></div>' : ''}
-        </div>`,
-        actions: [{ text: '关闭' }],
-      });
-      setTimeout(() => {
-        diag.querySelectorAll('.cm-more-row').forEach(row => {
-          row.onclick = async () => {
-            diag.open = false;
-            if (row.dataset.k === 'copy') {
-              try { await navigator.clipboard.writeText(p.content); toast('正文已复制'); }
-              catch { toast('复制失败'); }
-              return;
-            }
-            if (row.dataset.k === 'del') {
-              confirmDialog({ title: '删除帖子', body: '删除后不可恢复，确定吗？', onOk: async () => {
-                try {
-                  await api.postDelete(id);
-                  state.posts = state.posts.filter(x => x.id !== id);
-                  state.total = Math.max(0, state.total - 1);
-                  state.offset = Math.max(0, state.offset - 1);
-                  paint();
-                  toast('已删除');
-                } catch (e) { toast('删除失败：' + e.message); }
-              } });
-            }
-          };
-        });
-      }, 0);
-    };
-
-    card.querySelector('[data-act="like"]').onclick = async () => {
-      const p = find();
-      if (!p) return;
-      if (!auth.token) return toast('登录后可点赞');
-      const on = !p.likedByMe;
-      p.likedByMe = on;                                  // 乐观更新
-      p.likeCount = Math.max(0, (p.likeCount || 0) + (on ? 1 : -1));
-      const el = card.querySelector('[data-act="like"]');
-      el.classList.toggle('on', on);
-      el.querySelector('.material-icons-outlined').textContent = on ? 'favorite' : 'favorite_border';
-      el.querySelector('i').textContent = p.likeCount || '';
-      try { await api.postLike(id, on); }
-      catch (e) {
-        p.likedByMe = !on; p.likeCount = Math.max(0, p.likeCount + (on ? -1 : 1));
-        el.classList.toggle('on', !on);
-        el.querySelector('.material-icons-outlined').textContent = !on ? 'favorite' : 'favorite_border';
-        el.querySelector('i').textContent = p.likeCount || '';
-        toast('操作失败：' + e.message);
-      }
-    };
-
-    card.querySelector('[data-act="comment"]').onclick = () => openComments(id, () => {
-      const p = find();
-      if (p) { p.commentCount = (p.commentCount || 0) + 1;
-        card.querySelector('[data-act="comment"] i').textContent = p.commentCount; }
-    });
-  }
-
-  /** 评论弹层：列表 + 输入框；点「回复」针对某条评论（发送带 replyTo）。 */
-  async function openComments(postId, onAdded) {
-    const diag = mdui.dialog({
-      headline: '评论',
-      body: `<div class="cm-pcmt">
-        <div class="cm-pcmt-list" id="pcmtList"><div class="cm-loading"><mdui-circular-progress></mdui-circular-progress></div></div>
-        <div class="cm-pcmt-rbar" id="pcmtRbar" hidden></div>
-        <div class="cm-pcmt-input">
-          <mdui-text-field id="pcmtText" label="${auth.token ? '说点什么…' : '登录后可评论'}" variant="outlined"
-            ${auth.token ? '' : 'disabled'} style="width:100%"></mdui-text-field>
-          <mdui-button variant="filled" id="pcmtSend" ${auth.token ? '' : 'disabled'}>发送</mdui-button>
-        </div>
-      </div>`,
-      actions: [{ text: '关闭' }],
-    });
-    const listBox = diag.querySelector('#pcmtList');
-    const rbar = diag.querySelector('#pcmtRbar');
-    const tf = diag.querySelector('#pcmtText');
-    let replyTo = null;                      // {id, nickname}：当前正在回复的评论
-    const setReply = (c) => {
-      replyTo = c;
-      if (c) {
-        rbar.hidden = false;
-        rbar.innerHTML = `<span class="cm-pcmt-rbar-t">回复 @${esc(c.nickname)}<span class="material-icons-outlined" id="pcmtRcancel" title="取消回复">close</span></span>`;
-        rbar.querySelector('#pcmtRcancel').onclick = () => setReply(null);
-        tf.setAttribute('label', `回复 @${c.nickname}…`);
-      } else {
-        rbar.hidden = true;
-        rbar.innerHTML = '';
-        tf.setAttribute('label', auth.token ? '说点什么…' : '登录后可评论');
-      }
-    };
-    const draw = list => {
-      listBox.innerHTML = list.length ? list.map(c => `
-        <div class="cm-pcmt-item" data-id="${c.id}">
-          <span class="cm-pcmt-ava" data-uid="${c.author.id}">${avatarHTML(c.author, 32)}</span>
-          <div class="cm-pcmt-main">
-            <div class="cm-pcmt-who"><b data-uid="${c.author.id}">${esc(c.author.nickname || '用户' + c.author.id)}</b>${userTags(c.author)}
-              ${c.replyTo ? `<i class="cm-pcmt-rto" data-uid="${c.replyTo.userId}" title="查看被回复的评论">回复 @${esc(c.replyTo.nickname || '用户' + c.replyTo.userId)}</i>` : ''}
-              <span>${fmtAgo(c.createdAt)}</span>
-              ${auth.token ? `<u class="cm-pcmt-reply" data-reply="${c.id}" data-nick="${esc(c.author.nickname || '')}" title="回复这条评论">回复</u>` : ''}</div>
-            <div class="cm-pcmt-text">${esc(c.content)}</div>
-          </div>
-        </div>`).join('') : `<div class="cm-empty small">还没有评论，来说第一句</div>`;
-      listBox.querySelectorAll('[data-uid]').forEach(el => {
-        el.onclick = () => { diag.open = false; location.hash = `#/u/${el.dataset.uid}`; };
-      });
-      listBox.querySelectorAll('.cm-pcmt-reply').forEach(el => {
-        el.onclick = () => {
-          setReply({ id: +el.dataset.reply, nickname: el.dataset.nick || `用户${el.dataset.reply}` });
-          try { tf.focus(); } catch { /* 忽略 */ }
-        };
-      });
-    };
-    try {
-      const d = await api.postComments(postId);
-      draw(d.comments || []);
-    } catch (e) { listBox.innerHTML = `<div class="cm-empty small">加载失败：${esc(e.message)}</div>`; }
-
-    const send = async () => {
-      const text = (tf.value || '').trim();
-      if (!text) return;
-      const btn = diag.querySelector('#pcmtSend');
-      btn.disabled = true;
-      const wasReply = !!replyTo;
-      try {
-        await api.postComment(postId, text, replyTo ? replyTo.id : 0);
-        tf.value = '';
-        setReply(null);
-        const d = await api.postComments(postId);
-        draw(d.comments || []);
-        onAdded && onAdded();
-        toast(wasReply ? '已回复' : '已评论');
-      } catch (e) { toast('评论失败：' + e.message); }
-      finally { btn.disabled = false; }
-    };
-    diag.querySelector('#pcmtSend').onclick = send;
-    if (tf) tf.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
-  }
-
-  box.querySelector('#postNew').onclick = () => openEditor(reload);
-  paint();
-  loadMore();          // ← 必须真正拉一次：原先只 paint，首次进 TAB 永远是空态
-  return { reload, loadMore };
-}
-
-/** 发帖：独立页面（v1.28.45 从弹窗改为页面，附件选择逻辑在 attach.js 共用）。 */
-export function openEditor() {
-  if (!auth.token) return toast('登录后才能发帖');
-  location.hash = '#/post/new';
+  button.onclick = load;
+  load();
 }

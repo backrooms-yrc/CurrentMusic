@@ -363,6 +363,9 @@ export const api = {
   sendProfilePasswordCode: () => call('POST', '/profile/password/code', { body: {}, auth: true }),
   changePasswordByEmail: (emailCode, newPassword) => call('PUT', '/profile/password', { body: { emailCode, newPassword }, auth: true }),
   uploadAvatarBase64: (b64) => call('PUT', '/profile/avatar', { body: { data: b64 }, auth: true }),
+  uploadProfileBanner: (data) => call('PUT', '/profile/banner', { body: { data }, auth: true }),
+  removeProfileBanner: () => call('DELETE', '/profile/banner', { auth: true }),
+  profileBannerUrl: (path) => /^\/users\/\d+\/banner\?v=[0-9a-f]{24}$/.test(path) ? settings.base + path : '',
   // 头像挂件：目录（带 token 时附本人解锁状态）；素材固定 .gif/.png 由后端按 id 寻址
   decorations: () => call('GET', '/decorations', { auth: true }),
   setDecoration: (id) => call('PUT', '/decorations/mine', { body: { id }, auth: true }),
@@ -467,11 +470,12 @@ export const api = {
 
   // ---- 帖子（发现页） ----
   posts: (offset = 0, limit = 20, author = null) => call('GET',
-    `/posts?offset=${offset}&limit=${limit}${author ? `&author=${author}` : ''}`),
-  postCreate: (content, attachments) => call('POST', '/posts', { body: { content, attachments }, auth: true }),
+    `/posts?offset=${offset}&limit=${limit}${author ? `&author=${author}` : ''}`, { auth: true }),
+  post: (id) => call('GET', `/posts/${id}`, { auth: true }),
+  postCreate: (content, attachments, title) => call('POST', '/posts', { body: { title, content, attachments }, auth: true }),
   postDelete: (id) => call('DELETE', `/posts/${id}`, { auth: true }),
   postLike: (id, on) => call('POST', `/posts/${id}/like`, { body: { on }, auth: true }),
-  postComments: (id) => call('GET', `/posts/${id}/comments`),
+  postComments: (id, after = 0, limit = 30) => call('GET', `/posts/${id}/comments?after=${after}&limit=${limit}`),
   postComment: (id, content, replyTo = 0) => call('POST', `/posts/${id}/comments`,
     { body: replyTo ? { content, replyTo } : { content }, auth: true }),
   postCommentDelete: (cid) => call('DELETE', `/posts/comments/${cid}`, { auth: true }),

@@ -40,6 +40,11 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn((method, path), found)
         fields=docs.params(found['POST','/playlists/{id}/tracks'])
         self.assertIn(('JSON body','songs'),fields)
+        for method, path in [('PUT', '/profile/banner'), ('DELETE', '/profile/banner'),
+                             ('GET', '/users/{id}/banner'), ('GET', '/posts/{id}')]:
+            self.assertIn((method, path), found)
+        self.assertIn(('JSON body', 'title'), docs.params(found['POST', '/posts']))
+        self.assertIn(('query', 'after'), docs.params(found['GET', '/posts/{id}/comments']))
 
     def test_generated_site_links_and_registry_coverage(self):
         with tempfile.TemporaryDirectory(prefix='cm-docs-test-') as d:
@@ -58,6 +63,8 @@ class DocumentationTests(unittest.TestCase):
             self.assertTrue((output/'guide-qq-music-api.md').is_file())
             self.assertTrue((output/'guide-audio-sources-api.md').is_file())
             self.assertTrue((output/'guide-music-service-api.md').is_file())
+            self.assertTrue((output/'guide-community-api.md').is_file())
+            self.assertIn('(guide-community-api.md)', (output/'_sidebar.md').read_text())
             services = json.loads((output/'music-service-capabilities.json').read_text())['operations']
             schema = json.loads((output/'music-service.openapi.json').read_text())['paths']
             published = {item['path'] for item in manifest if item['group'] == '外接音乐服务'}

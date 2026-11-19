@@ -274,11 +274,18 @@ CREATE TABLE IF NOT EXISTS decorations (
 CREATE TABLE IF NOT EXISTS posts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
   content TEXT NOT NULL,
   attachments TEXT NOT NULL DEFAULT '[]',
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(user_id, id);
+CREATE TABLE IF NOT EXISTS profile_banners (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  version TEXT NOT NULL,
+  image BLOB NOT NULL
+);
 CREATE TABLE IF NOT EXISTS post_likes (
   post_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
@@ -711,6 +718,9 @@ def init():
     dncols = {r[1] for r in conn.execute("PRAGMA table_info(donations)")}
     if dncols and "created_by" not in dncols:
         conn.execute("ALTER TABLE donations ADD COLUMN created_by INTEGER DEFAULT 0")
+    post_columns = {r[1] for r in conn.execute("PRAGMA table_info(posts)")}
+    if "title" not in post_columns:
+        conn.execute("ALTER TABLE posts ADD COLUMN title TEXT NOT NULL DEFAULT ''")
     # post_comments 后加的列（老库补列；新库由 SCHEMA 直接建全）：回复目标评论 id
     pccols = {r[1] for r in conn.execute("PRAGMA table_info(post_comments)")}
     if pccols and "reply_to" not in pccols:
@@ -1772,6 +1782,7 @@ def square_stats():
 
 # ---------- 帖子（发现页） ----------
 POST_TYPES = ("song", "album", "artist", "playlist")
+POST_MAX_TITLE = 80
 POST_MAX_LEN = 5000
 POST_MAX_ATTACH = 5
 
@@ -1792,19 +1803,23 @@ def _admin_ids():
         c.close()
 
 
-def posts_list(viewer_id, offset=0, limit=20, author_id=None):
+def posts_list(viewer_id, offset=0, limit=20, author_id=None, *, post_id=None):
     """帖子流（新→旧）：一次带出作者、点赞数、评论数、是否已赞、能否删除。"""
     lim = max(1, min(int(limit), 50))
     off = max(0, int(offset))
-    where, args = "", []
+    filters, args = [], []
     if author_id is not None:
-        where = " WHERE p.user_id = ?"
+        filters.append("p.user_id = ?")
         args.append(int(author_id))
+    if post_id is not None:
+        filters.append("p.id = ?")
+        args.append(int(post_id))
+    where = " WHERE " + " AND ".join(filters) if filters else ""
     c = connect()
     try:
         rows = c.execute(
-            "SELECT p.id, p.user_id, p.content, p.attachments, p.created_at, "
-            "u.id AS _uid, u.nickname, u.avatar, u.avatar_decoration, u.is_admin, u.is_super, u.is_owner, u.title "
+            "SELECT p.id, p.user_id, p.title, p.content, p.attachments, p.created_at, "
+            "u.nickname, u.avatar, u.avatar_decoration, u.is_admin, u.is_super, u.is_owner, u.title AS author_title "
             "FROM posts p JOIN users u ON u.id = p.user_id" + where +
             " ORDER BY p.id DESC LIMIT ? OFFSET ?", args + [lim, off]).fetchall()
         ids = [r["id"] for r in rows]
@@ -1819,7 +1834,9 @@ def posts_list(viewer_id, offset=0, limit=20, author_id=None):
                 for r in c.execute(f"SELECT post_id FROM post_likes WHERE user_id = ? AND post_id IN ({ph})",
                                    [viewer_id] + ids):
                     liked.add(r["post_id"])
-        admins = _admin_ids()
+        is_admin = viewer_id is not None and bool(c.execute(
+            "SELECT 1 FROM users WHERE id = ? AND (is_admin = 1 OR is_super = 1)", (viewer_id,)
+        ).fetchone())
     finally:
         c.close()
     out = []
@@ -1827,6 +1844,7 @@ def posts_list(viewer_id, offset=0, limit=20, author_id=None):
         uid, pid = r["user_id"], r["id"]
         out.append({
             "id": pid,
+            "title": r["title"],
             "content": r["content"],
             "attachments": _post_atts(r["attachments"]),
             "createdAt": r["created_at"],
@@ -1835,18 +1853,34 @@ def posts_list(viewer_id, offset=0, limit=20, author_id=None):
                 "avatarDecoration": r["avatar_decoration"],
                 "isAdmin": bool(r["is_admin"]), "isSuper": bool(r["is_super"]),
                 "isOwner": bool(r["is_owner"]),
-                "title": r["title"] or "",
+                "title": r["author_title"] or "",
             },
             "likeCount": likes.get(pid, 0),
             "commentCount": cmts.get(pid, 0),
             "likedByMe": pid in liked,
-            "canDelete": viewer_id is not None and (viewer_id == uid or viewer_id in admins),
+            "canDelete": viewer_id == uid or is_admin,
         })
     return out
 
 
-def post_create(user_id, content, attachments):
-    content = (content or "").strip()
+def post_get(viewer_id, post_id):
+    rows = posts_list(viewer_id, limit=1, post_id=post_id)
+    return rows[0] if rows else None
+
+
+def post_create(user_id, content, attachments, title=""):
+    if title is None:
+        title = ""
+    if not isinstance(title, str):
+        raise ValueError("标题必须是文本")
+    title = title.strip()
+    if len(title.splitlines()) > 1:
+        raise ValueError("标题必须为单行")
+    if len(title) > POST_MAX_TITLE:
+        raise ValueError("标题最多 %d 字" % POST_MAX_TITLE)
+    if not isinstance(content, str):
+        raise ValueError("内容必须是文本")
+    content = content.strip()
     if not content:
         raise ValueError("内容不能为空")
     if len(content) > POST_MAX_LEN:
@@ -1860,8 +1894,8 @@ def post_create(user_id, content, attachments):
     c = connect()
     try:
         cur = c.execute(
-            "INSERT INTO posts(user_id, content, attachments, created_at) VALUES(?,?,?,?)",
-            (int(user_id), content, json.dumps(atts, ensure_ascii=False), now))
+            "INSERT INTO posts(user_id, title, content, attachments, created_at) VALUES(?,?,?,?,?)",
+            (int(user_id), title, content, json.dumps(atts, ensure_ascii=False), now))
         _reward_points(c, int(user_id), cm_levels.day_start(now), "post", 0)
         c.commit()
         return cur.lastrowid
@@ -1890,20 +1924,23 @@ def post_delete(user_id, post_id):
 def post_set_like(user_id, post_id, on):
     c = connect()
     try:
+        c.execute("BEGIN IMMEDIATE")
+        if not c.execute("SELECT 1 FROM posts WHERE id = ?", (int(post_id),)).fetchone():
+            return None
         if on:
             c.execute("INSERT OR IGNORE INTO post_likes(post_id, user_id, at) VALUES(?,?,?)",
                       (int(post_id), int(user_id), int(time.time())))
         else:
             c.execute("DELETE FROM post_likes WHERE post_id = ? AND user_id = ?",
                       (int(post_id), int(user_id)))
-        c.commit()
         n = c.execute("SELECT COUNT(*) FROM post_likes WHERE post_id = ?", (int(post_id),)).fetchone()[0]
+        c.commit()
         return n
     finally:
         c.close()
 
 
-def post_comments_list(post_id, limit=100):
+def post_comments_list(post_id, limit=100, *, after=0):
     """帖子评论（时间升序）。回复带 replyTo（被回复评论 id + 作者昵称）；
     被回复的评论已被删除时 replyTo 为 null，该条按普通评论展示。"""
     c = connect()
@@ -1915,8 +1952,8 @@ def post_comments_list(post_id, limit=100):
             "FROM post_comments pc JOIN users u ON u.id = pc.user_id "
             "LEFT JOIN post_comments r ON r.id = pc.reply_to "
             "LEFT JOIN users ru ON ru.id = r.user_id "
-            "WHERE pc.post_id = ? ORDER BY pc.id ASC LIMIT ?",
-            (int(post_id), int(limit))).fetchall()
+            "WHERE pc.post_id = ? AND pc.id > ? ORDER BY pc.id ASC LIMIT ?",
+            (int(post_id), int(after), int(limit))).fetchall()
     finally:
         c.close()
     return [{
@@ -2031,6 +2068,34 @@ def square_users(query="", sort="composite", limit=30, offset=0, listening_only=
             d["isBot"] = bool(d.get("is_bot"))
             users.append(d)
         return {"total": total, "users": users, "stats": square_stats()}
+    finally:
+        conn.close()
+
+
+def set_profile_banner(uid, version="", image=None):
+    conn = connect()
+    try:
+        if image is None:
+            conn.execute("DELETE FROM profile_banners WHERE user_id=?", (uid,))
+        else:
+            conn.execute(
+                """INSERT INTO profile_banners(user_id, version, image) VALUES(?, ?, ?)
+                   ON CONFLICT(user_id) DO UPDATE SET version=excluded.version, image=excluded.image""",
+                (uid, version, image),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_profile_banner(uid, *, include_image=False):
+    conn = connect()
+    try:
+        columns = "b.version, b.image" if include_image else "b.version"
+        return conn.execute(
+            f"""SELECT {columns} FROM profile_banners b JOIN users u ON u.id=b.user_id
+                WHERE b.user_id=? AND u.disabled=0 AND u.username!='__internal__'""", (uid,)
+        ).fetchone()
     finally:
         conn.close()
 

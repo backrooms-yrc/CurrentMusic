@@ -32,6 +32,7 @@ GROUPS = {
     'lx': '客户端与资源', 'audio-sources': '客户端与资源', 'music-service': '外接音乐服务',
 }
 GUIDES = {
+    'community-api': '个人主页、横幅与帖子',
     'user-levels-api': '用户等级、试炼与发现排序',
     'admin-overview-api': '管理台用户来源统计',
     'song-insights-api': '歌曲音质、副歌与其他版本',
@@ -215,6 +216,8 @@ def endpoint_text(method, path, node, title, access=None):
     text = [f'## {method} /cm{path}', '', title, '', f'**权限**：{permission}。', '']
     if path.startswith('/rooms'):
         text += ['请求与响应细节见[一起听房间 API 与同步协议](guide-rooms-design.md)。', '']
+    if path.startswith(('/posts', '/profile/banner')) or path in ('/users/{id}/profile', '/users/{id}/banner', '/auth/me', '/profile'):
+        text += ['请求与响应细节见[个人主页、横幅与帖子](guide-community-api.md)。', '']
     if path.startswith('/admin/ai'):
         text += ['配置与响应字段见[CurrentMusicAI 管理接口](guide-currentmusic-ai.md#管理接口)。', '']
     if path == '/feedback':
