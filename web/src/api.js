@@ -328,6 +328,11 @@ export const api = {
   adminClients: () => call('GET', '/admin/clients', { auth: true }),
   /** 站点出站流量统计（nginx 日志聚合，需部署方配置 CM_TRAFFIC_LOG）。 */
   adminTraffic: () => call('GET', '/admin/traffic', { auth: true }),
+  usage: () => call('GET', '/usage'),
+  reportSongTraffic: (body, keepalive) => auth.token
+    ? rawRequest('POST', settings.base + '/usage/audio', { Authorization: 'Bearer ' + auth.token },
+      JSON.stringify(body), keepalive)
+    : Promise.resolve(),
   adminUsers: (query = '', offset = 0, limit = 20, sort = 'reg') => call('GET', `/admin/users?query=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}&sort=${encodeURIComponent(sort)}`, { auth: true }),
   /** 捐赠用户列表：按用户聚合次数与累计金额。 */
   adminDonations: (query = '', offset = 0, limit = 20, sort = 'recent') => call('GET', `/admin/donations?query=${encodeURIComponent(query)}&offset=${offset}&limit=${limit}&sort=${encodeURIComponent(sort)}`, { auth: true }),

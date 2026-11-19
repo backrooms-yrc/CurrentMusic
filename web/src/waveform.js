@@ -57,13 +57,13 @@ export function createWaveform(canvas, opts) {
   let level = null, peak = null, peakAt = null, peakVel = null, dropVel = null;
   let raf = 0, lastTs = 0;
   let playing = false, hasData = false;
-  let reduced = false, alive = true, suspended = false;
+  let reduced = false, alive = true, suspended;
   let u8 = null, bins = binsOf();
   let bandLo = null, bandHi = null, bandGain = null;   // 每根柱：bin 区间 + 倾斜补偿(dB)
   let bandBins = -1, bandRate = -1;        // bins/采样率变化都要重建频率轴与倾斜补偿
   let spanDb = opts.tilt != null ? Math.max(0, Math.min(12, +opts.tilt)) : TILT_DB_PER_OCT;
   let minDb = -110, maxDb = -10;          // 分析器档位（由 player 提供）
-  let grad = null, gradKey = '';
+  let grad = null, gradKey = '', waveGradient, wavePoints;
 
   try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
   catch (e) { reduced = false; }
@@ -95,9 +95,10 @@ export function createWaveform(canvas, opts) {
     const rect = canvas.getBoundingClientRect();
     const w = Math.max(40, Math.round(rect.width));
     const h = Math.max(14, Math.round(rect.height));
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    if (w === cssW && h === cssH && canvas.width) return;
-    cssW = w; cssH = h;
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    if (w === cssW && h === cssH && dpr === pixelRatio && canvas.width) return;
+    cssW = w; cssH = h; dpr = pixelRatio;
+    waveGradient = null;
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -233,16 +234,18 @@ export function createWaveform(canvas, opts) {
     const maxH = h - 4;
     const n = bars;
     const step = w / (n - 1);
-    const pts = new Array(n);
+    if (wavePoints?.length !== n) wavePoints = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       const v = hasData ? Math.min(1, level[i] * 1.25) : 0;
-      pts[i] = Math.max(1.2, v * maxH) / 2;
+      wavePoints[i] = Math.max(1.2, v * maxH) / 2;
     }
-    const g = ctx.createLinearGradient(0, 0, w, 0);
-    g.addColorStop(0, accentColor(0.55));
-    g.addColorStop(1, accentColor(0.95));
-    wavePath(pts, step, mid);
-    ctx.fillStyle = g;
+    if (!waveGradient) {
+      waveGradient = ctx.createLinearGradient(0, 0, w, 0);
+      waveGradient.addColorStop(0, accentColor(0.55));
+      waveGradient.addColorStop(1, accentColor(0.95));
+    }
+    wavePath(wavePoints, step, mid);
+    ctx.fillStyle = waveGradient;
     ctx.fill();
   }
 
@@ -302,7 +305,11 @@ export function createWaveform(canvas, opts) {
     if (!alive || suspended) return;
     raf = 0;
     if (reduced) { stop(); return; }
-    const dt = lastTs ? Math.min(64, Math.max(8, ts - lastTs)) : 16;
+    if (lastTs && ts - lastTs < 32) {
+      raf = requestAnimationFrame(frame);
+      return;
+    }
+    const dt = lastTs ? Math.min(64, ts - lastTs) : 32;
     lastTs = ts;
     if (playing) {
       sample(dt);
@@ -353,10 +360,12 @@ export function createWaveform(canvas, opts) {
   return {
     style,
     setVisible(visible) {
+      if (suspended === !visible) return;
       suspended = !visible;
       if (suspended) stop(); else start();
     },
     setPlaying(on) {
+      if (playing === !!on) return;
       playing = !!on;
       if (playing && !reduced) {
         hasData = false;
@@ -377,7 +386,7 @@ export function createWaveform(canvas, opts) {
     /** 分析器档位（player 提供；变更后需重建分箱）。 */
     setDbRange(lo, hi) { minDb = +lo; maxDb = +hi; },
     /** 封面动态取色或固定配色变化后，丢弃旧渐变并立即按新颜色重绘。 */
-    refreshColor() { accent = readAccent(); grad = null; gradKey = ''; draw(); },
+    refreshColor() { accent = readAccent(); grad = waveGradient = null; gradKey = ''; draw(); },
     peaks() { return peak ? Array.prototype.slice.call(peak) : []; },
     start, stop,
     resize() { const w = cssW, h = cssH; cssW = 0; resize(); if (w !== cssW || h !== cssH) draw(); },

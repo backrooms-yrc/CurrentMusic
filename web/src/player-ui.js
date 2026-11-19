@@ -110,8 +110,8 @@ function syncPlayerVisuals() {
   } else {
     curLyricIdx = -1;
     syncLyric();
-    if (fullProgress) fullProgress.update();
-    if (player.isPlaying()) startKaraoke();
+    miniProgress?.update();
+    fullProgress?.update();
   }
 }
 document.addEventListener('cm-comments-visibility', syncPlayerVisuals);
@@ -249,12 +249,12 @@ function renderMini() {
 on('song', renderMini);
 
 on('time', () => {
-  // 进度线紧贴迷你播放条上缘。位置/总长一律走 player.posMs()/durMs()：
-  // 投屏时它们来自设备上报，直接读 audio 会永远是 0（进度条与歌词卡住）。
   if (!document.hidden && !document.getElementById('commentOverlay')) {
-    if (miniProgress) miniProgress.update();
-    if (fullProgress) fullProgress.update();
-    if (playerVisualsVisible()) updateBackgroundMotion(wave, player.isPlaying());
+    miniProgress?.update();
+    if (playerVisualsVisible()) {
+      fullProgress?.update();
+      updateBackgroundMotion(wave, player.isPlaying());
+    }
   }
   syncLyric();
 });
@@ -413,6 +413,7 @@ function setPlayerView(v) {
     const extra = Array.from(bodyEl.classList).filter(c => c !== 'pl-body' && !c.startsWith('view-')).join(' ');
     bodyEl.className = ('pl-body ' + extra + ' view-' + v).replace(/\s+/g, ' ').trim();
   }
+  if (!karaokeVisible()) stopKaraoke();
   if (v === 'lyric') {
     // 视图尺寸变化后：重算垫片并让当前行重新居中
     requestAnimationFrame(() => {
@@ -601,6 +602,8 @@ function layoutLyricPads() {
   if (bot) bot.style.height = h + 'px';
 }
 window.addEventListener('resize', () => {
+  if (karaokeVisible()) startKaraoke();
+  else stopKaraoke();
   layoutLyricPads();
   layoutSoarPads();
   // 旋转/分栏/改窗口大小后重新量取画布（控制器随播放页存在与否，安全空转）
@@ -690,13 +693,13 @@ function soarSweep(now, line, spans) {
   }
 }
 
+function karaokeVisible() {
+  return lyricKaraoke && playerVisualsVisible()
+    && (isSoaringBirdTheme() || window.innerWidth >= 600 || playerView === 'lyric');
+}
+
 function fireKaraoke() {
-  if (!lyricKaraoke) return;
-  if (!playerVisualsVisible()) return;
-  // 手机封面视图里歌词区是 display:none：不必每帧给不可见的逐字 span 写样式。
-  // 翱翔鸟Music 在窄屏也始终显示歌词，不受这条限制。
-  if (!isSoaringBirdTheme() && window.innerWidth < 600 && playerView === 'cover') return;
-  if (curLyricIdx < 0) return;
+  if (!karaokeVisible()) return;
   const line = lyricLines[curLyricIdx];
   if (!line) return;
   const now = player.posMs();
@@ -737,14 +740,6 @@ function fireKaraoke() {
     return;
   }
 
-  // 翱翔鸟Music 逐字扫光按帧更新（Apple 的 --line-animation-play-state 就是逐帧推进）；
-  // 其余皮肤仍节流到 ~30fps 省电。
-  if (!sbTheme) {
-    const t = performance.now();
-    if (t - karaokeTick < 33) return;
-    karaokeTick = t;
-  }
-
   for (let k = 0; k < spans.length && k < w.length; k++) {
     const start = w[k][0];
     const end = line.words?.[k]?.end ?? w[k + 1]?.[0] ?? start + 280;
@@ -769,9 +764,18 @@ function fireKaraoke() {
 }
 
 function startKaraoke() {
-  if (!lyricKaraoke || !playerVisualsVisible() || !player.isPlaying()) return;
-  if (karaokeRaf) return;
-  const step = () => { karaokeRaf = requestAnimationFrame(step); fireKaraoke(); };
+  const line = lyricLines[curLyricIdx];
+  if (karaokeRaf || !line || (!line.w?.length && (autoLyrics || !isSoaringBirdTheme()))
+      || !karaokeVisible() || !player.isPlaying()) return;
+  const step = now => {
+    karaokeRaf = 0;
+    if (!karaokeVisible() || !player.isPlaying()) return;
+    if (now - karaokeTick >= 32) {
+      karaokeTick = now;
+      fireKaraoke();
+    }
+    karaokeRaf = requestAnimationFrame(step);
+  };
   karaokeRaf = requestAnimationFrame(step);
 }
 function stopKaraoke() {
@@ -854,18 +858,21 @@ function syncLyric(force = false) {
     return;
   }
   const t = player.posMs();
-  let i = 0;
-  for (let k = 0; k < lyricLines.length; k++) {
-    if (lyricLines[k].t <= t) i = k; else break;
+  let start = 0, end = lyricLines.length;
+  while (start < end) {
+    const middle = (start + end) >>> 1;
+    if (lyricLines[middle].t <= t) start = middle + 1;
+    else end = middle;
   }
-  const changed = i !== curLyricIdx;
-  if (changed) {
+  const i = Math.max(0, start - 1);
+  const previous = curLyricIdx;
+  if (i !== previous) {
     curLyricIdx = i;
-    pushDesktopLyric(i);        // 播放页未打开时也要喂原生悬浮窗
+    pushDesktopLyric(i);
   }
+  if ((i === previous && !force) || !playerVisualsVisible()) return;
   const box = document.getElementById('plLyric');
-  if (!box || !playerVisualsVisible()) return;
-  if (!changed && !force) return;
+  if (!box) return;
   const soar = isSoaringBirdTheme();
   // 翱翔鸟Music 主题：纵深/停位交给 CSS（父级只更新 --active-i），并补 past 状态
   if (soar) {
@@ -878,9 +885,13 @@ function syncLyric(force = false) {
       soarStagger(el, idx, i);
     });
   } else {
-    box.querySelectorAll('.pl-lyric-line').forEach(el => el.classList.toggle('cur', +el.dataset.i === i));
+    (force || previous < 0 ? box.querySelector('.pl-lyric-line.cur')
+      : box.querySelector(`.pl-lyric-line[data-i="${previous}"]`))?.classList.remove('cur');
+    box.querySelector(`.pl-lyric-line[data-i="${i}"]`)?.classList.add('cur');
   }
+  stopKaraoke();
   karaokeSpans = null;
+  startKaraoke();
   soarResetSweep();
   // 预分词：当前行 ±6 行都切好，换行时不再动 DOM
   if (soar) soarTokenizeAround(box, i);
@@ -1648,8 +1659,8 @@ document.addEventListener('cm-colorscheme-mode', e => {
 // 缓冲进度：progress 事件与 tick 都会驱动，这里保证进度条上的缓冲区间实时更新
 on('buffer', () => {
   if (document.hidden || document.getElementById('commentOverlay')) return;
-  if (miniProgress) miniProgress.update();
-  if (fullProgress) fullProgress.update();
+  miniProgress?.updateBuffer();
+  if (playerVisualsVisible()) fullProgress?.updateBuffer();
 });
 // 卡顿提示：waiting/stalled 时显示「缓冲中…」，恢复或自愈成功即隐藏
 on('stalling', on => {

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="CurrentMusic 公网入口、API、镜像和依赖的运行状态与事件记录。">
+  <title>服务状态 · CurrentMusic</title>
+  <link rel="stylesheet" href="./status.css">
+  <link rel="alternate" type="application/rss+xml" title="CurrentMusic 状态更新" href="./events.xml">
+  <script defer src="./status.js"></script>
+</head>
+<body>
+  <header class="site-header"><div class="shell header-content">
+    <a class="brand" href="./"><span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>CurrentMusic <small>服务状态</small></span></a>
+    <nav aria-label="相关入口"><a href="/app/">播放器</a><a href="/api-docs/">API 文档</a><a href="./events.xml" title="订阅状态更新 RSS">订阅更新</a><button type="button" id="theme" aria-label="切换深浅色" title="切换深浅色">◐</button></nav>
+  </div></header>
+
+  <main class="shell">
+    <section id="summary" class="summary" data-state="unknown" aria-labelledby="summary-title">
+      <span class="summary-mark" aria-hidden="true">···</span>
+      <div><h1 id="summary-title">正在查询服务状态</h1><p id="summary-detail">等待监控数据</p></div>
+      <time id="last-updated"></time>
+    </section>
+
+    <div class="dashboard">
+      <section aria-labelledby="system-title">
+        <div class="section-head"><h2 id="system-title">系统状态</h2><span>近 30 天 · 北京时间 <a class="calendar-jump" href="#calendar-title">事件日历 ↓</a></span></div>
+        <div id="services" class="services" aria-busy="true"></div>
+        <p class="legend"><span><i class="dot up"></i>正常</span><span><i class="dot warn"></i>有失败探测</span><span><i class="dot down"></i>全部探测失败</span><span><i class="dot unknown"></i>无记录</span></p>
+      </section>
+      <aside aria-labelledby="calendar-title">
+        <div class="section-head"><h2 id="calendar-title">事件日历</h2></div>
+        <div class="calendar panel">
+          <div class="calendar-nav"><button type="button" id="prev" aria-label="上个月" disabled>‹</button><strong id="calendar-month"></strong><button type="button" id="next" aria-label="下个月" disabled>›</button></div>
+          <div class="weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+          <div id="calendar-days" class="calendar-days"></div>
+        </div>
+        <div class="panel event-panel"><h3 id="event-date"></h3><div id="events" aria-live="polite"></div><button class="history-link" type="button" id="history" aria-pressed="false">查看近 30 天事件</button></div>
+      </aside>
+    </div>
+  </main>
+  <footer class="shell">CurrentMusic <span>监控由 Gatus 提供</span></footer>
+</body>
+</html>

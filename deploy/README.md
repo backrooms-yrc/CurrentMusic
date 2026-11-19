@@ -25,33 +25,24 @@ automatically installed.
   mirror bundles with the local files. See [mirror troubleshooting](../docs/network-performance.md#镜像同步与回源排查).
 - `php/` — optional PHP front-controller entry for PHP-only hosts (Apache/nginx+FPM),
   with SSE/Range streaming and a php2shell runtime gate. See `php/README.md`.
-- `gatus/` — service status page (Gatus v5.38.0, Apache-2.0). `gatus/config.yaml`
-  defines all monitored endpoints; `gatus/gatus.service` is the systemd unit.
-  Live deployment on this host: binary at `/opt/gatus/gatus`, data at
-  `/opt/gatus/data/`, listening on `127.0.0.1:8080`, published at
-  **https://music.20110208.xyz/status/** (same-domain path, following the
-  `/app`, `/api-docs/` convention; nginx strips the `/status/` prefix) with an
-  emergency direct entry at `http://45.207.204.178:39530/status/`.
-  UI auto-refreshes every 10s; public endpoints are probed every 30s.
-  To change coverage, edit `gatus/config.yaml` and `systemctl restart gatus` —
-  no UI configuration, everything is declarative. To upgrade Gatus itself:
-  build the upstream source tarball, but first re-apply the frontend patches —
-  (a) subpath: set `publicPath: '/status/'` in `web/app/vue.config.js`, prefix
-  the `/api/v1`/`/oidc` literals in `web/app/src` with `process.env.BASE_URL`
-  and prefix `/apple-touch-icon.png`, `/manifest.json`, `/css/custom.css`,
-  `/favicon.ico` in `web/app/public/index.html` with `/status`;
-  (b) localization: the deployed UI is Chinese — re-translate the display
-  strings in `web/app/src` (App/SearchBar/Settings/StatusBadge/EndpointCard/
-  Home/EndpointDetails/SuiteDetails plus the relative-time strings in
-  `utils/time.js`, and `lang="zh-CN"` in `public/index.html`); a mismatched
-  string count means upstream changed wording, adjust accordingly;
-  (c) cache busting: after `npm ci && npm run build` in `web/app`, append
-  `?v=<sha1[:10]>` of each file to the `/status/js|css/...` references in
-  `web/static/index.html` (the bundle has no filename hash and Cloudflare
-  caches by URL; the query forces a fresh fetch after every rebuild). Then
-  `CGO_ENABLED=0 go build` with Go ≥ 1.26 and restart the unit. nginx serves
-  `/status/` with `Cache-Control: no-store`, so new deploys are picked up
-  as soon as the index is fetched.
+- `gatus/` — Gatus v5.38.0 monitors the endpoints in `gatus/config.yaml` and
+  stores probe results in `/opt/gatus/data/gatus.db`. The public status page
+  reads a small, sanitized snapshot from that database with the CurrentMusic
+  backend offline as well as online. With the repository at `/srv/currentmusic`:
+
+  1. Create `/srv/currentmusic/data/status` and copy the three assets from
+     `gatus/status/` into it.
+  2. Install `gatus/currentmusic-status.{service,timer}` into
+     `/etc/systemd/system/`, adjust the paths if needed, then run
+     `systemctl daemon-reload`, `systemctl start currentmusic-status.service`
+     and `systemctl enable --now currentmusic-status.timer`.
+  3. Include `gatus/status.nginx.conf` in each public or emergency Nginx
+     virtual host. Adjust the alias to the same destination and validate
+     the Nginx configuration before reloading.
+
+  The calendar displays 30 days. Days beyond Gatus's retained uptime
+  data display as missing. The exporter reads the v5 SQLite schema and
+  should be verified when upgrading Gatus.
 
 ## First boot
 

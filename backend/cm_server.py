@@ -52,6 +52,7 @@ import cm_ai
 import cm_chat
 import cm_region
 import cm_lines
+import cm_usage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("cm")
@@ -1180,7 +1181,7 @@ def _serve_job(handler, job, chunk_size=64 * 1024):
                     break
                 time.sleep(0.05)
                 continue
-            handler.wfile.write(data)
+            cm_usage.write_audio(handler, data)
             pos += len(data)
     finally:
         f.close()
@@ -2207,6 +2208,11 @@ def route(handler, method):
     q = {k: v[0] for k, v in parse_qs(parsed.query, keep_blank_values=True).items()}
     feedback_post = path == "/feedback" and method == "POST"
     feedback_media = re.fullmatch(r"/feedback/([0-9a-f]{32})/media/(screenshot-[123]|video-1)", path)
+    audio_report = path == "/usage/audio" and method == "POST"
+    if audio_report:
+        size = handler.headers.get("Content-Length") or "0"
+        if not size.isdecimal() or len(size) > 3 or int(size) > 256:
+            raise ApiError(400, "请求体过大")
     body = read_json(handler) if method in ("POST", "PUT", "DELETE") and not (feedback_post or feedback_media) else None
     # 限速按**真实客户端**分桶。此前用 handler.client_address（= nginx 的 127.0.0.1），
     # 全站共用一个 300/min 的桶：几个用户同时切歌就会把播放地址解析打成 429。
@@ -2231,6 +2237,16 @@ def route(handler, method):
         return docs_redirect(handler, "guide-network-lines-api")
     if path == "/health" and method == "GET":
         return jresp(handler, 200, {"ok": True, "now": int(time.time())})
+
+    if path == "/usage" and method == "GET":
+        return jresp(handler, 200, cm_usage.snapshot(), cache_control="public, max-age=15")
+    if path == "/usage/audio" and method == "POST":
+        require_user(handler, allow_query=False)
+        try:
+            cm_usage.report_audio(body)
+        except ValueError as exc:
+            raise ApiError(400, str(exc)) from exc
+        return jresp(handler, 200, {"ok": True}, cache_control="no-store")
 
     if path == "/music-service/descriptor" and method == "GET":
         return jresp(handler, 200, cm_music_service.descriptor(base_url(handler)))
@@ -2980,6 +2996,8 @@ def route(handler, method):
         base = base_url(handler)
         own = [
             ("GET", "/health", "公开", "服务健康检查"),
+            ("GET", "/usage", "公开", "API 调用与歌曲流量的年、月、周、日聚合"),
+            ("POST", "/usage/audio", "Bearer", "幂等上报直连歌曲的累计估算字节"),
             ("GET", "/music-service/descriptor", "公开", "外接音乐服务协议 v1 描述与已启用能力"),
             ("GET", "/music-service/connect", "公开", "由流声引擎侧发起外接音乐服务连接"),
             ("POST", "/music-service/v1/{operation}", "按能力", "调用白名单中的音乐能力。详见 /api-docs/reference/guide-music-service-api/"),
@@ -6085,7 +6103,7 @@ def route(handler, method):
                 chunk = f.read(min(256 * 1024, left))
                 if not chunk:
                     break
-                handler.wfile.write(chunk)
+                cm_usage.write_audio(handler, chunk)
                 left -= len(chunk)
         return
 
@@ -6253,6 +6271,9 @@ class Handler(BaseHTTPRequestHandler):
         super().end_headers()
 
     def _run(self, method):
+        path = self.path.split("?", 1)[0].rstrip("/")
+        if path.startswith("/"):
+            cm_usage.note_api(path)
         # HEAD 语义 = 与 GET 同样的响应头、但不带响应体。BaseHTTPRequestHandler 不会自动
         # 抑制响应体，故这里把 wfile 换成一个丢弃写入的包装（Content-Length 仍如实声明）。
         if method == "HEAD":
@@ -6365,8 +6386,18 @@ def _room_housekeeping():
         time.sleep(cm_rooms.SWEEP_SECONDS)
 
 
+def _usage_housekeeping():
+    while True:
+        time.sleep(15)
+        try:
+            cm_usage.flush()
+        except sqlite3.Error:
+            log.warning("保存流量统计失败，将重试", exc_info=True)
+
+
 def main():
     cm_db.init()
+    threading.Thread(target=_usage_housekeeping, name="cm-usage-housekeeping", daemon=True).start()
     cm_feedback.recover()
     _rc = cm_db.connect()
     cm_rooms.init_room_tables(_rc)

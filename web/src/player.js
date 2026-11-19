@@ -6,6 +6,15 @@ import { toast, tierLabel } from './ui.js';
 import { resolveSongUrl } from './songurl.js';   // 三级音源回退（P2）
 import { buildEqChain, removeEqChain } from './eq.js';   // 均衡器链（挂进音频图）
 import { updateBrowserMediaSession, updateBrowserMediaState } from './media-session.js';
+import { createSongTraffic } from './song-traffic.js';
+
+const songTraffic = createSongTraffic(api.reportSongTraffic);
+window.addEventListener('pagehide', () => {
+  songTraffic.sample(audio);
+  if (player._prefetch?.el) songTraffic.sample(player._prefetch.el);
+  songTraffic.flush(true);
+});
+
 
 // 播放实际请求的档位：开了「音效」（杜比全景声/臻音全景声/沉浸环绕声/高清臻音）时
 // 优先用音效档，否则用用户选的音质档。沉浸环绕声的声道类型（c51/ste）作为 immerse 传出。
@@ -128,6 +137,7 @@ function watchGraph() {
 
 /** 丢弃一个音频元素：停播 + 清源。监听器都有 el!==audio 守卫，不会误触发换歌。 */
 function disposeAudio(old) {
+  songTraffic.detach(old);
   try { old.pause(); } catch (e) { /* 忽略 */ }
   try { old.removeAttribute('src'); old.src = ''; old.load(); } catch (e) { /* 忽略 */ }
   old.remove();
@@ -208,6 +218,7 @@ function fallbackNoViz() {
   fresh.defaultPlaybackRate = rate; fresh.playbackRate = rate;
   fresh.crossOrigin = cors;                 // 下次真实手势仍可恢复安全音源的频谱
   if (url) {
+    songTraffic.attach(fresh, player.urlInfo, url);
     fresh.src = url;                       // 新元素直出，不再经过图
     try { if (pos > 0) fresh.currentTime = pos; } catch (e) { /* 元数据未就绪时忽略 */ }
     // 新元素上不会触发 pause，scheduleResume 不会自己跑 → 显式兜底重试
@@ -248,7 +259,9 @@ function loadUrl(url, pos) {
   } else {
     audio.crossOrigin = null;              // 普通播放（该源无可视化）
   }
+  songTraffic.attach(audio, player.urlInfo, url);
   audio.src = url;
+  bufPct = 0;
   if (pos > 0) { try { audio.currentTime = pos; } catch (e) { /* 忽略 */ } }
 }
 
@@ -433,7 +446,7 @@ export const player = {
   _prefetchBusy: false,
 
   /** 已缓冲到的百分比（进度条据此画出缓冲区间）。 */
-  bufferPct() { updateBufPct(); return bufPct; },
+  bufferPct() { return bufPct; },
   /** 是否正在卡顿（UI 显示"缓冲中"）。 */
   get stalling() { return stallNotified; },
 
@@ -481,6 +494,7 @@ export const player = {
       const el = new Audio();
       el.preload = 'auto';
       el.muted = true;                       // 不发声（也不接 Web Audio 图）
+      songTraffic.attach(el, info, info.url);
       try { el.src = info.url; el.load(); } catch { /* 忽略 */ }
       // 限量按实测速率：快线（dlRate≥2.5）给 90s/45s，其余 45s/25s。
       // 已缓冲的字节留在浏览器媒体缓存里，主元素播同一 URL 仍可复用。
@@ -1116,10 +1130,10 @@ function bindAudio(el) {
 });
   el.addEventListener('timeupdate', () => {
   if (el !== audio) return;      // 已丢弃的旧元素：事件一律忽略
+    updateBufPct();
     emit('time');
     accumulateLocal(el);
     maybeFlushListen();
-    updateBufPct();
     if (stallNotified) { stallNotified = false; emit('stalling', false); }   // 位置前进了 = 卡顿结束
     if (stallTimer) clearStallWatch();
     // 余量充足才预取下一首（v1.28.26）：要求前方余量 ≥ min(45s, 剩余时长 30%)。
@@ -1208,6 +1222,7 @@ function bindAudio(el) {
       const fresh = makeAudio();
       audio = fresh;
       fresh.crossOrigin = null;
+      songTraffic.attach(fresh, player.urlInfo, pend.url);
       fresh.src = pend.url;
       if (pend.pos > 0) { try { fresh.currentTime = pend.pos; } catch (e) { /* 忽略 */ } }
       if (player.wantPlaying) fresh.play().catch(() => scheduleResume());

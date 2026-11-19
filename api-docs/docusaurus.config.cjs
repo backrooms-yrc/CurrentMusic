@@ -22,6 +22,7 @@ module.exports = {
     navbar: {title: 'CurrentMusic', logo: {alt:'CurrentMusic',src:'img/logo.svg?v=sage1'}, items: [
       {to:'/reference/overview',label:'文档',position:'left'},
       {to:'/reference/endpoints',label:'API 参考',position:'left'},
+      {to:'/usage',label:'服务用量',position:'left'},
       {href:'https://music.20110208.xyz/app/auto',label:'线路测速',position:'left'},
       {href:'https://music.20110208.xyz/developer',label:'开发者平台',position:'right'},
       {href:'https://music.20110208.xyz/app/',label:'打开音乐',position:'right'},
