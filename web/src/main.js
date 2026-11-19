@@ -11,6 +11,7 @@ import './settings.css';
 import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
 import './top-account.css';
 import './aimo.css';
+import './community.css';
 import { initTabletScale } from './tablet-scale.js';
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
 import { mdui } from './md.js';
@@ -96,6 +97,7 @@ import * as memberPage from './pages/member.js';
 import * as servicesPage from './pages/services.js';
 import * as repPage from './pages/rep.js';
 import * as postNewPage from './pages/post-new.js';
+import * as postPage from './pages/post.js';
 import * as announceEditPage from './pages/announce-edit.js';
 import * as songPage from './pages/song.js';
 import * as legalPage from './pages/legal.js';
@@ -146,6 +148,7 @@ const ROUTES = [
   { re: /^#\/legal\/(privacy|terms)$/, page: legalPage, title: '政策与协议', fixed: m => [m[1]] },
   { re: /^#\/admin$/, page: adminPage, title: '管理员' },
   { re: /^#\/post\/new$/, page: postNewPage, title: '发帖' },
+  { re: /^#\/post\/(\d+)$/, page: postPage, title: '帖子详情', fixed: m => [m[1]] },
   { re: /^#\/song\/(\d+)$/, page: songPage, title: '歌曲', fixed: m => [m[1]] },
   { re: /^#\/announce\/new$/, page: announceEditPage, title: '发布公告' },
   { re: /^#\/announce\/(\d+)$/, page: announceEditPage, title: '编辑公告', fixed: m => [m[1]] },

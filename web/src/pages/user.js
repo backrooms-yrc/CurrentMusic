@@ -5,6 +5,7 @@ import { finishLogin } from '../twofactor.js';
 import { mdui } from '../md.js';
 import { api, auth, settings, adoptDecorScales } from '../api.js';
 import { esc, toast, avatarHTML, confirmDialog, promptDialog, skelProfile, fmtListen, userTags } from '../ui.js';
+import { bindProfileBanner, profileBannerHTML } from '../profile-banner.js';
 
 export async function render(el, params) {
   if (!auth.token) return renderAuth(el);
@@ -466,6 +467,7 @@ function renderAuth(el) {
 // ---------- 我的主页 ----------
 
 async function renderProfile(el, autoDecor) {
+  const profileToken = auth.token;
   el.innerHTML = skelProfile();
   let me = null, pls = [], bind = { bound: false }, follows = [], followCount = 0;
   let decor = { decorations: [], unlocked: false, listenMs: 0, current: '', minListenMs: 7200000, failed: true };
@@ -483,24 +485,29 @@ async function renderProfile(el, autoDecor) {
       .catch(e => { decor.failed = true; decor.error = (e && e.message) || '网络异常'; }),
   ];
   await Promise.allSettled(jobs);
+  if (profileToken !== auth.token || !el.isConnected) return;
 
   const accounts = auth.accounts().filter(a => a.username !== (me || {}).username);
   const u = me || auth.user || {};
 
   el.innerHTML = `
     <div class="cm-profile">
-      <div class="cm-profile-head">
-        <div id="avaWrap" class="cm-ava-wrap" role="button" tabindex="0" title="点击更换头像"
-             aria-label="更换头像">${avatarHTML(u, 84)}<span class="cm-ava-cam"><span class="material-icons-outlined">photo_camera</span></span></div>
-        <div class="cm-profile-info">
-          <div class="cm-profile-name">${esc(u.nickname || u.username)}${userTags(u)} <span class="cm-edit" id="editNick"><span class="material-icons-outlined">edit</span></span></div>
-          <div class="cm-profile-bio">${esc(u.bio || '这个人很懒，什么都没写')} <span class="cm-edit" id="editBio"><span class="material-icons-outlined">edit</span></span></div>
-          ${u.phone ? `<div class="cm-profile-phone"><span class="material-icons-outlined">smartphone</span>${esc(u.phone)}</div>` : ''}
-          <div class="cm-profile-stat">
-            <span><b>${me ? me.stat.likes : 0}</b>点赞</span>
-            <span><b>${me ? me.stat.playlists : pls.length}</b>歌单</span>
-            <span><b>${me ? me.stat.playDays : 0}</b>天听过</span>
-            <span><b>${fmtListen(me ? me.stat.listenMs : 0)}</b>听歌时长</span>
+      <div class="cm-community-profile">
+        ${profileBannerHTML(u.bannerUrl, true)}
+        <div class="cm-profile-head">
+          <div id="avaWrap" class="cm-ava-wrap" role="button" tabindex="0" title="点击更换头像"
+               aria-label="更换头像">${avatarHTML(u, 84)}<span class="cm-ava-cam"><span class="material-icons-outlined">photo_camera</span></span></div>
+          <div class="cm-profile-info">
+            <div class="cm-profile-name">${esc(u.nickname || u.username)}${userTags(u)} <span class="cm-edit" id="editNick"><span class="material-icons-outlined">edit</span></span></div>
+            <div class="cm-profile-bio">${esc(u.bio || '这个人很懒，什么都没写')} <span class="cm-edit" id="editBio"><span class="material-icons-outlined">edit</span></span></div>
+            ${u.phone ? `<div class="cm-profile-phone"><span class="material-icons-outlined">smartphone</span>${esc(u.phone)}</div>` : ''}
+            <div class="cm-profile-stat">
+              <span><b>${me ? me.stat.likes : 0}</b>点赞</span>
+              <span><b>${me ? me.stat.playlists : pls.length}</b>歌单</span>
+              <span><b>${me ? me.stat.playDays : 0}</b>天听过</span>
+              <span><b>${fmtListen(me ? me.stat.listenMs : 0)}</b>听歌时长</span>
+            </div>
+            ${u.id ? `<a class="cm-community-link cm-my-public-profile" href="#/u/${u.id}">查看公开主页</a>` : ''}
           </div>
         </div>
       </div>
@@ -640,6 +647,7 @@ async function renderProfile(el, autoDecor) {
     import('../ncmbind.js').then(m => m.unbindFlow(() => renderProfile(el)));
   });
 
+  bindProfileBanner(el);
   // 头像上传：点击头像即换（替换原「账号管理 → 更换头像」入口，位置更直观）
   const fileInput = el.querySelector('#avaFile');
   const avaWrap = el.querySelector('#avaWrap');

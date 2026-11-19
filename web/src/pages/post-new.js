@@ -1,117 +1,228 @@
-// 发帖页（v1.28.45：从弹窗改为独立页面）。
-// 复用 posts.js 的 Markdown 工具栏与 attach.js 的引用选择器；发布后回到发现页「帖子」TAB。
-import { api, auth } from '../api.js';
-import { esc, toast } from '../ui.js';
+import { api, auth, settings } from '../api.js';
+import { confirmDialog, esc, toast } from '../ui.js';
 import { renderMarkdown, applyToolbar } from '../markdown.js';
-import { MAX_ATTACH, TYPE_LABEL, openAttachPicker } from '../attach.js';
+import { attachHTML, MAX_ATTACH, TYPE_LABEL, openAttachPicker } from '../attach.js';
 
+const SQUARE = '#/square?tab=posts';
+const MAX_TITLE = 80;
+const MAX_BODY = 5000;
 const TOOLS = [
   ['h', '标题', 'title'], ['bold', '加粗', 'format_bold'], ['italic', '斜体', 'format_italic'],
   ['code', '代码', 'code'], ['quote', '引用', 'format_quote'], ['ul', '列表', 'format_list_bulleted'],
   ['ol', '序号', 'format_list_numbered'], ['link', '链接', 'link'], ['hr', '分割线', 'horizontal_rule'],
 ];
 
+function readDraft(key) {
+  try {
+    const draft = JSON.parse(localStorage.getItem(key));
+    if (typeof draft?.title === 'string' && typeof draft.content === 'string' && Array.isArray(draft.attachments)) {
+      return draft;
+    }
+  } catch { /* 存储不可用时仍可发帖 */ }
+  return { title: '', content: '', attachments: [] };
+}
+
 export async function render(el) {
-  if (!auth.token) {
-    el.innerHTML = `<div class="cm-page cm-peditor-page">
-      <div class="cm-empty" style="padding:48px 0">登录后才能发帖
-        <div style="margin-top:16px"><mdui-button variant="filled" href="#/user">去登录</mdui-button></div>
+  const token = auth.token;
+  if (!token) {
+    el.innerHTML = `<div class="cm-peditor-page">
+      <div class="cm-empty">登录后才能发帖
+        <div><mdui-button variant="filled" href="#/user">去登录</mdui-button></div>
       </div></div>`;
     return;
   }
-  const atts = [];
+
+  const user = auth.user || await api.me();
+  if (!el.isConnected || auth.token !== token) return;
+  const base = settings.base;
+  const key = `cm.postDraft:${encodeURIComponent(base)}:${encodeURIComponent(user.username)}`;
+  const draft = readDraft(key);
+  let attachments = draft.attachments.filter(a => a && Object.prototype.hasOwnProperty.call(TYPE_LABEL, a.type)).slice(0, MAX_ATTACH);
+  let previewing = false, publishing = false, stored = null;
+  const sameSession = () => token === auth.token && base === settings.base && el.isConnected;
+
   el.innerHTML = `
-    <div class="cm-page cm-peditor-page">
-      <div class="cm-sec-head"><h2>发布帖子</h2><span class="cm-sec-more" id="pCancel">取消</span></div>
-      <div class="cm-peditor">
-        <div class="cm-peditor-tools">
-          ${TOOLS.map(([k, label, icon]) => `<span class="cm-peditor-tool" data-k="${k}" title="${label}">
-            <span class="material-icons-outlined">${icon}</span></span>`).join('')}
-          <span class="cm-peditor-sp"></span>
-          <span class="cm-peditor-tool" id="pPreviewBtn" title="预览"><span class="material-icons-outlined">visibility</span></span>
+    <div class="cm-peditor-page">
+      <div class="cm-sec-head"><h2>发布帖子</h2><a class="cm-community-link" href="${SQUARE}">返回帖子</a></div>
+      <div class="cm-post-draft" data-draft hidden>
+        <span data-draft-status role="status"></span>
+        <button type="button" class="cm-community-link" data-discard>丢弃草稿</button>
+      </div>
+      <form class="cm-peditor">
+        <div class="cm-post-form-label"><label for="pTitle">标题（选填）</label><span data-title-count></span></div>
+        <input class="cm-community-input" type="text" id="pTitle">
+        <div class="cm-post-form-label"><label for="pText">正文</label><span data-body-count></span></div>
+        <div class="cm-post-editor-modes" aria-label="正文显示方式">
+          <button type="button" data-mode="edit" aria-pressed="true">编辑</button>
+          <button type="button" data-mode="preview" aria-pressed="false">预览</button>
         </div>
-        <textarea id="pText" class="cm-peditor-text" placeholder="写点什么…（支持 Markdown：# 标题、**加粗**、- 列表、> 引用、\`代码\`）"></textarea>
-        <div class="cm-peditor-preview" id="pPreview" hidden></div>
+        <div class="cm-peditor-tools" aria-label="Markdown 工具">
+          ${TOOLS.map(([key, label, icon]) => `<button type="button" class="cm-peditor-tool" data-tool="${key}" aria-label="${label}" title="${label}">
+            <span class="material-icons-outlined" aria-hidden="true">${icon}</span></button>`).join('')}
+        </div>
+        <textarea id="pText" class="cm-peditor-text cm-community-input" placeholder="写点什么… 支持 Markdown"></textarea>
+        <div class="cm-peditor-preview" data-preview hidden></div>
         <div class="cm-peditor-atts">
           <div class="cm-peditor-atts-head">
-            <span>附带内容</span>
-            <span class="cm-peditor-atts-n" id="pAttN">0/${MAX_ATTACH}</span>
-            <mdui-button variant="text" id="pAttAdd">添加</mdui-button>
+            <span>音乐附件</span>
+            <span class="cm-peditor-atts-n" data-att-count></span>
+            <mdui-button variant="text" data-att-add>添加</mdui-button>
           </div>
-          <div class="cm-peditor-atts-list" id="pAttList"></div>
+          <div class="cm-peditor-atts-list" data-att-list></div>
         </div>
-      </div>
-      <div class="cm-peditor-actions">
-        <mdui-button variant="filled" id="pPublish" full-width>发布</mdui-button>
-      </div>
+        <div class="cm-peditor-actions"><button class="cm-community-submit" type="submit">发布帖子</button></div>
+      </form>
     </div>`;
 
-  const ta = el.querySelector('#pText');
-  const pv = el.querySelector('#pPreview');
-  const attList = el.querySelector('#pAttList');
-  const attN = el.querySelector('#pAttN');
-  const publishBtn = el.querySelector('#pPublish');
+  const form = el.querySelector('form');
+  const title = form.querySelector('#pTitle');
+  const body = form.querySelector('#pText');
+  const preview = form.querySelector('[data-preview]');
+  const tools = form.querySelector('.cm-peditor-tools');
+  const attList = form.querySelector('[data-att-list]');
+  const draftBar = el.querySelector('[data-draft]');
+  const draftStatus = el.querySelector('[data-draft-status]');
+  const discard = el.querySelector('[data-discard]');
+  const publish = form.querySelector('[type="submit"]');
+  const add = form.querySelector('[data-att-add]');
+  title.value = draft.title;
+  body.value = draft.content;
 
-  const drawAtts = () => {
-    attN.textContent = `${atts.length}/${MAX_ATTACH}`;
-    attList.innerHTML = atts.length ? atts.map((a, i) => `
-      <span class="cm-peditor-att" data-i="${i}">
-        ${esc(TYPE_LABEL[a.type] || '')}·${esc(a.name || '')}
-        <span class="material-icons-outlined" data-del="${i}">close</span>
-      </span>`).join('') : '<span class="cm-peditor-empty">可添加单曲 / 专辑 / 歌手 / 歌单，最多 5 项</span>';
-    attList.querySelectorAll('[data-del]').forEach(x => {
-      x.onclick = () => { atts.splice(+x.dataset.del, 1); drawAtts(); };
+  function updateCounts() {
+    const values = [
+      [form.querySelector('[data-title-count]'), title.value, MAX_TITLE],
+      [form.querySelector('[data-body-count]'), body.value, MAX_BODY],
+    ];
+    for (const [label, text, max] of values) {
+      const count = Array.from(text.trim()).length;
+      label.textContent = `${count}/${max}`;
+      label.classList.toggle('cm-community-limit', count > max);
+    }
+  }
+
+  function removeStoredDraft() {
+    try {
+      if (localStorage.getItem(key) === stored) localStorage.removeItem(key);
+    } catch { /* 存储可能在编辑期间被禁用 */ }
+  }
+
+  function saveDraft() {
+    updateCounts();
+    if (!sameSession()) return;
+    const hasDraft = !!(title.value || body.value || attachments.length);
+    draftBar.hidden = !hasDraft;
+    if (!hasDraft) {
+      removeStoredDraft();
+      return;
+    }
+    try {
+      const value = JSON.stringify({ title: title.value, content: body.value, attachments, updatedAt: Date.now() });
+      localStorage.setItem(key, value);
+      stored = value;
+      draftStatus.textContent = '草稿已保存到此设备';
+    } catch { draftStatus.textContent = '无法在此设备保存草稿'; }
+  }
+
+  function drawAttachments() {
+    form.querySelector('[data-att-count]').textContent = `${attachments.length}/${MAX_ATTACH}`;
+    add.disabled = publishing || previewing || attachments.length >= MAX_ATTACH;
+    attList.innerHTML = previewing ? attachHTML(attachments) : attachments.map((item, index) => `
+      <span class="cm-peditor-att">${esc(TYPE_LABEL[item.type])} · ${esc(item.name || '')}
+        <button type="button" class="cm-community-link" data-del="${index}" aria-label="移除附件" ${publishing ? 'disabled' : ''}>
+          <span class="material-icons-outlined" aria-hidden="true">close</span>
+        </button>
+      </span>`).join('');
+  }
+
+  function setMode(mode) {
+    previewing = mode === 'preview';
+    tools.hidden = body.hidden = previewing;
+    preview.hidden = !previewing;
+    form.querySelectorAll('[data-mode]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
     });
-  };
+    preview.innerHTML = previewing ? `
+      ${title.value.trim() ? `<h3 class="cm-post-title">${esc(title.value.trim())}</h3>` : ''}
+      <div class="cm-post-body">${renderMarkdown(body.value) || '<p class="cm-peditor-empty">还没有正文</p>'}</div>` : '';
+    title.readOnly = publishing || previewing;
+    drawAttachments();
+  }
 
-  let previewing = false;
-  el.querySelector('#pPreviewBtn').onclick = () => {
-    previewing = !previewing;
-    if (previewing) {
-      pv.innerHTML = renderMarkdown(ta.value) || '<p class="cm-peditor-empty">（还没有内容）</p>';
-      pv.hidden = false; ta.hidden = true;
-    } else { pv.hidden = true; ta.hidden = false; }
-    el.querySelector('#pPreviewBtn').classList.toggle('on', previewing);
-  };
-
-  el.querySelectorAll('.cm-peditor-tool[data-k]').forEach(t => {
-    t.onclick = () => {
-      const r = applyToolbar(ta.value, ta.selectionStart, ta.selectionEnd, t.dataset.k);
-      ta.value = r.value;
-      ta.focus();
-      ta.setSelectionRange(r.selStart, r.selEnd);
-      if (previewing) pv.innerHTML = renderMarkdown(ta.value);
+  form.querySelectorAll('[data-mode]').forEach(button => {
+    button.onclick = () => setMode(button.dataset.mode);
+  });
+  form.querySelectorAll('[data-tool]').forEach(button => {
+    button.onmousedown = e => e.preventDefault();
+    button.onclick = () => {
+      if (publishing) return;
+      const edit = applyToolbar(body.value, body.selectionStart, body.selectionEnd, button.dataset.tool);
+      body.value = edit.value;
+      body.focus();
+      body.setSelectionRange(edit.selStart, edit.selEnd);
+      saveDraft();
     };
   });
-
-  el.querySelector('#pAttAdd').onclick = () => {
-    if (atts.length >= MAX_ATTACH) return toast(`最多添加 ${MAX_ATTACH} 项`);
-    openAttachPicker(picked => {
-      const room = MAX_ATTACH - atts.length;
-      picked.slice(0, room).forEach(x => atts.push(x));
-      if (picked.length > room) toast(`最多 ${MAX_ATTACH} 项，已忽略多余的`);
-      drawAtts();
-    });
+  title.oninput = body.oninput = saveDraft;
+  attList.onclick = event => {
+    const target = event.target.closest('[data-del]');
+    if (!target || publishing) return;
+    attachments.splice(Number(target.dataset.del), 1);
+    drawAttachments();
+    saveDraft();
   };
+  add.onclick = () => openAttachPicker(picked => {
+    if (publishing || previewing || !sameSession()) return;
+    const room = MAX_ATTACH - attachments.length;
+    attachments.push(...picked.slice(0, room));
+    if (picked.length > room) toast(`最多可添加 ${MAX_ATTACH} 项附件`);
+    drawAttachments();
+    saveDraft();
+  });
+  discard.onclick = () => confirmDialog({
+    title: '丢弃草稿', body: '将清空这篇草稿的标题、正文和音乐附件。',
+    onOk: () => {
+      if (publishing || !sameSession()) return;
+      title.value = body.value = '';
+      attachments = [];
+      setMode('edit');
+      saveDraft();
+      title.focus();
+    },
+  });
 
-  const back = () => {
-    sessionStorage.setItem('cm.sqTab', 'posts');
-    location.hash = '#/square';
-  };
-  el.querySelector('#pCancel').onclick = () => back();
-  publishBtn.onclick = async () => {
-    const text = (ta.value || '').trim();
-    if (!text) return toast('内容不能为空');
-    publishBtn.setAttribute('loading', '');
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (publishing) return;
+    if (!sameSession()) return toast('登录状态已变化，请重新打开编辑器');
+    const heading = title.value.trim();
+    const text = body.value.trim();
+    if (Array.from(heading).length > MAX_TITLE || /[\x0b\x0c\x1c-\x1e\x85\r\n\u2028\u2029]/.test(heading)) {
+      return toast(`标题须为单行，最多 ${MAX_TITLE} 字`);
+    }
+    if (!text) return toast('请填写正文');
+    if (Array.from(text).length > MAX_BODY) return toast(`正文最多 ${MAX_BODY} 字`);
+    saveDraft();
+    publishing = publish.disabled = discard.disabled = body.readOnly = true;
+    publish.textContent = '发布中…';
+    setMode(previewing ? 'preview' : 'edit');
     try {
-      await api.postCreate(text, atts);
-      toast('已发布');
-      back();
-    } catch (e) {
-      toast('发布失败：' + e.message);
-    } finally { publishBtn.removeAttribute('loading'); }
+      const result = await api.postCreate(text, attachments, heading);
+      removeStoredDraft();
+      toast('帖子已发布');
+      if (sameSession() && location.hash.split('?')[0] === '#/post/new') location.replace(`#/post/${result.id}`);
+    } catch (e) { toast('发布失败：' + e.message); }
+    finally {
+      publishing = publish.disabled = discard.disabled = body.readOnly = false;
+      publish.textContent = '发布帖子';
+      setMode(previewing ? 'preview' : 'edit');
+    }
   };
 
-  drawAtts();
-  setTimeout(() => ta.focus(), 100);
+  updateCounts();
+  setMode('edit');
+  if (title.value || body.value || attachments.length) {
+    try { stored = localStorage.getItem(key); } catch { /* 存储不可用 */ }
+    draftBar.hidden = false;
+    draftStatus.textContent = '已恢复此设备上的草稿';
+  }
 }

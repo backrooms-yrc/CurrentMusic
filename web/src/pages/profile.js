@@ -1,12 +1,15 @@
 // 公开用户主页：资料 + 统计（点赞/歌单/听歌天数/累计时长）+ 当前在听 + 最近听过 + TA 的歌单
 import { api } from '../api.js';
-import { esc, toast, avatarHTML, fmtListen, userTags, skelProfile } from '../ui.js';
+import { esc, avatarHTML, fmtListen, userTags, skelProfile } from '../ui.js';
 import { player } from '../player.js';
+import { mountPosts } from '../posts.js';
+import { profileBannerHTML } from '../profile-banner.js';
 
 const fmtTime = ts => new Date(ts * 1000).toLocaleDateString('zh-CN');
 
 export async function render(el, params) {
   const uid = params[0];
+  const showPosts = params.query?.tab === 'posts';
   el.innerHTML = skelProfile();
   let d;
   try {
@@ -16,7 +19,7 @@ export async function render(el, params) {
     return;
   }
   const u = d.user, st = d.stat;
-  const songRow = (s, i, list) => `
+  const songRow = (s, i) => `
     <div class="cm-song" data-i="${i}">
       <div class="cm-song-cover">${s.pic ? `<img src="${esc(s.pic)}" loading="lazy">` : '<span class="material-icons-outlined">music_note</span>'}</div>
       <div class="cm-song-main">
@@ -26,14 +29,22 @@ export async function render(el, params) {
     </div>`;
 
   el.innerHTML = `
-    <div class="cm-up-head">
-      <div class="cm-up-ava">${avatarHTML(u, 76)}</div>
-      <div class="cm-up-info">
-        <h2>${esc(u.nickname)}${userTags(u)}</h2>
-        <div class="cm-up-bio">${esc(u.bio || '这个人很懒，什么都没写')}</div>
-        <div class="cm-up-sub">注册于 ${fmtTime(u.created_at)}${u.ipRegion ? ` · <span class="cm-uregion" title="IP 属地"><span class="material-icons-outlined">location_on</span>IP 属地 ${esc(u.ipRegion)}</span>` : ''}</div>
+    <div class="cm-community-profile">
+      ${profileBannerHTML(u.bannerUrl)}
+      <div class="cm-up-head">
+        <div class="cm-up-ava">${avatarHTML(u, 76)}</div>
+        <div class="cm-up-info">
+          <h2>${esc(u.nickname)}${userTags(u)}</h2>
+          ${u.bio ? `<div class="cm-up-bio">${esc(u.bio)}</div>` : ''}
+          <div class="cm-up-sub">注册于 ${fmtTime(u.created_at)}${u.ipRegion ? ` · <span class="cm-uregion" title="IP 属地"><span class="material-icons-outlined">location_on</span>IP 属地 ${esc(u.ipRegion)}</span>` : ''}</div>
+        </div>
       </div>
     </div>
+    <nav class="cm-profile-tabs" aria-label="个人主页">
+      <a href="#/u/${uid}" ${showPosts ? '' : 'aria-current="page"'}>音乐</a>
+      <a href="#/u/${uid}?tab=posts" ${showPosts ? 'aria-current="page"' : ''}>帖子</a>
+    </nav>
+    ${showPosts ? '<div class="cm-profile-posts"></div>' : `
     <div class="cm-up-stats">
       <div><b>${st.likes}</b><span>点赞</span></div>
       <div><b>${st.playlists}</b><span>歌单</span></div>
@@ -71,8 +82,13 @@ export async function render(el, params) {
           <div class="cm-plname">${esc(p.name)}</div>
           <div class="cm-plsub">${p.track_count} 首</div>
         </div>`).join('')}
-    </div>` : ''}
+    </div>` : ''}`}
   `;
+
+  if (showPosts) {
+    mountPosts(el.querySelector('.cm-profile-posts'), { author: uid });
+    return;
+  }
 
   if (d.current) {
     el.querySelector('#nowPlay').onclick = () => player.playList([d.current], 0);

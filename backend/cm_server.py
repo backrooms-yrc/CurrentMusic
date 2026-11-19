@@ -13,7 +13,7 @@ import secrets
 import sys
 import threading
 import time
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeout
@@ -29,6 +29,7 @@ import cm_decor
 import cm_feedback
 import cm_feedback_diagnostics
 import cm_feedback_media
+import cm_image
 import cm_lx
 import cm_lddc
 import cm_levels
@@ -66,6 +67,7 @@ RELEASES_DIR = os.environ.get("CM_RELEASES", os.path.join(DATA_DIR, "releases"))
 # 由 tools/sync-cmx-releases.py 定时从 GitHub Releases 同步，对外前缀 /cm/x/**。
 X_RELEASES_DIR = os.environ.get("CM_X_RELEASES", os.path.join(DATA_DIR, "releases-x"))
 MAX_BODY = 2 * 1024 * 1024
+BANNER_MAX_BYTES = 1024 * 1024
 # dolby/vivid：音效变体（API 文档 /song/url/v1）。实测本账号 dolby 会被上游
 # 降级为 jyeffect（需设备支持），vivid 偶发返回错误页——由 url_is_audio 拦截后走阶梯降档。
 VALID_LEVELS = ("standard", "exhigh", "lossless", "hires", "sky", "jyeffect", "jymaster", "dolby", "vivid")
@@ -288,6 +290,7 @@ def _payload_daily(u):
 def _payload_me(u):
     """当前用户资料 + 统计 + 挂件解锁状态。原 /auth/me 逻辑。"""
     out = public_user(u)
+    out["bannerUrl"] = _profile_banner_url(u["id"])
     out["points"] = u["points"]
     protection = cm_2fa.status(u["id"])
     out["twoFactorEnabled"] = protection["enabled"]
@@ -1745,6 +1748,51 @@ def public_user(u):
     }
 
 
+def _profile_banner_url(uid, version=None):
+    if version is None:
+        banner = cm_db.get_profile_banner(uid)
+        if not banner:
+            return ""
+        version = banner["version"]
+    return f"/users/{uid}/banner?v={version}"
+
+
+def _community_id(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise ApiError(404, "内容不存在")
+    if not 0 <= number <= 2**63 - 1:
+        raise ApiError(404, "内容不存在")
+    return number
+
+
+def _prepare_profile_banner(encoded):
+    from io import BytesIO
+
+    try:
+        data = b64decode(encoded, validate=True)
+    except (ValueError, TypeError):
+        raise ApiError(400, "横幅数据无效")
+    if not 0 < len(data) <= BANNER_MAX_BYTES:
+        raise ApiError(400, "横幅图片需 ≤1 MiB")
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        raise ApiError(503, "横幅图片处理暂不可用")
+    try:
+        source = ImageOps.exif_transpose(cm_image.open_image(data)).convert("RGBA")
+        width = max(4, min(1600, source.width, source.height * 4) // 4 * 4)
+        crop = ImageOps.fit(source, (width, width // 4), method=Image.LANCZOS)
+        image = Image.new("RGB", crop.size, (32, 34, 44))
+        image.paste(crop, mask=crop.getchannel("A"))
+        out = BytesIO()
+        image.save(out, "JPEG", quality=85, optimize=True)
+    except (ValueError, OSError, SyntaxError):
+        raise ApiError(400, "横幅图片无效或尺寸过大，仅支持 JPEG、PNG 或 WebP")
+    return out.getvalue()
+
+
 def followed_netease(uid, ttl=300):
     """读某用户网易云账号的关注歌手（缓存 ttl 秒）；未绑定/上游失败返回 None。"""
     b = cm_db.get_binding(uid)
@@ -2977,7 +3025,10 @@ def route(handler, method):
             ("POST", "/auth/2fa/login", "公开", "{challengeToken, code}：完成第二步登录，返回 {token, user}；5 分钟有效，失败每账号 5 次/5 分钟"),
             ("POST", "/auth/login", "公开", "登录 Current 账户；开启验证器 2FA 或密保时先返回验证挑战（requires2FA 或 requiresSecurityQuestion、challengeToken、expiresIn），不会签发会话"),
             ("POST", "/auth/logout", "Bearer", "退出当前设备并撤销会话"),
-            ("GET", "/auth/me", "Bearer", "当前账户资料与统计（含累计积分 points 和等级 level）"),
+            ("GET", "/auth/me", "Bearer", "当前账户资料与统计（含 bannerUrl、累计积分 points 和等级 level）"),
+            ("GET", "/profile", "Bearer", "当前账户资料与统计（bannerUrl 为 API 基址相对路径，空串表示未设置）"),
+            ("PUT", "/profile/banner", "Bearer", "上传或替换自己的公开主页横幅 {data: Base64}，返回 {bannerUrl}"),
+            ("DELETE", "/profile/banner", "Bearer", "移除自己的公开主页横幅，返回空 bannerUrl"),
             ("GET", "/auth/sessions", "Bearer", "在线设备列表 {max:null,sessions}；数量不限，超过 5 台时客户端提示风险"),
             ("DELETE", "/auth/sessions/{id}", "Bearer", "下线指定设备"),
             ("DELETE", "/auth/sessions/others", "Bearer", "下线其他设备"),
@@ -3078,11 +3129,14 @@ def route(handler, method):
             ("GET", "/chat/members", "公开", "聊天成员：?q= 实时搜索昵称/用户名（@ 提及选择器，最多 20，前缀命中优先；无 q 返回近期活跃；尊重广场公开开关，AI 账号始终可搜到）"),
             ("GET", "/chat/live", "公开", "聊天实时流：?sse=1 走 SSE（message/delete/edit 事件，id=seq 断线续传；edit.payload={id,content,atts,streaming}，AI 流式回答用同一 id 反复更新）；不带则返回 JSON 增量"),
             ("POST", "/ai/live", "Bearer", "播放页「问AI」：SSE（start/delta/done/error）流式回答 {question≤500字, song:{type:'song',id,name,sub?,pic?}, reset?:bool}；delta.text 为累计文本；scope=player 与公共 Chat 隔离，reset=true 先清空播放页上下文"),
-            ("GET", "/users/{id}/profile", "公开", "公开用户主页（user.ipRegion = IP 属地，省份/国家，空串=未知）"),
-            ("GET", "/posts", "可选登录", "发现动态列表"),
-            ("POST", "/posts", "Bearer", "发布动态"),
+            ("GET", "/users/{id}/profile", "公开", "公开用户主页（含 user.bannerUrl 和 user.ipRegion）"),
+            ("GET", "/users/{id}/banner", "公开", "读取当前主页横幅 JPEG，v 可指定版本"),
+            ("GET", "/posts", "可选登录", "发现动态列表，可按 author 筛选，支持 offset 与 limit"),
+            ("POST", "/posts", "Bearer", "发布动态 {title?, content, attachments?}，返回 {id}"),
+            ("GET", "/posts/{id}", "可选登录", "单条帖子详情，返回与列表一致的帖子结构"),
+            ("DELETE", "/posts/{id}", "Bearer", "删除帖子（作者或管理员）"),
             ("POST", "/posts/{id}/like", "Bearer", "点赞动态"),
-            ("GET", "/posts/{id}/comments", "公开", "帖子评论（升序）：每条含 author 与 replyTo（被回复评论 id/作者，被删后为 null）"),
+            ("GET", "/posts/{id}/comments", "公开", "升序读取帖子评论，after 与 limit 启用游标分页，评论含 author 和 replyTo"),
             ("POST", "/posts/{id}/comments", "Bearer", "发评论 {content≤500字, replyTo?: 被回复评论id（须属同一帖子）}；DELETE /posts/comments/{id} 删除（本人或管理员）"),
             ("GET", "/plays/recent", "Bearer", "最近播放"),
             ("POST", "/plays/{ncmId}", "Bearer", "开始播放返回 playId，platform 可选 web/x/app；上报 {playId,totalMs,finished}，Web 播放中增量同步，结束时补报尾段；兼容旧版 ms 增量"),
@@ -3629,6 +3683,7 @@ def route(handler, method):
     if path == "/profile" and method == "GET":
         u = require_user(handler)
         out = public_user(u)
+        out["bannerUrl"] = _profile_banner_url(u["id"])
         out["stat"] = cm_db.user_stat(u["id"])
         return jresp(handler, 200, out)
 
@@ -3638,6 +3693,40 @@ def route(handler, method):
             cm_db.set_public_square(u["id"], bool(body.get("publicSquare")))
         cm_db.update_profile(u["id"], body)
         return jresp(handler, 200, public_user(cm_db.get_user(u["id"])))
+
+    if path == "/profile/banner" and method == "PUT":
+        u = require_user(handler, allow_query=False)
+        if not isinstance(body, dict):
+            raise ApiError(400, "横幅数据无效")
+        image = _prepare_profile_banner(body.get("data"))
+        version = hashlib.sha256(image).hexdigest()[:24]
+        cm_db.set_profile_banner(u["id"], version, image)
+        return jresp(handler, 200, {"bannerUrl": _profile_banner_url(u["id"], version)})
+
+    if path == "/profile/banner" and method == "DELETE":
+        u = require_user(handler, allow_query=False)
+        cm_db.set_profile_banner(u["id"])
+        return jresp(handler, 200, {"bannerUrl": ""})
+
+    m = re.fullmatch(r"/users/(\d+)/banner", path)
+    if m and method == "GET":
+        banner = cm_db.get_profile_banner(_community_id(m.group(1)), include_image=True)
+        version = q.get("v")
+        if not banner or (version and version != banner["version"]):
+            raise ApiError(404, "横幅不存在")
+        etag = '"' + banner["version"] + '"'
+        unchanged = handler.headers.get("If-None-Match") == etag
+        handler.send_response(304 if unchanged else 200)
+        handler.send_header("ETag", etag)
+        handler.send_header("Cache-Control", "public, no-cache")
+        handler.send_header("Access-Control-Allow-Origin", "*")
+        if not unchanged:
+            handler.send_header("Content-Type", "image/jpeg")
+            handler.send_header("Content-Length", str(len(banner["image"])))
+        handler.end_headers()
+        if not unchanged:
+            handler.wfile.write(banner["image"])
+        return
 
     # ---- 修改密码：原密码 或 邮箱验证码（v1.28.76）----
     # 已登录用户忘记原密码时，可让服务端把验证码发到**当前账号绑定**的邮箱；
@@ -4320,7 +4409,7 @@ def route(handler, method):
     # ---- 帖子（发现页 · v1.21.15） ----
     if path == "/posts" and method == "GET":
         """帖子流（新→旧）。未登录也能看；登录则附带 likedByMe/canDelete。"""
-        def _intp(name, default, lo, hi):
+        def _int(name, default, lo, hi):
             try:
                 v = int(q.get(name) or default)
             except (TypeError, ValueError):
@@ -4328,28 +4417,36 @@ def route(handler, method):
             return max(lo, min(v, hi))
         viewer = optional_user(handler)
         author = q.get("author")
-        aid = int(author) if author and author.isdigit() else None
+        aid = _community_id(author) if author and author.isdecimal() else None
         return jresp(handler, 200, {
             "posts": cm_db.posts_list(
                 viewer["id"] if viewer else None,
-                offset=_intp("offset", 0, 0, 100000),
-                limit=_intp("limit", 20, 1, 50), author_id=aid),
+                offset=_int("offset", 0, 0, 100000),
+                limit=_int("limit", 20, 1, 50), author_id=aid),
             "total": cm_db.posts_count(aid),
-        })
+        }, cache_control="no-store")
 
     if path == "/posts" and method == "POST":
         u = require_user(handler)
-        b = body or {}   # route() 顶部已统一读过 body，这里不能再读（会阻塞）
+        if not isinstance(body, dict):
+            raise ApiError(400, "帖子格式无效")
         try:
-            pid = cm_db.post_create(u["id"], b.get("content"), b.get("attachments"))
+            pid = cm_db.post_create(u["id"], body.get("content"), body.get("attachments"), body.get("title"))
         except ValueError as e:
             raise ApiError(400, str(e))
         return jresp(handler, 200, {"id": pid})
 
     m = re.fullmatch(r"/posts/(\d+)", path)
+    if m and method == "GET":
+        viewer = optional_user(handler)
+        post = cm_db.post_get(viewer["id"] if viewer else None, _community_id(m.group(1)))
+        if post is None:
+            raise ApiError(404, "帖子不存在")
+        return jresp(handler, 200, {"post": post}, cache_control="no-store")
+
     if m and method == "DELETE":
         u = require_user(handler)
-        if not cm_db.post_delete(u["id"], int(m.group(1))):
+        if not cm_db.post_delete(u["id"], _community_id(m.group(1))):
             raise ApiError(403, "只能删除自己的帖子")
         return jresp(handler, 200, {"ok": True})
 
@@ -4357,19 +4454,37 @@ def route(handler, method):
     if m and method == "POST":
         u = require_user(handler)
         b = body or {}   # route() 顶部已统一读过 body，这里不能再读（会阻塞）
-        n = cm_db.post_set_like(u["id"], int(m.group(1)), bool(b.get("on")))
+        n = cm_db.post_set_like(u["id"], _community_id(m.group(1)), bool(b.get("on")))
+        if n is None:
+            raise ApiError(404, "帖子不存在")
         return jresp(handler, 200, {"likeCount": n})
 
     m = re.fullmatch(r"/posts/(\d+)/comments", path)
     if m and method == "GET":
-        return jresp(handler, 200, {"comments": cm_db.post_comments_list(int(m.group(1)))})
+        pid = _community_id(m.group(1))
+        after = q.get("after")
+        limit = q.get("limit")
+        if after is None and limit is None:
+            return jresp(handler, 200, {"comments": cm_db.post_comments_list(pid)})
+        try:
+            cursor = int(after or 0)
+            size = int(limit or 30)
+            if not 0 <= cursor <= 2**63 - 1 or not 1 <= size <= 100:
+                raise ValueError
+        except ValueError:
+            raise ApiError(400, "评论分页参数无效")
+        comments = cm_db.post_comments_list(pid, limit=size + 1, after=cursor)
+        return jresp(handler, 200, {
+            "comments": comments[:size],
+            "nextAfter": comments[size - 1]["id"] if len(comments) > size else None,
+        }, cache_control="no-store")
 
     m = re.fullmatch(r"/posts/(\d+)/comments", path)
     if m and method == "POST":
         u = require_user(handler)
         b = body or {}   # route() 顶部已统一读过 body，这里不能再读（会阻塞）
         try:
-            cid = cm_db.post_comment_add(u["id"], int(m.group(1)), b.get("content"), b.get("replyTo"))
+            cid = cm_db.post_comment_add(u["id"], _community_id(m.group(1)), b.get("content"), b.get("replyTo"))
         except ValueError as e:
             raise ApiError(400, str(e))
         return jresp(handler, 200, {"id": cid})
@@ -4523,6 +4638,7 @@ def route(handler, method):
         prof = cm_db.public_profile(int(m.group(1)))
         if not prof:
             raise ApiError(404, "用户不存在")
+        prof["user"]["bannerUrl"] = _profile_banner_url(prof["user"]["id"])
         if prof["user"].get("public"):
             f = followed_netease(int(m.group(1)))
             if f and f.get("artists"):

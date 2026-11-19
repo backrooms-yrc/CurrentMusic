@@ -31,6 +31,7 @@ CurrentMusic 的自托管后端：账号体系、网易云音乐代理、播放�
 - 可选：
   - Pillow + segno + Noto Sans CJK：分享图渲染（缺失时 `/share/song/{id}/image` 返回 503）；
     可执行 `pip install -r deploy/requirements-optional.txt`，并安装 Noto CJK 字体
+  - Pillow：个人主页横幅解码与居中裁剪（缺失时上传返回 503）。
   - SMTP：邮箱验证码
   - 短信 webhook：手机验证码
   - z.ai 与 DeepSeek API key：AI 助手
