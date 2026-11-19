@@ -1376,6 +1376,16 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .cm-queue-action:focus-visible, .cm-queue-play:focus-visible { outline: 2px solid var(--cm-primary); }
 .cm-queue-play .q-name, .cm-queue-play .q-sub { display: block; }
 .cm-sleep-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.cm-qq-page { padding: 12px 0; }
+.cm-qq-search { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 16px 0; }
+.cm-qq-search label { display: grid; gap: 4px; flex: 1 1 220px; }
+.cm-qq-search input, .cm-qq-search select, .cm-qq-search button {
+  min-height: 44px; border: 1px solid currentColor; border-radius: 10px; padding-inline: 10px;
+  background: transparent; color: inherit; font: inherit;
+}
+.cm-qq-track { border: 0; padding: 0; text-align: start; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.cm-qq-row .cm-song-main > span { display: block; }
+.cm-qq-row > img { object-fit: cover; }
 .cm-lyric-manager input { max-width: 100%; }
 .cm-lyric-manager pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 #lyricCandidates { display: grid; gap: 6px; }

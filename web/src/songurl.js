@@ -7,6 +7,7 @@
 import { network, sourceIdentity } from './network.js';
 import { api } from './api.js';
 import { resolveServerAudio } from './server-audio-source.js';
+import { isQqSong, resolveQqSong } from './qqmusic.js';
 
 // EC-3 解码能力由当前浏览器报告。实际输出由系统和音频设备决定。
 function supportsDolby() {
@@ -37,6 +38,7 @@ function pickUrl(d) {
  * @returns {Promise<{url:string,type:string,level:string,host?:string,hosts?:string[]}>}
  */
 export async function resolveSongUrl(meta, level, immerse, opts) {
+  if (isQqSong(meta)) return resolveQqSong(meta, level);
   const identity = sourceIdentity();
   let info;
   try { info = await resolveProviderUrl(meta, level, immerse, opts); }

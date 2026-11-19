@@ -9,6 +9,7 @@ import { updateBrowserMediaSession, updateBrowserMediaState } from './media-sess
 import { createSongTraffic } from './song-traffic.js';
 import { readCheckpoint, saveCheckpoint } from './playback-checkpoint.js';
 import { createSleepTimer } from './sleep-timer.js';
+import { isQqSong, qqQuality } from './qqmusic.js';
 
 const songTraffic = createSongTraffic(api.reportSongTraffic);
 window.addEventListener('pagehide', () => {
@@ -485,7 +486,7 @@ export const player = {
   async _prefetchNext() {
     if (!this.queue.length || this._prefetchBusy) return;
     const nx = this.queue[this.index + 1] || this.queue[0];
-    if (!nx || !nx.ncm_id) return;
+    if (!nx || !nx.ncm_id || isQqSong(nx)) return;
     if (this._prefetch && String(this._prefetch.id) === String(nx.ncm_id)) return;
     try {
       const c = navigator.connection || navigator.mozConnection || {};
@@ -600,6 +601,7 @@ export const player = {
   /** 心动模式：以 seed（默认当前曲目）为种子续一批到队尾，返回新增条数。 */
   async heartExtend(seed) {
     if (this._heartBusy) return 0;
+    if (isQqSong(seed || this.meta)) return 0;
     const id = ((seed || this.meta) || {}).ncm_id;
     if (!id) return 0;
     const queue = this.queue, token = auth.token;
@@ -624,7 +626,7 @@ export const player = {
 
   /** 队列快见底就提前续（异步补齐，不阻塞切歌）。 */
   _heartEnsure() {
-    if (!this.heartMode || this._heartBusy) return;
+    if (!this.heartMode || this._heartBusy || isQqSong(this.meta)) return;
     if (this._heartMiss >= 3) return;                 // 连续失败：停手，不给上游刷请求
     if (this.queue.length - this.index > 3) return;   // 还够听
     this.heartExtend(this.meta);
@@ -785,11 +787,11 @@ export const player = {
         this._discardPrefetch();
         this._prefetch = null;
       } else {
-        const _pl2 = effectiveLevel();
+        const _pl2 = isQqSong(meta) ? { level: qqQuality() } : effectiveLevel();
         try {
           info = await resolveSongUrl(meta, _pl2.level, _pl2.immerse, skipDolby ? { supportsDolby: false } : undefined);
         } catch (e) {
-          if (_pl2.level !== settings.quality) {
+          if (!isQqSong(meta) && _pl2.level !== settings.quality) {
             toast('该音效当前不可用，已回退普通音质');
             info = await resolveSongUrl(meta, settings.quality);
           } else throw e;
@@ -798,7 +800,7 @@ export const player = {
     } catch (e) {
       if (this._playRequest !== request) return;
       this.loading = false;
-      if (e && e.status === 401) {         // 登录失效/未登录：提示登录，不当作播放失败跳歌
+      if (e && e.status === 401 && !isQqSong(meta)) { // 站内会话失效
         this.wantPlaying = false;
         emit('song');
         emit('state');
@@ -876,7 +878,7 @@ export const player = {
   },
 
   report() {
-    if (!auth.token || !this.meta) return;
+    if (!auth.token || !this.meta || isQqSong(this.meta)) return;
     lastTickT = -1;
     lastCastAt = 0;
     lastFlushAt = 0;
@@ -1001,7 +1003,8 @@ export const player = {
 
   async changeQuality(level) {
     if (this.playPending) { toast('歌曲正在准备，请稍后切换音质'); return; }
-    settings.quality = level;
+    if (isQqSong(this.meta)) qqQuality(level);
+    else settings.quality = level;
     if (!this.meta) return;
     const request = this._playRequest;
     const at = audio.currentTime;

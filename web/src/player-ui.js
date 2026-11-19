@@ -14,6 +14,8 @@ import { layoutRect, layoutScale } from './tablet-scale.js';
 import { AIMO_ICONS, injectSlot, isAimo } from './aimo-icons.js';
 import { lyricOwner, lyricPreference, openLyricManager } from './lyric-manager.js';
 import { lyricOffset, shiftLyricRows } from './local-lyrics.js';
+import { isQqSong, qqQuality, QQ_QUALITIES, qqRequest } from './qqmusic.js';
+import { openQqComments } from './qq-comments.js';
 
 // Apple 风媒体图标（仿 SF Symbols：play.fill / pause.fill / backward.end.fill / forward.end.fill）。
 // 特征是**实心 + 圆角、无外圈**；Material 的 play_circle/pause_circle 自带圆圈，
@@ -272,7 +274,7 @@ function paintLyricSource() {
   if (!status) return;
   const data = lyricRequest?.data;
   const sources = { 'lddc:qm': 'QQ 音乐', 'lddc:kg': '酷狗音乐', 'lddc:ne': '网易云音乐',
-    'lddc:lrclib': 'LRCLIB', 'ncm:yrc': '网易云音乐', 'ncm:lrc': '网易云音乐' };
+    'lddc:lrclib': 'LRCLIB', 'ncm:yrc': '网易云音乐', 'ncm:lrc': '网易云音乐', 'qqmusic:lrc': 'QQ 音乐' };
   const timing = data?.wordLevel ? '逐字' : lyricLines.some(line => line.wSynth) ? '估算逐字' : '逐行';
   const source = data?.source?.startsWith('local:') ? '手动歌词' : sources[data?.source];
   status.textContent = lyricRequest?.failed ? '歌词加载失败' : !data ? '正在查找歌词…'
@@ -292,7 +294,8 @@ function updateLyricRows() {
 }
 
 async function loadLyric() {
-  const id = player.meta?.ncm_id;
+  const song = player.meta;
+  const id = song?.ncm_id;
   if (!id) return;
   const owner = lyricOwner();
   const key = JSON.stringify([settings.base, owner, id, autoLyrics]);
@@ -313,7 +316,8 @@ async function loadLyric() {
   pushDesktopLyric(-1, true);
   let data;
   try {
-    data = lyricPreference(id).data || await api.lyric(id, autoLyrics);
+    data = lyricPreference(id).data || await (isQqSong(song)
+      ? qqRequest('/lyric', { query: { id: song.qq_mid } }) : api.lyric(id, autoLyrics));
     if (!Array.isArray(data?.lines)) throw new Error('歌词格式无效');
   } catch {
     request.failed = true;
@@ -1026,7 +1030,7 @@ async function openFull() {
   const sb = isSoaringBirdTheme();
   const backdrop = `<div class="pl-background" id="plBg" aria-hidden="true"><div class="pl-ambient"></div></div>`;
   ov.classList.toggle('pl-background-paused', !playerVisualsVisible());
-  const qualityNow = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
+  const qualityNow = visibleQuality();
   const modeNow = PLAY_MODES.find(x => x.key === player.playMode);
   const plAi = `<span class="pl-ai-btn" id="plAskAi" title="问 CurrentMusicAI"><span class="pl-ai-ava material-icons-outlined">auto_awesome</span><b>问AI</b></span>`;
   const plActions = `${plAi}${castIconHTML()}<span class="pl-btn" id="plMore" title="更多（歌词/背景/下载）"><span class="material-icons-outlined">more_vert</span></span>`;
@@ -1165,6 +1169,7 @@ async function openFull() {
     </div>`;
 
   ov.querySelector('#plClose').onclick = closeFull;
+  syncProviderControls(ov);
   const reveal = document.createElement('button');
   reveal.type = 'button';
   reveal.id = 'plShowControls';
@@ -1398,6 +1403,7 @@ async function loadStats() {
   const m = player.meta;
   if (!m) return;
   const el = document.getElementById('plStats');
+  if (isQqSong(m)) { if (el) el.innerHTML = ''; return; }
   if (!el) return;
   let pop = m.pop || 0, comments = null, count = getStatus(m.ncm_id).count;
   try {
@@ -1626,6 +1632,11 @@ function openMoreDrawer() {
     actions: [{ text: '关闭' }],
   });
   diag.classList.add('cm-more-dialog');
+  if (isQqSong(m)) {
+    diag.querySelector('#mShare')?.remove();
+    diag.querySelector('#mSongInfo')?.closest('section')?.remove();
+    diag.querySelector('.cm-more-dl')?.remove();
+  }
   setTimeout(() => {
     const msh = diag.querySelector('#mShare');
     if (msh) msh.onclick = () => {
@@ -1812,6 +1823,7 @@ function bindArtistLinks(scope) {
 /** 按「默认红心目标」同步播放页红心、网易云小圆点与红心数。 */
 let playerLikeRevision = 0;
 async function syncPlayerLike(m, refresh = true) {
+  if (isQqSong(m)) return;
   if (!m) return;
   const revision = ++playerLikeRevision;
   try {
@@ -1857,6 +1869,7 @@ function updateSongInfo() {
   const ov = overlay();
   const m = player.meta;
   if (!ov || ov.hidden || !m) return;
+  syncProviderControls(ov);
   const cover = document.getElementById('plCover');
   if (cover) cover.src = m.pic || '';
   const glow = ov.querySelector('.lp-artwork__glow img, .sb-artwork-glow img');
@@ -1874,16 +1887,37 @@ function updateSongInfo() {
   applyPlayerBackground(m.pic || '');
 }
 
+function syncProviderControls(ov) {
+  const visible = isQqSong(player.meta) ? 'none' : '';
+  ['plAdd', 'plLike', 'plStar', 'plAskAi', 'plHeart', 'plCast', 'plCastSlot'].forEach(id => {
+    const node = ov.querySelector('#' + id);
+    if (node) node.style.display = visible;
+  });
+  const comments = ov.querySelector('#plComments');
+  if (comments) comments.style.display = isQqSong(player.meta) && !player.meta.qq_id ? 'none' : '';
+}
+
+function visibleQuality() {
+  try { return tierLabel(player.urlInfo?.level || (isQqSong(player.meta) ? qqQuality() : settings.quality)); }
+  catch { return tierLabel('auto'); }
+}
+
 /** 音质胶囊：翱翔鸟Music 的 chip 里还有图标，不能直接写 textContent（会清空结构）。 */
 function paintQuality() {
   const q = document.getElementById('plQuality');
   if (!q) return;
-  const txt = player.urlInfo ? tierLabel(player.urlInfo.level) : tierLabel(settings.quality);
+  const txt = visibleQuality();
   const label = q.querySelector('.lp-quality__label');
   if (label) label.textContent = txt; else q.textContent = txt;
 }
 
 on('song', () => {
+  if (!player.meta) {
+    lyricRequest = null;
+    lyricLines = [];
+    if (!overlay().hidden) closeFull();
+    return;
+  }
   if (!overlay().hidden) {
     updateSongInfo();           // 只更新歌曲字段，不重建整个 overlay（重建会清空歌词区 → 闪烁）
   }
@@ -1904,8 +1938,9 @@ on('state', () => {
 });
 
 function qualityMenu() {
-  const cur = settings.quality;
-  const items = QUALITY_TIERS.map(t =>
+  const qq = isQqSong(player.meta);
+  const cur = qq ? qqQuality() : settings.quality;
+  const items = (qq ? QQ_QUALITIES : QUALITY_TIERS).map(t =>
     `<div class="cm-qm-item" data-v="${t.key}">${t.label}${t.spec ? `<em class="cm-qm-spec">${t.spec}</em>` : ''}${t.key === cur ? '<span class="material-icons-outlined">check</span>' : ''}</div>`).join('');
   const diag = mdui.dialog({
     headline: '选择音质',
@@ -2031,6 +2066,7 @@ function openSleepTimer() {
 // 以免同一套热门/最新/楼层/点赞/回复逻辑在多处分叉。
 export async function openComments(meta) {
   if (!meta) return;
+  if (isQqSong(meta)) return openQqComments(meta);
   const { openComments: openEntityComments } = await import('./comments.js');
   return openEntityComments({ type: 0, id: meta.ncm_id, title: meta.name || '歌曲' });
 }

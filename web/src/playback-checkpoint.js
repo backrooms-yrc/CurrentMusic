@@ -1,11 +1,11 @@
 const PREFIX = 'cm.playback.v1:';
 const LIMIT = 100;
-const SONG_FIELDS = ['ncm_id', 'name', 'artists', 'artist_ids', 'album', 'pic', 'duration', 'fee', 'pop', 'mv'];
+const SONG_FIELDS = ['ncm_id', 'name', 'artists', 'artist_ids', 'album', 'pic', 'duration', 'fee', 'pop', 'mv', 'provider', 'qq_mid', 'qq_id'];
 
 function serializableSong(song) {
   const record = {};
   for (const key of SONG_FIELDS) if (song[key] != null) record[key] = song[key];
-  if (/^#\/(?:pl|ncmpl)\/[\w-]+$|^#\/daily$/.test(song.queuePlaylist)) record.queuePlaylist = song.queuePlaylist;
+  if (/^#\/(?:pl|ncmpl|qqmusic\/(?:album|artist|playlist))\/[\w-]+$|^#\/daily$/.test(song.queuePlaylist)) record.queuePlaylist = song.queuePlaylist;
   return record;
 }
 

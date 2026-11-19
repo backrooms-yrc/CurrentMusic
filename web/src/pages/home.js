@@ -205,7 +205,7 @@ export async function render(el) {
     ${greetMarkup()}
     ${bannerHTML}
     <section class="cm-sec">
-      <div class="cm-sec-head"><h2>一键开听</h2><span class="cm-sec-sub">按听歌动线排</span></div>
+      <div class="cm-sec-head"><h2>一键开听</h2>${!window.NativeApi ? '<a class="cm-sec-more" href="#/qqmusic">切换到 QQ 音乐</a>' : ''}</div>
       <div class="cm-quickrow">
         <a class="cm-quick" href="#/podcast"><span class="material-icons-outlined">radio</span><b>私人 FM</b><i>无限电台</i></a>
         <span class="cm-quick" id="quickHeart"><span class="material-icons-outlined">auto_awesome</span><b>心动模式</b><i>按口味续播</i></span>
